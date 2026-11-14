@@ -140,7 +140,12 @@ export function EventSettings({ draft }: { draft: Draft }) {
               <legend className="sr-only">Bundle {b.name}</legend>
               <div className="form-row">
                 <Field label="Bundle name">{(id) => <input id={id} className="input" value={b.name} onChange={(e) => patch({ name: e.target.value })} maxLength={80} />}</Field>
-                <Field label="Discount">{(id) => <MoneyInput id={id} cents={b.discountCents} onCommit={(v) => patch({ discountCents: v })} />}</Field>
+                <Field label="Discount" hint={b.priceCents !== null ? 'Not used while a fixed price is set' : undefined}>
+                  {(id, d) => <MoneyInput id={id} describedBy={d} cents={b.discountCents} onCommit={(v) => patch({ discountCents: v })} />}
+                </Field>
+                <Field label="Or a fixed bundle price" hint="Leave blank to use the discount">
+                  {(id, d) => <IntInput id={id} describedBy={d} value={b.priceCents === null ? null : b.priceCents / 100} min={0} max={10000} onCommit={(v) => patch({ priceCents: v === null ? null : v * 100 })} />}
+                </Field>
               </div>
               <div className="chips" role="group" aria-label={`Races in ${b.name}`}>
                 {config.races.map((r) => (
@@ -159,7 +164,7 @@ export function EventSettings({ draft }: { draft: Draft }) {
         <button
           className="btn btn--ghost btn--small"
           onClick={() =>
-            update((c) => ({ ...c, registration: { ...c.registration, bundles: [...c.registration.bundles, { id: newId('bundle'), name: 'Weekend entry', raceIds: c.races.map((r) => r.id), discountCents: 1000 }] } }))
+            update((c) => ({ ...c, registration: { ...c.registration, bundles: [...c.registration.bundles, { id: newId('bundle'), name: 'Weekend entry', raceIds: c.races.map((r) => r.id), discountCents: 1000, priceCents: null }] } }))
           }
         >
           <Icon name="plus" /> Add bundle
@@ -168,8 +173,47 @@ export function EventSettings({ draft }: { draft: Draft }) {
           <Field label="Additional-race discount" hint="Per extra entry outside a bundle">
             {(id, d) => <MoneyInput id={id} describedBy={d} cents={config.registration.additionalRaceDiscountCents} onCommit={(v) => update((c) => ({ ...c, registration: { ...c.registration, additionalRaceDiscountCents: v } }))} />}
           </Field>
+          <Field label="Additional-race discount applies">
+            {(id) => (
+              <select
+                id={id}
+                className="input"
+                value={config.registration.additionalRaceDiscountMode}
+                onChange={(e) => update((c) => ({ ...c, registration: { ...c.registration, additionalRaceDiscountMode: e.target.value as 'each_additional_entry' | 'once_same_day' } }))}
+              >
+                <option value="each_additional_entry">To every entry after the first</option>
+                <option value="once_same_day">Once per order, when two entries share a day</option>
+              </select>
+            )}
+          </Field>
           <Field label="Recovery between races (minutes)" hint="Shorter gaps warn the rider">
             {(id, d) => <IntInput id={id} describedBy={d} value={config.registration.recoveryMinutes} min={0} max={180} allowEmpty={false} onCommit={(v) => v !== null && update((c) => ({ ...c, registration: { ...c.registration, recoveryMinutes: v } }))} />}
+          </Field>
+        </div>
+        <div className="form-row">
+          <Field label="Platform fee per order">
+            {(id) => <MoneyInput id={id} cents={config.registration.platformFeeCents} onCommit={(v) => update((c) => ({ ...c, registration: { ...c.registration, platformFeeCents: v } }))} />}
+          </Field>
+          <Field label="Platform fee label">
+            {(id) => <input id={id} className="input" value={config.registration.platformFeeLabel} onChange={(e) => update((c) => ({ ...c, registration: { ...c.registration, platformFeeLabel: e.target.value } }))} maxLength={60} />}
+          </Field>
+          <Field label="Processing fee (% after discounts)" hint="Whole or decimal percent, for example 3">
+            {(id, d) => (
+              <input
+                id={id}
+                aria-describedby={d}
+                inputMode="decimal"
+                className="input input--num"
+                defaultValue={config.registration.processingFeeBasisPoints / 100}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (e.target.value.trim() !== '' && n >= 0 && n <= 20) update((c) => ({ ...c, registration: { ...c.registration, processingFeeBasisPoints: Math.round(n * 100) } }));
+                }}
+              />
+            )}
+          </Field>
+          <Field label="Processing fee label">
+            {(id) => <input id={id} className="input" value={config.registration.processingFeeLabel} onChange={(e) => update((c) => ({ ...c, registration: { ...c.registration, processingFeeLabel: e.target.value } }))} maxLength={60} />}
           </Field>
         </div>
         <Field label="Refund policy shown before payment">

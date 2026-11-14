@@ -8,28 +8,94 @@ import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, LICENSE_TYPES, type Category,
  * still needs before they are cleared to race.
  */
 
-export const riderDetailsSchema = z.object({
-  firstName: z.string().trim().min(1, 'Enter a first name.').max(60),
-  lastName: z.string().trim().min(1, 'Enter a last name.').max(60),
-  email: z.string().trim().email('Enter an email address for the receipt.').max(120),
-  team: z.string().trim().max(80).default(''),
-  racingAge: z.number().int().min(5).max(110),
-  licenseCategory: z.enum(LICENSE_CATEGORIES).nullable(),
-  licenseType: z.enum(LICENSE_TYPES).nullable(),
-  competitionClass: z.enum(['women', 'men', 'other']).nullable(),
-  collegiateDivision: z.enum(COLLEGIATE_DIVISIONS).nullable(),
-  guardian: z
-    .object({ name: z.string().trim().min(1, 'Enter the guardian’s name.').max(120), relationship: z.string().trim().min(1, 'Enter the relationship.').max(40) })
-    .nullable(),
-});
+/** Messages from docs/fixtures/demo-purchase-flow.yaml (validation_messages). */
+export const MESSAGES = {
+  firstName: 'Enter your first name.',
+  lastName: 'Enter your last name.',
+  email: 'Enter an email address, like name@example.com.',
+  emailFormat: 'This email address is missing an @ or a domain. Check it and try again.',
+  emergencyName: "Enter an emergency contact's name.",
+  emergencyPhone: "Enter an emergency contact's phone number.",
+  phoneFormat: 'Enter a phone number with 10 digits.',
+  guardianName: 'Riders under 18 need a parent or guardian. Enter their name.',
+  entry: 'Choose at least one race to continue.',
+  waiverRead: 'Read the waiver to the end before signing.',
+  waiverSignature: 'Type your full name to sign the waiver.',
+  waiverAgree: 'Check the box to confirm you agree to the waiver.',
+  signatureMismatch: "The typed name must match the rider's name (or the guardian's, for a minor).",
+  full: 'This category is full. Choose another category or ask the organizer about the waitlist.',
+  ineligible: "This category does not match the rider's age or license category.",
+} as const;
+
+const digits = (s: string) => s.replace(/\D/g, '');
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const optionalPhone = z
+  .string()
+  .trim()
+  .max(24)
+  .default('')
+  .refine((v) => v === '' || digits(v).length === 10, MESSAGES.phoneFormat);
+
+export const riderDetailsSchema = z
+  .object({
+    firstName: z.string().trim().min(1, MESSAGES.firstName).max(60),
+    lastName: z.string().trim().min(1, MESSAGES.lastName).max(60),
+    email: z.string().trim().max(120).default(''),
+    phone: optionalPhone,
+    team: z.string().trim().max(80).default(''),
+    racingAge: z.number().int().min(5).max(110),
+    licenseCategory: z.enum(LICENSE_CATEGORIES).nullable(),
+    licenseType: z.enum(LICENSE_TYPES).nullable(),
+    licenseNumber: z.string().trim().max(30).default(''),
+    competitionClass: z.enum(['women', 'men', 'other']).nullable(),
+    collegiateDivision: z.enum(COLLEGIATE_DIVISIONS).nullable(),
+    demoRiderId: z.string().max(40).nullable().default(null),
+    emergencyContact: z.object({
+      name: z.string().trim().min(1, MESSAGES.emergencyName).max(120),
+      phone: z
+        .string()
+        .trim()
+        .min(1, MESSAGES.emergencyPhone)
+        .max(24)
+        .refine((v) => digits(v).length === 10, MESSAGES.phoneFormat),
+    }),
+    guardian: z
+      .object({
+        name: z.string().trim().min(1, MESSAGES.guardianName).max(120),
+        relationship: z.string().trim().max(40).default(''),
+        email: z.string().trim().max(120).default(''),
+        phone: optionalPhone,
+      })
+      .nullable(),
+  })
+  .superRefine((d, ctx) => {
+    // A minor's contact can go through the guardian; someone must have an email for the receipt.
+    const target = d.guardian && !d.email ? ['guardian', 'email'] : ['email'];
+    const value = d.guardian && !d.email ? d.guardian.email : d.email;
+    if (!value) ctx.addIssue({ code: 'custom', path: target, message: MESSAGES.email });
+    else if (!EMAIL.test(value)) ctx.addIssue({ code: 'custom', path: target, message: MESSAGES.emailFormat });
+  });
 export type RiderDetails = z.infer<typeof riderDetailsSchema>;
 
+/** Typed-name signature plus confirmation (fixtures: typed_name_plus_checkbox). */
 export const waiverAcceptanceSchema = z.object({
-  version: z.string().max(40),
-  riderAccepted: z.literal(true, { errorMap: () => ({ message: 'Accept the waiver to continue.' }) }),
-  guardianAccepted: z.boolean(),
+  version: z.string().max(60),
+  read: z.literal(true, { errorMap: () => ({ message: MESSAGES.waiverRead }) }),
+  agreed: z.literal(true, { errorMap: () => ({ message: MESSAGES.waiverAgree }) }),
+  signatureName: z.string().trim().min(1, MESSAGES.waiverSignature).max(120),
+  signerRole: z.enum(['rider', 'guardian']),
 });
 export type WaiverAcceptance = z.infer<typeof waiverAcceptanceSchema>;
+
+const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** The signer is the guardian when any entry needs one, otherwise the rider; the typed name must match. */
+export function checkSignature(rider: Pick<RiderDetails, 'firstName' | 'lastName' | 'guardian'>, waiver: Pick<WaiverAcceptance, 'signatureName' | 'signerRole'>, needsGuardian: boolean): string | null {
+  const role = needsGuardian ? 'guardian' : 'rider';
+  if (waiver.signerRole !== role) return needsGuardian ? 'A parent or guardian must sign for this entry.' : MESSAGES.signatureMismatch;
+  const expected = role === 'guardian' ? (rider.guardian?.name ?? '') : `${rider.firstName} ${rider.lastName}`;
+  return norm(waiver.signatureName) === norm(expected) && expected.trim() ? null : MESSAGES.signatureMismatch;
+}
 
 export function profileOf(d: Pick<RiderDetails, 'racingAge' | 'licenseCategory' | 'licenseType' | 'competitionClass' | 'collegiateDivision'>): RiderProfile {
   return {
@@ -127,11 +193,15 @@ export function checkSelection(config: EventConfig, categoryIds: readonly string
 export type ReadinessItem = { key: 'license' | 'waiver' | 'guardian'; label: string; state: 'done' | 'needs_review' | 'missing' };
 
 /** What a rider still needs before they are cleared to race. Paying never clears a rider by itself. */
-export function readiness(opts: { licenseReviewed: boolean; waiverAccepted: boolean; guardianRequired: boolean; guardianAccepted: boolean }): ReadinessItem[] {
+export function readiness(opts: { licenseReviewed: boolean; licenseNote: string | null; signerName: string | null; guardianRequired: boolean; guardianSigned: boolean }): ReadinessItem[] {
   const items: ReadinessItem[] = [
-    { key: 'license', label: opts.licenseReviewed ? 'License reviewed by the organizer' : 'License not verified: the organizer will review it', state: opts.licenseReviewed ? 'done' : 'needs_review' },
-    { key: 'waiver', label: opts.waiverAccepted ? 'Waiver accepted' : 'Waiver not accepted', state: opts.waiverAccepted ? 'done' : 'missing' },
+    {
+      key: 'license',
+      label: opts.licenseReviewed ? (opts.licenseNote?.startsWith('Simulated') ? 'License: simulated check valid (demo)' : 'License reviewed by the organizer') : 'License needs review: not verified yet',
+      state: opts.licenseReviewed ? 'done' : 'needs_review',
+    },
+    { key: 'waiver', label: opts.signerName ? `Waiver signed by ${opts.signerName}` : 'Waiver not signed', state: opts.signerName ? 'done' : 'missing' },
   ];
-  if (opts.guardianRequired) items.push({ key: 'guardian', label: opts.guardianAccepted ? 'Guardian accepted the waiver' : 'Guardian must accept the waiver', state: opts.guardianAccepted ? 'done' : 'missing' });
+  if (opts.guardianRequired) items.push({ key: 'guardian', label: opts.guardianSigned ? 'Guardian signature recorded' : 'Guardian must sign the waiver', state: opts.guardianSigned ? 'done' : 'missing' });
   return items;
 }
