@@ -99,7 +99,8 @@ The event records the rule source and season in `ruleSet`; validation warns when
 - Prices are integers in minor units (cents) with a currency code. Never use floating-point numbers for money.
 - Price rules cover base price, free entry, scheduled price changes, day-of surcharge, additional-race discount, and bundle price.
 - Define discount precedence explicitly and prevent unintended stacking. A multi-race discount applies exactly once per qualifying purchase.
-- At checkout, show an itemized total. On purchase, **snapshot** the accepted price and the rule versions on the order line. Later configuration changes never reprice a paid entry.
+- At checkout, show an itemized total, including every fee. On purchase, **snapshot** the accepted price and the rule versions on the order line. Later configuration changes never reprice a paid entry.
+- Fees are configured per event (`registration.platformFeeCents`, `registration.processingFeeBasisPoints`) and added once per order after discounts; the processing fee rounds half up to the cent (`src/shared/pricing.ts`).
 
 ### Configuration versioning
 

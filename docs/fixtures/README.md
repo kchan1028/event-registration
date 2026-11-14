@@ -1,6 +1,6 @@
 # Fixtures
 
-Status: Planned use. These files hold fake, illustrative data for prototypes and future automated tests. Nothing in this folder is real rider data, a real event, a real price, or a statement of current USA Cycling rules. Never add real names, emails, birth dates, license numbers, or emergency contacts here.
+Status: In use. The rider demo loads these fixtures (transcribed in `src/shared/fixtures.ts`), and `tests/pricing.test.ts` checks that file against this folder and reproduces every worked order total below. These files hold fake, illustrative data for prototypes and automated tests. Nothing in this folder is real rider data, a real event, a real price, or a statement of current USA Cycling rules. Never add real names, emails, birth dates, license numbers, or emergency contacts here.
 
 | File | Purpose |
 |---|---|

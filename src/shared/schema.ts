@@ -77,9 +77,25 @@ export const categorySchema = z.object({
 
 export const registrationSettingsSchema = z.object({
   bundles: z
-    .array(z.object({ id, name: z.string().max(80), raceIds: z.array(id).max(7), discountCents: cents }))
+    .array(
+      z.object({
+        id,
+        name: z.string().max(80),
+        raceIds: z.array(id).max(7),
+        discountCents: cents,
+        /** When set, the bundle's entries cost this fixed price instead of taking a discount. */
+        priceCents: cents.nullable().default(null),
+      }),
+    )
     .max(10),
   additionalRaceDiscountCents: cents,
+  /** each_additional_entry: every entry after the first; once_same_day: once per order when two or more entries share a day. */
+  additionalRaceDiscountMode: z.enum(['each_additional_entry', 'once_same_day']).default('each_additional_entry'),
+  platformFeeCents: cents.default(0),
+  platformFeeLabel: z.string().max(60).default('Platform fee'),
+  /** Percentage of the entries subtotal after discounts, in basis points (300 = 3%). */
+  processingFeeBasisPoints: z.number().int().min(0).max(2000).default(0),
+  processingFeeLabel: z.string().max(60).default('Processing fee'),
   recoveryMinutes: z.number().int().min(0).max(180),
   refundPolicy: z.string().max(1000),
   waiverText: z.string().max(4000),
@@ -89,6 +105,11 @@ export const registrationSettingsSchema = z.object({
 export const DEFAULT_REGISTRATION_SETTINGS: z.infer<typeof registrationSettingsSchema> = {
   bundles: [],
   additionalRaceDiscountCents: 0,
+  additionalRaceDiscountMode: 'each_additional_entry',
+  platformFeeCents: 0,
+  platformFeeLabel: 'Platform fee',
+  processingFeeBasisPoints: 0,
+  processingFeeLabel: 'Processing fee',
   recoveryMinutes: 15,
   refundPolicy: '',
   waiverText: '',

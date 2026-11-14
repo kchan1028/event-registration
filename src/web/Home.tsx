@@ -37,6 +37,17 @@ export function Home() {
     }
   }
 
+  async function loadRiderDemo() {
+    setBusy(true);
+    try {
+      await api.loadPurchaseFlowDemo();
+      navigate({ page: 'events' });
+    } catch (e) {
+      setError((e as ApiError).message);
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="home">
       <header className="home__bar">
@@ -129,6 +140,13 @@ export function Home() {
                 </button>{' '}
                 with 16 categories.
               </p>
+            </div>
+            <div className="demo-callout">
+              <h2>Try the rider demo</h2>
+              <p>Click through registration as a rider, from choosing an event to a simulated payment, using the fictional events, riders, and fees in docs/fixtures.</p>
+              <button className="btn btn--secondary" onClick={loadRiderDemo} disabled={busy}>
+                Open the rider demo
+              </button>
             </div>
           </aside>
         </section>

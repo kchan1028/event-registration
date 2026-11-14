@@ -1,84 +1,144 @@
 import { expect, test, type Page } from '@playwright/test';
 
-async function publishedDemo(page: Page): Promise<string> {
+/* Clickable demo purchase flow (product.md 2a) using the docs/fixtures data. */
+
+async function openEvent(page: Page, name: string): Promise<string> {
   await page.goto('/');
-  await page.getByRole('button', { name: 'fictional example weekend' }).click();
-  await expect(page.getByRole('heading', { name: 'Saturday road race', level: 2 })).toBeVisible();
-  await page.getByRole('link', { name: 'Review and publish' }).last().click();
-  const ack = page.getByLabel(/I have reviewed the/);
-  if (await ack.count()) await ack.check();
-  await page.getByRole('button', { name: /Publish version 1/ }).click();
-  await expect(page.locator('.publish-box .note')).toContainText('Published as version 1');
-  await page.getByRole('link', { name: /Open rider registration/ }).click();
+  await page.getByRole('button', { name: 'Open the rider demo' }).click();
+  await expect(page.getByRole('heading', { name: 'Choose an event' })).toBeVisible();
+  await expect(page.locator('.demo-badge')).toHaveText('Demo');
+  await page.getByRole('link', { name: new RegExp(name) }).click();
   await expect(page.getByRole('heading', { name: 'About you' })).toBeVisible();
-  return page.url();
+  return new URL(page.url()).hash.split('/')[2];
 }
 
-test('rider enters both days with the bundle, survives a declined payment, and gets a check-in code', async ({ page }) => {
-  await publishedDemo(page);
+async function signAndReview(page: Page, name: string) {
+  await page.getByLabel('I have read the whole waiver').check();
+  await page.getByLabel(/Type your full name to sign/).fill(name);
+  await page.getByLabel(/agree to this waiver/).check();
+  await page.getByRole('button', { name: 'Sign and review the order' }).click();
+}
 
-  await page.getByLabel('Racing age').fill('42');
-  await page.getByLabel('License category').selectOption('3');
-  await page.getByLabel('Competition class').selectOption('men');
+test('two races on one day: second-race discount, fees, signature errors, back navigation, simulated payment', async ({ page }) => {
+  await openEvent(page, 'Demo Valley Criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
 
-  await page.getByRole('checkbox', { name: /RR-M35-34/ }).click();
-  await expect(page.locator('.tray')).toContainText('Add an entry in Sunday criterium');
-  await page.getByRole('checkbox', { name: /CR-M35-34/ }).click();
-  await expect(page.locator('.tray')).toContainText('Weekend omnium entry');
-  await expect(page.getByRole('checkbox', { name: /RR-P12/ })).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByRole('checkbox', { name: /DVC-M35/ })).toHaveAttribute('aria-disabled', 'true'); // full and too young
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('checkbox', { name: /DVC-O45E/ }).click();
+  const tray = page.locator('.tray');
+  await expect(tray).toContainText('Second race discount');
+  await expect(tray).toContainText('Demo platform fee');
+  await expect(tray).toContainText('Demo processing fee (simulated)');
+  await expect(tray.locator('.quote__total')).toContainText('$59.65');
 
-  await page.getByRole('button', { name: 'Continue to your details' }).click();
-  await page.getByLabel('First name').fill('Test');
-  await page.getByLabel('Last name').fill('Rider');
-  await page.getByLabel('Email for your receipt').fill('test.rider@example.test');
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await expect(page.getByLabel('First name (required)')).toHaveValue('Alex');
   await page.getByRole('button', { name: 'Continue to the waiver' }).click();
 
-  await expect(page.getByText('SAMPLE WAIVER FOR THE PROTOTYPE')).toBeVisible();
-  await page.getByLabel('I have read and accept this waiver').check();
-  await page.getByRole('button', { name: 'Hold my places and review' }).click();
+  await page.getByRole('button', { name: 'Sign and review the order' }).click();
+  const summary = page.locator('.error-summary');
+  await expect(summary).toContainText('Type your full name to sign the waiver.');
+  await expect(summary).toContainText('Check the box to confirm you agree to the waiver.');
+  await signAndReview(page, 'Alex Demo');
 
-  await expect(page.locator('.hold')).toContainText('Your places are held for');
+  await expect(page.locator('.simulated').first()).toHaveText('Simulated payment: no money is charged.');
+  await expect(page.getByRole('button', { name: /^Pay/ })).toHaveCount(0);
+
+  // Back to a completed step keeps the data (and releases the hold).
+  await page.getByRole('button', { name: /Racer details/ }).click();
+  await expect(page.getByLabel('Last name (required)')).toHaveValue('Demo');
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await expect(page.getByLabel(/Type your full name to sign/)).toHaveValue('Alex Demo');
+  await page.getByRole('button', { name: 'Sign and review the order' }).click();
+
   await page.getByRole('button', { name: 'Simulate a declined payment' }).click();
   await expect(page.getByRole('alert')).toContainText('declined');
-  await page.getByRole('button', { name: /\(simulated\)/ }).click();
+  await page.getByRole('button', { name: /Complete simulated payment \(\$59\.65\)/ }).click();
 
   await expect(page.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
-  await expect(page.locator('.ticket__code')).toHaveText(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/);
-  await expect(page.locator('.done__entry').first()).toContainText('License not verified');
+  await expect(page.locator('.reg__meta')).toContainText(/order DEMO-/);
+  await expect(page.locator('.receipt')).toHaveAttribute('data-watermark', 'DEMO');
+  await expect(page.locator('.receipt')).toContainText('Simulated payment: no money is charged.');
+  await expect(page.locator('.done__entry').first()).toContainText('License: simulated check valid (demo)');
+  await expect(page.locator('.done__entry').first()).toContainText('Waiver signed by Alex Demo');
 });
 
-test('a junior entry requires a guardian, and the organizer can clear a license review', async ({ page }) => {
-  const registerUrl = await publishedDemo(page);
-  const eventId = new URL(registerUrl).hash.split('/')[2];
+test('weekend bundle needs both days; missing details show field messages and a summary', async ({ page }) => {
+  await openEvent(page, 'Demo Ridge Road Race Weekend');
+  await page.getByLabel('Racing age').fill('40');
+  await page.getByLabel('License category').selectOption('3');
+  await page.getByLabel(/I want the/).check();
+  await page.getByRole('checkbox', { name: /DRW-RR-M35/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await expect(page.locator('.error-summary')).toContainText('needs one eligible race on each day');
 
-  await page.getByLabel('Racing age').fill('16');
-  await page.getByRole('checkbox', { name: /RR-J1516/ }).click();
-  await page.getByRole('button', { name: 'Continue to your details' }).click();
-  await page.getByLabel('First name').fill('Junior');
-  await page.getByLabel('Last name').fill('Tester');
-  await page.getByLabel('Email for your receipt').fill('family@example.test');
+  await page.getByRole('checkbox', { name: /DRW-CR-M35/ }).click();
+  await expect(page.locator('.tray .quote__total')).toContainText('$80.25');
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+
   await page.getByRole('button', { name: 'Continue to the waiver' }).click();
-  await expect(page.getByText('Enter the guardian’s name.')).toBeVisible();
-  await page.getByLabel('Guardian name').fill('Parent Tester');
-  await page.getByLabel('Relationship to rider').fill('Parent');
+  const summary = page.locator('.error-summary');
+  await expect(summary).toBeFocused();
+  for (const msg of ['Enter your first name.', 'Enter your last name.', 'Enter an email address, like name@example.com.', "Enter an emergency contact's name."]) await expect(summary).toContainText(msg);
+  await expect(page.locator('#f-first-name')).toHaveAttribute('aria-invalid', 'true');
+
+  await page.getByLabel('First name (required)').fill('Pat');
+  await page.getByLabel('Last name (required)').fill('Tester');
+  await page.getByLabel('Email for the receipt (required)').fill('pat.tester@example.com');
+  await page.getByLabel('Contact name').fill('Lee Tester');
+  await page.getByLabel('Contact phone').fill('555-555-0123');
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await expect(page.getByRole('heading', { name: 'Waiver' })).toBeVisible();
+});
+
+test('junior with guardian: only the guardian’s typed name signs', async ({ page }) => {
+  await openEvent(page, 'Demo Valley Criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-casey');
+  await page.getByRole('checkbox', { name: /DVC-J1014/ }).click();
+  await expect(page.locator('.tray .quote__total')).toContainText('$18.45');
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await expect(page.getByLabel('Guardian name')).toHaveValue('Jordan Demo');
   await page.getByRole('button', { name: 'Continue to the waiver' }).click();
 
-  await page.getByLabel('I have read and accept this waiver').check();
-  await expect(page.getByRole('button', { name: 'Hold my places and review' })).toBeDisabled();
-  await page.getByLabel(/As parent or guardian/).check();
-  await page.getByRole('button', { name: 'Hold my places and review' }).click();
-  await page.getByRole('button', { name: /\(simulated\)/ }).click();
-  await expect(page.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
-  await expect(page.locator('.done__entry')).toContainText('Guardian accepted the waiver');
+  await signAndReview(page, 'Casey Demo');
+  await expect(page.locator('.error-summary')).toContainText("The typed name must match the rider's name (or the guardian's, for a minor).");
+  await page.getByLabel(/Type your full name to sign/).fill('Jordan Demo');
+  await page.getByRole('button', { name: 'Sign and review the order' }).click();
+  await page.getByRole('button', { name: /Complete simulated payment/ }).click();
+  await expect(page.locator('.done__entry')).toContainText('Guardian signature recorded');
+});
+
+test('uncertain license: paid but needs review, and the organizer clears it', async ({ page }) => {
+  const eventId = await openEvent(page, 'Demo Valley Criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-sam');
+  await page.getByRole('checkbox', { name: /DVC-W345/ }).click();
+  await expect(page.locator('.tray .quote__total')).toContainText('$39.05');
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await signAndReview(page, 'Sam Demo');
+  await page.getByRole('button', { name: /Complete simulated payment/ }).click();
+  await expect(page.locator('.done__entry')).toContainText('License needs review');
 
   await page.goto(`/#/events/${eventId}/registrations`);
   await page.getByRole('button', { name: /License review/ }).click();
-  const order = page.locator('.order', { hasText: 'Junior Tester' });
+  const order = page.locator('.order', { hasText: 'Sam Demo' });
   await order.getByRole('button', { name: 'Review license' }).click();
-  await order.getByRole('textbox').fill('One-day license confirmed at the desk');
+  await order.getByRole('textbox').fill('Demo license card checked at the desk');
   await order.getByRole('button', { name: 'Mark reviewed' }).click();
-  // Handled: it leaves the license-review filter, and shows as reviewed under All.
   await expect(order).toHaveCount(0);
   await page.getByRole('button', { name: /^All/ }).click();
-  await expect(page.locator('.order', { hasText: 'Junior Tester' })).toContainText('License reviewed: One-day license confirmed at the desk');
+  await expect(page.locator('.order', { hasText: 'Sam Demo' })).toContainText('License reviewed: Demo license card checked at the desk');
+});
+
+test('rider screens follow the theme toggle and remember it', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openEvent(page, 'Demo Valley Criterium');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: /Switch to dark theme/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('.demo-badge')).toBeVisible();
+  await page.screenshot({ path: 'test-results/rider-dark.png' });
 });

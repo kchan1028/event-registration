@@ -231,6 +231,11 @@ export function buildBerkeleyOmniumEvent(): { config: EventConfig; entryPlan: { 
     registration: {
       bundles: [],
       additionalRaceDiscountCents: 0,
+      additionalRaceDiscountMode: 'each_additional_entry',
+      platformFeeCents: 0,
+      platformFeeLabel: 'Platform fee',
+      processingFeeBasisPoints: 0,
+      processingFeeLabel: 'Processing fee',
       recoveryMinutes: 15,
       refundPolicy: '',
       waiverText: SAMPLE_WAIVER,
