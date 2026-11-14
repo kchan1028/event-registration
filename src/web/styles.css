@@ -32,6 +32,21 @@
   --pending: #4a4f8a;
   --pending-bg: #f1f1fa;
 
+  --on-ink: #ffffff;
+  --ink-hover: #0d1218;
+  --count-warn: #f0c24b;
+  --count-warn-ink: #181d26;
+  --demo-bg: #fff1d6;
+  --demo-ink: #5c3c00;
+  --demo-border: #f2dcae;
+  --warn-icon: #a36d00;
+  --dirty: #d6a21e;
+  --scrollbar: #c9c9c4;
+  --header-glass: rgb(255 255 255 / 0.96);
+  --scrim: rgb(24 29 38 / 0.32);
+  --shadow-rgb: 24 29 38;
+  --mix-strong: black;
+
   --r-sm: 6px;
   --r-md: 8px;
   --r-lg: 10px;
@@ -49,6 +64,102 @@
   --font-ui: 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-num: 'Barlow Condensed', 'Public Sans', system-ui, sans-serif;
   --font-code: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+/* Dark theme: the registration tent after sundown. Charcoal ground with a
+   faint cool cast, chalk-white ink, day hues lifted so they still read as the
+   same four days. Status pairs invert: light status tone on a deep tinted ground.
+   Screen only, so printed and exported material keeps the light palette. */
+@media screen {
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --ink: #eeede8;
+    --body: #cfcdc6;
+    --muted: #a19f97;
+    --hairline: #30343c;
+    --hairline-soft: #262a31;
+    --border-strong: #6b717b;
+    --canvas: #15181d;
+    --tyvek: #1b1f25;
+    --tyvek-deep: #242830;
+    --link: #8db8ff;
+    --focus: #8db8ff;
+
+    --day-1: #58b87a;
+    --day-2: #85a3f2;
+    --day-3: #b493e6;
+    --day-4: #d6a05a;
+
+    --error: #ffa197;
+    --error-bg: #3b1f1c;
+    --warn: #f2c86e;
+    --warn-bg: #342a12;
+    --ok: #84d39b;
+    --ok-bg: #16301f;
+    --pending: #b9bcf2;
+    --pending-bg: #24253d;
+
+    --on-ink: #15181d;
+    --ink-hover: #ffffff;
+    --demo-bg: #3a2d10;
+    --demo-ink: #f5d99e;
+    --demo-border: #5c4719;
+    --warn-icon: #e8b04a;
+    --scrollbar: #3d424b;
+    --header-glass: rgb(21 24 29 / 0.94);
+    --scrim: rgb(0 0 0 / 0.55);
+    --shadow-rgb: 0 0 0;
+    --mix-strong: white;
+  }
+}
+
+.theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--canvas);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    transform 120ms var(--ease-out);
+}
+.theme-toggle:active {
+  transform: scale(0.94);
+}
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.theme-toggle svg {
+  transition: transform 300ms var(--ease-out);
+}
+.theme-toggle[data-current='dark'] svg {
+  transform: rotate(-30deg);
+}
+@media (hover: hover) and (pointer: fine) {
+  .theme-toggle:hover {
+    border-color: var(--border-strong);
+    background: var(--tyvek);
+  }
+}
+@media (pointer: coarse) {
+  .theme-toggle {
+    width: 44px;
+    height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle,
+  .theme-toggle svg {
+    transition: none;
+  }
 }
 
 *,
@@ -73,13 +184,13 @@ body {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--link) 22%, white);
+  background: color-mix(in srgb, var(--link) 22%, var(--canvas));
   color: var(--ink);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #c9c9c4 transparent;
+  scrollbar-color: var(--scrollbar) transparent;
 }
 
 h1,
@@ -176,7 +287,7 @@ a {
 }
 .btn--primary {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 .btn--secondary {
   background: var(--canvas);
@@ -197,7 +308,7 @@ a {
 }
 @media (hover: hover) and (pointer: fine) {
   .btn--primary:hover:not(:disabled) {
-    background: #0d1218;
+    background: var(--ink-hover);
   }
   .btn--secondary:hover:not(:disabled) {
     border-color: var(--border-strong);
@@ -254,11 +365,11 @@ a {
 }
 .count-badge--error {
   background: var(--error);
-  color: #fff;
+  color: var(--on-ink);
 }
 .count-badge--warn {
-  background: #f0c24b;
-  color: var(--ink);
+  background: var(--count-warn);
+  color: var(--count-warn-ink);
 }
 
 .tag {
@@ -283,8 +394,8 @@ a {
   color: var(--error);
 }
 .tag--demo {
-  background: #fff1d6;
-  color: #6b4500;
+  background: var(--demo-bg);
+  color: var(--demo-ink);
   margin-left: 8px;
 }
 
@@ -448,7 +559,7 @@ textarea.input {
 .chip.is-on {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .segmented {
@@ -480,7 +591,7 @@ textarea.input {
 }
 .segmented__opt.is-on {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 fieldset {
@@ -574,10 +685,10 @@ fieldset {
 
 .demo-banner {
   padding: 8px var(--s-4);
-  background: #fff1d6;
-  color: #5c3c00;
+  background: var(--demo-bg);
+  color: var(--demo-ink);
   font-size: 13px;
-  border-bottom: 1px solid #f2dcae;
+  border-bottom: 1px solid var(--demo-border);
 }
 .demo-banner--inline {
   border: 0;
@@ -638,7 +749,7 @@ fieldset {
 }
 .home__bar {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--s-4);
   padding: var(--s-4) var(--s-5);
   border-bottom: 1px solid var(--hairline);
@@ -854,7 +965,7 @@ fieldset {
 }
 .save--dirty .save__dot,
 .save--saving .save__dot {
-  background: #d6a21e;
+  background: var(--dirty);
 }
 .save--error,
 .save--conflict {
@@ -907,7 +1018,7 @@ fieldset {
 .rail__race.is-active {
   background: var(--canvas);
   box-shadow:
-    0 1px 2px rgba(24, 29, 38, 0.08),
+    0 1px 2px rgb(var(--shadow-rgb) / 0.08),
     0 0 0 1px var(--hairline);
 }
 @media (hover: hover) and (pointer: fine) {
@@ -1154,7 +1265,7 @@ fieldset {
   transition: background-color 120ms ease;
 }
 .cat-row.is-selected {
-  background: color-mix(in srgb, var(--link) 7%, white);
+  background: color-mix(in srgb, var(--link) 7%, var(--canvas));
 }
 .cat-row.is-selected td:first-child {
   box-shadow: inset 3px 0 0 var(--ink);
@@ -1236,7 +1347,7 @@ fieldset {
   background: var(--border-strong);
 }
 .clip--error {
-  border-color: color-mix(in srgb, var(--error) 45%, white);
+  border-color: color-mix(in srgb, var(--error) 45%, var(--canvas));
 }
 .clip__head {
   display: grid;
@@ -1357,7 +1468,7 @@ fieldset {
   border-radius: 6px;
   background: var(--tyvek-deep);
   overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(24, 29, 38, 0.06);
+  box-shadow: inset 0 0 0 1px rgb(var(--shadow-rgb) / 0.06);
 }
 .tally__seg {
   position: absolute;
@@ -1373,13 +1484,13 @@ fieldset {
   background: var(--day);
 }
 .tally__seg--1 {
-  background: color-mix(in srgb, var(--day) 62%, white);
+  background: color-mix(in srgb, var(--day) 62%, var(--canvas));
 }
 .tally__seg--2 {
-  background: color-mix(in srgb, var(--day) 40%, white);
+  background: color-mix(in srgb, var(--day) 40%, var(--canvas));
 }
 .tally__seg--3 {
-  background: color-mix(in srgb, var(--day) 80%, black);
+  background: color-mix(in srgb, var(--day) 80%, var(--mix-strong));
 }
 .tally__text {
   display: flex;
@@ -1480,7 +1591,7 @@ button.issue {
 }
 .issue--warn svg,
 .issue--warning svg {
-  color: #a36d00;
+  color: var(--warn-icon);
 }
 .issue__where {
   display: block;
@@ -1748,7 +1859,7 @@ button.issue {
   border-bottom: 1px solid var(--hairline);
   position: sticky;
   top: 0;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--header-glass);
   z-index: 2;
 }
 .preview__mode {
@@ -1943,7 +2054,7 @@ button.issue {
     bottom: 0;
     width: min(460px, 100%);
     z-index: 20;
-    box-shadow: -12px 0 32px rgba(24, 29, 38, 0.16);
+    box-shadow: -12px 0 32px rgb(var(--shadow-rgb) / 0.16);
     transition: transform 320ms var(--ease-drawer);
     @starting-style {
       transform: translateX(100%);
@@ -1955,7 +2066,7 @@ button.issue {
   position: fixed;
   inset: 0;
   z-index: 19;
-  background: rgba(24, 29, 38, 0.32);
+  background: var(--scrim);
   transition: opacity 200ms ease;
   @starting-style {
     opacity: 0;

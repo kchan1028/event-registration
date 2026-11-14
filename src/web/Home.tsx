@@ -3,7 +3,7 @@ import { formatDate } from '../shared/format';
 import type { Template } from '../shared/schema';
 import { api, ApiError, type OrganizationSummary } from './api';
 import { navigate } from './App';
-import { Field, Icon, Pending } from './ui';
+import { Field, Icon, Pending, ThemeToggle } from './ui';
 
 const TEMPLATE_LABELS: Record<Template, { title: string; detail: string }> = {
   weekend: { title: 'Two-day weekend', detail: 'Saturday road race and Sunday criterium' },
@@ -42,6 +42,7 @@ export function Home() {
       <header className="home__bar">
         <span className="brand">CycleReg</span>
         <span className="home__bar-note">Organizer workspace · local prototype</span>
+        <ThemeToggle />
       </header>
       <main className="home__main">
         <section className="home__intro">

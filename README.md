@@ -42,6 +42,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Rider-facing schedule preview with an eligibility checker | Implemented |
 | Validation that blocks publishing on errors; warnings need acknowledgement; immutable published versions | Implemented and tested |
 | Autosave to a local SQLite database, safe against stale saves | Implemented and tested |
+| Light and dark themes, following the system setting, with a header toggle | Implemented; contrast checked manually, no automated test yet |
 | CSV import, bundles and discounts, change-impact preview, rider checkout, exports | Planned |
 
 <details>

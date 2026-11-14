@@ -7,7 +7,7 @@ import { countIssues } from '../shared/validation';
 import { href } from './App';
 import type { Draft } from './Builder';
 import { Tally } from './FieldBoard';
-import { dayHue, Field, Icon, IntInput, Pending } from './ui';
+import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
 
 const EMPTY: RiderProfile = { racingAge: null, licenseCategory: null, licenseType: null, competitionClass: null, collegiateDivision: null };
 
@@ -34,6 +34,7 @@ export function Preview({ draft }: { draft: Draft }) {
           <Icon name="arrow-left" /> Back to builder
         </a>
         <p className="preview__mode">Rider preview of the current draft{errors ? ` · ${errors} ${errors === 1 ? 'error' : 'errors'} still to fix` : ''}</p>
+        <ThemeToggle />
       </header>
 
       <main className="preview__main">
