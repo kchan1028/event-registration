@@ -101,7 +101,7 @@ Each of these needs an ADR before implementation depends on it. Options and trad
 3. Payment provider and merchant-of-record model
 4. USA Cycling license and waiver path
 5. Hosting, backups, and monitoring
-6. Authentication for riders, guardians, and organizers
+6. Authentication for riders, guardians, and organizers (MFA is required for all accounts; the ADR chooses methods and recovery)
 7. Transactional email provider
 8. Timer export formats
 9. Data retention and deletion periods

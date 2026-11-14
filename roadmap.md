@@ -35,7 +35,8 @@ Deliverables:
 - Map the road race and criterium setup, shared fields, discounts, changes, exceptions, check-in, and exports.
 - Measure organizer hours, check-in times, errors, and support requests.
 - Compare improving the current setup, purchasing additional support, and building a new platform.
-- Contact USAC about integration and accepted waiver/license processes. Assess payment-provider operating models.
+- Contact USAC about integration and accepted waiver/license processes, including future access to pull waiver status and validate licenses. Assess payment-provider operating models.
+- Research how results reach road-results.com for comparable events: who uploads, the CSV columns that matter, and whether the timer export can serve both. See [product.md](product.md#results-site-updates-research).
 - Identify a smaller pilot event, its accountable organizer, and a support owner.
 
 Exit gate: A specific, recurring problem has a measurable workload cost; a custom product has a credible advantage; a team and budget exist; external requirements have named owners. If not, recommend improving the incumbent workflow and stop the build.
@@ -61,8 +62,9 @@ Indicative effort: 5–7 weeks. Depends on Phase 1 and a settled payment model. 
 Build:
 
 - Organization access, roles, ownership transfer, audit history, and event templates.
+- Required multi-factor authentication (MFA) for every account, step-up re-verification for sensitive organizer actions, and audited account recovery. See [product.md](product.md#sign-in-and-account-security).
 - Event/day/race/category/start-group setup and publishing checks.
-- Mobile registration, guardian data, accepted waiver flow, and license-review status.
+- Mobile registration, guardian data, accepted waiver flow, and license-review status, behind one verification interface that can later use a live USAC source without reworking registration. See [product.md](product.md#future-usa-cycling-waiver-and-license-integration).
 - Individual entries and two-day bundles with transparent totals.
 - Capacity reservations and atomic enforcement of shared limits.
 - Hosted payment flow, verified payment notifications, receipts, refunds, and a reconciliable ledger.
@@ -74,6 +76,7 @@ Verification:
 - Concurrent checkout for the last place, expired reservations, and bundle rollback.
 - Payment failure, timeout, duplicate notification, refund retry, and cancellation scenarios.
 - Role access, private-data visibility, waiver/version integrity, and keyboard/mobile use.
+- MFA enforcement for every account type, step-up prompts on sensitive organizer actions, recovery paths that cannot bypass MFA, and attempt rate limits.
 
 Exit gate: Sandbox money and entry states reconcile; no overselling or duplicate processing in concurrency/retry tests; core flows pass with realistic categories. No public paid launch yet.
 
@@ -85,6 +88,7 @@ Build:
 
 - Agreed license verification and exception-review workflow, with freshness/source visible.
 - Search and QR check-in, bib-range rules, conflict detection, and repeat-scan handling.
+- Timer export fields agreed from the road-results research, so results uploads need no retyping.
 - Timestamped start lists, change reports, and tested timer exports.
 - Minimal printable fallback roster and an access-restricted emergency-contact process.
 - Payment/email failure alerts, backup/restore, incident handling, and support runbook.
@@ -135,9 +139,10 @@ Candidate improvements, in likely order:
 1. Automated waitlist offers with expiring reservations and explicit payment consent.
 2. Better rider self-service changes, transfers, and refunds under organizer rules.
 3. Series registration and reusable season bib assignments.
-4. Additional cycling disciplines and federation integrations.
-5. Offline check-in synchronization, only with a defined conflict-resolution model.
-6. Public event discovery once organizer operations are reliable.
+4. Live USAC waiver pull and license validation, as soon as USAC grants access and approves the workflow. This moves ahead of other P2 items when access arrives.
+5. Additional cycling disciplines and other federation integrations.
+6. Offline check-in synchronization, only with a defined conflict-resolution model.
+7. Public event discovery once organizer operations are reliable.
 
 Omnium scoring, timing hardware, weather, training tools, and general event ticketing remain outside this roadmap unless discovery establishes a compelling need.
 
@@ -145,7 +150,7 @@ Omnium scoring, timing hardware, weather, training tools, and general event tick
 
 | Priority | Meaning | Examples |
 |---|---|---|
-| P0 | Required before a safe, usable pilot | Correct capacity/payments, accepted waivers, license review, check-in, exports, support |
+| P0 | Required before a safe, usable pilot | Correct capacity/payments, MFA sign-in, accepted waivers, license review, check-in, exports, support |
 | P1 | Required for the intended two-day adoption | Validated weekend operations, successor handoff, complete day-by-day reconciliation |
 | P2 | Improves a proven product | Automated waitlists, series features, additional disciplines |
 
@@ -168,7 +173,7 @@ These are roles to assign, not assumed staffing commitments.
 | Risk | Response | Stop / change condition |
 |---|---|---|
 | Too little volunteer capacity | Dedicated delivery/support ownership; brief scheduled research sessions | No funded capacity or support owner: do not commit to a live event |
-| Federation access unavailable | Seek approval early; prototype with labeled simulation | No accepted licensing/waiver workflow: no sanctioned-event launch |
+| Federation access unavailable | Seek approval early; prototype with labeled simulation; keep a verification interface ready for a live USAC source | No accepted licensing/waiver workflow: no sanctioned-event launch |
 | Incumbent already solves the problem | Benchmark real tasks before building | No material workload benefit: improve existing setup |
 | Money or capacity inconsistency | Transactional state design, retry protection, reconciliation tests | Any unresolved critical integrity defect blocks pilot |
 | Timer incompatibility | Test actual files with the actual timer | No accepted export blocks race-day adoption |
@@ -181,4 +186,5 @@ These are roles to assign, not assumed staffing commitments.
 2. Obtain an anonymized existing category setup, timer export, exception list, and reconciliation example.
 3. Schedule one workflow observation and the initial interviews.
 4. Submit federation and payment-model questions before choosing an implementation stack.
-5. Complete the build-versus-improve decision and revise estimates from evidence.
+5. Research the road-results.com update process with the timer and a recent promoter.
+6. Complete the build-versus-improve decision and revise estimates from evidence.
