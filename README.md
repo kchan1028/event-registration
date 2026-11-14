@@ -204,20 +204,27 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 |---|---|
 | [product.md](product.md) | Source of truth for requirements, scope, flows, business rules, and acceptance criteria |
 | [roadmap.md](roadmap.md) | Source of truth for phases, priorities, dependencies, risks, and delivery status |
-| [AGENTS.md](AGENTS.md) | Working rules for AI coding agents and anyone automating changes |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose, make, and review a change |
+| [SECURITY.md](SECURITY.md) | How to report a security problem privately, and a summary of security requirements |
+| [ACCESSIBILITY.md](ACCESSIBILITY.md) | Accessibility target, how it will be checked, and how to report a barrier |
+| [LICENSE.md](LICENSE.md) | MIT License |
 | [docs/architecture.md](docs/architecture.md) | What is built, the proposed target architecture, and open technical questions |
 | [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md) | Install, run, and test the prototype; [troubleshooting](docs/runbooks/troubleshooting.md) |
 | [DESIGN.md](DESIGN.md) | Visual system of the organizer workspace |
 | [docs/coding-guide.md](docs/coding-guide.md) | Category and capacity modeling, eligibility, pricing, payments, privacy, accessibility, testing |
 | [docs/documentation-guide.md](docs/documentation-guide.md) | How docs are organized, status vocabulary, glossary, and setup and troubleshooting templates |
 | [docs/content-guide.md](docs/content-guide.md) | Rules for future public pages, including SEO, answer engines, and structured data |
+| [docs/operations.md](docs/operations.md) | Proposed operating model: support owners, incident severity, freezes, monitoring, backups, and handoff |
 | [docs/decisions/README.md](docs/decisions/README.md) | Architecture decision records, including [0001](docs/decisions/0001-stack-for-category-builder-milestone.md), and the backlog of unresolved decisions |
 
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) first. Every change must review both [product.md](product.md) and [roadmap.md](roadmap.md) for impact and say in its summary what changed in each, or why neither needed to change.
 
+## Security and accessibility
+
+Report security problems privately as described in [SECURITY.md](SECURITY.md). The accessibility target and how to report a barrier are in [ACCESSIBILITY.md](ACCESSIBILITY.md).
+
 ## License
 
-Not chosen yet. Until a license is added, no reuse rights are granted.
+Released under the [MIT License](LICENSE.md).

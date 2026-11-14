@@ -41,7 +41,7 @@ Reviewers will send back any change whose summary does not state its product and
 3. Follow [docs/coding-guide.md](docs/coding-guide.md) for domain rules and [docs/documentation-guide.md](docs/documentation-guide.md) for writing.
 4. Update `product.md`, `roadmap.md`, `README.md`, and affected guides in the same change when the rule above requires it.
 5. Use fake data only. Never commit secrets, `.env` files, or real rider information.
-6. Run `npm run check`. If you changed the interface, also run `npm run test:e2e`, and follow the UI skills listed in [AGENTS.md](AGENTS.md#ux-and-ui-work).
+6. Run `npm run check`. If you changed the interface, also run `npm run test:e2e`, and keep the visual system in [DESIGN.md](DESIGN.md) consistent.
 7. Write the change summary (format below).
 
 ## Change summary
@@ -78,7 +78,11 @@ Write an ADR when a choice is expensive to reverse or affects several parts of t
 
 ## Reporting a problem
 
-Describe what you expected, what happened, and how to reproduce it. Leave out real rider names, emails, license numbers, and payment details. If the problem exposes private data or a security weakness, contact the project owner privately instead of filing it in public.
+Describe what you expected, what happened, and how to reproduce it. Leave out real rider names, emails, license numbers, and payment details. If the problem exposes private data or a security weakness, report it privately as described in [SECURITY.md](SECURITY.md) instead of filing it in public. For accessibility barriers, see [ACCESSIBILITY.md](ACCESSIBILITY.md#report-a-barrier).
+
+## License
+
+By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE.md).
 
 ## Questions
 

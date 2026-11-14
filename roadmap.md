@@ -113,7 +113,7 @@ Build:
 - Timer export fields agreed from the road-results research, so results uploads need no retyping.
 - Timestamped start lists, change reports, and tested timer exports.
 - Minimal printable fallback roster and an access-restricted emergency-contact process.
-- Payment/email failure alerts, backup/restore, incident handling, and support runbook.
+- Payment/email failure alerts, backup/restore, incident handling, and support runbook, following the operating model in [docs/operations.md](docs/operations.md).
 - Organizer handoff guide and role-specific volunteer instructions.
 
 Rehearsal:

@@ -27,3 +27,6 @@ design-md/
 # OS and editor
 .DS_Store
 *.log
+
+# Agent instructions are kept locally, not tracked
+AGENTS.md
