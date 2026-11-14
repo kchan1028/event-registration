@@ -1,0 +1,216 @@
+# Demo purchase flow fixtures
+#
+# FAKE DATA ONLY. Every event, venue, rider, license number, price, and fee
+# here is fictional and exists to drive the Phase 1 clickable demo described in
+# product.md section 2a. None of it is a real event, a real price, or a
+# statement of USA Cycling eligibility rules.
+#
+# Format is illustrative, not a schema. The real format is decided with the
+# technology stack ADR. Money is integer cents with a currency code.
+
+meta:
+  fixture_set: demo-purchase-flow
+  version: 1
+  created: 2026-11-14
+  currency: USD
+  simulated: true
+
+fees:
+  # Applied once per order, after discounts. Both are demo values.
+  platform_fee:
+    label: "Demo platform fee"
+    amount_cents: 300
+    per: order
+  processing_fee:
+    label: "Demo processing fee (simulated)"
+    rate_percent: 3
+    base: entries_subtotal_after_discounts
+    rounding: half_up_to_cent
+
+events:
+  - id: demo-valley-criterium
+    name: "Demo Valley Criterium"
+    venue: "Fictional Business Park, Demo City, CA"
+    days:
+      - id: dvc-sat
+        date: 2027-04-17
+        races:
+          - id: dvc-men-4-5
+            registration_category: "Men Cat 4/5"
+            format: { type: timed, minutes: 35, plus_laps: 2 }
+            start_time: "09:00"
+            price_cents: 3500
+            eligibility:
+              all_of:
+                - competition_class: { any_of: [men] }
+                - license_category: { any_of: [4, 5] }
+            capacity: { cap: 75, confirmed: 60 }
+          - id: dvc-women-3-4-5
+            registration_category: "Women Cat 3/4/5"
+            format: { type: timed, minutes: 30, plus_laps: 2 }
+            start_time: "09:50"
+            price_cents: 3500
+            eligibility:
+              all_of:
+                - competition_class: { any_of: [women] }
+                - license_category: { any_of: [3, 4, 5] }
+            capacity: { cap: 50, confirmed: 18 }
+          - id: dvc-masters-35-3-4
+            registration_category: "Masters 35+ Cat 3/4"
+            format: { type: timed, minutes: 40, plus_laps: 3 }
+            start_time: "10:40"
+            price_cents: 4000
+            eligibility:
+              all_of:
+                - racing_age: { min: 35 }
+                - license_category: { any_of: [3, 4] }
+            capacity: { cap: 60, confirmed: 60 }   # full: demo shows "Full"
+          - id: dvc-juniors-10-14
+            registration_category: "Juniors 10-14"
+            format: { type: timed, minutes: 20, plus_laps: 1 }
+            start_time: "11:40"
+            price_cents: 1500
+            eligibility:
+              all_of:
+                - racing_age: { min: 10, max: 14 }
+            requires_guardian: true
+            capacity: { cap: 40, confirmed: 6 }
+          - id: dvc-open-4-5-evening
+            registration_category: "Open Cat 4/5 Evening"
+            format: { type: timed, minutes: 30, plus_laps: 2 }
+            start_time: "17:30"
+            price_cents: 3000
+            eligibility:
+              all_of:
+                - license_category: { any_of: [4, 5] }
+            capacity: { cap: 60, confirmed: 12 }
+    discounts:
+      - id: dvc-second-race
+        label: "Second race discount"
+        amount_cents: 1000
+        applies: once_per_order_when_two_or_more_entries_on_same_day
+
+  - id: demo-ridge-weekend
+    name: "Demo Ridge Road Race Weekend"
+    venue: "Imaginary Ridge Loop, Sampleton, CA"
+    days:
+      - id: drw-sat
+        date: 2027-05-15
+        races:
+          - id: drw-rr-masters-35-3-4
+            registration_category: "Masters 35+ Cat 3/4 Road Race"
+            format: { type: distance, laps: 4, km: 64 }
+            start_time: "08:30"
+            price_cents: 5000
+            eligibility:
+              all_of:
+                - racing_age: { min: 35 }
+                - license_category: { any_of: [3, 4] }
+            capacity: { cap: 80, confirmed: 41 }
+          - id: drw-rr-4-5
+            registration_category: "Cat 4/5 Road Race"
+            format: { type: distance, laps: 3, km: 48 }
+            start_time: "10:00"
+            price_cents: 4500
+            eligibility:
+              all_of:
+                - license_category: { any_of: [4, 5] }
+            capacity: { cap: 80, confirmed: 55 }
+      - id: drw-sun
+        date: 2027-05-16
+        races:
+          - id: drw-crit-masters-35-3-4
+            registration_category: "Masters 35+ Cat 3/4 Criterium"
+            format: { type: timed, minutes: 40, plus_laps: 3 }
+            start_time: "09:00"
+            price_cents: 3500
+            eligibility:
+              all_of:
+                - racing_age: { min: 35 }
+                - license_category: { any_of: [3, 4] }
+            capacity: { cap: 60, confirmed: 33 }
+          - id: drw-crit-4-5
+            registration_category: "Cat 4/5 Criterium"
+            format: { type: timed, minutes: 35, plus_laps: 2 }
+            start_time: "10:00"
+            price_cents: 3500
+            eligibility:
+              all_of:
+                - license_category: { any_of: [4, 5] }
+            capacity: { cap: 60, confirmed: 47 }
+    bundles:
+      - id: drw-weekend
+        label: "Weekend bundle (one road race + one criterium)"
+        price_cents: 7500
+        components:
+          - { day: drw-sat, choose: one_eligible_race }
+          - { day: drw-sun, choose: one_eligible_race }
+        reserve: all_or_nothing
+
+riders:
+  # Names use the "Demo" surname, emails use the reserved example.com domain,
+  # phone numbers use the fictional 555-01xx range, license numbers use the
+  # DEMO- prefix. License results are simulated, never real USAC checks.
+  - id: rider-alex
+    name: "Alex Demo"
+    email: alex.demo@example.com
+    phone: "555-0101"
+    racing_age_2027: 29
+    competition_class: men
+    license: { number: DEMO-100001, category: 4, check: simulated_valid }
+    team: "Demo Wheelers"
+    emergency_contact: { name: "Robin Demo", phone: "555-0111" }
+  - id: rider-blake
+    name: "Blake Demo"
+    email: blake.demo@example.com
+    phone: "555-0102"
+    racing_age_2027: 38
+    competition_class: women
+    license: { number: DEMO-100002, category: 3, check: simulated_valid }
+    team: "Sample Velo"
+    emergency_contact: { name: "Taylor Demo", phone: "555-0112" }
+  - id: rider-casey
+    name: "Casey Demo"
+    email: null   # minor: contact goes through the guardian
+    racing_age_2027: 13
+    competition_class: men      # junior status comes from racing age, not class
+    license: { number: DEMO-100003, category: 5, check: simulated_valid }
+    guardian: { name: "Jordan Demo", email: jordan.demo@example.com, phone: "555-0103" }
+    emergency_contact: { name: "Jordan Demo", phone: "555-0103" }
+  - id: rider-sam
+    name: "Sam Demo"
+    email: sam.demo@example.com
+    phone: "555-0104"
+    racing_age_2027: 31
+    competition_class: women
+    license: { number: DEMO-100004, category: 4, check: simulated_unknown }  # -> needs review
+    team: null
+    emergency_contact: { name: "Morgan Demo", phone: "555-0114" }
+
+waiver:
+  id: demo-sample-waiver
+  version: "DEMO-WAIVER v1 (2026-11-14)"
+  text_file: sample-waiver.md
+  signature: { method: typed_name_plus_checkbox, guardian_required_for_minors: true }
+
+validation_messages:
+  # Shown next to the field and in the error summary at the top of the step.
+  required:
+    first_name: "Enter your first name."
+    last_name: "Enter your last name."
+    email: "Enter an email address, like name@example.com."
+    date_of_birth: "Enter your date of birth to confirm your racing age."
+    emergency_contact_name: "Enter an emergency contact's name."
+    emergency_contact_phone: "Enter an emergency contact's phone number."
+    guardian_name: "Riders under 18 need a parent or guardian. Enter their name."
+    entry: "Choose at least one race to continue."
+    waiver_read: "Read the waiver to the end before signing."
+    waiver_signature: "Type your full name to sign the waiver."
+    waiver_agree: "Check the box to confirm you agree to the waiver."
+  format:
+    email: "This email address is missing an @ or a domain. Check it and try again."
+    phone: "Enter a phone number with 10 digits."
+    signature_mismatch: "The typed name must match the rider's name (or the guardian's, for a minor)."
+  availability:
+    full: "This category is full. Choose another category or ask the organizer about the waitlist."
+    ineligible: "This category does not match the rider's age or license category."

@@ -36,7 +36,7 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Public page and copy rules | [content-guide.md](content-guide.md) | |
 | Writing rules, status vocabulary, glossary | This file | |
 | Setup, troubleshooting, race-day runbooks | `docs/runbooks/` (planned) | Created once there is something to run |
-| Category configuration fixtures | `docs/fixtures/` (planned) | Fake, illustrative data only |
+| Demo and category configuration fixtures | [fixtures/](fixtures/README.md) | Fake, illustrative data only. Demo purchase flow fixtures exist; category configuration fixtures are planned |
 
 ### Repository structure
 
@@ -57,8 +57,12 @@ Current layout:
     ├── content-guide.md
     ├── documentation-guide.md
     ├── operations.md
-    └── decisions/
-        └── README.md
+    ├── decisions/
+    │   └── README.md
+    └── fixtures/
+        ├── README.md
+        ├── demo-purchase-flow.yaml
+        └── sample-waiver.md
 ```
 
 Source code directories will be defined by the ADR that chooses the technology stack. Do not create empty placeholder directories before then.

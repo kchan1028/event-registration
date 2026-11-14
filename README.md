@@ -143,6 +143,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 |---|---|
 | Product brief and roadmap | Drafted; proposed, not approved |
 | Repository and contributor documentation | Implemented November 14, 2026 |
+| Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; no demo uses them yet |
 | Technology stack | Not chosen; see [open decisions](docs/decisions/README.md#decision-backlog) |
 | Application code, payments, USA Cycling integration, hosting | None |
 
@@ -164,6 +165,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [docs/content-guide.md](docs/content-guide.md) | Rules for future public pages, including SEO, answer engines, and structured data |
 | [docs/operations.md](docs/operations.md) | Proposed operating model: support owners, incident severity, freezes, monitoring, backups, and handoff |
 | [docs/decisions/README.md](docs/decisions/README.md) | Architecture decision records and the backlog of unresolved decisions |
+| [docs/fixtures/README.md](docs/fixtures/README.md) | Fake demonstration data and sample waiver text for the planned Phase 1 demo purchase flow |
 
 ## Contributing
 
