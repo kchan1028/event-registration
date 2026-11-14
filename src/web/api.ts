@@ -3,6 +3,7 @@ import type { CreateEventInput, EventConfig, TestEntry } from '../shared/schema'
 import type { Issue } from '../shared/validation';
 import type { ReadinessItem, RiderDetails, WaiverAcceptance } from '../shared/checkout';
 import type { Quote } from '../shared/pricing';
+import type { BibSettings, CheckInResult, PaymentState } from '../shared/checkin';
 
 export interface PublicEvent {
   eventId: string;
@@ -111,6 +112,33 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   return data as T;
 }
 
+export interface CheckInRider {
+  orderId: string;
+  checkInCode: string | null;
+  name: string;
+  team: string;
+  racingAge: number;
+  payment: PaymentState;
+  entries: { id: string; categoryName: string; code: string; raceName: string; startTime: string | null }[];
+  readiness: ReadinessItem[];
+  result: CheckInResult;
+  bib: number | null;
+  bibHistory: { bib: number; assignedAt: string; releasedAt: string | null; reason: string | null }[];
+  checkedInAt: string | null;
+}
+
+export interface CheckInList {
+  eventId: string;
+  eventName: string;
+  isDemo: boolean;
+  published: boolean;
+  days: { id: string; label: string; date: string }[];
+  dayId: string;
+  settings: BibSettings;
+  summary: { riders: number; checkedIn: number; blocked: number; bibsIssued: number };
+  riders: CheckInRider[];
+}
+
 export const api = {
   organizations: () => request<OrganizationSummary[]>('GET', '/api/organizations'),
   createOrganization: (name: string) => request<{ id: string; name: string }>('POST', '/api/organizations', { name }),
@@ -130,4 +158,11 @@ export const api = {
   cancelOrder: (id: string) => request<OrderView>('POST', `/api/orders/${id}/cancel`),
   orders: (eventId: string) => request<OrderView[]>('GET', `/api/events/${eventId}/orders`),
   reviewLicense: (entryId: string, note: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/license-review`, { note }),
+  checkInList: (eventId: string, dayId: string | null, q: string) =>
+    request<CheckInList>('GET', `/api/events/${eventId}/check-in?${new URLSearchParams({ ...(dayId ? { day: dayId } : {}), q })}`),
+  saveBibSettings: (eventId: string, settings: BibSettings) => request<BibSettings>('PUT', `/api/events/${eventId}/bib-settings`, settings),
+  checkIn: (eventId: string, orderId: string, dayId: string, bib: number | null) => request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}`, { dayId, bib }),
+  changeBib: (eventId: string, orderId: string, dayId: string, bib: number, reason: string) =>
+    request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}/bib`, { dayId, bib, reason }),
+  addCheckInDemoRiders: (eventId: string) => request<{ created: number }>('POST', `/api/events/${eventId}/check-in-demo-riders`),
 };
