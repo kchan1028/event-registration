@@ -232,7 +232,7 @@ export function buildBerkeleyOmniumEvent(): { config: EventConfig; entryPlan: { 
       bundles: [],
       additionalRaceDiscountCents: 0,
       additionalRaceDiscountMode: 'each_additional_entry',
-      // Berkeley Omnium rule (2026 race information): a second criterium race costs $20.
+      // Berkeley Omnium rule (2026 race information): a second criterium race costs $20, flat, on race day too.
       sameRaceExtraEntryCents: 2000,
       platformFeeCents: 0,
       platformFeeLabel: 'Platform fee',
