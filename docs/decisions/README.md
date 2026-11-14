@@ -1,0 +1,92 @@
+# Architecture decision records
+
+An architecture decision record (ADR) is a short document that captures one significant decision: the context, the options considered, what was chosen, and the consequences. ADRs let a successor understand why the system looks the way it does without asking the person who built it.
+
+**Current state:** no ADRs have been accepted. The backlog below lists decisions the project will need, with known options and tradeoffs. None of the options listed is a recommendation yet.
+
+## Document maintenance rule (mandatory)
+
+Every change must review both [product.md](../../product.md) and [roadmap.md](../../roadmap.md) for impact.
+
+- Update `product.md` when requirements, scope, user flows, business rules, acceptance criteria, or product decisions change.
+- Update `roadmap.md` when priorities, dependencies, milestones, blockers, or delivery status change.
+- When a change affects neither document, state that explicitly in the change summary instead of making cosmetic edits.
+- Keep `README.md` and affected guides consistent with the implementation.
+- Mark roadmap work complete only after its acceptance criteria are verified.
+- Distinguish planned, implemented, and verified behavior.
+- Do not maintain a competing product roadmap elsewhere.
+
+An accepted ADR often changes `product.md` (a product decision or dependency) or `roadmap.md` (a dependency resolved or a blocker removed). Update them in the same change.
+
+## When to write an ADR
+
+Write one when a choice:
+
+- is expensive or slow to reverse (stack, datastore, payment provider, hosting);
+- affects money, capacity, privacy, or federation compliance; or
+- closes an open decision listed in `product.md` or this backlog.
+
+Routine choices (a library for date formatting, a variable name) do not need one.
+
+## Process
+
+1. Copy the template below into `docs/decisions/NNNN-short-title.md`, using the next unused number.
+2. Set the status to Proposed and fill in the context and options. Include "do nothing" or "keep the current process" when it is a real option.
+3. Ask the accountable role to review (see [roadmap.md](../../roadmap.md#responsibilities)); for example, the treasurer for payment decisions.
+4. Mark it Accepted or Rejected with the date. Update [architecture.md](../architecture.md), the index below, and any affected source documents in the same change.
+5. Never rewrite an accepted ADR's decision. To change it, write a new ADR that supersedes it and mark the old one Superseded with a link.
+
+Statuses: Proposed, Accepted, Rejected, Superseded.
+
+## Template
+
+```markdown
+# NNNN. <Decision title>
+
+Status: Proposed | Accepted | Rejected | Superseded by NNNN
+Date: <YYYY-MM-DD>
+Deciders: <roles>
+Related: <product.md or roadmap.md sections>
+
+## Context
+What problem forces a decision now? Which requirements and constraints apply?
+
+## Options considered
+### Option A
+Pros, cons, cost, and risks.
+### Option B
+...
+
+## Decision
+What was chosen, in one or two sentences.
+
+## Consequences
+What becomes easier, what becomes harder, what must happen next.
+Product impact (product.md):
+Roadmap impact (roadmap.md):
+```
+
+## Index
+
+| Number | Title | Status | Date |
+|---|---|---|---|
+| (none yet) | | | |
+
+## Decision backlog
+
+These are unresolved. They are ordered roughly by when the roadmap needs them. "Needed by" refers to roadmap phases.
+
+| Decision | Needed by | Options known so far | Main tradeoffs |
+|---|---|---|---|
+| Build versus improve the current setup | Phase 0 exit | Improve the incumbent workflow; buy more support; build CycleReg | The roadmap stops the build if a custom product shows no credible advantage |
+| USA Cycling license and waiver path | Before any sanctioned pilot (Phase 3 gate) | Approved platform integration; organizer manual review with paper waivers; a hybrid | Approval may be slow or unavailable; manual paths add volunteer work, which is the problem being solved |
+| Payment provider and merchant-of-record model | Phase 2 | Club as merchant with connected accounts; platform as merchant with payouts | Who handles disputes, payouts, and tax; onboarding effort for each club |
+| Application stack | Phase 1 for prototypes, Phase 2 for the core | To be listed after Phase 0 | Successor maintainability and hosting cost matter more than novelty; choose after the federation and payment questions (roadmap next actions) |
+| Primary datastore and capacity enforcement | Phase 2 | A relational database with transactions and row locks; atomic conditional counters; a queue that serializes reservations | Correctness under concurrency first; then operational simplicity for a small team |
+| Hosting, backups, and monitoring | Phase 2 | Managed platform; self-managed cloud resources | Managed services cost more but need less volunteer expertise; restore must be demonstrated either way |
+| Authentication | Phase 2 | Email magic links; passwords; third-party sign-in | Guardians and occasional riders forget passwords; organizer accounts need stronger protection |
+| Transactional email provider | Phase 2 | To be compared | Delivery status and suppression handling are required |
+| Timer export format | Phase 1 (samples), Phase 3 (tested) | Whatever the actual timer accepts | Must be tested with the real timer; no assumed standard |
+| Data retention and deletion periods | Before the pilot | To be set with the club and federation requirements | Waiver and financial records may need long retention; other data should be kept as briefly as possible |
+| Product name | Before any public page | CycleReg (working name, availability not checked) | Trademark and domain availability |
+| Repository license | Before sharing the code | Private; an open-source license; source-available | Reuse by other clubs versus control of support burden |

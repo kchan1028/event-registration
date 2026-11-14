@@ -1,0 +1,202 @@
+# Documentation guide
+
+This guide explains where each kind of information lives, how to describe the status of work honestly, and how to write documentation a new contributor or successor organizer can act on. Follow it for every document in this repository.
+
+## Document maintenance rule (mandatory)
+
+Every change must review both [product.md](../product.md) and [roadmap.md](../roadmap.md) for impact.
+
+- Update `product.md` when requirements, scope, user flows, business rules, acceptance criteria, or product decisions change.
+- Update `roadmap.md` when priorities, dependencies, milestones, blockers, or delivery status change.
+- When a change affects neither document, state that explicitly in the change summary instead of making cosmetic edits.
+- Keep `README.md` and affected guides consistent with the implementation.
+- Mark roadmap work complete only after its acceptance criteria are verified.
+- Distinguish planned, implemented, and verified behavior.
+- Do not maintain a competing product roadmap elsewhere.
+
+The change summary format is in [CONTRIBUTING.md](../CONTRIBUTING.md#change-summary).
+
+## Where things live
+
+Each fact has one home. Other documents link to it instead of copying it, so they cannot drift apart.
+
+| Information | Home | Notes |
+|---|---|---|
+| Requirements, scope, flows, business rules, acceptance criteria | [product.md](../product.md) | Source of truth |
+| Phases, priorities, dependencies, risks, delivery status | [roadmap.md](../roadmap.md) | Source of truth; the only roadmap |
+| Project summary, status snapshot, document map | [README.md](../README.md) | Summarizes; must match the two sources |
+| Rules for AI agents | [AGENTS.md](../AGENTS.md) | |
+| How to propose and review changes | [CONTRIBUTING.md](../CONTRIBUTING.md) | |
+| Technical structure and constraints | [architecture.md](architecture.md) | Labeled Proposed until ADRs accept it |
+| Significant technical decisions | [decisions/](decisions/README.md) | One file per decision |
+| Domain rules for code | [coding-guide.md](coding-guide.md) | |
+| Public page and copy rules | [content-guide.md](content-guide.md) | |
+| Writing rules, status vocabulary, glossary | This file | |
+| Setup, troubleshooting, race-day runbooks | `docs/runbooks/` (planned) | Created once there is something to run |
+| Category configuration fixtures | `docs/fixtures/` (planned) | Fake, illustrative data only |
+
+### Repository structure
+
+Current layout:
+
+```text
+.
+├── README.md
+├── AGENTS.md
+├── CONTRIBUTING.md
+├── product.md
+├── roadmap.md
+└── docs/
+    ├── architecture.md
+    ├── coding-guide.md
+    ├── content-guide.md
+    ├── documentation-guide.md
+    └── decisions/
+        └── README.md
+```
+
+Source code directories will be defined by the ADR that chooses the technology stack. Do not create empty placeholder directories before then.
+
+### Naming conventions
+
+- Documentation files use lowercase kebab-case: `race-day-check-in.md`, not `RaceDayCheckIn.md`. The exceptions are the conventional root files (`README.md`, `AGENTS.md`, `CONTRIBUTING.md`) and the two source documents (`product.md`, `roadmap.md`), whose names stay fixed because other files link to them.
+- ADRs are numbered: `docs/decisions/0001-short-title.md`. Numbers are never reused.
+- Runbooks are named for the task they support: `docs/runbooks/open-registration.md`, `docs/runbooks/check-in-outage.md`.
+- Use the domain terms exactly as defined in the [glossary](#glossary). Say "registration category", not "division", "class", or "wave", unless the glossary says otherwise.
+
+## Status vocabulary
+
+Describe every feature, phase, or behavior with one of these words. Do not use "done", "ready", or "supported" on their own.
+
+| Status | Meaning | Evidence needed |
+|---|---|---|
+| Planned | Described in `product.md` or `roadmap.md`; not started | A requirement or roadmap item |
+| Proposed | A design or decision under discussion, not yet accepted | A document or ADR marked Proposed |
+| In progress | Work has started but is not usable | A branch or partial change |
+| Implemented | Code or documentation exists in `main` | The commit or file |
+| Verified | Implemented, and its acceptance criteria or exit gate have been checked | Test results, rehearsal notes, or sign-off from the accountable role, linked from `roadmap.md` |
+| Blocked | Cannot proceed until a named dependency is resolved | The dependency and its owner |
+
+Only Verified work counts as complete on the roadmap. When README text describes behavior, it must match the status in `roadmap.md`.
+
+## How to write
+
+Write for a volunteer organizer who is smart, busy, and not a software engineer. Engineers lose nothing when the text is plain.
+
+- **Lead with the point.** State the conclusion or instruction in the first sentence, then give the reasons and details in order of importance. This is the Minto pyramid structure: answer first, then grouped support. A reader who stops after the first paragraph should still know what to do.
+- **One idea per paragraph.** Use headings that state the point, such as "A display header never creates a limit", rather than vague labels such as "Notes".
+- **Explain technical terms when you need them.** Define the term the first time it appears, or link to the glossary. Example: "an idempotency key (a unique value that lets the system recognize a repeated request and process it only once)".
+- **Be specific.** Name the role, the screen, the field, the number. Replace "the system handles errors" with what actually happens.
+- **Be honest about uncertainty.** Say what is unknown and who owns the question. Never fill a gap with a guess.
+- **Cut filler.** No "it's important to note", "seamless", "robust", "leverage", or restating the heading. No em dashes as sentence separators. No closing paragraph that repeats the page.
+- **Instructions are numbered steps.** Each step starts with a verb and says what you should see when it worked.
+
+## Diagrams
+
+- Use Mermaid in fenced `mermaid` code blocks so diagrams live in version control and render on common Git hosts.
+- Put a one-paragraph plain-English explanation directly below each diagram. Someone who cannot see the diagram should get the same information from the text.
+- Label diagrams of unbuilt behavior as proposed, in the heading or the sentence above.
+- Quote node labels (`A["Label text"]`) and avoid semicolons inside labels; both prevent common parse errors.
+- Keep a diagram to one idea. If it needs more than about 20 nodes, split it.
+- Check that every diagram parses before merging (paste it into the Mermaid live editor, or use a renderer once the project has one).
+
+## Links
+
+- Link between repository files with relative paths, such as `[coding guide](coding-guide.md)` from inside `docs/`.
+- Link to a section with its heading anchor, such as `product.md#launch-criteria`. When you rename a heading, search for links to its old anchor.
+- Use descriptive link text. Never "click here".
+- External sources include the date you reviewed them when the content can change (fees, federation rules, competitor features).
+
+## Documenting setup and troubleshooting once code exists
+
+There is nothing to set up yet. When the first runnable code lands, the same change must add a setup runbook. Do not write setup steps for software that does not exist.
+
+### Setup runbook template
+
+Save as `docs/runbooks/local-setup.md` (or a more specific name):
+
+```markdown
+# Local setup
+
+Last verified: <date> on <operating system and version> by <role>
+
+## What you need
+- <tool> <exact version>, and where to get it
+
+## Steps
+1. <Verb> <thing>. Expected result: <what you see>.
+2. ...
+
+## Check it worked
+<one command or action and its expected output>
+
+## Configuration
+| Setting | Purpose | Where the value comes from | Secret? |
+|---|---|---|---|
+
+## Common problems
+See troubleshooting.md.
+```
+
+### Troubleshooting entry template
+
+Add entries to `docs/runbooks/troubleshooting.md`, one heading per symptom:
+
+```markdown
+## <Symptom as the user sees it, for example "Check-in screen shows 'offline'">
+
+Who sees it: <role>
+Likely causes:
+1. <cause>: how to confirm, how to fix
+2. ...
+Escalate to: <role from the event's support plan> if not fixed in <time>
+Last confirmed: <date>
+```
+
+Race-day runbooks (check-in outage, payment provider outage, start-list correction) follow the same structure and must name the support owner and escalation route that [product.md](../product.md#quality-requirements) requires.
+
+Rules for runbooks:
+
+- Every command must have been run by the author on the date shown.
+- Never put real secrets, passwords, or rider data in a runbook. Refer to where the secret is stored.
+- When a step changes, update the "Last verified" line.
+
+## Glossary
+
+Terms from the category model are defined in [product.md](../product.md#keep-the-concepts-separate); this list repeats them briefly and adds other terms used across the docs. If a definition here conflicts with `product.md`, `product.md` wins and this list should be corrected.
+
+| Term | Meaning in this project |
+|---|---|
+| Road race | A mass-start bicycle race on roads, run over a set distance or number of laps of a course |
+| Criterium (crit) | A mass-start race on a short closed circuit, often run for a set time plus a number of laps (for example 45 minutes + 3 laps) |
+| Omnium | A competition combining several races; here, a road race and criterium weekend that riders can enter as a bundle. Omnium points scoring is out of scope |
+| Event weekend | One event made up of one or more race days |
+| Race day | A single date within an event weekend |
+| Race | One competition on a race day, such as the Saturday road race |
+| Display group (header) | A heading that groups categories on the schedule; presentation only, never a limit |
+| Registration category | The entry option a rider buys, with its own eligibility and price, such as Masters 35+ Cat 3/4 |
+| Start group (field) | Riders who start together under one shared field limit; may contain several categories |
+| Classification | The label or code sent to the timer for scoring and awards |
+| Capacity pool | An explicit limit shared across selected categories or start groups |
+| Bundle | One purchase containing an entry in each specified race, such as a weekend entry |
+| Reservation | A short-lived hold on a place during checkout; it expires if payment does not complete |
+| Eligibility rule | Structured conditions (license category, racing age, competition class, and so on) a rider must meet for a category |
+| License category | The rider's racing category assigned by the federation, such as Cat 3. Pro status is stored separately |
+| Racing age | The age used for eligibility, calculated by the governing body's rule for the discipline and season, not assumed from the birthday |
+| Readiness | Whether a rider is cleared to race: needs information, needs waiver, needs license review, cleared, or checked in |
+| Bib | The race number a rider wears; assigned from configured ranges |
+| Start list | The list of riders in each race sent to the timer; versioned with timestamps |
+| Timer | The person or service that records finishes and produces results |
+| USAC | USA Cycling, the national governing body for competitive cycling in the United States |
+| Idempotency | Processing a repeated request or notification only once, so retries cannot create duplicates |
+| ADR | Architecture decision record: a short document recording one significant decision and its tradeoffs |
+
+## Review checklist for documentation changes
+
+- [ ] Product and roadmap impact stated in the change summary
+- [ ] Status words match the [status vocabulary](#status-vocabulary)
+- [ ] Each fact lives in one home; other documents link to it
+- [ ] Terms match the glossary
+- [ ] Relative links and anchors resolve
+- [ ] Every Mermaid diagram parses and has a plain-English explanation
+- [ ] No secrets, real rider data, or unsupported claims
