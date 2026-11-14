@@ -41,6 +41,13 @@ Cause: the event has no published version. Riders only ever see a published vers
 Fix: in the organizer workspace, open **Review and publish**, fix any errors, and publish. The page then shows the published schedule.
 Last confirmed: November 14, 2026
 
+## A category shows "Opens …" or "Registration closed" and cannot be chosen
+
+Who sees it: rider on a real (non-demo) event, or on a demo event with the demo window setting turned off.
+Cause: the current time in the event's time zone is outside that category's registration window.
+Fix: organizers change the category's opening or closing time in the category editor and publish again. For a demo, turn on "let testers register outside the registration windows" in **Event setup**.
+Last confirmed: November 14, 2026
+
 ## Checkout says a race is full and nothing was held
 
 Who sees it: rider at the "Sign and review the order" step.

@@ -205,3 +205,57 @@ describe('demo purchase flow fixtures through the API', () => {
     await app.close();
   });
 });
+
+describe('registration windows through the API', () => {
+  /** The demo weekend turned into a "real" event: windows are enforced. */
+  async function realEvent(at: string) {
+    let now = new Date(at);
+    const clock = { set: (iso: string) => (now = new Date(iso)), advance: (min: number) => (now = new Date(now.getTime() + min * 60_000)) };
+    const { app } = buildApp({ dbPath: ':memory:', now: () => now, holdMinutes: 10 });
+    const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
+    const ev = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
+    const config = structuredClone(ev.config);
+    config.event.isDemo = false;
+    await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: ev.revision, config } });
+    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    const code = (c: string) => config.categories.find((x) => x.timingCode === c)!.id;
+    const waiver = { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
+    let n = 0;
+    const order = (ids: string[]) => app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `win-${++n}-xxxxxx`, categoryIds: ids, rider: RIDER, waiver } });
+    return { app, eventId, code, order, clock };
+  }
+
+  it('refuses entries before a window opens and after it closes', async () => {
+    const { order, code, clock } = await realEvent('2027-01-15T20:00:00Z');
+    const early = await order([code('RR-M35-34')]);
+    expect(early.statusCode).toBe(422);
+    expect(early.json().error).toMatch(/opens Feb 1, 2027, 9:00 AM/);
+    clock.set('2027-04-23T04:00:00Z'); // Apr 22, 9:00 PM in California: road race closed at 8:00 PM, criterium still open
+    expect((await order([code('RR-M35-34')])).statusCode).toBe(422);
+    expect((await order([code('CR-M35-34')])).statusCode).toBe(201);
+  });
+
+  it('a demo event lets testers register outside the window', async () => {
+    let now = new Date('2027-01-15T20:00:00Z');
+    const { app } = buildApp({ dbPath: ':memory:', now: () => now });
+    const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
+    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    const pub = (await app.inject({ method: 'GET', url: `/api/public/events/${eventId}` })).json() as { config: EventConfig; enforceWindows: boolean; nowLocal: string };
+    expect(pub.enforceWindows).toBe(false);
+    expect(pub.nowLocal).toBe('2027-01-15T12:00');
+    const cat = pub.config.categories.find((c) => c.timingCode === 'RR-M35-34')!.id;
+    const waiver = { version: pub.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
+    const res = await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: 'demo-window-1', categoryIds: [cat], rider: RIDER, waiver } });
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('a hold taken before close can be paid within its time, but a late payment after close goes to a person', async () => {
+    const { app, order, code, clock } = await realEvent('2027-04-23T02:55:00Z'); // 7:55 PM, road race closes 8:00 PM
+    const inTime = (await order([code('RR-M35-34')])).json() as Order;
+    const lateOne = (await order([code('RR-D23')])).json() as Order;
+    clock.advance(6); // 8:01 PM: closed, holds still valid
+    expect(((await app.inject({ method: 'POST', url: `/api/orders/${inTime.id}/payment`, payload: { attemptId: 'win-pay-1', outcome: 'success' } })).json() as Order).status).toBe('confirmed');
+    clock.advance(10); // hold expired after close
+    expect(((await app.inject({ method: 'POST', url: `/api/orders/${lateOne.id}/payment`, payload: { attemptId: 'win-pay-2', outcome: 'success' } })).json() as Order).status).toBe('needs_attention');
+  });
+});

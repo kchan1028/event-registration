@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { checkSignature, findConflicts, MESSAGES, riderDetailsSchema, type RiderDetails } from '../shared/checkout';
+import { checkSignature, findConflicts, formatLocalDateTime, MESSAGES, riderDetailsSchema, windowMessage, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
 import { evaluateCategory, summarizeEligibility, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories } from '../shared/format';
@@ -339,6 +339,8 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
       const cat = config.categories.find((c) => c.id === id);
       if (cat && checking && evaluateCategory(cat, draft.profile).status === 'ineligible') errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.ineligible}` });
       if (cat && ev.remaining[id] === 0) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.full}` });
+      const wmsg = cat && ev.enforceWindows ? windowMessage(cat, windowState(cat, ev.nowLocal)) : null;
+      if (wmsg) errs.push({ id: `opt-${id}`, message: wmsg });
     }
     for (const c of conflicts.filter((x) => x.level === 'block')) errs.push({ id: `opt-${c.b}`, message: c.message });
     if (intent && intentMissing.length) {
@@ -352,6 +354,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
     <div className="reg__grid">
       <div className="reg__col">
         <ErrorSummary errors={errors} />
+        <WindowBanner ev={ev} />
         <section className="about" aria-labelledby="about-title">
           <h2 id="about-title">About you</h2>
           <p className="muted">These answers show which races you can enter. Every race stays visible.</p>
@@ -451,6 +454,8 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                                     today={ev.today}
                                     selected={draft.selected.includes(cat.id)}
                                     remaining={ev.remaining[cat.id] ?? null}
+                                    window={windowState(cat, ev.nowLocal)}
+                                    enforceWindows={ev.enforceWindows}
                                     result={result(cat)}
                                     conflicts={draft.selected.includes(cat.id) ? conflicts.filter((c) => c.a === cat.id || c.b === cat.id) : []}
                                     onToggle={() => toggle(cat.id)}
@@ -515,15 +520,42 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
   );
 }
 
-function RaceOption({ config, cat, today, selected, remaining, result, conflicts, onToggle }: { config: EventConfig; cat: Category; today: string; selected: boolean; remaining: number | null; result: EligibilityResult | null; conflicts: ReturnType<typeof findConflicts>; onToggle: () => void }) {
+function RaceOption({
+  config,
+  cat,
+  today,
+  selected,
+  remaining,
+  window,
+  enforceWindows,
+  result,
+  conflicts,
+  onToggle,
+}: {
+  config: EventConfig;
+  cat: Category;
+  today: string;
+  selected: boolean;
+  remaining: number | null;
+  window: WindowState;
+  enforceWindows: boolean;
+  result: EligibilityResult | null;
+  conflicts: ReturnType<typeof findConflicts>;
+  onToggle: () => void;
+}) {
   const race = config.races.find((r) => r.id === cat.raceId);
   const day = config.days.find((d) => d.id === race?.dayId);
   const price = categoryPrice(cat, today, day?.date ?? '');
   const full = remaining === 0;
+  const outside = enforceWindows && window !== 'open';
   const closed = cat.status !== 'active';
-  const disabled = !selected && (full || closed || result?.status === 'ineligible');
+  const disabled = !selected && (full || closed || outside || result?.status === 'ineligible');
   const status = closed
     ? { cls: 'muted', text: 'Closed' }
+    : outside && window === 'not_yet'
+      ? { cls: 'muted', text: `Opens ${formatLocalDateTime(cat.registration.opensAt!)}` }
+      : outside
+        ? { cls: 'muted', text: 'Registration closed' }
     : full
       ? { cls: 'muted', text: 'Full' }
       : result?.status === 'ineligible'
@@ -557,6 +589,7 @@ function RaceOption({ config, cat, today, selected, remaining, result, conflicts
       <div className="opt__status" id={`opt-${cat.id}-why`}>
         {status && <span className={`status status--${status.cls}`}>{status.text}</span>}
         {full && <span className="opt__reason">{MESSAGES.full}</span>}
+        {!outside && cat.registration.closesAt && window === 'open' && <span className="opt__reason">Registration closes {formatLocalDateTime(cat.registration.closesAt)}</span>}
         {result && result.status === 'ineligible' && <span className="opt__reason">{result.reasons.join('; ')}</span>}
         {result && result.status === 'needs_review' && <span className="opt__reason">{result.reasons.join('; ')}</span>}
         {cat.eligibility.guardianRequired && <span className="opt__reason">A parent or guardian signs for this entry.</span>}
@@ -567,6 +600,31 @@ function RaceOption({ config, cat, today, selected, remaining, result, conflicts
         ))}
       </div>
     </div>
+  );
+}
+
+/** Explains when windows apply, and says plainly when a demo lets testers register outside them. */
+function WindowBanner({ ev }: { ev: PublicEvent }) {
+  const cats = ev.config.categories.filter((c) => c.status === 'active');
+  const outside = cats.filter((c) => windowState(c, ev.nowLocal) !== 'open');
+  if (outside.length === 0) return null;
+  const opens = cats.map((c) => c.registration.opensAt).filter((x): x is string => !!x).sort()[0];
+  const tz = ev.config.event.timeZone;
+  if (!ev.enforceWindows) {
+    return (
+      <p className="note note--warn" role="note">
+        <strong>Demo mode:</strong> {opens && ev.nowLocal < opens ? `registration for this event opens ${formatLocalDateTime(opens)} (${tz})` : 'some registration windows are not open right now'}. This demo lets you try it anyway. A real event refuses entries outside each category’s window.
+      </p>
+    );
+  }
+  return (
+    <p className="note" role="note">
+      {outside.length === cats.length
+        ? opens && ev.nowLocal < opens
+          ? `Registration opens ${formatLocalDateTime(opens)} (${tz}).`
+          : 'Registration is closed for every category.'
+        : `${outside.length} of ${cats.length} categories are outside their registration window right now.`}
+    </p>
   );
 }
 

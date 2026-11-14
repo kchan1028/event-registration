@@ -44,6 +44,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Autosave to a local SQLite database, safe against stale saves | Implemented and tested |
 | Rider demo purchase flow (product.md 2a): browse events, demo rider picker, start-ordered schedule with conflict warnings, bundles, second-race discount, demo fees, emergency contact, typed-name waiver signature, error summaries, all-or-nothing 10-minute holds, "Complete simulated payment" with decline and retry | Implemented and tested in light and dark themes; usability test with people still open |
 | Confirmation with a check-in code and per-entry readiness; organizer Registrations queue with license review | Implemented and tested |
+| Registration open and close times enforced in the event's time zone (demo events can let testers register early, labeled "Demo mode") | Implemented and tested |
 | Light and dark themes, following the system setting, with a header toggle | Implemented; contrast checked manually, no automated test yet |
 | CSV import, change-impact preview, real payments and refunds, check-in, exports | Planned |
 
