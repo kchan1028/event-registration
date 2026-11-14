@@ -154,7 +154,6 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 |---|---|
 | [product.md](product.md) | Source of truth for requirements, scope, flows, business rules, and acceptance criteria |
 | [roadmap.md](roadmap.md) | Source of truth for phases, priorities, dependencies, risks, and delivery status |
-| [AGENTS.md](AGENTS.md) | Working rules for AI coding agents and anyone automating changes |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose, make, and review a change |
 | [SECURITY.md](SECURITY.md) | How to report a security problem privately, and a summary of security requirements |
 | [ACCESSIBILITY.md](ACCESSIBILITY.md) | Accessibility target, how it will be checked, and how to report a barrier |

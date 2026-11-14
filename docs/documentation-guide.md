@@ -25,7 +25,6 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Requirements, scope, flows, business rules, acceptance criteria | [product.md](../product.md) | Source of truth |
 | Phases, priorities, dependencies, risks, delivery status | [roadmap.md](../roadmap.md) | Source of truth; the only roadmap |
 | Project summary, status snapshot, document map | [README.md](../README.md) | Summarizes; must match the two sources |
-| Rules for AI agents | [AGENTS.md](../AGENTS.md) | |
 | How to propose and review changes | [CONTRIBUTING.md](../CONTRIBUTING.md) | |
 | Security reporting and security requirement summary | [SECURITY.md](../SECURITY.md) | Summary links to the rules' homes |
 | Accessibility target, checks, and barrier reports | [ACCESSIBILITY.md](../ACCESSIBILITY.md) | Detailed rules stay in the coding guide |
@@ -45,7 +44,6 @@ Current layout:
 ```text
 .
 ├── README.md
-├── AGENTS.md
 ├── CONTRIBUTING.md
 ├── SECURITY.md
 ├── ACCESSIBILITY.md
@@ -65,7 +63,7 @@ Source code directories will be defined by the ADR that chooses the technology s
 
 ### Naming conventions
 
-- Documentation files use lowercase kebab-case: `race-day-check-in.md`, not `RaceDayCheckIn.md`. The exceptions are the conventional root files (`README.md`, `AGENTS.md`, `CONTRIBUTING.md`) and the two source documents (`product.md`, `roadmap.md`), whose names stay fixed because other files link to them.
+- Documentation files use lowercase kebab-case: `race-day-check-in.md`, not `RaceDayCheckIn.md`. The exceptions are the conventional root files (`README.md`, `CONTRIBUTING.md`) and the two source documents (`product.md`, `roadmap.md`), whose names stay fixed because other files link to them.
 - ADRs are numbered: `docs/decisions/0001-short-title.md`. Numbers are never reused.
 - Runbooks are named for the task they support: `docs/runbooks/open-registration.md`, `docs/runbooks/check-in-outage.md`.
 - Use the domain terms exactly as defined in the [glossary](#glossary). Say "registration category", not "division", "class", or "wave", unless the glossary says otherwise.
