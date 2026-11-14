@@ -82,7 +82,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5273/` and select **Load demonstration event**, or create your own organization. To try rider checkout, publish the event from **Review and publish**, then select **Open rider registration**. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
+Open `http://127.0.0.1:5273/` and select **Load Berkeley Omnium** (the 2026 fields and times, dated for 2027, with placeholder fees), or create your own organization. To try rider checkout, publish the event from **Review and publish**, then select **Open rider registration**. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
 
 ## How it is meant to work
 

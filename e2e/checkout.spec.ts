@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 async function publishedDemo(page: Page): Promise<string> {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Load demonstration event' }).click();
+  await page.getByRole('button', { name: 'fictional example weekend' }).click();
   await expect(page.getByRole('heading', { name: 'Saturday road race', level: 2 })).toBeVisible();
   await page.getByRole('link', { name: 'Review and publish' }).last().click();
   const ack = page.getByLabel(/I have reviewed the/);

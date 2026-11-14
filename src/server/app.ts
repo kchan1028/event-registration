@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z, ZodError } from 'zod';
+import { buildBerkeleyOmniumEvent, OMNIUM_ORG_NAME } from '../shared/berkeleyOmnium';
 import { buildDemoEvent } from '../shared/demo';
 import { configFromTemplate } from '../shared/factory';
 import { createEventInputSchema, eventConfigSchema } from '../shared/schema';
@@ -148,14 +149,18 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return orders.reviewLicense(id, body.note);
   });
 
-  /** Creates the labeled demonstration organization and event. */
-  app.post('/api/demo', async (_req, reply) => {
-    const org = repo.createOrganization('Example Cycling Club (demonstration)');
-    const { config, entryPlan } = buildDemoEvent();
+  function seed(orgName: string, { config, entryPlan }: ReturnType<typeof buildDemoEvent>) {
+    const org = repo.createOrganization(orgName);
     const record = repo.createEvent(org.id, config);
     for (const p of entryPlan) repo.addTestEntries(record.id, p.categoryId, p.count);
-    return reply.status(201).send({ organizationId: org.id, eventId: record.id });
-  });
+    return { organizationId: org.id, eventId: record.id };
+  }
+
+  /** Creates the labeled fictional demonstration organization and event. */
+  app.post('/api/demo', async (_req, reply) => reply.status(201).send(seed('Example Cycling Club (demonstration)', buildDemoEvent())));
+
+  /** Creates the Berkeley Omnium working copy (2026 fields, 2027 dates, placeholder fees, simulated entries). */
+  app.post('/api/demo/berkeley-omnium', async (_req, reply) => reply.status(201).send(seed(OMNIUM_ORG_NAME, buildBerkeleyOmniumEvent())));
 
   const webRoot = resolve(process.cwd(), 'dist/web');
   if (opts.serveWeb && existsSync(webRoot)) {

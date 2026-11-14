@@ -26,10 +26,10 @@ export function Home() {
   }, []);
   useEffect(load, [load]);
 
-  async function loadDemo() {
+  async function loadDemo(which: 'omnium' | 'example') {
     setBusy(true);
     try {
-      const { eventId } = await api.createDemo();
+      const { eventId } = await (which === 'omnium' ? api.createOmnium() : api.createDemo());
       navigate({ page: 'event', eventId, view: 'race', raceId: null });
     } catch (e) {
       setError((e as ApiError).message);
@@ -77,7 +77,7 @@ export function Home() {
             {orgs?.length === 0 && (
               <div className="empty">
                 <p>
-                  <strong>No organizations yet.</strong> Create your club on the right, or load the demonstration weekend to see a full elite, masters, women's, junior,
+                  <strong>No organizations yet.</strong> Create your club on the right, or load the Berkeley Omnium to see a full elite, masters, women's, junior,
                   and collegiate schedule.
                 </p>
               </div>
@@ -114,14 +114,21 @@ export function Home() {
           <aside className="home__col home__col--side">
             <CreateOrganization onCreated={load} onError={setError} />
             <div className="demo-callout">
-              <h2>Try the demonstration weekend</h2>
+              <h2>Load the Berkeley Omnium</h2>
               <p>
-                A fictional two-day omnium with 16 example categories and simulated entries. It is not an approved race schedule and does not state current federation
-                rules.
+                The Berkeley Hills Road Race and Berkeley Streets Criterium, with every field, distance, start time and field limit from the 2026 race information, dated
+                for April 17–18, 2027. Entry fees are placeholders and entries are simulated.
               </p>
-              <button className="btn btn--secondary" onClick={loadDemo} disabled={busy}>
-                {busy ? 'Creating…' : 'Load demonstration event'}
+              <button className="btn btn--secondary" onClick={() => loadDemo('omnium')} disabled={busy}>
+                {busy ? 'Creating…' : 'Load Berkeley Omnium'}
               </button>
+              <p>
+                Or try a{' '}
+                <button className="link-btn" onClick={() => loadDemo('example')} disabled={busy}>
+                  fictional example weekend
+                </button>{' '}
+                with 16 categories.
+              </p>
             </div>
           </aside>
         </section>

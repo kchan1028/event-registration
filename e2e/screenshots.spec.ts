@@ -10,7 +10,7 @@ test('capture documentation screenshots', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Load demonstration event' }).click();
+  await page.getByRole('button', { name: 'fictional example weekend' }).click();
   await expect(page.getByRole('heading', { name: 'Saturday road race', level: 2 })).toBeVisible();
   const eventUrl = page.url();
   await page.goto('/');
@@ -56,7 +56,7 @@ test('capture rider checkout screenshots', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Load demonstration event' }).click();
+  await page.getByRole('button', { name: 'fictional example weekend' }).click();
   await expect(page.getByRole('heading', { name: 'Saturday road race', level: 2 })).toBeVisible();
   await page.getByRole('link', { name: 'Review and publish' }).last().click();
   const ack = page.getByLabel(/I have reviewed the/);
