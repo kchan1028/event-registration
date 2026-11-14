@@ -299,6 +299,10 @@ A 12px track on Tyvek Deep with a 6px radius and a faint inset ring. Each catego
 - **Entry tray:** sticky right rail on desktop; on phones a bottom bar (count, total numeral, View) that expands into a sheet. Quote lines are Tyvek rows with the code chip, name, race, price, and a green discount line naming the bundle or "Additional race". The total is a 26px numeral over a hairline.
 - **Hold timer:** pending-tone pill with a clip icon and a countdown numeral.
 - **Check-in ticket:** Tyvek panel with a 1.5px ink outline and a 44px numeral code (34px on phones).
+- **Demo label:** a 24px pill in demo-banner colors reading "Demo", in the rider header on every demo screen. Payment-related screens add a pending-tone line, "Simulated payment: no money is charged."
+- **Error summary:** a 1.5px error-red outline on the error ground at the top of a step, a heading that counts the problems, and links that move focus to each field. It takes focus when it appears.
+- **Demo receipt:** dashed border and a rotated "DEMO" watermark in a 6% ink tint behind the lines.
+- **Signature field:** a full-width input set in italic at 18px.
 - **Readiness list:** icon plus label per item: green check for done, amber warning for organizer review, red for missing.
 
 ## Do's and Don'ts

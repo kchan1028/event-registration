@@ -1,8 +1,9 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
 
 /** Labeled field wrapper. The label is always visible (coding guide, Accessibility). */
-export function Field({ label, hint, error, children, className }: { label: string; hint?: string; error?: string; children: (id: string, describedBy?: string) => ReactNode; className?: string }) {
-  const id = useId();
+export function Field({ label, hint, error, children, className, id: fixedId }: { label: string; hint?: string; error?: string; children: (id: string, describedBy?: string) => ReactNode; className?: string; id?: string }) {
+  const generated = useId();
+  const id = fixedId ?? generated;
   const hintId = hint || error ? `${id}-hint` : undefined;
   return (
     <div className={`field ${error ? 'field--error' : ''} ${className ?? ''}`}>

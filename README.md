@@ -42,7 +42,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Rider-facing schedule preview with an eligibility checker | Implemented |
 | Validation that blocks publishing on errors; warnings need acknowledgement; immutable published versions | Implemented and tested |
 | Autosave to a local SQLite database, safe against stale saves | Implemented and tested |
-| Rider checkout: eligibility check, start-ordered schedule with conflict warnings, bundle and additional-race discounts, guardian and waiver steps, all-or-nothing 10-minute holds, simulated payment with decline and retry | Implemented and tested |
+| Rider demo purchase flow (product.md 2a): browse events, demo rider picker, start-ordered schedule with conflict warnings, bundles, second-race discount, demo fees, emergency contact, typed-name waiver signature, error summaries, all-or-nothing 10-minute holds, "Complete simulated payment" with decline and retry | Implemented and tested; usability test and display themes still open |
 | Confirmation with a check-in code and per-entry readiness; organizer Registrations queue with license review | Implemented and tested |
 | CSV import, change-impact preview, real payments and refunds, check-in, exports | Planned |
 
@@ -57,15 +57,21 @@ The category schedule lists what riders buy, grouped under display headers that 
 
 ![Category schedule on a 390-pixel-wide phone screen](docs/screenshots/07-mobile-schedule.png)
 
-![Rider checkout: a Cat 3 masters rider picks both days and the weekend bundle applies](docs/screenshots/09-register-choose-races.png)
+![Choose an event: the two fixture demo events](docs/screenshots/09-register-choose-event.png)
 
-![Rider checkout on a phone, with the order total in a bottom bar](docs/screenshots/10-mobile-register.png)
+![Demo rider Alex picks two races on one day; the second-race discount and demo fees appear in the order total](docs/screenshots/10-register-choose-races.png)
 
-![Review step with places held and a simulated payment](docs/screenshots/11-register-review-and-pay.png)
+![The same step on a phone, with the total in a bottom bar](docs/screenshots/11-mobile-register.png)
 
-![Confirmation with a check-in code and license review still pending](docs/screenshots/12-registration-confirmed.png)
+![Racer details with an error summary at the top and a message next to the field](docs/screenshots/12-register-error-summary.png)
 
-![Organizer Registrations view with entries waiting for license review](docs/screenshots/13-organizer-registrations.png)
+![Waiver with version, read confirmation, and a typed-name signature](docs/screenshots/13-register-waiver-signature.png)
+
+![Review step with places held and the simulated payment buttons](docs/screenshots/14-register-review-and-pay.png)
+
+![Confirmation with a demo order number, check-in code, readiness, and a watermarked demo receipt](docs/screenshots/15-registration-confirmed.png)
+
+![Organizer Registrations view](docs/screenshots/16-organizer-registrations.png)
 
 </details>
 
@@ -81,7 +87,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5273/` and select **Load demonstration event**, or create your own organization. To try rider checkout, publish the event from **Review and publish**, then select **Open rider registration**. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
+Open `http://127.0.0.1:5273/` and select **Load demonstration event**, or create your own organization. To try the rider demo, select **Open the rider demo** on the home page; it loads the fictional events, riders, and fees from `docs/fixtures`. Any event you publish also appears in the rider event list. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
 
 ## How it is meant to work
 
@@ -206,7 +212,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | Repository and contributor documentation | Implemented November 14, 2026 |
 | Category builder milestone (local organizer prototype) | Implemented November 14, 2026; shared-cap, eligibility, and fixture criteria verified by automated tests. See [roadmap.md](roadmap.md#category-builder-milestone) |
 | Rider checkout prototype (simulated payment) | Implemented November 14, 2026; buy-both-days, payment retry, license uncertainty, multi-race discount, and bundle criteria verified by automated tests. See [roadmap.md](roadmap.md#rider-checkout-prototype) |
-| Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; not yet used by the app |
+| Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; used by the rider demo |
 | Stack | Chosen for the prototype only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
 | Rider checkout, payments, USA Cycling checks, sign-in with MFA, hosting | Not built |
 

@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { z, ZodError } from 'zod';
 import { buildDemoEvent } from '../shared/demo';
 import { configFromTemplate } from '../shared/factory';
+import { buildFixtureEvents, FIXTURE_ORG_NAME } from '../shared/fixtures';
 import { createEventInputSchema, eventConfigSchema } from '../shared/schema';
 import { validateConfig } from '../shared/validation';
 import { openDb } from './db';
@@ -115,6 +116,40 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   // Rider checkout (prototype). Uses the latest published version only.
+  app.get('/api/public/events', async () =>
+    repo
+      .listOrganizations()
+      .flatMap((o) => o.events.filter((e) => e.publishedVersion !== null).map((e) => ({ id: e.id, organizationName: o.name })))
+      .map(({ id, organizationName }) => {
+        const record = repo.getEvent(id);
+        const config = repo.getVersion(id, record.publishedVersion!);
+        return {
+          id,
+          organizationName,
+          name: config.event.name,
+          venue: config.event.venue,
+          isDemo: config.event.isDemo,
+          days: config.days.map((d) => ({ date: d.date, label: d.label, races: config.races.filter((r) => r.dayId === d.id).map((r) => r.name) })),
+          categoryCount: config.categories.filter((c) => c.status !== 'archived').length,
+        };
+      }),
+  );
+
+  /** Loads the clickable demo purchase flow fixtures (docs/fixtures) once, published. */
+  app.post('/api/demo/purchase-flow', async (_req, reply) => {
+    const existing = repo.listOrganizations().find((o) => o.name === FIXTURE_ORG_NAME);
+    if (existing && existing.events.length > 0) return reply.status(200).send({ organizationId: existing.id, eventIds: existing.events.map((e) => e.id) });
+    const org = existing ?? repo.createOrganization(FIXTURE_ORG_NAME);
+    const eventIds: string[] = [];
+    for (const { config, entryPlan } of buildFixtureEvents()) {
+      const record = repo.createEvent(org.id, config);
+      for (const p of entryPlan) repo.addTestEntries(record.id, p.categoryId, p.count);
+      repo.publish(record.id, true);
+      eventIds.push(record.id);
+    }
+    return reply.status(201).send({ organizationId: org.id, eventIds });
+  });
+
   app.get('/api/public/events/:id', async (req) => orders.publicEvent(idParam.parse(req.params).id));
 
   app.post('/api/public/events/:id/orders', async (req, reply) => {

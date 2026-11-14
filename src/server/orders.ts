@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { canAdmit, remainingForCategory } from '../shared/capacity';
-import { checkSelection, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
+import { checkSelection, checkSignature, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
+import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { quote, todayIn, type Quote } from '../shared/pricing';
 import type { EventConfig } from '../shared/schema';
@@ -93,14 +94,17 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         licenseReviewNote: e.license_review_note,
         readiness: readiness({
           licenseReviewed: e.license_reviewed === 1,
-          waiverAccepted: waiver.riderAccepted,
+          licenseNote: e.license_review_note,
+          signerName: waiver.signatureName,
           guardianRequired: !!cat?.eligibility.guardianRequired,
-          guardianAccepted: waiver.guardianAccepted,
+          guardianSigned: waiver.signerRole === 'guardian',
         }),
       };
     });
     return {
       id: row.id,
+      /** Shown to riders; marked as a demo because payment is simulated. */
+      orderNumber: `DEMO-${row.id.slice(4, 12).toUpperCase()}`,
       eventId: row.event_id,
       eventName: config.event.name,
       isDemo: config.event.isDemo,
@@ -163,8 +167,9 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
 
           const check = checkSelection(config, input.categoryIds, profileOf(rider));
           if (!check.ok) throw new HttpError(422, check.problems[0], check.problems);
-          if (check.needsGuardian && !rider.guardian) throw new HttpError(422, 'A parent or guardian must be named for this entry.');
-          if (check.needsGuardian && !waiver.guardianAccepted) throw new HttpError(422, 'The parent or guardian must accept the waiver.');
+          if (check.needsGuardian && !rider.guardian) throw new HttpError(422, 'Riders under 18 need a parent or guardian. Enter their name.');
+          const signatureProblem = checkSignature(rider, waiver, check.needsGuardian);
+          if (signatureProblem) throw new HttpError(422, signatureProblem);
 
           const id = newId('ord');
           const riderRef = `rider-${id}`;
@@ -178,8 +183,15 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
             `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at)
              VALUES (?, ?, ?, ?, 'held', ?, ?, ?, ?, ?, ?, ?)`,
           ).run(id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t);
-          const ins = db.prepare(`INSERT INTO order_entries (id, order_id, event_id, category_id, rider_ref, status) VALUES (?, ?, ?, ?, ?, 'held')`);
-          for (const categoryId of input.categoryIds) ins.run(newId('oe'), id, eventId, categoryId, riderRef);
+          // Demo riders on demo events carry a simulated license result from the fixtures; everyone else needs review.
+          const fixture = config.event.isDemo ? demoRider(rider.demoRiderId) : undefined;
+          const simulatedValid = !!fixture && fixture.licenseCheck === 'simulated_valid' && fixture.licenseNumber === rider.licenseNumber;
+          const ins = db.prepare(
+            `INSERT INTO order_entries (id, order_id, event_id, category_id, rider_ref, status, license_reviewed, license_review_note, license_reviewed_at) VALUES (?, ?, ?, ?, ?, 'held', ?, ?, ?)`,
+          );
+          for (const categoryId of input.categoryIds) {
+            ins.run(newId('oe'), id, eventId, categoryId, riderRef, simulatedValid ? 1 : 0, simulatedValid ? 'Simulated license check: valid (demo fixture)' : null, simulatedValid ? t : null);
+          }
           return view(id);
         })
         .immediate();

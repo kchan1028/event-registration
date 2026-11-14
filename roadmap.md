@@ -11,9 +11,9 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 | Item | Status | Notes |
 |---|---|---|
 | Repository and documentation foundation | Implemented (November 14, 2026) | Supporting work, not a roadmap phase. |
-| Demo purchase flow fixtures | Implemented (November 14, 2026) | Supporting work for Phase 1: fake events, riders, fees, worked order totals, and sample waiver text in [docs/fixtures/](docs/fixtures/README.md). Not yet used by the app. |
+| Demo purchase flow fixtures | Implemented (November 14, 2026) | Fake events, riders, fees, worked order totals, and sample waiver text in [docs/fixtures/](docs/fixtures/README.md), used by the rider demo. Phone numbers corrected to 10 digits to match the fixture's own phone rule. |
 | Category builder milestone (organizer prototype) | Implemented (November 14, 2026); partly verified | Local-only prototype. See [Category builder milestone](#category-builder-milestone). |
-| Rider checkout prototype | Implemented (November 14, 2026); partly verified | Simulated payment only. Built before the [clickable demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-1) was specified, so it does not yet meet all of 2a. See [Rider checkout prototype](#rider-checkout-prototype). |
+| Rider checkout prototype and demo purchase flow (2a) | Implemented (November 14, 2026); partly verified | Simulated payment only. Meets the [2a](product.md#2a-clickable-demo-purchase-flow--phase-1) behavior in automated tests; usability testing with people and display themes are not done. See [Rider checkout prototype](#rider-checkout-prototype). |
 | Phase 0: Establish the case to build | Planned | Not started. The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. Next actions are listed at the end of this document. |
 | Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented as prototypes. The demo purchase flow (product.md 2a), check-in prototype, timer export samples, and usability tests are not finished. |
 | Phase 2: Build the registration core | Planned | Depends on Phase 1 and a settled payment model. |
@@ -64,7 +64,18 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 
 **Pending external dependencies:** a payment provider, USA Cycling license and waiver checks, and sign-in with required MFA. Rider data entered in the prototype stays in the local database; use made-up details.
 
-**Gaps against the [clickable demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-1) (2a), specified after this prototype was built:** no browse-events step; no demo rider profiles to prefill details; no emergency contact; the waiver uses a checkbox, not a typed-name signature; the payment button says "Pay … (simulated)" instead of "Complete simulated payment"; no persistent "Demo" label or watermarked receipt; no error summary at the top of a step; completed steps are reachable only with Back buttons, not from the progress indicator; demo pricing does not use the [fixture fees](docs/fixtures/README.md) (platform fee, processing fee, fixed bundle price) or fixture events; light and dark themes are not built. The 2a acceptance criterion is therefore not met.
+**Demo purchase flow (product.md 2a), added after the first checkout build:** a browse-events step; the four fixture riders as a demo rider picker that prefills racer details; emergency contact; a waiver that must be read to the end (or confirmed) and signed with a typed name plus a checkbox, signed by the guardian for a minor; "Complete simulated payment" with no "Pay" or "Buy" buttons; a persistent "Demo" label, "Simulated payment: no money is charged" on review, payment, confirmation, and receipt, a DEMO order number, and a watermarked receipt; an error summary at the top of each step with field-level messages from the fixtures; a progress indicator that returns to completed steps without losing data; the fixture events, capacities, fees, second-race discount, and fixed-price weekend bundle.
+
+| 2a check | How it was verified |
+|---|---|
+| Worked order totals ($59.65, $80.25, $18.45, $39.05) | Unit tests on the quote and API tests on real orders |
+| Full category, ineligible category, minor without guardian, half-selected bundle | Unit and Playwright tests |
+| Missing required fields block progress with field messages and a summary | Playwright test |
+| Back navigation keeps entered data | Playwright test |
+| Simulated labeling on every payment-related screen and the receipt | Playwright test |
+| Uncertain license is paid but not cleared | API and Playwright tests |
+
+**Still open for 2a:** the "without facilitator help" part needs a usability test with people; light and dark display themes are being built on a separate `feat/dark-mode` branch and are not in this prototype.
 
 ## Delivery approach
 

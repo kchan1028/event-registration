@@ -2530,6 +2530,154 @@ button.issue {
   width: auto;
 }
 
+
+/* Demo purchase flow additions ------------------------------------------- */
+
+.demo-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: #fff1d6;
+  color: #5c3c00;
+  font: 600 12.5px var(--font-ui);
+  letter-spacing: 0.02em;
+}
+.simulated {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--pending);
+}
+.error-summary {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border: 1.5px solid var(--error);
+  border-radius: var(--r-md);
+  background: var(--error-bg);
+}
+.error-summary h3 {
+  font-size: 15px;
+  color: var(--error);
+}
+.error-summary ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+.error-summary a {
+  color: var(--error);
+  font-size: 14px;
+}
+.stepper__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.stepper li > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.event-pick {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.event-pick__link {
+  display: grid;
+  gap: 2px;
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--hairline-soft);
+  color: inherit;
+  text-decoration: none;
+}
+.event-pick__name {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.event-pick__meta {
+  color: var(--body);
+}
+.event-pick__races {
+  font-size: 13.5px;
+  color: var(--muted);
+}
+@media (hover: hover) and (pointer: fine) {
+  .event-pick__link:hover .event-pick__name {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+.about__demo {
+  max-width: 520px;
+}
+.bundle-pick {
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  font-size: 13.5px;
+}
+.bundle-pick.is-on {
+  border-color: var(--ink);
+}
+.quote__fees {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 13.5px;
+}
+.quote__fees li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 10px;
+  color: var(--body);
+}
+.receipt {
+  position: relative;
+  overflow: hidden;
+  padding: var(--s-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+}
+.receipt::after {
+  content: attr(data-watermark);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 600 96px/1 var(--font-num);
+  letter-spacing: 0.1em;
+  color: rgba(24, 29, 38, 0.06);
+  transform: rotate(-18deg);
+  pointer-events: none;
+}
+.input--signature {
+  font-size: 18px;
+  font-style: italic;
+}
+.schedule-anchor:focus {
+  outline: none;
+}
+fieldset:disabled .check,
+fieldset:disabled .field label {
+  color: var(--muted);
+}
+
 /* Responsive ------------------------------------------------------------- */
 
 @media (max-width: 1280px) {

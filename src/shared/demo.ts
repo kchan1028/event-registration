@@ -137,8 +137,13 @@ export function buildDemoEvent(): { config: EventConfig; entryPlan: { categoryId
     },
     ruleSet: { source: 'Example only. Not taken from a federation rulebook.', season: 2027 },
     registration: {
-      bundles: [{ id: newId('bundle'), name: 'Weekend omnium entry', raceIds: [rr.id, crit.id], discountCents: 1500 }],
+      bundles: [{ id: newId('bundle'), name: 'Weekend omnium entry', raceIds: [rr.id, crit.id], discountCents: 1500, priceCents: null }],
       additionalRaceDiscountCents: 1000,
+      additionalRaceDiscountMode: 'each_additional_entry',
+      platformFeeCents: 0,
+      platformFeeLabel: 'Platform fee',
+      processingFeeBasisPoints: 0,
+      processingFeeLabel: 'Processing fee',
       recoveryMinutes: 15,
       refundPolicy:
         'Example policy: full refund less a $5 processing fee until 7 days before the race; no refunds after that. Category transfers are free until registration closes.',

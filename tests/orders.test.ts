@@ -10,7 +10,7 @@ type Order = {
   entries: { id: string; categoryId: string; status: string; readiness: { key: string; state: string }[] }[];
 };
 
-const RIDER = { firstName: 'Test', lastName: 'Rider', email: 'test.rider@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null };
+const RIDER = { firstName: 'Test', lastName: 'Rider', email: 'test.rider@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Test Contact', phone: '555-555-0199' } };
 
 async function setup(opts: { publish?: boolean } = {}) {
   let now = new Date('2027-03-01T18:00:00Z');
@@ -20,7 +20,7 @@ async function setup(opts: { publish?: boolean } = {}) {
   if (opts.publish !== false) await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
   const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number; entries: unknown[] };
   const code = (c: string) => event.config.categories.find((x) => x.timingCode === c)!.id;
-  const waiver = { version: event.config.registration.waiverVersion, riderAccepted: true, guardianAccepted: false };
+  const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
   let n = 0;
   const order = (categoryIds: string[], extra: Record<string, unknown> = {}) =>
     app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `req-${++n}-xxxxxxxx`, categoryIds, rider: RIDER, waiver, ...extra } });
@@ -63,7 +63,9 @@ describe('rider checkout: holds and simulated payment', () => {
     expect((await order([code('RR-P12')])).statusCode).toBe(422); // Cat 3 is not P/1/2
     const junior = { ...RIDER, racingAge: 16, licenseCategory: null };
     expect((await order([code('RR-J1516')], { rider: junior })).statusCode).toBe(422);
-    expect((await order([code('RR-J1516')], { rider: { ...junior, guardian: { name: 'Test Parent', relationship: 'Parent' } }, waiver: { ...waiver, guardianAccepted: true } })).statusCode).toBe(201);
+    const withGuardian = { ...junior, guardian: { name: 'Test Parent', relationship: 'Parent', email: '', phone: '' } };
+    expect((await order([code('RR-J1516')], { rider: withGuardian })).statusCode).toBe(422); // rider signed, guardian must
+    expect((await order([code('RR-J1516')], { rider: withGuardian, waiver: { ...waiver, signatureName: 'Test Parent', signerRole: 'guardian' } })).statusCode).toBe(201);
     expect((await order([code('RR-M35-34')], { waiver: { ...waiver, version: 'old' } })).statusCode).toBe(409);
   });
 
@@ -153,6 +155,14 @@ describe('rider checkout: holds and simulated payment', () => {
     expect(list).toHaveLength(1);
   });
 
+  it('requires the typed signature to match the rider and an emergency contact', async () => {
+    const { order, code, waiver } = await setup();
+    expect((await order([code('RR-M35-34')], { waiver: { ...waiver, signatureName: 'Someone Else' } })).statusCode).toBe(422);
+    expect((await order([code('RR-M35-34')], { waiver: { ...waiver, signatureName: '  test   rider ' } })).statusCode).toBe(201);
+    const res = await order([code('RR-M35-34')], { rider: { ...RIDER, emergencyContact: { name: 'X', phone: '12345' } } });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('a category with a confirmed registration cannot be deleted from the draft', async () => {
     const { app, eventId, order, pay, code } = await setup();
     const o = (await order([code('RR-M35-34')])).json() as Order;
@@ -162,5 +172,36 @@ describe('rider checkout: holds and simulated payment', () => {
     config.categories = config.categories.filter((c) => c.timingCode !== 'RR-M35-34');
     const res = await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: ev.revision, config } });
     expect(res.statusCode).toBe(409);
+  });
+});
+
+describe('demo purchase flow fixtures through the API', () => {
+  it('loads the fixture events once, published, and orders reproduce the worked totals and simulated license results', async () => {
+    const { app } = buildApp({ dbPath: ':memory:', now: () => new Date('2027-03-01T18:00:00Z') });
+    const first = await app.inject({ method: 'POST', url: '/api/demo/purchase-flow' });
+    expect(first.statusCode).toBe(201);
+    const again = await app.inject({ method: 'POST', url: '/api/demo/purchase-flow' });
+    expect(again.statusCode).toBe(200);
+    const events = (await app.inject({ method: 'GET', url: '/api/public/events' })).json() as { id: string; name: string }[];
+    expect(events.map((e) => e.name).sort()).toEqual(['Demo Ridge Road Race Weekend', 'Demo Valley Criterium']);
+    const valleyId = events.find((e) => e.name === 'Demo Valley Criterium')!.id;
+    const pub = (await app.inject({ method: 'GET', url: `/api/public/events/${valleyId}` })).json() as { config: EventConfig; remaining: Record<string, number> };
+    const cat = (n: string) => pub.config.categories.find((c) => c.name === n)!.id;
+    expect(pub.remaining[cat('Masters 35+ Cat 3/4')]).toBe(0);
+
+    const waiverFor = (name: string, role = 'rider') => ({ version: pub.config.registration.waiverVersion, read: true, agreed: true, signatureName: name, signerRole: role });
+    const alex = { firstName: 'Alex', lastName: 'Demo', email: 'alex.demo@example.com', phone: '555-555-0101', team: 'Demo Wheelers', racingAge: 29, licenseCategory: '4', licenseType: 'annual', licenseNumber: 'DEMO-100001', competitionClass: 'men', collegiateDivision: null, demoRiderId: 'rider-alex', emergencyContact: { name: 'Robin Demo', phone: '555-555-0111' }, guardian: null };
+    const a = (await app.inject({ method: 'POST', url: `/api/public/events/${valleyId}/orders`, payload: { clientRequestId: 'alex-order-1', categoryIds: [cat('Men Cat 4/5'), cat('Open Cat 4/5 Evening')], rider: alex, waiver: waiverFor('Alex Demo') } })).json() as Order;
+    expect(a.totalCents).toBe(5965);
+    const paidA = (await app.inject({ method: 'POST', url: `/api/orders/${a.id}/payment`, payload: { attemptId: 'alex-attempt-1', outcome: 'success' } })).json() as Order;
+    expect(paidA.entries.every((e) => e.readiness.every((r) => r.state === 'done'))).toBe(true);
+
+    const sam = { ...alex, firstName: 'Sam', email: 'sam.demo@example.com', racingAge: 31, competitionClass: 'women', licenseNumber: 'DEMO-100004', demoRiderId: 'rider-sam', team: '' };
+    const s = (await app.inject({ method: 'POST', url: `/api/public/events/${valleyId}/orders`, payload: { clientRequestId: 'sam-order-1', categoryIds: [cat('Women Cat 3/4/5')], rider: sam, waiver: waiverFor('Sam Demo') } })).json() as Order;
+    expect(s.totalCents).toBe(3905);
+    const paidS = (await app.inject({ method: 'POST', url: `/api/orders/${s.id}/payment`, payload: { attemptId: 'sam-attempt-1', outcome: 'success' } })).json() as Order;
+    expect(paidS.status).toBe('confirmed');
+    expect(paidS.entries[0].readiness.find((r) => r.key === 'license')!.state).toBe('needs_review');
+    await app.close();
   });
 });

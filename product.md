@@ -108,7 +108,7 @@ CSV import of category schedules is P0: provide a template, map columns, validat
 - Allow multiple eligible criterium entries when the approved schedule permits them; flag overlapping starts and configurable recovery/transition conflicts.
 - A bundle selects a valid category in each component race. Do not assume the same label, eligibility, or available capacity on both days.
 - Show an itemized preview of additional-race discounts, bundle pricing, and fees. Define discount precedence and prevent unintended stacking.
-- Discount precedence (decided November 14, 2026): at most one bundle applies per order, the one with the largest discount whose races all have an entry, and its discount is split across one entry per bundle race. Every other entry after the first full-price entry gets the additional-race discount, capped at its price. An entry never receives two discounts, and free entries receive none.
+- Discount precedence (decided November 14, 2026): at most one bundle applies per order, the one saving the most whose races all have an entry; it covers one entry per bundle race and either takes a fixed discount or sets a fixed bundle price. The additional-race discount then applies outside the bundle in one of two organizer-chosen ways: to every entry after the first full-price entry, or once per order when two or more entries share a day (the demo fixtures use this). An entry never receives two discounts, and free entries receive none. Fees (a flat platform fee and a percentage processing fee on the entries subtotal after discounts, rounded half up to the cent) are added once per order after discounts and shown before payment.
 
 #### Simulated entries before payments exist
 
@@ -149,7 +149,7 @@ These are illustrative product fixtures, not an approved BHRR schedule or statem
 
 ### 2a. Clickable demo purchase flow — Phase 1
 
-Status: Planned. Demonstration data exists as fake fixtures in [docs/fixtures/](docs/fixtures/README.md); no demo or design exists yet. The demo is a Phase 1 prototype for usability testing, not a working checkout.
+Status: Implemented as a local prototype using the fake fixtures in [docs/fixtures/](docs/fixtures/README.md); automated tests cover the acceptance criterion below except testing with real people and the display themes (see [roadmap.md](roadmap.md#rider-checkout-prototype)). The demo is a Phase 1 prototype for usability testing, not a working checkout.
 
 A rider can click through the whole purchase from start to finish using fake demonstration data only. The demo keeps the project's chosen visual design (set in `DESIGN.md` once one exists) and supports both [display themes](#display-themes).
 
