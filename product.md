@@ -138,6 +138,30 @@ These are illustrative product fixtures, not an approved BHRR schedule or statem
 - Confirm entries only after authoritative payment confirmation. Handle delayed or failed payments explicitly.
 - Permit organizer-configured changes, withdrawals, and refund requests. Show policy before checkout.
 
+### 2a. Clickable demo purchase flow — Phase 1
+
+Status: Planned. No demo, design, or demonstration data exists in this repository yet. The demo is a Phase 1 prototype for usability testing, not a working checkout.
+
+A rider can click through the whole purchase from start to finish using fake demonstration data only. The demo keeps the project's chosen visual design (set in `DESIGN.md` once one exists) and supports both [display themes](#display-themes).
+
+Steps:
+
+1. **Browse events.** List the demo events with date, location, and races; the rider selects one.
+2. **Choose an entry.** Show the event's races and categories with eligibility guidance, start time, race length, price, and capacity status, following the [rider-facing behavior](#rider-facing-behavior) rules. The rider picks one or more entries or a bundle.
+3. **Racer details.** Collect and review the required rider details, prefilled from a fake demo rider profile where available.
+4. **Waiver.** Show the waiver text with its version; the rider must scroll or otherwise confirm reading, then sign (typed name plus a confirmation checkbox). The demo uses clearly marked sample waiver text, not the USA Cycling waiver, and makes no claim that a demo signature is valid for any event.
+5. **Review order.** Show every line item, discount, and fee from the demo data, with the total, before payment. No fee appears for the first time after this step.
+6. **Simulated payment.** The rider completes a simulated payment step. It collects no card numbers or real payment details, contacts no payment provider, and moves no money.
+7. **Confirmation.** Show the registration details, waiver signature status, readiness items still outstanding (for example "license needs review"), and a receipt with an order number marked as a demo.
+
+Rules:
+
+- **Navigation.** A visible progress indicator shows the current step. The rider can go back to any completed step without losing entered data, and cannot skip ahead past an incomplete step.
+- **Validation.** Required fields are marked. Errors appear next to the field when the rider tries to continue, say what is wrong and how to fix it, are summarized at the top of the step, and are announced to screen readers. See the [accessibility rules](docs/coding-guide.md#accessibility-and-mobile-usability).
+- **Simulation labeling.** Every demo screen shows a persistent, readable "Demo" label. The order review, payment step, confirmation, and receipt also state "Simulated payment: no money is charged". Buttons say "Complete simulated payment", never "Pay" or "Buy". The receipt is watermarked as a demo.
+- **Separate states.** Entry, payment, and readiness states stay independent in the demo, as in the product. A simulated paid entry is not shown as cleared to race.
+- **Fake data only.** Demo events, riders, prices, and fees are fictional fixtures (planned location: `docs/fixtures/`). Never use real rider data or present demo prices and fees as real ones.
+
 ### 3. Capacity and entry integrity
 
 - Use short-lived capacity reservations during checkout. Release expired reservations.
@@ -197,6 +221,7 @@ These are illustrative product fixtures, not an approved BHRR schedule or statem
 | Export to timer | Agreed fields and IDs survive export/import; withdrawn riders and subsequent changes are clear |
 | Refund | Ledger, registration state, capacity, receipt, and provider records agree |
 | Organizer handoff | A second authorized organizer can operate the event and access its runbook without the original owner's credentials |
+| Demo purchase flow | Using fake data only, a tester goes from event list through entry choice, racer details, waiver signature, order review with all fees, simulated payment, and confirmation without facilitator help; missing required fields block progress with field-level messages; back navigation keeps entered data; every payment-related screen and the receipt are labeled as simulated, and no real payment details are requested |
 | Switch display theme | First visit follows the device's light or dark setting; the rider or volunteer can switch with a visible toggle; the choice persists on that device; text, form fields, buttons, focus indicators, errors, and status indicators meet contrast targets in both themes |
 | Sign in with MFA | No account of any type reaches signed-in pages without completing a second factor; organizer sensitive actions prompt re-verification; recovery without recovery codes is audited and cannot be self-served by the first factor alone |
 

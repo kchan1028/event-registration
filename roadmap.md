@@ -48,6 +48,7 @@ Indicative effort: 2–3 weeks. Depends on Phase 0. Priority: P0.
 Deliverables:
 
 - Clickable rider checkout for one day, both days, a junior entry, and an uncertain-license case.
+- End-to-end demo purchase flow on fake demonstration data: browse events, choose an entry, racer details, waiver signature, order review with fees, clearly labeled simulated payment, and confirmation with registration details, waiver status, and receipt. See [product.md](product.md#2a-clickable-demo-purchase-flow--phase-1).
 - Organizer event builder and registration exception queue prototype.
 - Check-in prototype showing ready/blocked states and bib assignment.
 - Light and dark themes with a toggle that defaults to the system preference and remembers the choice. See [product.md](product.md#display-themes).
