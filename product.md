@@ -201,6 +201,7 @@ BikeReg documents category grouping under headers, category-specific questions, 
 | Export to timer | Agreed fields and IDs survive export/import; withdrawn riders and subsequent changes are clear |
 | Refund | Ledger, registration state, capacity, receipt, and provider records agree |
 | Organizer handoff | A second authorized organizer can operate the event and access its runbook without the original owner's credentials |
+| Sign in with MFA | No account of any type reaches signed-in pages without completing a second factor; organizer sensitive actions prompt re-verification; recovery without recovery codes is audited and cannot be self-served by the first factor alone |
 
 ## Data model
 
@@ -234,11 +235,24 @@ Until USAC integration is approved, prototypes may use clearly labeled simulated
 
 - Phone, tablet, and desktop support; keyboard access, readable labels, clear errors, and accessible checkout.
 - Server-enforced authorization and capacity; encrypted transport and protected secrets; least-privilege access to contact and emergency details.
+- Multi-factor authentication (MFA) is required for every account sign-in: riders, guardians, and all organizer roles. A password or emailed link alone never grants access. See [Sign-in and account security](#sign-in-and-account-security).
 - No sensitive rider data in public participant lists by default. Define retention and deletion rules before the pilot.
 - Audit money, category, waiver, capacity, and permission changes.
 - Backups with a demonstrated restore; monitoring for registration/payment failures and stuck capacity reservations.
 - Publish a support owner and escalation route for each event. Volunteers must know who handles a race-morning failure.
 - Load and recovery checks use twice the expected pilot opening peak, based on the organizer's historical data.
+
+### Sign-in and account security
+
+MFA means a sign-in needs a second, independent proof of identity in addition to the first factor, such as an authenticator app code or a passkey.
+
+- Require MFA at every sign-in for every account type. Enrollment happens during account creation; an account cannot reach rider, guardian, or organizer pages until a second factor is enrolled.
+- Offer at least one phishing-resistant option (passkey or security key) and an authenticator-app option. SMS codes, if offered at all, are a fallback only and are not allowed for organizer roles.
+- Organizer roles (owner, registration manager, check-in volunteer, timer/export, finance) must re-verify with MFA before sensitive actions: refunds, payout or role changes, ownership transfer, exports containing contact or emergency details, and manual exceptions.
+- Account recovery must not bypass MFA. Provide single-use recovery codes at enrollment; recovery without them requires identity checks by an authorized owner or support and is recorded in the audit log.
+- Rate-limit sign-in and second-factor attempts, and notify the account holder when a factor is added, removed, or used for recovery.
+- Record MFA enrollment, factor changes, and recovery events in the audit history.
+- Shared check-in devices still require each volunteer to sign in with their own account and MFA. Do not share organizer credentials.
 
 ## Success measures
 
@@ -278,6 +292,7 @@ Do not replace Berkeley Omnium's registration merely because the software is ava
 4. Will USAC approve integration and the proposed license/waiver workflow?
 5. Which payment and settlement model works for the club?
 6. What timer formats, refund policies, retention periods, and organizer permissions are required?
+7. Which MFA methods and recovery process keep rider and guardian checkout usable, especially for occasional riders and race-morning registration? MFA itself is required; the methods are decided in the authentication ADR.
 
 ## Research baseline
 

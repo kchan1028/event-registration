@@ -61,6 +61,7 @@ Indicative effort: 5–7 weeks. Depends on Phase 1 and a settled payment model. 
 Build:
 
 - Organization access, roles, ownership transfer, audit history, and event templates.
+- Required multi-factor authentication (MFA) for every account, step-up re-verification for sensitive organizer actions, and audited account recovery. See [product.md](product.md#sign-in-and-account-security).
 - Event/day/race/category/start-group setup and publishing checks.
 - Mobile registration, guardian data, accepted waiver flow, and license-review status.
 - Individual entries and two-day bundles with transparent totals.
@@ -74,6 +75,7 @@ Verification:
 - Concurrent checkout for the last place, expired reservations, and bundle rollback.
 - Payment failure, timeout, duplicate notification, refund retry, and cancellation scenarios.
 - Role access, private-data visibility, waiver/version integrity, and keyboard/mobile use.
+- MFA enforcement for every account type, step-up prompts on sensitive organizer actions, recovery paths that cannot bypass MFA, and attempt rate limits.
 
 Exit gate: Sandbox money and entry states reconcile; no overselling or duplicate processing in concurrency/retry tests; core flows pass with realistic categories. No public paid launch yet.
 
@@ -145,7 +147,7 @@ Omnium scoring, timing hardware, weather, training tools, and general event tick
 
 | Priority | Meaning | Examples |
 |---|---|---|
-| P0 | Required before a safe, usable pilot | Correct capacity/payments, accepted waivers, license review, check-in, exports, support |
+| P0 | Required before a safe, usable pilot | Correct capacity/payments, MFA sign-in, accepted waivers, license review, check-in, exports, support |
 | P1 | Required for the intended two-day adoption | Validated weekend operations, successor handoff, complete day-by-day reconciliation |
 | P2 | Improves a proven product | Automated waitlists, series features, additional disciplines |
 
