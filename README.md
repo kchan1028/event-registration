@@ -162,6 +162,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [docs/coding-guide.md](docs/coding-guide.md) | Category and capacity modeling, eligibility, pricing, payments, privacy, accessibility, testing |
 | [docs/documentation-guide.md](docs/documentation-guide.md) | How docs are organized, status vocabulary, glossary, and setup and troubleshooting templates |
 | [docs/content-guide.md](docs/content-guide.md) | Rules for future public pages, including SEO, answer engines, and structured data |
+| [docs/operations.md](docs/operations.md) | Proposed operating model: support owners, incident severity, freezes, monitoring, backups, and handoff |
 | [docs/decisions/README.md](docs/decisions/README.md) | Architecture decision records and the backlog of unresolved decisions |
 
 ## Contributing
