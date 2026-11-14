@@ -13,8 +13,7 @@ CycleReg proposes a guided cycling workflow: categories modeled the way road and
 | User | What they need from CycleReg |
 |---|---|
 | Race director | Correct categories, limits, fees, and exports with little manual reconciliation |
-| Registration lead | One prioritized exception queue with the reason and next action |
-| Check-in volunteer | Fast lookup and an unmistakable ready or blocked result |
+| Registration lead | One prioritized exception queue with the reason and next action, plus fast check-in lookup with an unmistakable ready or blocked result |
 | Rider or parent | Clear fields, total cost, requirements, receipt, and check-in instructions |
 | Timer or official | Reliable start lists with stable identifiers in an agreed format |
 | Club treasurer | Entries, refunds, fees, and payouts that trace to one ledger |

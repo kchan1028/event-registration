@@ -26,10 +26,10 @@ These come from [product.md](../product.md) and apply whatever stack is chosen.
 | Idempotent payment handling with authoritative confirmation | Retries and duplicate notifications must not create duplicate orders, charges, or entries | Money and reporting; acceptance criteria |
 | Versioned configuration and price snapshots | Paid entries keep the rules and price they were sold under | Changes after registration opens |
 | Independent entry, payment, and readiness states | Paying does not clear a rider to race | Data model |
-| Server-enforced roles and least-privilege data access | Volunteers see only what their job needs; emergency contacts stay restricted | Quality requirements |
+| Server-enforced roles and least-privilege data access | Organizers see only what their role needs; emergency contacts stay restricted | Quality requirements |
 | Append-only audit history | Money, category, waiver, capacity, and permission changes stay traceable | Quality requirements |
 | Hosted payment flow, no stored card data | Keeps card data out of the system entirely | Money and reporting |
-| Mobile-first, accessible interface | Riders use phones; volunteers use tablets outdoors | Quality requirements |
+| Mobile-first, accessible interface | Riders use phones; organizers check riders in on tablets outdoors | Quality requirements |
 | Connectivity required for live changes, with a printable fallback | Full offline sync is deferred and must not be advertised | Race-day operations |
 | Backups with a demonstrated restore, and failure monitoring | Race-morning failures need a known recovery path | Quality requirements |
 | Load and recovery checks at twice the expected pilot opening peak | Registration opening is the busiest moment | Quality requirements |

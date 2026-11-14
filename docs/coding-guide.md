@@ -144,10 +144,10 @@ Idempotent means doing the same thing twice has the same effect as doing it once
 
 ### Roles
 
-The first release has these roles (from [product.md](../product.md#4-organizer-workspace)): owner, registration manager, check-in volunteer, timer/export, and finance. Riders and guardians see only their own data.
+The first release has these roles (from [product.md](../product.md#4-organizer-workspace)): owner, registration manager, timer/export, and finance. Registration managers run check-in; a separate check-in volunteer role is deferred. Riders and guardians see only their own data.
 
 - Check permissions on the server for every request, by role and by event.
-- Give each role the least access it needs. A check-in volunteer sees readiness and bib, not payment details or emergency contacts by default.
+- Give each role the least access it needs. A check-in screen shows readiness and bib, not payment details or emergency contacts by default.
 - Owners can transfer ownership to a successor without sharing credentials.
 
 ### Privacy
@@ -171,7 +171,7 @@ Record an audit entry for every change to money, categories, waivers, capacity, 
 
 ## Accessibility and mobile usability
 
-Riders register on phones and volunteers check riders in on tablets outdoors. Accessibility is a requirement, not a polish step.
+Riders register on phones and organizers check riders in on tablets outdoors. Accessibility is a requirement, not a polish step.
 
 - Proposed target: WCAG 2.2 level AA (the W3C Web Content Accessibility Guidelines). Confirm in an ADR when the front-end approach is chosen.
 - Every action works with a keyboard alone, with a visible focus indicator.

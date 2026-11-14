@@ -26,7 +26,7 @@ These map to the roles in [roadmap.md](../roadmap.md#responsibilities). They are
 |---|---|
 | Support owner | First contact for organizer and volunteer problems on opening day and race day; runs incidents; sends status updates |
 | Technical lead | Fixes system faults, restores from backup, rotates secrets, approves changes during a freeze |
-| Registration lead | Works the exception queue; decides rider-level corrections; trains check-in volunteers |
+| Registration lead | Works the exception queue; decides rider-level corrections; runs check-in |
 | Treasurer | Refund approvals, payout checks, reconciliation against provider statements |
 | Timer / officials liaison | Confirms start-list snapshots and exports; reports race-day field changes back |
 | Event owner (organizer role) | Publishes the event's support contact; transfers ownership to a successor |
@@ -69,7 +69,7 @@ Freeze lengths are proposals for the pilot organizer to confirm.
 
 ## Incident severity
 
-An incident is anything that stops riders registering, stops volunteers checking riders in, or makes money, capacity, or entry records wrong.
+An incident is anything that stops riders registering, stops check-in, or makes money, capacity, or entry records wrong.
 
 | Severity | Examples | Response target (proposed) |
 |---|---|---|
@@ -119,7 +119,7 @@ Alerts must not include card data, emergency contacts, or other restricted field
 ## Access and secrets
 
 - Every person uses their own account with MFA, including on shared check-in tablets ([product.md](../product.md#sign-in-and-account-security)).
-- Give each role the least access its job needs. Remove access when a volunteer's event ends.
+- Give each role the least access its job needs. Remove access when someone's event role ends.
 - Secrets live in the hosting platform's secret store, never in the repository or in chat. Rotate them when someone with access leaves, and after any suspected exposure.
 - Access to restricted data (emergency contacts, license numbers, payment references, audit history) is logged.
 
