@@ -77,7 +77,11 @@ Write an ADR when a choice is expensive to reverse or affects several parts of t
 
 ## Reporting a problem
 
-Describe what you expected, what happened, and how to reproduce it. Leave out real rider names, emails, license numbers, and payment details. If the problem exposes private data or a security weakness, contact the project owner privately instead of filing it in public.
+Describe what you expected, what happened, and how to reproduce it. Leave out real rider names, emails, license numbers, and payment details. If the problem exposes private data or a security weakness, report it privately as described in [SECURITY.md](SECURITY.md) instead of filing it in public. For accessibility barriers, see [ACCESSIBILITY.md](ACCESSIBILITY.md#report-a-barrier).
+
+## License
+
+By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE.md).
 
 ## Questions
 

@@ -27,6 +27,9 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Project summary, status snapshot, document map | [README.md](../README.md) | Summarizes; must match the two sources |
 | Rules for AI agents | [AGENTS.md](../AGENTS.md) | |
 | How to propose and review changes | [CONTRIBUTING.md](../CONTRIBUTING.md) | |
+| Security reporting and security requirement summary | [SECURITY.md](../SECURITY.md) | Summary links to the rules' homes |
+| Accessibility target, checks, and barrier reports | [ACCESSIBILITY.md](../ACCESSIBILITY.md) | Detailed rules stay in the coding guide |
+| License | [LICENSE.md](../LICENSE.md) | MIT |
 | Technical structure and constraints | [architecture.md](architecture.md) | Labeled Proposed until ADRs accept it |
 | Significant technical decisions | [decisions/](decisions/README.md) | One file per decision |
 | Domain rules for code | [coding-guide.md](coding-guide.md) | |
@@ -44,6 +47,9 @@ Current layout:
 ├── README.md
 ├── AGENTS.md
 ├── CONTRIBUTING.md
+├── SECURITY.md
+├── ACCESSIBILITY.md
+├── LICENSE.md
 ├── product.md
 ├── roadmap.md
 └── docs/

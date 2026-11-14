@@ -156,6 +156,9 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [roadmap.md](roadmap.md) | Source of truth for phases, priorities, dependencies, risks, and delivery status |
 | [AGENTS.md](AGENTS.md) | Working rules for AI coding agents and anyone automating changes |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose, make, and review a change |
+| [SECURITY.md](SECURITY.md) | How to report a security problem privately, and a summary of security requirements |
+| [ACCESSIBILITY.md](ACCESSIBILITY.md) | Accessibility target, how it will be checked, and how to report a barrier |
+| [LICENSE.md](LICENSE.md) | MIT License |
 | [docs/architecture.md](docs/architecture.md) | Proposed architecture, constraints, and open technical questions |
 | [docs/coding-guide.md](docs/coding-guide.md) | Category and capacity modeling, eligibility, pricing, payments, privacy, accessibility, testing |
 | [docs/documentation-guide.md](docs/documentation-guide.md) | How docs are organized, status vocabulary, glossary, and setup and troubleshooting templates |
@@ -166,6 +169,10 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) first. Every change must review both [product.md](product.md) and [roadmap.md](roadmap.md) for impact and say in its summary what changed in each, or why neither needed to change.
 
+## Security and accessibility
+
+Report security problems privately as described in [SECURITY.md](SECURITY.md). The accessibility target and how to report a barrier are in [ACCESSIBILITY.md](ACCESSIBILITY.md).
+
 ## License
 
-Not chosen yet. Until a license is added, no reuse rights are granted.
+Released under the [MIT License](LICENSE.md).
