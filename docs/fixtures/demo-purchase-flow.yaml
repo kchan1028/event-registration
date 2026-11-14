@@ -173,7 +173,7 @@ riders:
     name: "Casey Demo"
     email: null   # minor: contact goes through the guardian
     racing_age_2027: 13
-    competition_class: junior
+    competition_class: men      # junior status comes from racing age, not class
     license: { number: DEMO-100003, category: 5, check: simulated_valid }
     guardian: { name: "Jordan Demo", email: jordan.demo@example.com, phone: "555-0103" }
     emergency_contact: { name: "Jordan Demo", phone: "555-0103" }
