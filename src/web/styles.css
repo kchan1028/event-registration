@@ -149,6 +149,12 @@
     background: var(--tyvek);
   }
 }
+@media (pointer: coarse) {
+  .theme-toggle {
+    width: 44px;
+    height: 44px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .theme-toggle,
   .theme-toggle svg {
