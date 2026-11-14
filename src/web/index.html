@@ -6,6 +6,14 @@
     <meta name="robots" content="noindex, nofollow" />
     <meta name="description" content="CycleReg organizer workspace prototype: build and validate road race and criterium category schedules." />
     <title>CycleReg organizer workspace</title>
+    <script>
+      (function () {
+        var t;
+        try { t = localStorage.getItem('cyclereg-theme'); } catch (e) {}
+        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

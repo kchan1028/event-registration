@@ -310,7 +310,7 @@ To research before Phase 3:
 
 ### Display themes
 
-Status: Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
+Status: Implemented in the local organizer prototype (home, builder, and rider preview screens); signed-in sync and the screens not yet built (rider checkout, check-in) are Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
 
 - Default to the device's system preference (light or dark) on first visit.
 - Provide a visible, keyboard-accessible light/dark toggle on every screen, with an accessible name that states the current theme.

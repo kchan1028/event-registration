@@ -44,6 +44,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Autosave to a local SQLite database, safe against stale saves | Implemented and tested |
 | Rider checkout: eligibility check, start-ordered schedule with conflict warnings, bundle and additional-race discounts, guardian and waiver steps, all-or-nothing 10-minute holds, simulated payment with decline and retry | Implemented and tested |
 | Confirmation with a check-in code and per-entry readiness; organizer Registrations queue with license review | Implemented and tested |
+| Light and dark themes, following the system setting, with a header toggle | Implemented; contrast checked manually, no automated test yet |
 | CSV import, change-impact preview, real payments and refunds, check-in, exports | Planned |
 
 <details>

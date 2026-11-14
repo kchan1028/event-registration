@@ -13,7 +13,7 @@ import { Pools } from './Pools';
 import { Preview } from './Preview';
 import { Publish } from './Publish';
 import { Registrations } from './Registrations';
-import { dayHue, Icon, Pending } from './ui';
+import { dayHue, Icon, Pending, ThemeToggle } from './ui';
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error' | 'conflict';
 
@@ -326,6 +326,7 @@ function TopBar({ draft, eventId, errors, warnings }: { draft: Draft; eventId: s
         <a className="btn btn--primary" href={href({ page: 'event', eventId, view: 'publish' })}>
           Review and publish
         </a>
+        <ThemeToggle />
       </nav>
     </header>
   );
