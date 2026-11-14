@@ -85,3 +85,16 @@ test('demonstration weekend enforces a shared cap and publishes a version', asyn
   await expect(page.locator('.publish-box .note')).toContainText('Published as version 1');
   await expect(page.getByRole('button', { name: 'Version 1 is current' })).toBeDisabled();
 });
+
+test('on a phone, the category editor opens as a drawer that takes and returns focus', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Load demonstration event' }).click();
+  const name = page.locator('.cat-row__name', { hasText: 'Masters 60+' });
+  await name.click();
+  await expect(page.locator('.inspector.is-open')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Close category editor' })).toBeFocused();
+  await page.locator('.scrim').click({ position: { x: 10, y: 400 } });
+  await expect(page.locator('.inspector.is-open')).toHaveCount(0);
+  await expect(name).toBeFocused();
+});

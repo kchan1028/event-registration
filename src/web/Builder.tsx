@@ -261,12 +261,13 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
           {route.view === 'pools' && <Pools draft={draft} />}
           {route.view === 'publish' && <Publish draft={draft} onOpenIssue={openIssue} />}
         </main>
+        {selectedCategory && !wide && <div className="scrim" aria-hidden="true" onClick={() => setSelected(null)} />}
         <aside
           className={`inspector ${selectedCategory ? 'is-open' : ''} ${wide && race && !selectedCategory ? 'inspector--board' : ''}`}
           aria-label={selectedCategory ? 'Category editor' : race && wide ? 'Start groups and shared field limits' : 'Checks before publishing'}
         >
           {selectedCategory ? (
-            <CategoryEditor key={selectedCategory.id} draft={draft} categoryId={selectedCategory.id} onClose={() => setSelected(null)} onSelect={setSelected} />
+            <CategoryEditor key={selectedCategory.id} draft={draft} categoryId={selectedCategory.id} onClose={() => setSelected(null)} onSelect={setSelected} drawer={!wide} />
           ) : wide && race && route.view === 'race' ? (
             <FieldBoard draft={draft} raceId={race.id} onSelect={setSelected} selectedId={selected} />
           ) : (

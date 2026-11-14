@@ -1951,6 +1951,17 @@ button.issue {
   }
 }
 
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  background: rgba(24, 29, 38, 0.32);
+  transition: opacity 200ms ease;
+  @starting-style {
+    opacity: 0;
+  }
+}
+
 @media (max-width: 760px) {
   body {
     font-size: 15px;
@@ -2107,6 +2118,7 @@ button.issue {
 
 @media (prefers-reduced-motion: reduce) {
   .tally__seg,
+  .scrim,
   .inspector.is-open,
   .btn,
   .icon-btn,

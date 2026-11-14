@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { usageForCategory } from '../shared/capacity';
 import { summarizePath } from '../shared/eligibility';
 import { blankPath, duplicateCategory, updateCategory } from '../shared/factory';
@@ -8,7 +8,15 @@ import { ApiError } from './api';
 import type { Draft } from './Builder';
 import { Field, Icon, IntInput, MoneyInput, Pending } from './ui';
 
-export function CategoryEditor({ draft, categoryId, onClose, onSelect }: { draft: Draft; categoryId: string; onClose: () => void; onSelect: (id: string) => void }) {
+export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = false }: { draft: Draft; categoryId: string; onClose: () => void; onSelect: (id: string) => void; drawer?: boolean }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  // As a drawer over the page (narrow screens), move focus into it and give it back on close.
+  useEffect(() => {
+    if (!drawer) return;
+    const opener = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    return () => opener?.focus?.();
+  }, [drawer]);
   const { config, update } = draft;
   const cat = config.categories.find((c) => c.id === categoryId)!;
   const race = config.races.find((r) => r.id === cat.raceId)!;
@@ -46,7 +54,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect }: { draft
     <div className="editor">
       <header className="editor__head">
         <p className="editor__context">Editing a category in {race.name}</p>
-        <button className="icon-btn editor__close" onClick={onClose} aria-label="Close category editor">
+        <button ref={closeRef} className="icon-btn editor__close" onClick={onClose} aria-label="Close category editor">
           <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d="M4 4l8 8M12 4l-8 8" />
           </svg>
