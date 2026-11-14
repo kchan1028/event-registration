@@ -1,1 +1,32 @@
+# Dependencies and build output
+node_modules/
+dist/
+
+# Local databases (may hold test entries); never commit
+data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Test and tool output
+test-results/
+playwright-report/
+coverage/
+
+# Local design tooling and reference library
+.impeccable/
+design-md/
+.worktrees/
+
+# OS and editor
+.DS_Store
+*.log
+
+# Agent instructions are kept locally, not tracked
 AGENTS.md

@@ -10,15 +10,37 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 
 | Item | Status | Notes |
 |---|---|---|
-| Repository and documentation foundation | Implemented (November 14, 2026) | Supporting work, not a roadmap phase. No application code exists. |
-| Demo purchase flow fixtures | Implemented (November 14, 2026) | Supporting work for Phase 1: fake events, riders, fees, worked order totals, and sample waiver text in [docs/fixtures/](docs/fixtures/README.md). No demo uses them yet. |
-| Phase 0: Establish the case to build | Planned | Not started. Next actions are listed at the end of this document. |
-| Phase 1: Test the experience without live money | Planned | Depends on Phase 0. |
+| Repository and documentation foundation | Implemented (November 14, 2026) | Supporting work, not a roadmap phase. |
+| Demo purchase flow fixtures | Implemented (November 14, 2026) | Supporting work for Phase 1: fake events, riders, fees, worked order totals, and sample waiver text in [docs/fixtures/](docs/fixtures/README.md). Not yet used by the app. |
+| Category builder milestone (organizer prototype) | Implemented (November 14, 2026); partly verified | Local-only prototype. See [Category builder milestone](#category-builder-milestone). |
+| Phase 0: Establish the case to build | Planned | Not started. The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. Next actions are listed at the end of this document. |
+| Phase 1: Test the experience without live money | In progress | Organizer event builder prototype implemented. Rider checkout and check-in prototypes, timer samples, and usability tests are not started. |
 | Phase 2: Build the registration core | Planned | Depends on Phase 1 and a settled payment model. |
 | Phase 3: Make race day operable | Planned | USAC acceptance gates live sanctioned use. |
 | Phase 4: Run a controlled live pilot | Planned | Depends on Phase 3. |
 | Phase 5: Prove a two-day weekend and handoff | Planned | Depends on a successful Phase 4. |
 | Phase 6: Expand only from observed demand | Planned | P2. |
+
+## Category builder milestone
+
+Built November 14, 2026, on the stack in [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md). It covers the organizer side of the [road race and criterium category builder](product.md#1a-road-race-and-criterium-category-builder--p0) and runs only on a local computer. Setup: [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
+
+**Implemented:** organizations and draft events from road race, criterium, and two-day weekend templates; editable race days and races; categories that can be created, duplicated (flagged for review), reordered, archived, and edited; structured eligibility (AND within a path, OR between paths, organizer review and guardian flags); prices with scheduled changes and day-of surcharge; registration windows; distance, laps, or minutes plus laps; start groups with start and staging times and field limits; separate classification codes; category caps and shared capacity pools; simulated test entries that exercise the limits; a rider-facing preview with an eligibility checker; validation that blocks publishing on errors and requires warnings to be acknowledged; immutable published versions; autosaved drafts in SQLite with stale-save protection; labeled demonstration data.
+
+**Verified by automated tests** (Vitest unit and API tests, Playwright end-to-end tests, all passing on November 14, 2026):
+
+| Acceptance criterion in product.md | What was checked |
+|---|---|
+| Shared field cap | Caps of 40 and 40 with a combined 60: 35 entries in one leave 25 in the other; the 61st rider is refused; two simultaneous requests for the last place across two database connections give exactly one entry |
+| Category eligibility | Masters age and license category, competition class, collegiate path, and junior age bands evaluate independently; unknown data returns review, never cleared |
+| Timed criterium | 45 minutes + 3 laps displays as entered with no invented distance (export not built) |
+| Category configuration fixtures | Elite P/1/2, Masters 35+ Cat 3/4, Masters 50+ and 60+ sharing a start, women's combined criterium, junior bands, collegiate plus domestic field all load, validate, and behave as listed |
+
+**Implemented, not yet verified with organizers:** "Publish a weekend" and "Recreate a race schedule" pass end-to-end tests with example data, but the criteria require an organizer to do it with an approved schedule and no developer help. That is a Phase 1 usability test.
+
+**Not built yet (still required by product.md):** CSV import of category schedules; bundles and additional-race discounts; impact preview for changes after publishing; bulk edit and copy-day; category-specific questions, waivers, and bib ranges; waitlist policy; rider registration and checkout; exports.
+
+**Pending external dependencies, shown as pending in the interface:** USA Cycling license and waiver checks, payments, and sign-in with required MFA. Until sign-in exists the prototype must not be hosted or shared.
 
 ## Delivery approach
 
@@ -189,6 +211,7 @@ These are roles to assign, not assumed staffing commitments.
 1. Assign a product owner and registration lead for discovery.
 2. Obtain an anonymized existing category setup, timer export, exception list, and reconciliation example.
 3. Schedule one workflow observation and the initial interviews.
-4. Submit federation and payment-model questions before choosing an implementation stack.
+4. Submit federation and payment-model questions before choosing the production stack. ADR 0001 covers only the local prototype.
 5. Research the road-results.com update process with the timer and a recent promoter.
-6. Complete the build-versus-improve decision and revise estimates from evidence.
+6. Run the category builder with the registration lead on an anonymized real schedule and record where they needed help (Phase 1 usability test).
+7. Complete the build-versus-improve decision and revise estimates from evidence.

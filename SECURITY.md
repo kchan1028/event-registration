@@ -2,13 +2,13 @@
 
 CycleReg will handle rider contact details, emergency contacts, license numbers, waivers, and payments, so security problems are taken seriously even at the documentation stage. This file explains what to report, how to report it privately, and which security rules the product is held to.
 
-> **Status: documentation only.** There is no application code, no deployed website, no payment processing, and no stored rider data. The security requirements below are Planned, not Implemented.
+> **Status: local prototype only.** The organizer workspace prototype runs on `127.0.0.1` with no sign-in and stores data in a local SQLite file ([setup](docs/runbooks/local-setup.md)). There is no deployed website, no payment processing, and no real rider data. It must not be hosted or shared until sign-in with MFA and role-based access exist. Unless a section says otherwise, the security requirements below are Planned, not Implemented.
 
 ## Supported versions
 
 | Version | Supported |
 |---|---|
-| Documentation on the `main` branch | Yes |
+| Documentation and the local prototype on the `main` branch | Yes |
 | Released software | None exists yet |
 
 This table will list released versions once there is code to release.

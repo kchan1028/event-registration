@@ -1,8 +1,45 @@
-# Architecture (proposed)
+# Architecture
 
-**Status: Proposed.** Nothing in this document is built or accepted. It records the constraints any implementation must meet and the technical questions still open. Components become decided only through accepted [architecture decision records](decisions/README.md).
+**Status: partly implemented.** The [local category builder prototype](#what-exists-today-implemented) is built on the stack in [ADR 0001](decisions/0001-stack-for-category-builder-milestone.md). Everything under [Proposed logical components](#proposed-logical-components) beyond that prototype is still proposed. Components become decided only through accepted [architecture decision records](decisions/README.md).
 
-The short version: CycleReg needs one source of truth with strong consistency for capacity and money, a clear boundary between public schedule pages and private organizer and rider data, and replaceable connections to a payment provider, an email provider, timer files, and (if approved) USA Cycling. The technology stack is deliberately unchosen until Phase 0 answers the federation and payment questions, as [roadmap.md](../roadmap.md#next-actions) requires.
+The short version: CycleReg needs one source of truth with strong consistency for capacity and money, a clear boundary between public schedule pages and private organizer and rider data, and replaceable connections to a payment provider, an email provider, timer files, and (if approved) USA Cycling. The production stack stays open until Phase 0 answers the federation and payment questions, as [roadmap.md](../roadmap.md#next-actions) requires.
+
+## What exists today (implemented)
+
+```mermaid
+flowchart LR
+    subgraph Browser["Browser (React, Vite)"]
+        UI["Organizer workspace: category schedule, field board, editor, setup, pools, publish"]
+        PV["Rider preview with eligibility checker"]
+        SH1["Shared rules: eligibility, capacity, validation"]
+    end
+    subgraph Server["Local server on 127.0.0.1 (Node.js, Fastify)"]
+        API["JSON API under /api"]
+        SH2["Same shared rules module"]
+        REPO["Repository: drafts, versions, test entries"]
+    end
+    DB[("SQLite file: data/cyclereg.sqlite")]
+    UI -->|"autosave with revision number"| API
+    PV --> SH1
+    UI --> SH1
+    API --> SH2
+    API --> REPO
+    REPO -->|"immediate write transactions"| DB
+```
+
+The browser and the server import the same rules module (`src/shared`), so the preview, the issue list, and the server's save and publish checks always agree. The organizer edits a working copy; changes autosave about half a second after typing stops, carrying the revision number they started from. The server refuses a save from an out-of-date revision instead of overwriting newer work. Every write runs inside an immediate SQLite transaction, which makes the capacity check and the insert of a test entry one indivisible step, even across two server processes. Publishing copies the draft into an immutable numbered version. Nothing is sent to USA Cycling, a payment provider, or an email service, and there is no sign-in, so the server listens only on the local machine.
+
+| Concern | Where it lives |
+|---|---|
+| Document schema (Zod) | `src/shared/schema.ts` |
+| Eligibility (AND within a path, OR between paths) | `src/shared/eligibility.ts` |
+| Capacity limits, rider counted once | `src/shared/capacity.ts` |
+| Pre-publication checks | `src/shared/validation.ts` |
+| Templates, duplicate, reorder | `src/shared/factory.ts` |
+| Demonstration data (labeled examples) | `src/shared/demo.ts` |
+| HTTP routes | `src/server/app.ts` |
+| Transactions and storage | `src/server/repo.ts`, `src/server/db.ts` |
+| Interface | `src/web/` |
 
 ## Document maintenance rule (mandatory)
 
@@ -35,6 +72,8 @@ These come from [product.md](../product.md) and apply whatever stack is chosen.
 | Load and recovery checks at twice the expected pilot opening peak | Registration opening is the busiest moment | Quality requirements |
 
 ## Proposed logical components
+
+This is the target shape for the hosted product. Only the registration core rules and the organizer workspace exist today, in prototype form.
 
 ```mermaid
 flowchart LR

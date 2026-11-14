@@ -2,7 +2,7 @@
 
 CycleReg (working name; availability not checked) is a proposed registration and race-day platform for volunteer-run U.S. bike races. Its first release targets road races, criteriums, and two-day road race plus criterium weekends. The goal is measurable: less volunteer time spent on setup, registration exceptions, check-in, and handing the event to next year's organizer.
 
-> **Status: documentation only.** This repository holds the product brief, roadmap, and contributor guides. There is no application code, no payment processing, no USA Cycling connection, and no deployed website. Roadmap Phase 0 (establishing the case to build) has not started.
+> **Status: local prototype of the organizer category builder.** You can build a road race and criterium weekend, set eligibility, prices, start groups, and shared field limits, preview the rider schedule, and publish a versioned configuration, all on your own computer. Rider checkout, payments, USA Cycling license and waiver checks, and sign-in with MFA are **not built** and are shown as pending in the app. Do not host or share the prototype. Phase 0 discovery has not started.
 
 ## Who it serves and the problem it solves
 
@@ -22,9 +22,58 @@ CycleReg proposes a guided cycling workflow: categories modeled the way road and
 
 Berkeley Omnium (Berkeley Bicycle Club) is the reference scenario and proposed first design partner. It is not an approved migration, and it stays on its current registration system until the launch criteria in [product.md](product.md#launch-criteria) pass.
 
+## What works today
+
+The organizer workspace runs locally and is covered by automated tests. Screens below use the labeled demonstration weekend, which is example data, not an approved race schedule.
+
+![Category schedule for the example Saturday road race, with the start-group field board on the right](docs/screenshots/02-category-schedule.png)
+
+The category schedule lists what riders buy, grouped under display headers that never set limits. The field board on the right shows each start group as a clip of category tags with one tally for the shared field: Masters 50+ has 35 of its 40 places, and the combined 60-rider pool leaves 25 for Masters 60+.
+
+| Organizer task | Status |
+|---|---|
+| Create an organization and a draft event from a road race, criterium, or two-day weekend template | Implemented |
+| Create, duplicate (flagged for review), reorder, archive, and edit categories | Implemented |
+| Eligibility by license category, license type, racing age, competition class, and collegiate path, with OR between paths | Implemented and tested |
+| Prices with scheduled changes and day-of surcharge; registration windows | Implemented |
+| Distance and laps, laps only, or minutes plus laps (for example 45 min + 3 laps) | Implemented and tested |
+| Start groups that keep separate classification codes | Implemented and tested |
+| Category caps, start group field limits, and shared capacity pools, with a rider counted once | Implemented and tested, including two simultaneous requests for the last place |
+| Rider-facing schedule preview with an eligibility checker | Implemented |
+| Validation that blocks publishing on errors; warnings need acknowledgement; immutable published versions | Implemented and tested |
+| Autosave to a local SQLite database, safe against stale saves | Implemented and tested |
+| CSV import, bundles and discounts, change-impact preview, rider checkout, exports | Planned |
+
+<details>
+<summary>More screens: category editor, rider preview, publishing, phone layout</summary>
+
+![Category editor with eligibility conditions for Masters 35+ Cat 3/4](docs/screenshots/04-category-editor.png)
+
+![Rider preview checking which races a 52-year-old Cat 3 woman can enter](docs/screenshots/05-rider-preview.png)
+
+![Review and publish page with error and warning counts](docs/screenshots/06-review-and-publish.png)
+
+![Category schedule on a 390-pixel-wide phone screen](docs/screenshots/07-mobile-schedule.png)
+
+</details>
+
+### Try it locally
+
+You need Node.js 20 or later. Full steps and troubleshooting: [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
+
+```bash
+npm ci
+```
+
+```bash
+npm run dev
+```
+
+Open `http://127.0.0.1:5273/` and select **Load demonstration event**, or create your own organization. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
+
 ## How it is meant to work
 
-The three diagrams below describe **proposed** behavior from [product.md](product.md). None of it is built yet.
+The diagrams below describe behavior from [product.md](product.md). The rider journey is **planned**: only the preview exists. In the organizer workflow, the "Before registration opens" steps are implemented except CSV import, category questions, waivers, bib ranges, bundles, and discounts; the later stages are planned.
 
 ### 1. Rider registration journey
 
@@ -113,7 +162,7 @@ erDiagram
     BUNDLE_COMPONENT }o--|| RACE : "one entry in"
 ```
 
-This is a proposed conceptual model, not a database schema. An organization runs event weekends; each weekend has race days, and each day has races. Within a race, six concepts stay separate so that one setting never changes another by accident:
+This is the conceptual model. Everything except bundles is implemented in the prototype's configuration document ([src/shared/schema.ts](src/shared/schema.ts)); bundles are planned. An organization runs event weekends; each weekend has race days, and each day has races. Within a race, six concepts stay separate so that one setting never changes another by accident:
 
 - Registration category: what a rider buys, such as Masters 35+ Cat 3/4, with its own eligibility and price.
 - Start group: the categories that start together under one field limit.
@@ -143,11 +192,12 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 |---|---|
 | Product brief and roadmap | Drafted; proposed, not approved |
 | Repository and contributor documentation | Implemented November 14, 2026 |
-| Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; no demo uses them yet |
-| Technology stack | Not chosen; see [open decisions](docs/decisions/README.md#decision-backlog) |
-| Application code, payments, USA Cycling integration, hosting | None |
+| Category builder milestone (local organizer prototype) | Implemented November 14, 2026; shared-cap, eligibility, and fixture criteria verified by automated tests. See [roadmap.md](roadmap.md#category-builder-milestone) |
+| Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; not yet used by the app |
+| Stack | Chosen for the prototype only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
+| Rider checkout, payments, USA Cycling checks, sign-in with MFA, hosting | Not built |
 
-**Next milestone: Phase 0 exit gate.** Phase 0 shows whether a specific, recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup. If it does not, the roadmap says to stop the build. The first actions are in [roadmap.md](roadmap.md#next-actions).
+**Next milestone: Phase 0 exit gate, plus the rest of Phase 1.** Phase 0 shows whether a recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup; if not, the roadmap says to stop the build. The remaining Phase 1 work is a clickable rider checkout and check-in prototype, sample timer exports, and a usability test where the registration lead recreates an anonymized real schedule in the category builder. The first actions are in [roadmap.md](roadmap.md#next-actions).
 
 ## Documentation
 
@@ -159,12 +209,14 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [SECURITY.md](SECURITY.md) | How to report a security problem privately, and a summary of security requirements |
 | [ACCESSIBILITY.md](ACCESSIBILITY.md) | Accessibility target, how it will be checked, and how to report a barrier |
 | [LICENSE.md](LICENSE.md) | MIT License |
-| [docs/architecture.md](docs/architecture.md) | Proposed architecture, constraints, and open technical questions |
+| [docs/architecture.md](docs/architecture.md) | What is built, the proposed target architecture, and open technical questions |
+| [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md) | Install, run, and test the prototype; [troubleshooting](docs/runbooks/troubleshooting.md) |
+| [DESIGN.md](DESIGN.md) | Visual system of the organizer workspace |
 | [docs/coding-guide.md](docs/coding-guide.md) | Category and capacity modeling, eligibility, pricing, payments, privacy, accessibility, testing |
 | [docs/documentation-guide.md](docs/documentation-guide.md) | How docs are organized, status vocabulary, glossary, and setup and troubleshooting templates |
 | [docs/content-guide.md](docs/content-guide.md) | Rules for future public pages, including SEO, answer engines, and structured data |
 | [docs/operations.md](docs/operations.md) | Proposed operating model: support owners, incident severity, freezes, monitoring, backups, and handoff |
-| [docs/decisions/README.md](docs/decisions/README.md) | Architecture decision records and the backlog of unresolved decisions |
+| [docs/decisions/README.md](docs/decisions/README.md) | Architecture decision records, including [0001](docs/decisions/0001-stack-for-category-builder-milestone.md), and the backlog of unresolved decisions |
 | [docs/fixtures/README.md](docs/fixtures/README.md) | Fake demonstration data and sample waiver text for the planned Phase 1 demo purchase flow |
 
 ## Contributing

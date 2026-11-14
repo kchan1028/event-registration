@@ -35,7 +35,8 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Domain rules for code | [coding-guide.md](coding-guide.md) | |
 | Public page and copy rules | [content-guide.md](content-guide.md) | |
 | Writing rules, status vocabulary, glossary | This file | |
-| Setup, troubleshooting, race-day runbooks | `docs/runbooks/` (planned) | Created once there is something to run |
+| Setup and troubleshooting | [runbooks/](runbooks/local-setup.md) | Local setup and troubleshooting exist; race-day runbooks are planned |
+| Visual system of the interface | [DESIGN.md](../DESIGN.md) | Tokens, type, components; derived from the built interface |
 | Demo and category configuration fixtures | [fixtures/](fixtures/README.md) | Fake, illustrative data only. Demo purchase flow fixtures exist; category configuration fixtures are planned |
 
 ### Repository structure
@@ -44,28 +45,26 @@ Current layout:
 
 ```text
 .
-├── README.md
-├── CONTRIBUTING.md
-├── SECURITY.md
-├── ACCESSIBILITY.md
-├── LICENSE.md
-├── product.md
-├── roadmap.md
+├── README.md, CONTRIBUTING.md
+├── SECURITY.md, ACCESSIBILITY.md, LICENSE.md
+├── product.md, roadmap.md        Sources of truth
+├── DESIGN.md                     Visual system of the organizer workspace
+├── src/
+│   ├── shared/                   Rules used by browser and server (schema, eligibility, capacity, validation, templates, demo data)
+│   ├── server/                   Fastify API, SQLite storage, seed script
+│   └── web/                      React organizer workspace and rider preview
+├── tests/                        Vitest unit and API tests
+├── e2e/                          Playwright browser tests and screenshot capture
+├── .github/workflows/ci.yml      Automated checks on pushes and pull requests
 └── docs/
-    ├── architecture.md
-    ├── coding-guide.md
-    ├── content-guide.md
-    ├── documentation-guide.md
-    ├── operations.md
-    ├── decisions/
-    │   └── README.md
-    └── fixtures/
-        ├── README.md
-        ├── demo-purchase-flow.yaml
-        └── sample-waiver.md
+    ├── architecture.md, coding-guide.md, content-guide.md, documentation-guide.md, operations.md
+    ├── decisions/                Architecture decision records
+    ├── fixtures/                 Fake demo purchase flow data and sample waiver text
+    ├── runbooks/                 Local setup and troubleshooting
+    └── screenshots/              Images used in the README
 ```
 
-Source code directories will be defined by the ADR that chooses the technology stack. Do not create empty placeholder directories before then.
+Generated folders (`node_modules/`, `dist/`, `data/`, `test-results/`) are ignored by Git. Do not create empty placeholder directories.
 
 ### Naming conventions
 
@@ -119,7 +118,7 @@ Write for a volunteer organizer who is smart, busy, and not a software engineer.
 
 ## Documenting setup and troubleshooting once code exists
 
-There is nothing to set up yet. When the first runnable code lands, the same change must add a setup runbook. Do not write setup steps for software that does not exist.
+The current setup runbook is [runbooks/local-setup.md](runbooks/local-setup.md) and problems go in [runbooks/troubleshooting.md](runbooks/troubleshooting.md). Any change that alters how the app is installed, configured, or run must update them in the same change, using the templates below. Do not write setup steps for software that does not exist.
 
 ### Setup runbook template
 

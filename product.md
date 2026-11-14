@@ -83,6 +83,8 @@ A display header must never create a capacity rule accidentally. Combining start
 
 Eligibility must use structured rules: AND between independent constraints, OR between allowed alternatives, and explicit exceptions. Do not infer that category numbers form a simple eligibility hierarchy. Store professional status explicitly; support organizer-facing labels such as P/1/2 and Novice with verified mappings. Masters age and license category are independent constraints. Collegiate and domestic category mappings must be explicit and approved, never guessed from display labels.
 
+A rider whose competition class does not match a configured class (for example, a class the event has not defined) is routed to organizer review rather than accepted or refused automatically.
+
 Racing age uses the governing body's approved discipline/season rule, not an assumed birthday calculation. Eligibility and license checks are evaluated for the relevant race date. Unknown or stale verification produces a review status, not an automatic clearance. Changes to federation rules must be versioned and reviewed before reuse next season.
 
 #### Setup workflow
@@ -106,6 +108,12 @@ CSV import of category schedules is P0: provide a template, map columns, validat
 - Allow multiple eligible criterium entries when the approved schedule permits them; flag overlapping starts and configurable recovery/transition conflicts.
 - A bundle selects a valid category in each component race. Do not assume the same label, eligibility, or available capacity on both days.
 - Show an itemized preview of additional-race discounts, bundle pricing, and fees. Define discount precedence and prevent unintended stacking.
+
+#### Simulated entries before payments exist
+
+Until payments and rider registration exist, organizers can add simulated test entries to a category to check that caps, start group limits, and capacity pools hold. Test entries carry no rider data and no payment, count toward limits exactly like real entries, are labeled as test entries everywhere they appear, and can be removed in one action. They are never exported or published.
+
+Demonstration data must be labeled as examples on every screen and must not be presented as an approved race schedule or as current federation rules.
 
 #### Changes after registration opens
 
