@@ -51,6 +51,16 @@ Do not do any of the following unless the user explicitly asks for it in the cur
 - Entry, payment, and readiness states are independent. A paid entry is not automatically cleared to race.
 - Paid entries keep the price and rules accepted at purchase. Never silently reprice or invalidate them.
 
+## UX and UI work
+
+For any change to screens, components, layout, styling, interaction, or motion, load and follow these skills before writing UI code:
+
+1. `impeccable`: design direction, critique, and polish for the interface (hierarchy, typography, spacing, color, states, accessibility, responsive behavior).
+2. `awesome-design`: brand reference library. Use it to choose or set the project's `DESIGN.md` direction before inventing a new visual style.
+3. `emil-design-eng` (Emil Kowalski's design-engineering guidance): interaction details such as press and hover states, transitions, popovers, tooltips, and motion.
+
+Apply them in that order: direction first, then visual system, then interaction polish. The accessibility and mobile rules in [docs/coding-guide.md](docs/coding-guide.md#accessibility-and-mobile-usability) still apply and win any conflict. If a skill is not installed in your environment, say so in the change summary and follow the closest equivalent guidance; never claim to have used a skill you could not load.
+
 ## Writing rules
 
 - Plain English. Lead with the point, then the detail. Define a technical term the first time it appears or link to the [glossary](docs/documentation-guide.md#glossary).
@@ -79,4 +89,5 @@ Open questions:
 - [ ] README and affected guides match the repository as it actually is
 - [ ] Relative links resolve and Mermaid diagrams parse
 - [ ] No secrets or real personal data added
+- [ ] UI changes used `impeccable`, `awesome-design`, and `emil-design-eng`, or the summary says which were unavailable
 - [ ] Nothing described as working that has not been verified
