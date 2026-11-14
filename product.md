@@ -295,7 +295,7 @@ Targets below are hypotheses, not measured results. Establish the baseline with 
 | Metric | Proposed pilot target |
 |---|---|
 | Organizer setup and administration time | At least 30% below the equivalent existing workflow |
-| Standard rider checkout | Median under 3 minutes, excluding external license purchase |
+| Standard rider checkout | Median under 3 minutes for a returning signed-in rider, excluding external license purchase and first-time MFA enrollment |
 | Standard check-in | Median under 30 seconds; 95th percentile under 90 seconds, excluding exceptions |
 | Critical integrity failures | Zero oversold places, duplicate charges, lost confirmed entries, or unexplained ledger differences |
 | Start-list accuracy | Every confirmed entry appears in the correct agreed export |
