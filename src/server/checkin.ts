@@ -113,15 +113,17 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const cfg = config(eventId);
       const day = dayId ? requireDay(cfg, dayId) : cfg.days[0];
       const s = settings(eventId);
-      const cards = riders(eventId)
+      const all = riders(eventId)
         .map((o) => riderCard(o, day.id, s))
-        .filter((c) => matches(c, q))
         .sort((a, b) => a.name.localeCompare(b.name));
+      const enteredToday = all.filter((c) => c.entries.length > 0);
+      // A search also finds riders with no entry today, so the volunteer sees why; the plain list shows only today's riders.
+      const cards = q.trim() ? all.filter((c) => matches(c, q)) : enteredToday;
       const scope = bibScopeKey(s, day.id);
       const summary = {
-        riders: cards.length,
-        checkedIn: cards.filter((c) => c.checkedInAt).length,
-        blocked: cards.filter((c) => !c.result.ready && c.entries.length > 0).length,
+        riders: enteredToday.length,
+        checkedIn: enteredToday.filter((c) => c.checkedInAt).length,
+        blocked: enteredToday.filter((c) => !c.result.ready).length,
         bibsIssued: takenBibs(eventId, scope).size,
       };
       return {
