@@ -11,10 +11,11 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 | Item | Status | Notes |
 |---|---|---|
 | Repository and documentation foundation | Implemented (November 14, 2026) | Supporting work, not a roadmap phase. |
+| Demo purchase flow fixtures | Implemented (November 14, 2026) | Supporting work for Phase 1: fake events, riders, fees, worked order totals, and sample waiver text in [docs/fixtures/](docs/fixtures/README.md). Not yet used by the app. |
 | Category builder milestone (organizer prototype) | Implemented (November 14, 2026); partly verified | Local-only prototype. See [Category builder milestone](#category-builder-milestone). |
-| Rider checkout prototype | Implemented (November 14, 2026); partly verified | Simulated payment only. See [Rider checkout prototype](#rider-checkout-prototype). |
-| Phase 0: Establish the case to build | Planned | Not started. The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. |
-| Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented as prototypes. Check-in prototype, timer export samples, and usability tests are not started. |
+| Rider checkout prototype | Implemented (November 14, 2026); partly verified | Simulated payment only. Built before the [clickable demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-1) was specified, so it does not yet meet all of 2a. See [Rider checkout prototype](#rider-checkout-prototype). |
+| Phase 0: Establish the case to build | Planned | Not started. The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. Next actions are listed at the end of this document. |
+| Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented as prototypes. The demo purchase flow (product.md 2a), check-in prototype, timer export samples, and usability tests are not finished. |
 | Phase 2: Build the registration core | Planned | Depends on Phase 1 and a settled payment model. |
 | Phase 3: Make race day operable | Planned | USAC acceptance gates live sanctioned use. |
 | Phase 4: Run a controlled live pilot | Planned | Depends on Phase 3. |
@@ -63,6 +64,8 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 
 **Pending external dependencies:** a payment provider, USA Cycling license and waiver checks, and sign-in with required MFA. Rider data entered in the prototype stays in the local database; use made-up details.
 
+**Gaps against the [clickable demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-1) (2a), specified after this prototype was built:** no browse-events step; no demo rider profiles to prefill details; no emergency contact; the waiver uses a checkbox, not a typed-name signature; the payment button says "Pay … (simulated)" instead of "Complete simulated payment"; no persistent "Demo" label or watermarked receipt; no error summary at the top of a step; completed steps are reachable only with Back buttons, not from the progress indicator; demo pricing does not use the [fixture fees](docs/fixtures/README.md) (platform fee, processing fee, fixed bundle price) or fixture events; light and dark themes are not built. The 2a acceptance criterion is therefore not met.
+
 ## Delivery approach
 
 Validate that the product saves volunteer time before building a replacement registration system. Deliver in dependency order, using phase exit criteria rather than a fixed launch date. Do not anchor the first live use to Berkeley Omnium's registration opening.
@@ -92,8 +95,10 @@ Indicative effort: 2–3 weeks. Depends on Phase 0. Priority: P0.
 Deliverables:
 
 - Clickable rider checkout for one day, both days, a junior entry, and an uncertain-license case.
+- End-to-end demo purchase flow on fake demonstration data: browse events, choose an entry, racer details, waiver signature, order review with fees, clearly labeled simulated payment, and confirmation with registration details, waiver status, and receipt. Uses the fixtures in [docs/fixtures/](docs/fixtures/README.md). See [product.md](product.md#2a-clickable-demo-purchase-flow--phase-1).
 - Organizer event builder and registration exception queue prototype.
 - Check-in prototype showing ready/blocked states and bib assignment.
+- Light and dark themes with a toggle that defaults to the system preference and remembers the choice. See [product.md](product.md#display-themes).
 - Draft category/start-group model, state transitions, and timer export samples.
 - Test with at least two organizers, two check-in volunteers, and five riders/parents. Participants may overlap with discovery.
 
@@ -120,6 +125,7 @@ Verification:
 - Concurrent checkout for the last place, expired reservations, and bundle rollback.
 - Payment failure, timeout, duplicate notification, refund retry, and cancellation scenarios.
 - Role access, private-data visibility, waiver/version integrity, and keyboard/mobile use.
+- Contrast and readability of text, forms, buttons, errors, and status indicators in both light and dark themes; theme choice persists without a flash of the wrong theme.
 - MFA enforcement for every account type, step-up prompts on sensitive organizer actions, recovery paths that cannot bypass MFA, and attempt rate limits.
 
 Exit gate: Sandbox money and entry states reconcile; no overselling or duplicate processing in concurrency/retry tests; core flows pass with realistic categories. No public paid launch yet.
