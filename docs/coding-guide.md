@@ -217,7 +217,7 @@ Tests prove the acceptance criteria in [product.md](../product.md#core-flows-and
 
 Use fake data in all tests. Concurrency and idempotency tests must actually run requests in parallel or replay events; a single-threaded test does not prove them.
 
-Current coverage (all passing November 14, 2026): category fixtures, eligibility, and the 40/40/60 shared cap in `tests/`; last-place race across two database connections, stale-save rejection, entry-protecting saves, and publish rules in `tests/api.test.ts`; the organizer workflow and the demonstration publish flow in `e2e/organizer.spec.ts`. Payments, state machines, permissions, impact previews, exports, and time-zone edge cases have no tests yet because those features are not built.
+Current coverage (all passing November 14, 2026): category fixtures, eligibility, and the 40/40/60 shared cap in `tests/`; last-place race across two database connections, stale-save rejection, entry-protecting saves, and publish rules in `tests/api.test.ts`; the organizer workflow, the demonstration publish flow, and the phone-width editor drawer (focus in, backdrop close, focus returned) in `e2e/organizer.spec.ts`. Payments, state machines, permissions, impact previews, exports, and time-zone edge cases have no tests yet because those features are not built.
 
 ### Review
 
