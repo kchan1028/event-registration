@@ -125,6 +125,13 @@ describe('rider checkout: holds and simulated payment', () => {
     expect(((await pay(o.id, 'success')).json() as Order).status).toBe('confirmed');
   });
 
+  it('a payment that arrives after the rider cancelled goes to the exception queue instead of re-entering them', async () => {
+    const { app, order, pay, code } = await setup();
+    const o = (await order([code('RR-M35-34')])).json() as Order;
+    await app.inject({ method: 'POST', url: `/api/orders/${o.id}/cancel` });
+    expect(((await pay(o.id, 'success')).json() as Order).status).toBe('needs_attention');
+  });
+
   it('cancelling releases the hold', async () => {
     const { app, order, code, entriesCount } = await setup();
     const before = await entriesCount();

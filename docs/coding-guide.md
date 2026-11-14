@@ -151,7 +151,7 @@ Idempotent means doing the same thing twice has the same effect as doing it once
 
 ### What the prototype implements
 
-The checkout prototype (`src/server/orders.ts`) follows these rules with a simulated provider: order creation carries a client request ID so a retried request returns the same order; each payment notification carries an attempt ID stored in `payment_attempts` and is processed once; a success after the hold expired re-checks every place in one transaction and either confirms or moves the order to `needs_attention`; a decline keeps the hold. Real provider signatures, refunds, disputes, and reconciliation are not built.
+The checkout prototype (`src/server/orders.ts`) follows these rules with a simulated provider: order creation carries a client request ID so a retried request returns the same order; each payment notification carries an attempt ID stored in `payment_attempts` and is processed once; a success after the hold expired re-checks every place in one transaction and either confirms or moves the order to `needs_attention`; a success after the rider cancelled always goes to `needs_attention`; a decline keeps the hold. Real provider signatures, refunds, disputes, and reconciliation are not built.
 
 ### Reconciliation
 

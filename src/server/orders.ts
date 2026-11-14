@@ -212,8 +212,11 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
             next = status === 'held' ? 'payment_failed' : status;
           } else if (status === 'held' || status === 'payment_failed') {
             next = 'confirmed';
+          } else if (status === 'cancelled') {
+            // The rider walked away; money arriving now goes to a person, never a silent re-entry.
+            next = 'needs_attention';
           } else {
-            // expired or cancelled: try to take the places again, all or nothing.
+            // expired: try to take the places again, all or nothing.
             const config = repo.getVersion(row.event_id, row.published_version);
             const ids = entryRows.all(orderId).map((e) => e.category_id);
             const riderRef = entryRows.all(orderId)[0]?.rider_ref ?? `rider-${orderId}`;
