@@ -160,6 +160,18 @@ export function validateConfig(config: EventConfig, entries: readonly TestEntry[
     }
   }
 
+  // Registration settings: bundles, rider policies
+  for (const b of config.registration.bundles) {
+    const t = { kind: 'event' } as const;
+    const label = b.name || 'Unnamed bundle';
+    if (!b.name.trim()) add('error', `bundle.${b.id}.name`, 'A bundle needs a name.', t);
+    if (new Set(b.raceIds).size < 2) add('error', `bundle.${b.id}.races`, `${label} must include at least two different races.`, t);
+    if (b.raceIds.some((id) => !raceById.has(id))) add('error', `bundle.${b.id}.race-missing`, `${label} includes a race that no longer exists.`, t);
+    if (b.discountCents === 0) add('warning', `bundle.${b.id}.zero`, `${label} has no discount, so riders gain nothing from it.`, t);
+  }
+  if (!config.registration.waiverText.trim()) add('warning', 'event.waiver', 'No waiver text is set, so riders will see an empty waiver step.', { kind: 'event' });
+  if (!config.registration.refundPolicy.trim()) add('warning', 'event.refund', 'No refund policy is set. Riders should see it before they pay.', { kind: 'event' });
+
   // Capacity pools
   for (const pool of config.capacityPools) {
     const t = { kind: 'pool', id: pool.id } as const;

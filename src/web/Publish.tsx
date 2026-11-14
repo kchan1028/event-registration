@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { countIssues, type Issue } from '../shared/validation';
 import { ApiError } from './api';
+import { href } from './App';
 import type { Draft } from './Builder';
 import { IssueList } from './IssuesPanel';
 import { Icon, Pending } from './ui';
@@ -62,7 +63,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
       <div className="publish-box">
         <div className="pending-stack">
           <Pending>USA Cycling license checks are not connected. Published categories still mark every license for review.</Pending>
-          <Pending>Payments are not connected. Publishing does not open paid registration.</Pending>
+          <Pending>Payments are not connected. Published events open a rider registration page with simulated payment only.</Pending>
         </div>
         {warnings > 0 && (
           <label className="check">
@@ -73,6 +74,11 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
           {busy ? 'Publishing…' : upToDate ? `Version ${data.publishedVersion} is current` : `Publish version ${(data.publishedVersion ?? 0) + 1}`}
         </button>
         {errors > 0 && <p className="muted small">Fix the errors above to publish.</p>}
+        {data.publishedVersion !== null && (
+          <a className="btn btn--secondary btn--small" href={href({ page: 'register', eventId: data.id })}>
+            Open rider registration (version {data.publishedVersion})
+          </a>
+        )}
         {msg && (
           <p className={`note note--${msg.tone}`} role="status">
             {msg.text}

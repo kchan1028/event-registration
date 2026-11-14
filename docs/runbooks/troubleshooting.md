@@ -34,6 +34,20 @@ Cause: a category cap, start group field limit, or pool limit would fall below r
 Fix: raise the limit back, archive the category instead of deleting it, or remove test entries in **Event setup**.
 Last confirmed: November 14, 2026
 
+## Rider registration says "Registration is not open"
+
+Who sees it: anyone opening the rider registration page.
+Cause: the event has no published version. Riders only ever see a published version.
+Fix: in the organizer workspace, open **Review and publish**, fix any errors, and publish. The page then shows the published schedule.
+Last confirmed: November 14, 2026
+
+## Checkout says a race is full and nothing was held
+
+Who sees it: rider at the "Hold my places" step.
+Cause: another order or test entry took the last place in a category, start group, or shared pool. Orders are all or nothing, so no other race in the order was held either.
+Fix: go back to races, choose another category, and try again. Organizers can remove test entries in **Event setup**.
+Last confirmed: November 14, 2026
+
 ## `npm ci` fails building `better-sqlite3`
 
 Who sees it: contributors on an unusual platform or Node version.

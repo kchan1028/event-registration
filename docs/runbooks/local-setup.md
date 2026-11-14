@@ -93,6 +93,7 @@ SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts
 | `DB_PATH` | SQLite file for organizations, drafts, published versions, and test entries | `data/cyclereg.sqlite` | No |
 | `PORT` or `API_PORT` | API server port | `3001` | No |
 | `NODE_ENV=production` | Makes the API also serve the built web app from `dist/web` | unset | No |
+| `HOLD_MINUTES` | How long rider checkout holds places before payment | `10` | No |
 
 The `data/` folder is ignored by Git. Delete `data/cyclereg.sqlite` to start over.
 

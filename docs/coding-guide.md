@@ -149,6 +149,10 @@ Idempotent means doing the same thing twice has the same effect as doing it once
 | Partial refund of one bundle entry | Refund recorded against that entry; capacity released for that race only; bundle price effect shown before confirming |
 | Dispute (chargeback) | Payment state becomes disputed; entry state unchanged until an organizer acts |
 
+### What the prototype implements
+
+The checkout prototype (`src/server/orders.ts`) follows these rules with a simulated provider: order creation carries a client request ID so a retried request returns the same order; each payment notification carries an attempt ID stored in `payment_attempts` and is processed once; a success after the hold expired re-checks every place in one transaction and either confirms or moves the order to `needs_attention`; a decline keeps the hold. Real provider signatures, refunds, disputes, and reconciliation are not built.
+
 ### Reconciliation
 
 - Keep a ledger of order totals, line items, discounts, processing and platform fees, refunds, and the provider's settlement or payout references.
@@ -217,7 +221,7 @@ Tests prove the acceptance criteria in [product.md](../product.md#core-flows-and
 
 Use fake data in all tests. Concurrency and idempotency tests must actually run requests in parallel or replay events; a single-threaded test does not prove them.
 
-Current coverage (all passing November 14, 2026): category fixtures, eligibility, and the 40/40/60 shared cap in `tests/`; last-place race across two database connections, stale-save rejection, entry-protecting saves, and publish rules in `tests/api.test.ts`; the organizer workflow, the demonstration publish flow, and the phone-width editor drawer (focus in, backdrop close, focus returned) in `e2e/organizer.spec.ts`. Payments, state machines, permissions, impact previews, exports, and time-zone edge cases have no tests yet because those features are not built.
+Current coverage (all passing November 14, 2026): category fixtures, eligibility, and the 40/40/60 shared cap in `tests/`; last-place race across two database connections, stale-save rejection, entry-protecting saves, and publish rules in `tests/api.test.ts`; the organizer workflow, the demonstration publish flow, and the phone-width editor drawer (focus in, backdrop close, focus returned) in `e2e/organizer.spec.ts`. Checkout pricing, discount precedence, schedule conflicts, holds, expiry, idempotent payments, and license review are covered in `tests/pricing.test.ts` and `tests/orders.test.ts`, and the rider journeys in `e2e/checkout.spec.ts`. Real payments, permissions, impact previews, exports, and time-zone edge cases have no tests yet because those features are not built.
 
 ### Review
 

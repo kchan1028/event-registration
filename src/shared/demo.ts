@@ -4,6 +4,9 @@ import type { Category, EligibilityPath, EventConfig, LicenseCategory } from './
 export const DEMO_NOTICE =
   'Demonstration data. These categories, prices, limits, and times are examples for trying the builder. They are not an approved race schedule and do not describe current USA Cycling eligibility rules.';
 
+export const SAMPLE_WAIVER =
+  'SAMPLE WAIVER FOR THE PROTOTYPE. This is not USA Cycling\'s waiver and has no legal effect. A sanctioned event must use the federation\'s approved waiver text and signing process, which this prototype does not connect to.\n\nI understand that bicycle racing involves risk of injury. I will follow the officials\' instructions, ride within my ability, and wear an approved helmet at all times on the course.';
+
 type PathSpec = Partial<Omit<EligibilityPath, 'id'>>;
 
 function path(spec: PathSpec): EligibilityPath {
@@ -133,6 +136,15 @@ export function buildDemoEvent(): { config: EventConfig; entryPlan: { categoryId
       demoNotice: DEMO_NOTICE,
     },
     ruleSet: { source: 'Example only. Not taken from a federation rulebook.', season: 2027 },
+    registration: {
+      bundles: [{ id: newId('bundle'), name: 'Weekend omnium entry', raceIds: [rr.id, crit.id], discountCents: 1500 }],
+      additionalRaceDiscountCents: 1000,
+      recoveryMinutes: 15,
+      refundPolicy:
+        'Example policy: full refund less a $5 processing fee until 7 days before the race; no refunds after that. Category transfers are free until registration closes.',
+      waiverText: SAMPLE_WAIVER,
+      waiverVersion: 'sample-2027.1',
+    },
     days: [sat, sun],
     races: [rr, crit],
     displayGroups: Object.values(dg),

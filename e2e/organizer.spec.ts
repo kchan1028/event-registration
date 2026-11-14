@@ -8,7 +8,7 @@ test('organizer builds, saves, reloads, and previews a category', async ({ page 
   await page.getByRole('button', { name: 'Create organization' }).click();
   await expect(page.getByRole('heading', { name: 'Test Velo Club' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'New draft event' }).click();
+  await page.getByRole('article').filter({ hasText: 'Test Velo Club' }).getByRole('button', { name: 'New draft event' }).click();
   await page.getByLabel('Event name').fill('Test Velo Weekend');
   await page.getByLabel('First race day').fill('2027-06-12');
   await page.getByRole('button', { name: 'Create draft' }).click();

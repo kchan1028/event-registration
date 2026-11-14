@@ -12,8 +12,9 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 |---|---|---|
 | Repository and documentation foundation | Implemented (November 14, 2026) | Supporting work, not a roadmap phase. |
 | Category builder milestone (organizer prototype) | Implemented (November 14, 2026); partly verified | Local-only prototype. See [Category builder milestone](#category-builder-milestone). |
+| Rider checkout prototype | Implemented (November 14, 2026); partly verified | Simulated payment only. See [Rider checkout prototype](#rider-checkout-prototype). |
 | Phase 0: Establish the case to build | Planned | Not started. The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. |
-| Phase 1: Test the experience without live money | In progress | Organizer event builder prototype implemented. Rider checkout and check-in prototypes, timer samples, and usability tests are not started. |
+| Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented as prototypes. Check-in prototype, timer export samples, and usability tests are not started. |
 | Phase 2: Build the registration core | Planned | Depends on Phase 1 and a settled payment model. |
 | Phase 3: Make race day operable | Planned | USAC acceptance gates live sanctioned use. |
 | Phase 4: Run a controlled live pilot | Planned | Depends on Phase 3. |
@@ -40,6 +41,27 @@ Built November 14, 2026, on the stack in [ADR 0001](docs/decisions/0001-stack-fo
 **Not built yet (still required by product.md):** CSV import of category schedules; bundles and additional-race discounts; impact preview for changes after publishing; bulk edit and copy-day; category-specific questions, waivers, and bib ranges; waitlist policy; rider registration and checkout; exports.
 
 **Pending external dependencies, shown as pending in the interface:** USA Cycling license and waiver checks, payments, and sign-in with required MFA. Until sign-in exists the prototype must not be hosted or shared.
+
+## Rider checkout prototype
+
+Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "clickable rider checkout for one day, both days, a junior entry, and an uncertain-license case" and the organizer exception queue, with **simulated payment only**.
+
+**Implemented:** a rider registration page for the latest published version; an "about you" check that marks every category as qualifying, needing organizer review, or not eligible, with the full schedule still visible; a start-ordered schedule that flags same-start, overlapping, tight-recovery, and unknown-finish conflicts; a live order summary with bundle and additional-race discounts under the precedence rule in product.md; rider details entered once; guardian details and guardian waiver acceptance for junior entries; a versioned sample waiver; places held for 10 minutes for the whole order, all or nothing; simulated payment with decline and retry; idempotent payment notifications; confirmation with a check-in code and a readiness checklist per entry; an organizer Registrations view filtered by license review, needs attention, and unpaid holds, where an organizer records a license review with a reason; bundle, discount, recovery, refund policy, and waiver settings in event setup.
+
+**Verified by automated tests** (Vitest and Playwright, all passing November 14, 2026):
+
+| Acceptance criterion in product.md | What was checked |
+|---|---|
+| Buy both days | One set of rider details; both entries, the bundle discount, and the total shown before payment; confirmation lists both races |
+| Last-place checkout | A held place counts toward shared limits, so a second rider cannot take it; an expired hold releases the place |
+| Payment retry | Repeating a payment notification, or sending a second one, creates no second confirmation, entry, or check-in code; a repeated order request returns the same order |
+| License uncertainty | An unknown license is marked for organizer review and never shown as valid; paying does not clear it |
+| Multi-race discount | Two non-conflicting criteriums get the additional-race discount exactly once and stay distinct entries |
+| Mixed-category weekend bundle | Each day's category passes its own rules; if any place is full, nothing is held |
+
+**Not built yet:** real payments, refunds, and payouts; enforcement of registration open and close times (the prototype lets anyone try checkout now); rider accounts and access to past receipts; category transfers and withdrawals; waitlists; emergency contact collection (deferred until role-based access exists); email receipts; check-in, bib assignment, and timer exports.
+
+**Pending external dependencies:** a payment provider, USA Cycling license and waiver checks, and sign-in with required MFA. Rider data entered in the prototype stays in the local database; use made-up details.
 
 ## Delivery approach
 
@@ -209,5 +231,5 @@ These are roles to assign, not assumed staffing commitments.
 3. Schedule one workflow observation and the initial interviews.
 4. Submit federation and payment-model questions before choosing the production stack. ADR 0001 covers only the local prototype.
 5. Research the road-results.com update process with the timer and a recent promoter.
-6. Run the category builder with the registration lead on an anonymized real schedule and record where they needed help (Phase 1 usability test).
+6. Run the category builder with the registration lead on an anonymized real schedule, and the rider checkout with at least five riders or parents, recording where each needed help (Phase 1 usability test).
 7. Complete the build-versus-improve decision and revise estimates from evidence.

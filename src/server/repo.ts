@@ -38,12 +38,16 @@ interface EventRow {
   updated_at: string;
 }
 
-export function createRepo(db: Db) {
+export function createRepo(db: Db, clock: () => Date = () => new Date()) {
   const getRow = db.prepare<[string], EventRow>(
     `SELECT e.*, o.name AS organization_name FROM events e JOIN organizations o ON o.id = e.organization_id WHERE e.id = ?`,
   );
-  const entriesStmt = db.prepare<[string], { id: string; category_id: string; rider_ref: string }>(
-    `SELECT id, category_id, rider_ref FROM test_entries WHERE event_id = ? ORDER BY created_at, id`,
+  // Places taken: simulated test entries, confirmed registrations, and unexpired checkout holds.
+  const entriesStmt = db.prepare<[string, string, string], { id: string; category_id: string; rider_ref: string }>(
+    `SELECT id, category_id, rider_ref FROM test_entries WHERE event_id = ?
+     UNION ALL
+     SELECT oe.id, oe.category_id, oe.rider_ref FROM order_entries oe JOIN orders o ON o.id = oe.order_id
+     WHERE oe.event_id = ? AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > ?))`,
   );
   const insertEntry = db.prepare(`INSERT INTO test_entries (id, event_id, category_id, rider_ref, created_at) VALUES (?, ?, ?, ?, ?)`);
 
@@ -56,7 +60,7 @@ export function createRepo(db: Db) {
       publishedVersion: row.published_version,
       publishedRevision: row.published_revision,
       updatedAt: row.updated_at,
-      config: JSON.parse(row.draft_json) as EventConfig,
+      config: eventConfigSchema.parse(JSON.parse(row.draft_json)),
     };
   }
 
@@ -67,7 +71,7 @@ export function createRepo(db: Db) {
   }
 
   function entries(eventId: string): TestEntry[] {
-    return entriesStmt.all(eventId).map((r) => ({ id: r.id, categoryId: r.category_id, riderRef: r.rider_ref }));
+    return entriesStmt.all(eventId, eventId, clock().toISOString()).map((r) => ({ id: r.id, categoryId: r.category_id, riderRef: r.rider_ref }));
   }
 
   /** Rules that protect existing entries; enforced on every save. */
@@ -183,7 +187,7 @@ export function createRepo(db: Db) {
     getVersion(id: string, version: number): EventConfig {
       const row = db.prepare<[string, number], { config_json: string }>(`SELECT config_json FROM event_versions WHERE event_id = ? AND version = ?`).get(id, version);
       if (!row) throw new HttpError(404, 'Version not found.');
-      return JSON.parse(row.config_json) as EventConfig;
+      return eventConfigSchema.parse(JSON.parse(row.config_json));
     },
 
     /**

@@ -3,7 +3,7 @@ import { addDays, newId } from '../shared/factory';
 import type { EventConfig } from '../shared/schema';
 import { ApiError } from './api';
 import type { Draft } from './Builder';
-import { dayHue, Field, Icon, IntInput } from './ui';
+import { dayHue, Field, Icon, IntInput, MoneyInput } from './ui';
 
 const TIME_ZONES = ['America/Los_Angeles', 'America/Denver', 'America/Phoenix', 'America/Chicago', 'America/New_York', 'America/Anchorage', 'Pacific/Honolulu'];
 
@@ -125,6 +125,64 @@ export function EventSettings({ draft }: { draft: Draft }) {
         <button className="btn btn--secondary btn--small" onClick={addDay} disabled={config.days.length >= 7}>
           <Icon name="plus" /> Add race day
         </button>
+      </section>
+
+      <section className="settings__section">
+        <h3>Bundles, discounts, and rider policies</h3>
+        <p className="muted">
+          A bundle discounts an order that has an entry in each of its races, such as a road race and criterium weekend. Entries outside a bundle after the first get the additional-race
+          discount. An entry never gets two discounts.
+        </p>
+        {config.registration.bundles.map((b) => {
+          const patch = (p: Partial<typeof b>) => update((c) => ({ ...c, registration: { ...c.registration, bundles: c.registration.bundles.map((x) => (x.id === b.id ? { ...x, ...p } : x)) } }));
+          return (
+            <fieldset className="day-block bundle" key={b.id}>
+              <legend className="sr-only">Bundle {b.name}</legend>
+              <div className="form-row">
+                <Field label="Bundle name">{(id) => <input id={id} className="input" value={b.name} onChange={(e) => patch({ name: e.target.value })} maxLength={80} />}</Field>
+                <Field label="Discount">{(id) => <MoneyInput id={id} cents={b.discountCents} onCommit={(v) => patch({ discountCents: v })} />}</Field>
+              </div>
+              <div className="chips" role="group" aria-label={`Races in ${b.name}`}>
+                {config.races.map((r) => (
+                  <label key={r.id} className={`chip ${b.raceIds.includes(r.id) ? 'is-on' : ''}`}>
+                    <input type="checkbox" checked={b.raceIds.includes(r.id)} onChange={() => patch({ raceIds: b.raceIds.includes(r.id) ? b.raceIds.filter((x) => x !== r.id) : [...b.raceIds, r.id] })} />
+                    {r.name}
+                  </label>
+                ))}
+              </div>
+              <button className="btn btn--ghost btn--small btn--danger" onClick={() => update((c) => ({ ...c, registration: { ...c.registration, bundles: c.registration.bundles.filter((x) => x.id !== b.id) } }))}>
+                <Icon name="trash" /> Remove bundle
+              </button>
+            </fieldset>
+          );
+        })}
+        <button
+          className="btn btn--ghost btn--small"
+          onClick={() =>
+            update((c) => ({ ...c, registration: { ...c.registration, bundles: [...c.registration.bundles, { id: newId('bundle'), name: 'Weekend entry', raceIds: c.races.map((r) => r.id), discountCents: 1000 }] } }))
+          }
+        >
+          <Icon name="plus" /> Add bundle
+        </button>
+        <div className="form-row">
+          <Field label="Additional-race discount" hint="Per extra entry outside a bundle">
+            {(id, d) => <MoneyInput id={id} describedBy={d} cents={config.registration.additionalRaceDiscountCents} onCommit={(v) => update((c) => ({ ...c, registration: { ...c.registration, additionalRaceDiscountCents: v } }))} />}
+          </Field>
+          <Field label="Recovery between races (minutes)" hint="Shorter gaps warn the rider">
+            {(id, d) => <IntInput id={id} describedBy={d} value={config.registration.recoveryMinutes} min={0} max={180} allowEmpty={false} onCommit={(v) => v !== null && update((c) => ({ ...c, registration: { ...c.registration, recoveryMinutes: v } }))} />}
+          </Field>
+        </div>
+        <Field label="Refund policy shown before payment">
+          {(id) => <textarea id={id} className="input" rows={3} value={config.registration.refundPolicy} onChange={(e) => update((c) => ({ ...c, registration: { ...c.registration, refundPolicy: e.target.value } }))} maxLength={1000} />}
+        </Field>
+        <div className="form-row">
+          <Field label="Waiver version" hint="Change it whenever the text changes">
+            {(id, d) => <input id={id} aria-describedby={d} className="input input--code" value={config.registration.waiverVersion} onChange={(e) => update((c) => ({ ...c, registration: { ...c.registration, waiverVersion: e.target.value } }))} maxLength={40} />}
+          </Field>
+        </div>
+        <Field label="Waiver text" hint="A sanctioned event must use the federation's approved waiver; that connection is not built.">
+          {(id, d) => <textarea id={id} aria-describedby={d} className="input" rows={6} value={config.registration.waiverText} onChange={(e) => update((c) => ({ ...c, registration: { ...c.registration, waiverText: e.target.value } }))} maxLength={4000} />}
+        </Field>
       </section>
 
       <section className="settings__section">

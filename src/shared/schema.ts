@@ -75,6 +75,26 @@ export const categorySchema = z.object({
   reviewReason: z.string().max(300),
 });
 
+export const registrationSettingsSchema = z.object({
+  bundles: z
+    .array(z.object({ id, name: z.string().max(80), raceIds: z.array(id).max(7), discountCents: cents }))
+    .max(10),
+  additionalRaceDiscountCents: cents,
+  recoveryMinutes: z.number().int().min(0).max(180),
+  refundPolicy: z.string().max(1000),
+  waiverText: z.string().max(4000),
+  waiverVersion: z.string().max(40),
+});
+
+export const DEFAULT_REGISTRATION_SETTINGS: z.infer<typeof registrationSettingsSchema> = {
+  bundles: [],
+  additionalRaceDiscountCents: 0,
+  recoveryMinutes: 15,
+  refundPolicy: '',
+  waiverText: '',
+  waiverVersion: '',
+};
+
 export const eventConfigSchema = z.object({
   schemaVersion: z.literal(1),
   event: z.object({
@@ -85,6 +105,7 @@ export const eventConfigSchema = z.object({
     demoNotice: z.string().max(400),
   }),
   ruleSet: z.object({ source: z.string().max(200), season: z.number().int().min(2000).max(2100) }),
+  registration: registrationSettingsSchema.default(DEFAULT_REGISTRATION_SETTINGS),
   days: z.array(z.object({ id, date, label: z.string().max(60) })).min(1).max(7),
   races: z
     .array(z.object({ id, dayId: id, name: z.string().max(120), discipline: z.enum(['road_race', 'criterium']), course: z.string().max(200) }))
@@ -120,6 +141,8 @@ export type RaceDay = EventConfig['days'][number];
 export type StartGroup = EventConfig['startGroups'][number];
 export type DisplayGroup = EventConfig['displayGroups'][number];
 export type CapacityPool = EventConfig['capacityPools'][number];
+export type RegistrationSettings = z.infer<typeof registrationSettingsSchema>;
+export type Bundle = RegistrationSettings['bundles'][number];
 
 /** A simulated entry used to exercise capacity rules. No payment, no rider data. */
 export interface TestEntry {

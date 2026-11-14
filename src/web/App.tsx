@@ -1,23 +1,30 @@
 import { useEffect, useState } from 'react';
 import { Builder } from './Builder';
 import { Home } from './Home';
+import { OrderPage, Register } from './Register';
 
 export type Route =
   | { page: 'home' }
+  | { page: 'register'; eventId: string }
+  | { page: 'order'; orderId: string }
   | { page: 'event'; eventId: string; view: 'race'; raceId: string | null }
-  | { page: 'event'; eventId: string; view: 'setup' | 'pools' | 'publish' | 'preview' };
+  | { page: 'event'; eventId: string; view: 'setup' | 'pools' | 'publish' | 'preview' | 'registrations' };
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
+  if (parts[0] === 'register' && parts[1]) return { page: 'register', eventId: parts[1] };
+  if (parts[0] === 'orders' && parts[1]) return { page: 'order', orderId: parts[1] };
   if (parts[0] !== 'events' || !parts[1]) return { page: 'home' };
   const eventId = parts[1];
   const view = parts[2];
-  if (view === 'setup' || view === 'pools' || view === 'publish' || view === 'preview') return { page: 'event', eventId, view };
+  if (view === 'setup' || view === 'pools' || view === 'publish' || view === 'preview' || view === 'registrations') return { page: 'event', eventId, view };
   return { page: 'event', eventId, view: 'race', raceId: view === 'race' ? (parts[3] ?? null) : null };
 }
 
 export function href(route: Route): string {
   if (route.page === 'home') return '#/';
+  if (route.page === 'register') return `#/register/${route.eventId}`;
+  if (route.page === 'order') return `#/orders/${route.orderId}`;
   if (route.view === 'race') return `#/events/${route.eventId}${route.raceId ? `/race/${route.raceId}` : ''}`;
   return `#/events/${route.eventId}/${route.view}`;
 }
@@ -35,5 +42,7 @@ export function App() {
   }, []);
 
   if (route.page === 'home') return <Home />;
+  if (route.page === 'register') return <Register key={route.eventId} eventId={route.eventId} />;
+  if (route.page === 'order') return <OrderPage key={route.orderId} orderId={route.orderId} />;
   return <Builder key={route.eventId} route={route} />;
 }
