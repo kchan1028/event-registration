@@ -186,6 +186,16 @@ export function EventSettings({ draft }: { draft: Draft }) {
               </select>
             )}
           </Field>
+          <Field label="Extra entry in the same race" hint="Flat price for each entry after the first in one race; 0 for none">
+            {(id, d) => (
+              <MoneyInput
+                id={id}
+                describedBy={d}
+                cents={config.registration.sameRaceExtraEntryCents ?? 0}
+                onCommit={(v) => update((c) => ({ ...c, registration: { ...c.registration, sameRaceExtraEntryCents: v > 0 ? v : null } }))}
+              />
+            )}
+          </Field>
           <Field label="Recovery between races (minutes)" hint="Shorter gaps warn the rider">
             {(id, d) => <IntInput id={id} describedBy={d} value={config.registration.recoveryMinutes} min={0} max={180} allowEmpty={false} onCommit={(v) => v !== null && update((c) => ({ ...c, registration: { ...c.registration, recoveryMinutes: v } }))} />}
           </Field>

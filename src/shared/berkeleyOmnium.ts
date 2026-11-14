@@ -6,7 +6,7 @@ import type { Category, CollegiateDivision, EligibilityPath, EventConfig, Gender
  * The Berkeley Omnium (Berkeley Hills Road Race and Berkeley Streets Criterium), used with the promoter's
  * permission as the working demo event. Fields, distances, staging and start times, race lengths and field limits
  * come from the 2026 Berkeley Omnium race information; dates and the registration window are the 2027 edition's.
- * Entry fees are placeholders until the 2027 fees are set. Riders and entries stay simulated.
+ * Entry fees are placeholders until the 2027 fees are set; the $15 day-of surcharge and $20 second criterium race are the 2026 rules. Riders and entries stay simulated.
  */
 
 export const OMNIUM_ORG_NAME = 'Berkeley Bicycle Club';
@@ -232,6 +232,8 @@ export function buildBerkeleyOmniumEvent(): { config: EventConfig; entryPlan: { 
       bundles: [],
       additionalRaceDiscountCents: 0,
       additionalRaceDiscountMode: 'each_additional_entry',
+      // Berkeley Omnium rule (2026 race information): a second criterium race costs $20.
+      sameRaceExtraEntryCents: 2000,
       platformFeeCents: 0,
       platformFeeLabel: 'Platform fee',
       processingFeeBasisPoints: 0,

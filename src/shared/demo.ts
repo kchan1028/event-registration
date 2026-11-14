@@ -140,6 +140,7 @@ export function buildDemoEvent(): { config: EventConfig; entryPlan: { categoryId
       bundles: [{ id: newId('bundle'), name: 'Weekend omnium entry', raceIds: [rr.id, crit.id], discountCents: 1500, priceCents: null }],
       additionalRaceDiscountCents: 1000,
       additionalRaceDiscountMode: 'each_additional_entry',
+      sameRaceExtraEntryCents: null,
       platformFeeCents: 0,
       platformFeeLabel: 'Platform fee',
       processingFeeBasisPoints: 0,
