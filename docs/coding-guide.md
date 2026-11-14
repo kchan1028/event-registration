@@ -1,6 +1,18 @@
 # Coding guide
 
-This guide sets the rules code must follow once implementation starts. Most of them protect three things volunteers cannot easily fix by hand on race morning: correct fields, correct money, and private rider data. No technology stack has been chosen, so the rules are written in language-neutral terms; the stack ADR will add language-specific conventions here.
+This guide sets the rules code must follow. Most of them protect three things volunteers cannot easily fix by hand on race morning: correct fields, correct money, and private rider data. The local category builder prototype uses TypeScript, Node.js, React, and SQLite ([ADR 0001](decisions/0001-stack-for-category-builder-milestone.md)). Sections about payments, roles, and sign-in describe planned work; nothing for them is built yet.
+
+## Repository structure and commands
+
+| Folder | What goes there |
+|---|---|
+| `src/shared/` | Domain rules that must give the same answer in the browser and on the server: schema, eligibility, capacity, validation, templates, demo data. No browser or Node-only APIs. |
+| `src/server/` | HTTP routes (`app.ts`), storage and transactions (`repo.ts`, `db.ts`), entry point and seed script |
+| `src/web/` | React components and `styles.css` (design tokens are documented in [DESIGN.md](../DESIGN.md)) |
+| `tests/` | Vitest unit tests for `src/shared` and API tests using `app.inject` |
+| `e2e/` | Playwright browser tests |
+
+Commands (details in [runbooks/local-setup.md](runbooks/local-setup.md)): `npm run dev` to work locally, `npm run check` for typecheck plus unit and API tests plus build, `npm run test:e2e` for the browser tests. CI runs the same checks on every push to `main` and every pull request.
 
 Every rule traces to a requirement in [product.md](../product.md). When a rule here and `product.md` disagree, `product.md` wins and this guide must be corrected.
 
@@ -30,7 +42,8 @@ Every change must review both [product.md](../product.md) and [roadmap.md](../ro
 - Name states exactly as `product.md` lists them (see [states](#keep-entry-payment-and-readiness-states-independent)).
 - Money fields say what they hold and in what unit: `price_minor_units` with a currency code, not `price`.
 - Times carry a time zone. Store instants in UTC and the event's IANA time zone (for example `America/Los_Angeles`) alongside them for display.
-- Language-specific casing and file layout will be set by the stack ADR.
+- TypeScript: `camelCase` for variables and functions, `PascalCase` for types and React components, one component family per file in `src/web/` named after its main export (`CategoryEditor.tsx`). Shared modules are lowercase nouns (`capacity.ts`).
+- IDs are opaque strings with a type prefix (`cat_…`, `sg_…`, `pool_…`) created by `newId()`. Never derive an ID from a name.
 
 ## Category and shared-capacity modeling
 
@@ -53,7 +66,7 @@ The category builder is a P0 requirement. Get the model right first; screens com
 2. A reservation consumes every applicable limit at once: the category cap, the start-group limit, and each capacity pool the category belongs to. If any limit is full, nothing is reserved.
 3. A rider counts **once** toward a start group or pool, even with several classification tags. Dual scoring is allowed only when explicitly configured.
 4. A bundle reserves all component entries in one atomic operation (all succeed or none do). Never sell half a bundle.
-5. Enforce limits with a mechanism that is correct under concurrent checkouts, such as a database transaction with appropriate locking or an atomic conditional update. Counting rows and then inserting in two separate steps is not acceptable. The exact mechanism is an open decision (see [decisions backlog](decisions/README.md#decision-backlog)).
+5. Enforce limits with a mechanism that is correct under concurrent checkouts, such as a database transaction with appropriate locking or an atomic conditional update. Counting rows and then inserting in two separate steps is not acceptable. The prototype runs `canAdmit()` and the insert inside one SQLite `BEGIN IMMEDIATE` transaction (`repo.addTestEntries`), and saves that change limits run in the same kind of transaction. The hosted product's mechanism is still open (see [decisions backlog](decisions/README.md#decision-backlog)).
 6. An organizer cannot lower a cap below confirmed entries plus active reservations.
 7. Archive a category that has entries; never delete it.
 
@@ -68,16 +81,18 @@ Worked example from the acceptance criteria: categories A and B each have a cap 
 - Evaluate eligibility for the **race date**, using the governing body's racing-age rule for that discipline and season.
 - Unknown or stale license data returns `needs_review`, not `eligible`.
 
-Illustrative shape for the Masters 35+ Cat 3/4 fixture (not a schema; the format will be decided during implementation):
+As implemented (`src/shared/schema.ts`), a category holds a list of eligibility paths. A rider qualifies when every condition in at least one path holds. The Masters 35+ Cat 3/4 fixture is one path:
 
-```yaml
-category: masters-35-plus-cat-3-4   # illustrative ID
-eligibility:
-  all_of:
-    - racing_age: { min: 35 }
-    - license_category: { any_of: [3, 4] }
-  rule_set: { source: "<governing body document>", season: 2027, version: 1 }
+```json
+{
+  "paths": [{ "licenseCategories": ["3", "4"], "minAge": 35, "maxAge": null, "genderClass": "any",
+              "licenseTypes": ["annual", "one_day"], "collegiateRequired": false, "collegiateDivisions": [] }],
+  "organizerReview": false,
+  "guardianRequired": false
+}
 ```
+
+The event records the rule source and season in `ruleSet`; validation warns when the season does not match the event year. Racing age is entered directly in the preview because the federation's racing-age rule is not implemented.
 
 ### Pricing
 
@@ -201,6 +216,8 @@ Tests prove the acceptance criteria in [product.md](../product.md#core-flows-and
 | Time | Events near midnight and daylight-saving changes in the event's time zone |
 
 Use fake data in all tests. Concurrency and idempotency tests must actually run requests in parallel or replay events; a single-threaded test does not prove them.
+
+Current coverage (all passing November 14, 2026): category fixtures, eligibility, and the 40/40/60 shared cap in `tests/`; last-place race across two database connections, stale-save rejection, entry-protecting saves, and publish rules in `tests/api.test.ts`; the organizer workflow and the demonstration publish flow in `e2e/organizer.spec.ts`. Payments, state machines, permissions, impact previews, exports, and time-zone edge cases have no tests yet because those features are not built.
 
 ### Review
 

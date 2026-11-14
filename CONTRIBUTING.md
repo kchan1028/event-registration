@@ -2,7 +2,7 @@
 
 Thanks for helping. This guide explains how to propose a change, make it, and get it reviewed. It is written for new contributors and for a race organizer taking over the project from someone else.
 
-The project is at the documentation stage. Most contributions right now are discovery notes, requirement clarifications, decision records, and fixes to these documents. Code contributions start once an architecture decision record (ADR) picks a technology stack.
+The project has its source documents and a local organizer prototype (the category builder milestone). Useful contributions now are discovery notes, requirement clarifications, decision records, and code that closes gaps listed in [roadmap.md](roadmap.md#category-builder-milestone). To run the code, follow [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
 
 ## The one rule that applies to every change
 
@@ -41,7 +41,8 @@ Reviewers will send back any change whose summary does not state its product and
 3. Follow [docs/coding-guide.md](docs/coding-guide.md) for domain rules and [docs/documentation-guide.md](docs/documentation-guide.md) for writing.
 4. Update `product.md`, `roadmap.md`, `README.md`, and affected guides in the same change when the rule above requires it.
 5. Use fake data only. Never commit secrets, `.env` files, or real rider information.
-6. Write the change summary (format below).
+6. Run `npm run check`. If you changed the interface, also run `npm run test:e2e`, and follow the UI skills listed in [AGENTS.md](AGENTS.md#ux-and-ui-work).
+7. Write the change summary (format below).
 
 ## Change summary
 
@@ -69,7 +70,7 @@ Example of a valid "no impact" line: `Product impact (product.md): None. This fi
   - [ ] Roadmap items are marked complete only with evidence that acceptance criteria pass
   - [ ] No secrets or real personal data
   - [ ] Relative links work and Mermaid diagrams render
-  - [ ] Tests cover the acceptance criteria the change claims (once code exists)
+  - [ ] Tests cover the acceptance criteria the change claims, and CI is green
 
 ## Architecture decisions
 

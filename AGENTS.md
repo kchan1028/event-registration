@@ -4,7 +4,9 @@ Instructions for AI coding agents and other automated contributors. Human contri
 
 ## What this repository is
 
-CycleReg is a proposed registration and race-day platform for U.S. road races and criteriums. Right now the repository contains documentation only. No technology stack has been chosen, and there is no code to build, test, or run. Do not describe commands, integrations, screenshots, or features as working unless they exist in this repository and have been checked.
+CycleReg is a proposed registration and race-day platform for U.S. road races and criteriums. The repository holds the source documents and a local organizer prototype (the category builder milestone) built with TypeScript, Node.js, React, and SQLite ([ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md)). Payments, rider checkout, USA Cycling checks, and sign-in are not built. Do not describe commands, integrations, screenshots, or features as working unless they exist in this repository and have been checked.
+
+Commands: `npm ci`, `npm run dev`, `npm run check` (typecheck, unit and API tests, build), `npm run test:e2e`. Setup and troubleshooting: [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md). Run `npm run check` before finishing any code change, and `npm run test:e2e` when the interface changes. Domain rules belong in `src/shared/` so the browser and server agree.
 
 ## Read these first, in this order
 
@@ -88,6 +90,7 @@ Open questions:
 - [ ] `product.md` and `roadmap.md` reviewed; impact stated in the summary
 - [ ] README and affected guides match the repository as it actually is
 - [ ] Relative links resolve and Mermaid diagrams parse
+- [ ] `npm run check` passes; `npm run test:e2e` passes when the interface changed
 - [ ] No secrets or real personal data added
 - [ ] UI changes used `impeccable`, `awesome-design`, and `emil-design-eng`, or the summary says which were unavailable
 - [ ] Nothing described as working that has not been verified
