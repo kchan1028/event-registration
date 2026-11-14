@@ -193,6 +193,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | Product brief and roadmap | Drafted; proposed, not approved |
 | Repository and contributor documentation | Implemented November 14, 2026 |
 | Category builder milestone (local organizer prototype) | Implemented November 14, 2026; shared-cap, eligibility, and fixture criteria verified by automated tests. See [roadmap.md](roadmap.md#category-builder-milestone) |
+| Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; not yet used by the app |
 | Stack | Chosen for the prototype only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
 | Rider checkout, payments, USA Cycling checks, sign-in with MFA, hosting | Not built |
 
@@ -216,6 +217,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [docs/content-guide.md](docs/content-guide.md) | Rules for future public pages, including SEO, answer engines, and structured data |
 | [docs/operations.md](docs/operations.md) | Proposed operating model: support owners, incident severity, freezes, monitoring, backups, and handoff |
 | [docs/decisions/README.md](docs/decisions/README.md) | Architecture decision records, including [0001](docs/decisions/0001-stack-for-category-builder-milestone.md), and the backlog of unresolved decisions |
+| [docs/fixtures/README.md](docs/fixtures/README.md) | Fake demonstration data and sample waiver text for the planned Phase 1 demo purchase flow |
 
 ## Contributing
 
