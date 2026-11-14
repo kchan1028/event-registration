@@ -175,9 +175,14 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
   const { draft, loadError } = useDraft(route.eventId);
   const [selected, setSelected] = useState<string | null>(null);
   const wide = useWide();
+  // A selection requested together with a navigation survives the route-change reset.
+  const pendingSelect = useRef<string | null>(null);
 
   const raceId = route.view === 'race' ? (route.raceId ?? draft?.config.races[0]?.id ?? null) : null;
-  useEffect(() => setSelected(null), [raceId, route.view]);
+  useEffect(() => {
+    setSelected(pendingSelect.current);
+    pendingSelect.current = null;
+  }, [raceId, route.view]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setSelected(null);
@@ -212,8 +217,11 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
     if (t.kind === 'category') {
       const cat = config.categories.find((c) => c.id === t.id);
       if (cat) {
-        navigate({ page: 'event', eventId: route.eventId, view: 'race', raceId: cat.raceId });
-        window.setTimeout(() => setSelected(cat.id), 0);
+        if (route.view === 'race' && raceId === cat.raceId) setSelected(cat.id);
+        else {
+          pendingSelect.current = cat.id;
+          navigate({ page: 'event', eventId: route.eventId, view: 'race', raceId: cat.raceId });
+        }
       }
     } else if (t.kind === 'startGroup') {
       const sg = config.startGroups.find((g) => g.id === t.id);
