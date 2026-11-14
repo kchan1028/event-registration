@@ -50,6 +50,7 @@ Deliverables:
 - Clickable rider checkout for one day, both days, a junior entry, and an uncertain-license case.
 - Organizer event builder and registration exception queue prototype.
 - Check-in prototype showing ready/blocked states and bib assignment.
+- Light and dark themes with a toggle that defaults to the system preference and remembers the choice. See [product.md](product.md#display-themes).
 - Draft category/start-group model, state transitions, and timer export samples.
 - Test with at least two organizers, two check-in volunteers, and five riders/parents. Participants may overlap with discovery.
 
@@ -76,6 +77,7 @@ Verification:
 - Concurrent checkout for the last place, expired reservations, and bundle rollback.
 - Payment failure, timeout, duplicate notification, refund retry, and cancellation scenarios.
 - Role access, private-data visibility, waiver/version integrity, and keyboard/mobile use.
+- Contrast and readability of text, forms, buttons, errors, and status indicators in both light and dark themes; theme choice persists without a flash of the wrong theme.
 - MFA enforcement for every account type, step-up prompts on sensitive organizer actions, recovery paths that cannot bypass MFA, and attempt rate limits.
 
 Exit gate: Sandbox money and entry states reconcile; no overselling or duplicate processing in concurrency/retry tests; core flows pass with realistic categories. No public paid launch yet.

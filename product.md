@@ -197,6 +197,7 @@ These are illustrative product fixtures, not an approved BHRR schedule or statem
 | Export to timer | Agreed fields and IDs survive export/import; withdrawn riders and subsequent changes are clear |
 | Refund | Ledger, registration state, capacity, receipt, and provider records agree |
 | Organizer handoff | A second authorized organizer can operate the event and access its runbook without the original owner's credentials |
+| Switch display theme | First visit follows the device's light or dark setting; the rider or volunteer can switch with a visible toggle; the choice persists on that device; text, form fields, buttons, focus indicators, errors, and status indicators meet contrast targets in both themes |
 | Sign in with MFA | No account of any type reaches signed-in pages without completing a second factor; organizer sensitive actions prompt re-verification; recovery without recovery codes is audited and cannot be self-served by the first factor alone |
 
 ## Data model
@@ -264,6 +265,7 @@ To research before Phase 3:
 ## Quality requirements
 
 - Phone, tablet, and desktop support; keyboard access, readable labels, clear errors, and accessible checkout.
+- Light and dark display themes on every rider and organizer screen. See [Display themes](#display-themes).
 - Server-enforced authorization and capacity; encrypted transport and protected secrets; least-privilege access to contact and emergency details.
 - Multi-factor authentication (MFA) is required for every account sign-in: riders, guardians, and all organizer roles. A password or emailed link alone never grants access. See [Sign-in and account security](#sign-in-and-account-security).
 - No sensitive rider data in public participant lists by default. Define retention and deletion rules before the pilot.
@@ -271,6 +273,17 @@ To research before Phase 3:
 - Backups with a demonstrated restore; monitoring for registration/payment failures and stuck capacity reservations.
 - Publish a support owner and escalation route for each event. Volunteers must know who handles a race-morning failure.
 - Load and recovery checks use twice the expected pilot opening peak, based on the organizer's historical data.
+
+### Display themes
+
+Status: Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
+
+- Default to the device's system preference (light or dark) on first visit.
+- Provide a visible, keyboard-accessible light/dark toggle on every screen, with an accessible name that states the current theme.
+- Remember the user's choice on that device and apply it before the page draws, so the screen does not flash the wrong theme. A signed-in preference may sync across devices later; that is not required for the first release.
+- Text, form fields, placeholders, buttons, links, focus indicators, error messages, and status indicators (entry, payment, readiness, check-in ready/blocked) must meet the WCAG 2.2 AA contrast targets in both themes.
+- Status keeps its text and icon in both themes; never rely on color alone. The check-in ready/blocked result must stay readable in bright sunlight in either theme.
+- Printed or exported material (receipts, start lists, timer exports) is unaffected by the screen theme.
 
 ### Sign-in and account security
 

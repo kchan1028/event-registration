@@ -179,6 +179,7 @@ Riders register on phones and volunteers check riders in on tablets outdoors. Ac
 - Never use color alone to show status. The check-in ready/blocked result uses text and an icon as well as color, and must be readable in bright sunlight.
 - Design for a 360-pixel-wide screen first. Touch targets are large enough to hit with a gloved or cold hand. No horizontal scrolling.
 - Checkout must work at 200% browser zoom.
+- Support light and dark themes from shared color tokens. Default to the system preference, remember the user's choice, and check contrast in both themes. See [product.md](../product.md#display-themes).
 - Test with at least one screen reader and on a real phone before calling a flow Verified.
 
 ## Testing and review
