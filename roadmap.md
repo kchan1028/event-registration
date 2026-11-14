@@ -13,7 +13,8 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 | Repository and documentation foundation | Implemented (November 14, 2026) | Supporting work, not a roadmap phase. |
 | Demo purchase flow fixtures | Implemented (November 14, 2026) | Fake events, riders, fees, worked order totals, and sample waiver text in [docs/fixtures/](docs/fixtures/README.md), used by the rider demo. Phone numbers corrected to 10 digits to match the fixture's own phone rule. |
 | Category builder milestone (organizer prototype) | Implemented (November 14, 2026); partly verified | Local-only prototype. See [Category builder milestone](#category-builder-milestone). |
-| Rider checkout prototype and demo purchase flow (2a) | Implemented (November 14, 2026); partly verified | Simulated payment only. Meets the [2a](product.md#2a-clickable-demo-purchase-flow--phase-1) behavior in automated tests; usability testing with people and display themes are not done. See [Rider checkout prototype](#rider-checkout-prototype). |
+| Rider checkout prototype and demo purchase flow (2a) | Implemented (November 14, 2026); partly verified | Simulated payment only. Meets the [2a](product.md#2a-clickable-demo-purchase-flow--phase-1) behavior in automated tests, including both display themes; usability testing with people is not done. See [Rider checkout prototype](#rider-checkout-prototype). |
+| Light and dark display themes | Implemented (November 14, 2026); partly verified | Organizer and rider prototype screens: system default, header toggle on every screen, saved per device, applied before first paint, light palette for print. Token contrast checked against WCAG 2.2 AA in the browser; the rider demo has an automated theme switch test. Check-in screens must adopt it when built. |
 | Phase 0: Establish the case to build | Planned | Not started. The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. Next actions are listed at the end of this document. |
 | Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented as prototypes. The demo purchase flow (product.md 2a), check-in prototype, timer export samples, and usability tests are not finished. |
 | Phase 2: Build the registration core | Planned | Depends on Phase 1 and a settled payment model. |
@@ -75,7 +76,7 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 | Simulated labeling on every payment-related screen and the receipt | Playwright test |
 | Uncertain license is paid but not cleared | API and Playwright tests |
 
-**Still open for 2a:** the "without facilitator help" part needs a usability test with people; light and dark display themes are being built on a separate `feat/dark-mode` branch and are not in this prototype.
+**Still open for 2a:** the "without facilitator help" part needs a usability test with people. Display themes come from the shared theme work (PR #11) and the rider screens now carry the same header toggle.
 
 ## Delivery approach
 

@@ -42,8 +42,9 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Rider-facing schedule preview with an eligibility checker | Implemented |
 | Validation that blocks publishing on errors; warnings need acknowledgement; immutable published versions | Implemented and tested |
 | Autosave to a local SQLite database, safe against stale saves | Implemented and tested |
-| Rider demo purchase flow (product.md 2a): browse events, demo rider picker, start-ordered schedule with conflict warnings, bundles, second-race discount, demo fees, emergency contact, typed-name waiver signature, error summaries, all-or-nothing 10-minute holds, "Complete simulated payment" with decline and retry | Implemented and tested; usability test and display themes still open |
+| Rider demo purchase flow (product.md 2a): browse events, demo rider picker, start-ordered schedule with conflict warnings, bundles, second-race discount, demo fees, emergency contact, typed-name waiver signature, error summaries, all-or-nothing 10-minute holds, "Complete simulated payment" with decline and retry | Implemented and tested in light and dark themes; usability test with people still open |
 | Confirmation with a check-in code and per-entry readiness; organizer Registrations queue with license review | Implemented and tested |
+| Light and dark themes, following the system setting, with a header toggle | Implemented; contrast checked manually, no automated test yet |
 | CSV import, change-impact preview, real payments and refunds, check-in, exports | Planned |
 
 <details>

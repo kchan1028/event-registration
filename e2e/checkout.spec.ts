@@ -130,3 +130,15 @@ test('uncertain license: paid but needs review, and the organizer clears it', as
   await page.getByRole('button', { name: /^All/ }).click();
   await expect(page.locator('.order', { hasText: 'Sam Demo' })).toContainText('License reviewed: Demo license card checked at the desk');
 });
+
+test('rider screens follow the theme toggle and remember it', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openEvent(page, 'Demo Valley Criterium');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: /Switch to dark theme/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('.demo-badge')).toBeVisible();
+  await page.screenshot({ path: 'test-results/rider-dark.png' });
+});

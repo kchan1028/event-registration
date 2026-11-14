@@ -7,7 +7,7 @@ import { categoryPrice, quote, type Quote } from '../shared/pricing';
 import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, type Category, type EventConfig } from '../shared/schema';
 import { api, ApiError, type OrderView, type PublicEvent, type PublicEventSummary } from './api';
 import { href, navigate } from './App';
-import { dayHue, Field, Icon, IntInput, Pending } from './ui';
+import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
 
 /*
  * Clickable demo purchase flow (product.md 2a). Payment is simulated on every
@@ -98,6 +98,9 @@ function DemoHeader() {
       </a>
       <span className="demo-badge">Demo</span>
       <span className="reg__bar-note">Rider registration with simulated payment</span>
+      <span className="reg__bar-end">
+        <ThemeToggle />
+      </span>
     </header>
   );
 }

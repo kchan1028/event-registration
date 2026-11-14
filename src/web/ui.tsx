@@ -1,4 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useTheme } from './theme';
 
 /** Labeled field wrapper. The label is always visible (coding guide, Accessibility). */
 export function Field({ label, hint, error, children, className, id: fixedId }: { label: string; hint?: string; error?: string; children: (id: string, describedBy?: string) => ReactNode; className?: string; id?: string }) {
@@ -134,6 +135,21 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     <svg aria-hidden="true" viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d={PATHS[name]} />
     </svg>
+  );
+}
+
+const SUN = 'M8 10.75a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5ZM8 1.5v1.25m0 10.5v1.25M1.5 8h1.25m10.5 0h1.25M3.4 3.4l.9.9m7.4 7.4.9.9m0-9.2-.9.9m-7.4 7.4-.9.9';
+const MOON = 'M13.5 9.6A5.75 5.75 0 0 1 6.4 2.5a5.75 5.75 0 1 0 7.1 7.1Z';
+
+export function ThemeToggle() {
+  const [theme, toggle] = useTheme();
+  const next = theme === 'dark' ? 'light' : 'dark';
+  return (
+    <button type="button" className="theme-toggle" data-current={theme} onClick={toggle} aria-label={`Theme: ${theme}. Switch to ${next} theme`} title={`Switch to ${next} theme`}>
+      <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d={theme === 'dark' ? MOON : SUN} />
+      </svg>
+    </button>
   );
 }
 

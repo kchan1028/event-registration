@@ -149,7 +149,7 @@ These are illustrative product fixtures, not an approved BHRR schedule or statem
 
 ### 2a. Clickable demo purchase flow — Phase 1
 
-Status: Implemented as a local prototype using the fake fixtures in [docs/fixtures/](docs/fixtures/README.md); automated tests cover the acceptance criterion below except testing with real people and the display themes (see [roadmap.md](roadmap.md#rider-checkout-prototype)). The demo is a Phase 1 prototype for usability testing, not a working checkout.
+Status: Implemented as a local prototype using the fake fixtures in [docs/fixtures/](docs/fixtures/README.md); automated tests cover the acceptance criterion below, including both display themes, except testing with real people (see [roadmap.md](roadmap.md#rider-checkout-prototype)). The demo is a Phase 1 prototype for usability testing, not a working checkout.
 
 A rider can click through the whole purchase from start to finish using fake demonstration data only. The demo keeps the project's chosen visual design (set in `DESIGN.md` once one exists) and supports both [display themes](#display-themes).
 
@@ -310,7 +310,7 @@ To research before Phase 3:
 
 ### Display themes
 
-Status: Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
+Status: Implemented in the local organizer prototype (home, builder, and rider preview screens); signed-in sync and the screens not yet built (rider checkout, check-in) are Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
 
 - Default to the device's system preference (light or dark) on first visit.
 - Provide a visible, keyboard-accessible light/dark toggle on every screen, with an accessible name that states the current theme.
