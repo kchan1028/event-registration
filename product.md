@@ -26,8 +26,7 @@ An organizer can prepare a two-day race weekend, open registration, manage chang
 | User | Main job | Success looks like |
 |---|---|---|
 | Race director | Configure and supervise the weekend | Correct categories, limits, fees, and exports with little manual reconciliation |
-| Registration lead | Resolve registration exceptions | One prioritized queue with the reason and next action |
-| Check-in volunteer | Confirm readiness and issue bibs | Fast lookup and an unmistakable ready/blocked result |
+| Registration lead | Resolve registration exceptions, confirm readiness, and issue bibs | One prioritized queue with the reason and next action; fast check-in lookup with an unmistakable ready/blocked result |
 | Rider or parent | Enter eligible races and prepare | Clear fields, total cost, requirements, receipt, and check-in instructions |
 | Timer / official | Receive reliable start lists | Stable identifiers and an agreed export format |
 | Club treasurer | Reconcile proceeds | Entries, refunds, fees, and payouts trace to one ledger |
@@ -178,7 +177,7 @@ Rules:
 - Allow authorized corrections with a reason and an audit trail.
 - Record race-specific status separately from order/payment status.
 - Provide transactional confirmations and targeted operational messages. Marketing consent is separate.
-- Support owner, registration manager, check-in volunteer, timer/export, and finance roles. Owners can transfer responsibility to a successor.
+- Support owner, registration manager, timer/export, and finance roles. Registration managers run check-in; a separate check-in volunteer role is deferred. Owners can transfer responsibility to a successor.
 
 ### 5. Race-day operations
 
@@ -217,12 +216,12 @@ Rules:
 | Mixed-category weekend bundle | Each day's selection passes its own rules and limits; either all entries reserve successfully or none does |
 | Category import | Valid CSV rows populate a draft; invalid/ambiguous rules produce actionable row errors and cannot publish silently |
 | Published configuration change | Impact preview identifies affected entries; accepted prices and rules remain auditable; start-list revisions are visible |
-| Check in | Volunteer finds a rider, sees blockers, and issues the correct bib; repeated scans remain safe |
+| Check in | Registration manager finds a rider, sees blockers, and issues the correct bib; repeated scans remain safe |
 | Export to timer | Agreed fields and IDs survive export/import; withdrawn riders and subsequent changes are clear |
 | Refund | Ledger, registration state, capacity, receipt, and provider records agree |
 | Organizer handoff | A second authorized organizer can operate the event and access its runbook without the original owner's credentials |
 | Demo purchase flow | Using fake data only, a tester goes from event list through entry choice, racer details, waiver signature, order review with all fees, simulated payment, and confirmation without facilitator help; missing required fields block progress with field-level messages; back navigation keeps entered data; every payment-related screen and the receipt are labeled as simulated, and no real payment details are requested |
-| Switch display theme | First visit follows the device's light or dark setting; the rider or volunteer can switch with a visible toggle; the choice persists on that device; text, form fields, buttons, focus indicators, errors, and status indicators meet contrast targets in both themes |
+| Switch display theme | First visit follows the device's light or dark setting; the rider or organizer can switch with a visible toggle; the choice persists on that device; text, form fields, buttons, focus indicators, errors, and status indicators meet contrast targets in both themes |
 | Sign in with MFA | No account of any type reaches signed-in pages without completing a second factor; organizer sensitive actions prompt re-verification; recovery without recovery codes is audited and cannot be self-served by the first factor alone |
 
 ## Data model
@@ -301,7 +300,7 @@ To research before Phase 3:
 
 ### Display themes
 
-Status: Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
+Status: Planned. Riders register at night and check in outdoors, so one fixed color scheme will not suit everyone.
 
 - Default to the device's system preference (light or dark) on first visit.
 - Provide a visible, keyboard-accessible light/dark toggle on every screen, with an accessible name that states the current theme.
@@ -316,11 +315,11 @@ MFA means a sign-in needs a second, independent proof of identity in addition to
 
 - Require MFA at every sign-in for every account type. Enrollment happens during account creation; an account cannot reach rider, guardian, or organizer pages until a second factor is enrolled.
 - Offer at least one phishing-resistant option (passkey or security key) and an authenticator-app option. SMS codes, if offered at all, are a fallback only and are not allowed for organizer roles.
-- Organizer roles (owner, registration manager, check-in volunteer, timer/export, finance) must re-verify with MFA before sensitive actions: refunds, payout or role changes, ownership transfer, exports containing contact or emergency details, and manual exceptions.
+- Organizer roles (owner, registration manager, timer/export, finance) must re-verify with MFA before sensitive actions: refunds, payout or role changes, ownership transfer, exports containing contact or emergency details, and manual exceptions.
 - Account recovery must not bypass MFA. Provide single-use recovery codes at enrollment; recovery without them requires identity checks by an authorized owner or support and is recorded in the audit log.
 - Rate-limit sign-in and second-factor attempts, and notify the account holder when a factor is added, removed, or used for recovery.
 - Record MFA enrollment, factor changes, and recovery events in the audit history.
-- Shared check-in devices still require each volunteer to sign in with their own account and MFA. Do not share organizer credentials.
+- Shared check-in devices still require each organizer to sign in with their own account and MFA. Do not share organizer credentials.
 
 ## Success measures
 
@@ -334,13 +333,13 @@ Targets below are hypotheses, not measured results. Establish the baseline with 
 | Critical integrity failures | Zero oversold places, duplicate charges, lost confirmed entries, or unexplained ledger differences |
 | Start-list accuracy | Every confirmed entry appears in the correct agreed export |
 | Category setup completeness | Approved road race and criterium schedules can be configured without custom code or spreadsheet-only rules |
-| Handoff | Two organizers and two volunteers complete their assigned tasks without developer intervention |
+| Handoff | Two organizers complete their assigned tasks without developer intervention |
 
 Capture abandonment and support requests without recording payment details or sensitive form content.
 
 ## Out of scope initially
 
-Timing hardware, finish-line timing, omnium points/results scoring, rankings, training plans, route/weather tools, federation membership administration, international federation integrations, marketplace discovery, fundraising, and a native mobile app.
+Timing hardware, finish-line timing, omnium points/results scoring, rankings, training plans, route/weather tools, federation membership administration, international federation integrations, marketplace discovery, fundraising, volunteer management (a separate check-in volunteer role, volunteer accounts, shift scheduling), and a native mobile app.
 
 Race results and weather may be linked from the event website. They do not belong on the registration critical path. Supplying the rider fields a timer needs for results uploads is in scope once [researched](#results-site-updates-research).
 

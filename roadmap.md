@@ -53,7 +53,7 @@ Deliverables:
 - Check-in prototype showing ready/blocked states and bib assignment.
 - Light and dark themes with a toggle that defaults to the system preference and remembers the choice. See [product.md](product.md#display-themes).
 - Draft category/start-group model, state transitions, and timer export samples.
-- Test with at least two organizers, two check-in volunteers, and five riders/parents. Participants may overlap with discovery.
+- Test with at least two organizers and five riders/parents. Participants may overlap with discovery.
 
 Exit gate: Participants complete the core tasks without facilitator rescue; all serious confusion is resolved; the timer accepts the proposed sample format; scope is small enough to operate with the identified team. Proposed usability threshold: at least 90% unassisted completion across the core tasks, with no unresolved critical blocker.
 
@@ -95,7 +95,7 @@ Build:
 - Timestamped start lists, change reports, and tested timer exports.
 - Minimal printable fallback roster and an access-restricted emergency-contact process.
 - Payment/email failure alerts, backup/restore, incident handling, and support runbook, following the operating model in [docs/operations.md](docs/operations.md).
-- Organizer handoff guide and role-specific volunteer instructions.
+- Organizer handoff guide and role-specific instructions.
 
 Rehearsal:
 
@@ -116,7 +116,7 @@ Scope:
 - Monitor registrations, payment callbacks, capacity, email delivery, and support demand.
 - Use the new system as the single authoritative source for pilot entries. Any comparison exports must be read-only; avoid duplicate live payments or competing registration lists.
 - Establish cancellation, outage, and communication procedures before opening entries.
-- Collect rider/volunteer feedback and measure workload against the baseline.
+- Collect rider and organizer feedback and measure workload against the baseline.
 
 Exit gate: No critical integrity failures, financial reconciliation is complete, exports are correct, and workload targets show meaningful improvement. If targets fail, fix the workflow and repeat a small pilot before expanding.
 
@@ -146,6 +146,7 @@ Candidate improvements, in likely order:
 5. Additional cycling disciplines and other federation integrations.
 6. Offline check-in synchronization, only with a defined conflict-resolution model.
 7. Public event discovery once organizer operations are reliable.
+8. Volunteer management: a separate check-in volunteer role with limited access, volunteer accounts, and shift scheduling. Not needed for the first release; registration managers run check-in.
 
 Omnium scoring, timing hardware, weather, training tools, and general event ticketing remain outside this roadmap unless discovery establishes a compelling need.
 
@@ -165,7 +166,7 @@ These are roles to assign, not assumed staffing commitments.
 |---|---|
 | Product owner | Scope, research, baseline, priorities, and go/no-go recommendation |
 | Technical lead | Architecture, implementation, integrity, deployment, and recovery |
-| Registration lead | Category rules, exception handling, check-in, and volunteer acceptance |
+| Registration lead | Category rules, exception handling, and check-in |
 | Treasurer | Payment operating model, refunds, fees, payouts, and reconciliation |
 | Federation liaison | USAC permissions and accepted licensing/waiver workflows |
 | Timer / officials liaison | Start lists, export acceptance, and race-day change handling |
