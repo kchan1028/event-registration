@@ -37,7 +37,7 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Writing rules, status vocabulary, glossary | This file | |
 | Setup and troubleshooting | [runbooks/](runbooks/local-setup.md) | Local setup and troubleshooting exist; race-day runbooks are planned |
 | Visual system of the interface | [DESIGN.md](../DESIGN.md) | Tokens, type, components; derived from the built interface |
-| Category configuration fixtures | `docs/fixtures/` (planned) | Fake, illustrative data only |
+| Demo and category configuration fixtures | [fixtures/](fixtures/README.md) | Fake, illustrative data only. Demo purchase flow fixtures exist; category configuration fixtures are planned |
 
 ### Repository structure
 
@@ -59,6 +59,7 @@ Current layout:
 └── docs/
     ├── architecture.md, coding-guide.md, content-guide.md, documentation-guide.md, operations.md
     ├── decisions/                Architecture decision records
+    ├── fixtures/                 Fake demo purchase flow data and sample waiver text
     ├── runbooks/                 Local setup and troubleshooting
     └── screenshots/              Images used in the README
 ```

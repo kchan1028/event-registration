@@ -2,7 +2,7 @@
 
 CycleReg is meant to work for every rider, parent, and volunteer, including people who use a screen reader, a keyboard, zoom, or voice control. Riders register on phones and volunteers check riders in on tablets outdoors, so accessibility is a requirement, not a polish step.
 
-> **Status: documentation only.** There is no interface to test yet. Everything below is a Planned commitment, not a claim about working software.
+> **Status: local prototype, not audited.** The organizer workspace prototype exists and runs only on a local computer ([setup](docs/runbooks/local-setup.md)). It is built to the rules below and has automated checks for keyboard focus in the phone editor drawer, but no WCAG audit or screen-reader test has been done. Treat everything below as a Planned commitment, not a claim of conformance.
 
 ## Target
 
