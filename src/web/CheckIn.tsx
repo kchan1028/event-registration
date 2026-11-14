@@ -3,7 +3,7 @@ import type { BibSettings } from '../shared/checkin';
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
 import { href } from './App';
-import { Icon } from './ui';
+import { Icon, ThemeToggle } from './ui';
 
 /**
  * Race-day check-in. Built for a volunteer at a folding table: find the rider,
@@ -208,7 +208,10 @@ function CheckInBar({ eventId, eventName, children }: { eventId: string; eventNa
         <h1>Race-day check-in</h1>
         {eventName && <span className="ci__event">{eventName}</span>}
       </div>
-      <div className="ci__bar-actions">{children}</div>
+      <div className="ci__bar-actions">
+        {children}
+        <ThemeToggle />
+      </div>
     </header>
   );
 }

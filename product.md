@@ -191,6 +191,8 @@ Rules:
 
 ### 5. Race-day operations
 
+Status: check-in search, ready/blocked result, bib ranges, bib history, and repeat-safe check-in are Implemented in the local prototype on fake data (see [roadmap.md](roadmap.md#check-in-prototype)). QR scanning, start-list snapshots, exports, and the printable roster are Planned.
+
 - Search or scan a check-in code; codes identify entries and contain no sensitive rider details.
 - Show readiness, missing requirements, race/category, and bib assignment clearly.
 - Configure bib ranges per event/day and prevent collisions within the configured scope.
@@ -310,7 +312,7 @@ To research before Phase 3:
 
 ### Display themes
 
-Status: Implemented in the local organizer prototype (home, builder, and rider preview screens); signed-in sync and the screens not yet built (rider checkout, check-in) are Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
+Status: Implemented in the local prototype (organizer, rider, and check-in screens); signed-in sync is Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
 
 - Default to the device's system preference (light or dark) on first visit.
 - Provide a visible, keyboard-accessible light/dark toggle on every screen, with an accessible name that states the current theme.

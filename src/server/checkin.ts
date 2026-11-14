@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { bibScopeKey, bibSettingsSchema, checkInResult, DEFAULT_BIB_SETTINGS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
-import { checkSelection, profileOf, type RiderDetails } from '../shared/checkout';
+import { checkSelection, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { evaluateCategory } from '../shared/eligibility';
 import { newId } from '../shared/factory';
 import { sortCategories } from '../shared/format';
@@ -197,15 +197,30 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const cfg = repo.getVersion(eventId, record.publishedVersion);
       const created: string[] = [];
       for (const p of DEMO_RIDERS) {
-        const categoryIds = pickEntries(cfg, { ...p.rider, guardian: null });
+        const full = (guardian: RiderDetails['guardian']): RiderDetails => ({
+          ...p.rider,
+          phone: '',
+          licenseNumber: `DEMO-2${String(created.length + 1).padStart(5, '0')}`,
+          demoRiderId: null,
+          emergencyContact: { name: 'Robin Demo', phone: '555-555-0199' },
+          guardian,
+        });
+        const categoryIds = pickEntries(cfg, full(null));
         if (categoryIds.length === 0) continue;
         const needsGuardian = categoryIds.some((id) => cfg.categories.find((c) => c.id === id)?.eligibility.guardianRequired);
-        const rider: RiderDetails = { ...p.rider, guardian: needsGuardian || p.rider.racingAge < 18 ? { name: 'Jordan Demo', relationship: 'Parent' } : null };
+        const rider = full(needsGuardian || p.rider.racingAge < 18 ? { name: 'Jordan Demo', relationship: 'Parent', email: 'jordan.demo@example.com', phone: '' } : null);
+        const waiver: WaiverAcceptance = {
+          version: cfg.registration.waiverVersion,
+          read: true,
+          agreed: true,
+          signerRole: needsGuardian ? 'guardian' : 'rider',
+          signatureName: needsGuardian ? (rider.guardian?.name ?? '') : `${rider.firstName} ${rider.lastName}`,
+        };
         const order = orders.createOrder(eventId, {
           clientRequestId: `demo-checkin-${randomUUID()}`,
           categoryIds,
           rider,
-          waiver: { version: cfg.registration.waiverVersion, riderAccepted: true, guardianAccepted: !!rider.guardian },
+          waiver,
         });
         if (p.paid) orders.pay(order.id, `demo-${randomUUID()}`, 'success');
         if (p.licenseReviewed) for (const e of order.entries) orders.reviewLicense(e.id, 'Demo: license card shown at the desk (simulated).');
@@ -228,7 +243,7 @@ function pickEntries(cfg: EventConfig, rider: RiderDetails): string[] {
   return picks;
 }
 
-type DemoRider = { rider: Omit<RiderDetails, 'guardian'>; paid: boolean; licenseReviewed: boolean };
+type DemoRider = { rider: Omit<RiderDetails, 'guardian' | 'phone' | 'licenseNumber' | 'demoRiderId' | 'emergencyContact'>; paid: boolean; licenseReviewed: boolean };
 
 const base = { collegiateDivision: null, licenseType: 'annual' as const };
 const DEMO_RIDERS: DemoRider[] = [
