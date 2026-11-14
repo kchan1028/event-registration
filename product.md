@@ -110,6 +110,15 @@ CSV import of category schedules is P0: provide a template, map columns, validat
 - Show an itemized preview of additional-race discounts, bundle pricing, and fees. Define discount precedence and prevent unintended stacking.
 - Discount precedence (decided November 14, 2026): at most one bundle applies per order, the one saving the most whose races all have an entry; it covers one entry per bundle race and either takes a fixed discount or sets a fixed bundle price. The additional-race discount then applies outside the bundle in one of two organizer-chosen ways: to every entry after the first full-price entry, or once per order when two or more entries share a day (the demo fixtures use this). An entry never receives two discounts, and free entries receive none. Fees (a flat platform fee and a percentage processing fee on the entries subtotal after discounts, rounded half up to the cent) are added once per order after discounts and shown before payment.
 
+#### Registration windows
+
+Decided November 14, 2026:
+
+- A category accepts new entries from its opening time (inclusive) until its closing time (exclusive), read in the event's time zone. A missing opening or closing time does not limit that side; validation already warns about it.
+- The window is checked when places are held. A hold taken while the window is open can be paid within the hold's time even if the window closes meanwhile. A payment that arrives after the hold ended and after the window closed is not confirmed automatically; it goes to the organizer's exception queue.
+- Riders see each category's opening or closing time; categories outside their window are shown but cannot be chosen.
+- Demo events may let testers register outside the windows (an organizer setting, on by default for demo data). The rider page then labels it "Demo mode" and states when real registration opens. Real events always enforce the windows.
+
 #### Simulated entries before payments exist
 
 Until payments and rider registration exist, organizers can add simulated test entries to a category to check that caps, start group limits, and capacity pools hold. Test entries carry no rider data and no payment, count toward limits exactly like real entries, are labeled as test entries everywhere they appear, and can be removed in one action. They are never exported or published.

@@ -158,6 +158,49 @@ export function findConflicts(config: EventConfig, categoryIds: readonly string[
   return out;
 }
 
+/* Registration windows ---------------------------------------------------- */
+
+/** Current wall-clock time in the event's time zone as "YYYY-MM-DDTHH:MM", the format windows are stored in. */
+export function localNow(timeZone: string, now: Date = new Date()): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+export type WindowState = 'open' | 'not_yet' | 'closed';
+
+/** Open from opensAt (inclusive) until closesAt (exclusive). A missing side does not limit. */
+export function windowState(cat: Pick<Category, 'registration'>, nowLocal: string): WindowState {
+  const { opensAt, closesAt } = cat.registration;
+  if (opensAt && nowLocal < opensAt) return 'not_yet';
+  if (closesAt && nowLocal >= closesAt) return 'closed';
+  return 'open';
+}
+
+/** Real events always enforce windows; a demo event can let testers try registration at any time. */
+export function enforcesWindows(config: Pick<EventConfig, 'event' | 'registration'>): boolean {
+  return !(config.event.isDemo && config.registration.demoIgnoreWindows);
+}
+
+/** "Mar 1, 2027, 9:00 AM" from a stored local date-time. */
+export function formatLocalDateTime(local: string): string {
+  const [d, t] = local.split('T');
+  const [y, m, day] = d.split('-').map(Number);
+  const [h, min] = t.split(':').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, day)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  return `${date}, ${h % 12 === 0 ? 12 : h % 12}:${String(min).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+export function windowMessage(cat: Pick<Category, 'registration' | 'name'>, state: WindowState, timeZoneLabel = ''): string | null {
+  const tz = timeZoneLabel ? ` (${timeZoneLabel})` : '';
+  if (state === 'not_yet' && cat.registration.opensAt) return `Registration for ${cat.name} opens ${formatLocalDateTime(cat.registration.opensAt)}${tz}.`;
+  if (state === 'closed' && cat.registration.closesAt) return `Registration for ${cat.name} closed ${formatLocalDateTime(cat.registration.closesAt)}${tz}.`;
+  return null;
+}
+
 export interface SelectionCheck {
   ok: boolean;
   problems: string[];
@@ -167,7 +210,7 @@ export interface SelectionCheck {
 }
 
 /** Server-side gate for an order; the browser uses the same rules to explain them early. */
-export function checkSelection(config: EventConfig, categoryIds: readonly string[], profile: RiderProfile): SelectionCheck {
+export function checkSelection(config: EventConfig, categoryIds: readonly string[], profile: RiderProfile, opts: { nowLocal?: string } = {}): SelectionCheck {
   const problems: string[] = [];
   const eligibility: Record<string, EligibilityResult> = {};
   if (categoryIds.length === 0) problems.push('Choose at least one race.');
@@ -180,6 +223,10 @@ export function checkSelection(config: EventConfig, categoryIds: readonly string
       continue;
     }
     if (cat.status === 'closed') problems.push(`${cat.name} is closed to new entries.`);
+    if (opts.nowLocal && enforcesWindows(config)) {
+      const msg = windowMessage(cat, windowState(cat, opts.nowLocal), config.event.timeZone);
+      if (msg) problems.push(msg);
+    }
     const result = evaluateCategory(cat, profile);
     eligibility[id] = result;
     if (result.status === 'ineligible') problems.push(`You are not eligible for ${cat.name}: ${result.reasons.join('; ')}.`);

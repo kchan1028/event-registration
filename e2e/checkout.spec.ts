@@ -22,6 +22,8 @@ async function signAndReview(page: Page, name: string) {
 test('two races on one day: second-race discount, fees, signature errors, back navigation, simulated payment', async ({ page }) => {
   await openEvent(page, 'Demo Valley Criterium');
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  // Fixture registration opens Jan 1, 2027; the demo says so and lets testers try it anyway.
+  if (new Date() < new Date('2027-01-01T17:00:00Z')) await expect(page.getByRole('note').filter({ hasText: 'Demo mode:' })).toContainText('opens Jan 1, 2027');
 
   await expect(page.getByRole('checkbox', { name: /DVC-M35/ })).toHaveAttribute('aria-disabled', 'true'); // full and too young
   await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
@@ -141,4 +143,26 @@ test('rider screens follow the theme toggle and remember it', async ({ page }) =
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(page.locator('.demo-badge')).toBeVisible();
   await page.screenshot({ path: 'test-results/rider-dark.png' });
+});
+
+test('with the demo setting off, categories outside their window cannot be chosen', async ({ page }) => {
+  test.skip(new Date() >= new Date('2027-02-01T17:00:00Z'), 'Demo windows open Feb 1, 2027; this check needs a date before that.');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Load demonstration event' }).click();
+  await expect(page.getByRole('heading', { name: 'Saturday road race', level: 2 })).toBeVisible();
+  await page.getByRole('link', { name: 'Event setup' }).click();
+  await page.getByLabel(/let testers register outside the registration windows/).uncheck();
+  await expect(page.locator('.save')).toContainText('All changes saved');
+  await page.getByRole('link', { name: 'Review and publish' }).last().click();
+  const ack = page.getByLabel(/I have reviewed the/);
+  if (await ack.count()) await ack.check();
+  await page.getByRole('button', { name: /Publish version 1/ }).click();
+  await page.getByRole('link', { name: /Open rider registration/ }).click();
+
+  await expect(page.getByRole('note').filter({ hasText: 'Registration opens Feb 1, 2027' })).toBeVisible();
+  const option = page.getByRole('checkbox', { name: /RR-M35-34/ });
+  await expect(option).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('.opt', { has: option })).toContainText('Opens Feb 1, 2027, 9:00 AM');
+  await page.locator('.sched-day').first().evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await page.screenshot({ path: 'test-results/windows-enforced.png' });
 });
