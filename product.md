@@ -228,8 +228,42 @@ Document permitted transitions before implementation. Financial and signature hi
 | Timer / officials | Obtain actual accepted files and required race-day changes workflow |
 | Email | Select a transactional provider with delivery status and suppression handling |
 | Existing registrations | Confirm export rights and mappings; never assume signatures or payment tokens transfer |
+| Results sites (road-results.com) | Research how results are updated and which registration fields (name, license number, team, category) a timer needs to build the upload file. See [Results site updates](#results-site-updates-research) |
 
 Until USAC integration is approved, prototypes may use clearly labeled simulated checks or an agreed manual-review process. A sanctioned-event pilot requires explicit acceptance of the chosen process by the relevant parties.
+
+### Future USA Cycling waiver and license integration
+
+Status: Planned. No USAC access exists, and nothing in this repository connects to USAC. Build it only after USAC grants access and approves the workflow.
+
+When access is available, the application must be able to:
+
+- **Pull USAC waiver status.** Retrieve whether a rider (and guardian, for minors) has a valid USAC waiver for the event or season, with the waiver version, signature date, and source. Store the reference and status, not a copy of USAC's waiver text unless USAC requires it.
+- **Validate rider licenses.** Check license number, name match, license type (annual, one-day, collegiate), status, expiry, discipline, and racing category against USAC for the race date, and feed the result into structured eligibility.
+
+Design now so this can be added without reworking registration:
+
+- Keep waiver and license checks behind a single verification interface with interchangeable sources: manual organizer review, an approved file import (for example a USAC-supplied license list), and a live USAC connection.
+- Record every check with its source, timestamp, and raw result. Show freshness to organizers.
+- Unknown, stale, failed, or mismatched results set readiness to "needs license review" or "needs waiver". Never clear a rider automatically on missing data, and never let a USAC outage block checkout; it routes the entry to review.
+- Re-check before start-list lock and at check-in when the last result is older than an agreed freshness window.
+- Keep the USAC result separate from organizer overrides. An override needs an authorized role, a reason, and an audit record, and cannot override mandatory federation requirements.
+
+Acceptance (when access exists): a valid USAC license and waiver clear the matching readiness items; an expired, wrong-category, or missing record leaves the rider in review with the reason shown; a USAC outage leaves entries in review instead of cleared or rejected.
+
+### Results site updates (research)
+
+Status: Research needed. Results publishing stays out of scope; the question is what this product must provide so results reach road-results.com, where riders track results and category upgrade points.
+
+What is known (road-results.com upload page, reviewed November 14, 2026): results are added by an account holder uploading a CSV. All categories go on one sheet with labeled category and column headers, and a name column is the minimum. A file already prepared for USAC results upload can be reused. Timing software such as CrossMgr can produce the upload file directly. No public API was found.
+
+To research before Phase 3:
+
+1. Who uploads for our events today (timer, promoter, or road-results staff), and whether road-results ingests sanctioned results from USAC on its own.
+2. Which columns improve rider matching (license number, team, place, category, finish time) and whether our timer export should carry them.
+3. Whether the timer export and the road-results CSV can share one format, so organizers do not retype data.
+4. How corrections are made after upload, and who owns them.
+
 
 ## Quality requirements
 
@@ -274,7 +308,7 @@ Capture abandonment and support requests without recording payment details or se
 
 Timing hardware, finish-line timing, omnium points/results scoring, rankings, training plans, route/weather tools, federation membership administration, international federation integrations, marketplace discovery, fundraising, and a native mobile app.
 
-Race results and weather may be linked from the event website. They do not belong on the registration critical path.
+Race results and weather may be linked from the event website. They do not belong on the registration critical path. Supplying the rider fields a timer needs for results uploads is in scope once [researched](#results-site-updates-research).
 
 ## Business model hypothesis
 
@@ -293,6 +327,7 @@ Do not replace Berkeley Omnium's registration merely because the software is ava
 5. Which payment and settlement model works for the club?
 6. What timer formats, refund policies, retention periods, and organizer permissions are required?
 7. Which MFA methods and recovery process keep rider and guardian checkout usable, especially for occasional riders and race-morning registration? MFA itself is required; the methods are decided in the authentication ADR.
+8. How do results reach road-results.com for our events, and what should the timer export include to support it?
 
 ## Research baseline
 
@@ -305,3 +340,5 @@ Reviewed November 14, 2026. Product requirements above are proposed; listed comp
 - [BikeReg category headers and category-specific questions](https://www.bikereg.com/Users/Public/Director/Feature.aspx?fid=25&nc=1)
 - [BikeReg category transfers and destination restrictions](https://www.bikereg.com/Users/Public/Director/Feature.aspx?fid=54&nc=1)
 - [Movemint sub-event configuration and combined limits](https://docs.movemint.cc/organizers/setting-up-your-event/registration/sub-events)
+- [road-results.com results upload instructions](https://www.road-results.com/upload)
+- [CrossMgr publishing to RoadResults.com](https://www.sites.google.com/site/crossmgrsoftware/project-updates/crossmgrautomaticallypublishtocrossresultscomroadresultscom)
