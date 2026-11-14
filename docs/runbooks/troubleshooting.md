@@ -43,7 +43,7 @@ Last confirmed: November 14, 2026
 
 ## Checkout says a race is full and nothing was held
 
-Who sees it: rider at the "Hold my places" step.
+Who sees it: rider at the "Sign and review the order" step.
 Cause: another order or test entry took the last place in a category, start group, or shared pool. Orders are all or nothing, so no other race in the order was held either.
 Fix: go back to races, choose another category, and try again. Organizers can remove test entries in **Event setup**.
 Last confirmed: November 14, 2026

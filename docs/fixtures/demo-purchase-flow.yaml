@@ -149,43 +149,43 @@ events:
 
 riders:
   # Names use the "Demo" surname, emails use the reserved example.com domain,
-  # phone numbers use the fictional 555-01xx range, license numbers use the
+  # phone numbers use the fictional 555-555-01xx range (10 digits, matching the phone format rule), license numbers use the
   # DEMO- prefix. License results are simulated, never real USAC checks.
   - id: rider-alex
     name: "Alex Demo"
     email: alex.demo@example.com
-    phone: "555-0101"
+    phone: "555-555-0101"
     racing_age_2027: 29
     competition_class: men
     license: { number: DEMO-100001, category: 4, check: simulated_valid }
     team: "Demo Wheelers"
-    emergency_contact: { name: "Robin Demo", phone: "555-0111" }
+    emergency_contact: { name: "Robin Demo", phone: "555-555-0111" }
   - id: rider-blake
     name: "Blake Demo"
     email: blake.demo@example.com
-    phone: "555-0102"
+    phone: "555-555-0102"
     racing_age_2027: 38
     competition_class: women
     license: { number: DEMO-100002, category: 3, check: simulated_valid }
     team: "Sample Velo"
-    emergency_contact: { name: "Taylor Demo", phone: "555-0112" }
+    emergency_contact: { name: "Taylor Demo", phone: "555-555-0112" }
   - id: rider-casey
     name: "Casey Demo"
     email: null   # minor: contact goes through the guardian
     racing_age_2027: 13
     competition_class: men      # junior status comes from racing age, not class
     license: { number: DEMO-100003, category: 5, check: simulated_valid }
-    guardian: { name: "Jordan Demo", email: jordan.demo@example.com, phone: "555-0103" }
-    emergency_contact: { name: "Jordan Demo", phone: "555-0103" }
+    guardian: { name: "Jordan Demo", email: jordan.demo@example.com, phone: "555-555-0103" }
+    emergency_contact: { name: "Jordan Demo", phone: "555-555-0103" }
   - id: rider-sam
     name: "Sam Demo"
     email: sam.demo@example.com
-    phone: "555-0104"
+    phone: "555-555-0104"
     racing_age_2027: 31
     competition_class: women
     license: { number: DEMO-100004, category: 4, check: simulated_unknown }  # -> needs review
     team: null
-    emergency_contact: { name: "Morgan Demo", phone: "555-0114" }
+    emergency_contact: { name: "Morgan Demo", phone: "555-555-0114" }
 
 waiver:
   id: demo-sample-waiver

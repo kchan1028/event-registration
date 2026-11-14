@@ -2053,7 +2053,7 @@ button.issue {
 }
 .reg__bar {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--s-4);
   padding: var(--s-3) var(--s-5);
   border-bottom: 1px solid var(--hairline);
@@ -2061,6 +2061,9 @@ button.issue {
 .reg__bar-note {
   font-size: 13px;
   color: var(--muted);
+}
+.reg__bar-end {
+  margin-left: auto;
 }
 .reg__main {
   max-width: 1120px;
@@ -2115,7 +2118,7 @@ button.issue {
 .stepper .is-current .stepper__num {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 .stepper .is-done .stepper__num {
   background: var(--ok-bg);
@@ -2260,7 +2263,7 @@ button.issue {
   margin-top: 1px;
   border: 1.5px solid var(--border-strong);
   border-radius: 6px;
-  color: #fff;
+  color: var(--on-ink);
 }
 .opt.is-selected .opt__box {
   background: var(--ink);
@@ -2576,7 +2579,7 @@ button.issue {
   background: var(--ink);
 }
 .chip.is-on .num {
-  color: #fff;
+  color: var(--on-ink);
 }
 .orders {
   list-style: none;
@@ -2639,6 +2642,154 @@ button.issue {
 .review-form .input {
   min-width: 260px;
   width: auto;
+}
+
+
+/* Demo purchase flow additions ------------------------------------------- */
+
+.demo-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: var(--demo-bg);
+  color: var(--demo-ink);
+  font: 600 12.5px var(--font-ui);
+  letter-spacing: 0.02em;
+}
+.simulated {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--pending);
+}
+.error-summary {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border: 1.5px solid var(--error);
+  border-radius: var(--r-md);
+  background: var(--error-bg);
+}
+.error-summary h3 {
+  font-size: 15px;
+  color: var(--error);
+}
+.error-summary ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+.error-summary a {
+  color: var(--error);
+  font-size: 14px;
+}
+.stepper__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.stepper li > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.event-pick {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.event-pick__link {
+  display: grid;
+  gap: 2px;
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--hairline-soft);
+  color: inherit;
+  text-decoration: none;
+}
+.event-pick__name {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.event-pick__meta {
+  color: var(--body);
+}
+.event-pick__races {
+  font-size: 13.5px;
+  color: var(--muted);
+}
+@media (hover: hover) and (pointer: fine) {
+  .event-pick__link:hover .event-pick__name {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+.about__demo {
+  max-width: 520px;
+}
+.bundle-pick {
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  font-size: 13.5px;
+}
+.bundle-pick.is-on {
+  border-color: var(--ink);
+}
+.quote__fees {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 13.5px;
+}
+.quote__fees li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 10px;
+  color: var(--body);
+}
+.receipt {
+  position: relative;
+  overflow: hidden;
+  padding: var(--s-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+}
+.receipt::after {
+  content: attr(data-watermark);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 600 96px/1 var(--font-num);
+  letter-spacing: 0.1em;
+  color: color-mix(in srgb, var(--ink) 8%, transparent);
+  transform: rotate(-18deg);
+  pointer-events: none;
+}
+.input--signature {
+  font-size: 18px;
+  font-style: italic;
+}
+.schedule-anchor:focus {
+  outline: none;
+}
+fieldset:disabled .check,
+fieldset:disabled .field label {
+  color: var(--muted);
 }
 
 /* Responsive ------------------------------------------------------------- */
@@ -2720,7 +2871,7 @@ button.issue {
     z-index: 15;
     border-radius: var(--r-lg) var(--r-lg) 0 0;
     border-bottom: 0;
-    box-shadow: 0 -8px 24px rgba(24, 29, 38, 0.12);
+    box-shadow: 0 -8px 24px rgb(var(--shadow-rgb) / 0.12);
     max-height: 80vh;
     overflow: auto;
   }

@@ -16,8 +16,19 @@ export interface PublicEvent {
 
 export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
 
+export interface PublicEventSummary {
+  id: string;
+  organizationName: string;
+  name: string;
+  venue: string;
+  isDemo: boolean;
+  days: { date: string; label: string; races: string[] }[];
+  categoryCount: number;
+}
+
 export interface OrderView {
   id: string;
+  orderNumber: string;
   eventId: string;
   eventName: string;
   isDemo: boolean;
@@ -122,6 +133,8 @@ export const api = {
   addTestEntries: (id: string, categoryId: string, count: number) =>
     request<{ result: TestEntryResult; event: EventPayload }>('POST', `/api/events/${id}/test-entries`, { categoryId, count }),
   clearTestEntries: (id: string) => request<{ removed: number; event: EventPayload }>('DELETE', `/api/events/${id}/test-entries`),
+  publicEvents: () => request<PublicEventSummary[]>('GET', '/api/public/events'),
+  loadPurchaseFlowDemo: () => request<{ organizationId: string; eventIds: string[] }>('POST', '/api/demo/purchase-flow'),
   publicEvent: (id: string) => request<PublicEvent>('GET', `/api/public/events/${id}`),
   createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; rider: RiderDetails; waiver: WaiverAcceptance }) =>
     request<OrderView>('POST', `/api/public/events/${eventId}/orders`, body),

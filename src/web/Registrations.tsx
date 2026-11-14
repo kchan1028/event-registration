@@ -118,7 +118,7 @@ function OrderRow({ order, onChange }: { order: OrderView; onChange: (o: OrderVi
       </div>
       <p className="muted small">
         Racing age {order.rider.racingAge} · license {order.rider.licenseCategory ? (order.rider.licenseCategory === 'PRO' ? 'Pro' : `Cat ${order.rider.licenseCategory}`) : 'not known'}
-        {order.rider.guardian ? ` · guardian ${order.rider.guardian.name} (${order.rider.guardian.relationship})` : ''} · waiver {order.waiver.version}
+        {order.rider.guardian ? ` · guardian ${order.rider.guardian.name}` : ''} · waiver {order.waiver.version} signed by {order.waiver.signatureName} · emergency contact on file · order {order.orderNumber}
       </p>
       {order.status === 'needs_attention' && (
         <p className="note note--error">Payment arrived after the hold ended and a place had filled. Nothing was confirmed. Contact the rider about a refund or another race.</p>
