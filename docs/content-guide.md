@@ -55,7 +55,7 @@ Give each page one main purpose. A schedule page answers "what races are there a
 ## Make claims you can support
 
 - Describe only features that are Verified (see the [status vocabulary](documentation-guide.md#status-vocabulary)). Never present planned behavior as available.
-- Do not claim feature parity with BikeReg, Movemint, or anyone else, equivalent federation integration, lower fees, or better reliability unless the claim has been verified and the evidence is cited. This follows [product.md](../product.md#positioning-and-differentiation).
+- Do not claim feature parity with any other platform, equivalent federation integration, lower fees, or better reliability unless the claim has been verified and the evidence is cited. This follows [product.md](../product.md#positioning-and-differentiation).
 - Success measures in `product.md` are hypotheses. Do not publish them as results.
 - No testimonials, logos, or partner names without written permission and a real source.
 - Name sources. Replace "experts say" or "studies show" with the organization, document, and date.

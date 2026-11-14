@@ -37,7 +37,7 @@ An organizer can prepare a two-day race weekend, open registration, manage chang
 
 Cycling racing is the entire product scope. Prioritize multi-day entries, racing categories, shared field capacities, licensing exceptions, bib allocation, and timer handoffs.
 
-Compete on measured volunteer time saved. BikeReg and Movemint are category-setup benchmarks. Match the practical flexibility organizers need, rather than copying either interface. Do not claim feature parity, equivalent federation integration, lower fees, or better reliability until verified.
+Compete on measured volunteer time saved. Match the practical flexibility organizers need, rather than copying another platform's interface. Do not claim feature parity, equivalent federation integration, lower fees, or better reliability until verified.
 
 ## Scope of the first release
 
@@ -127,10 +127,6 @@ These are illustrative product fixtures, not an approved BHRR schedule or statem
 | Collegiate + domestic field | Separate eligibility paths and classification codes with a shared approved capacity |
 | Rider entering two criteriums | Two valid entries and an additional-race discount, with schedule conflict checks |
 | Weekend entry with different day categories | One order, independently validated category selections, atomic reservation across both days |
-
-#### Benchmark evidence and limits
-
-BikeReg documents category grouping under headers, category-specific questions, and category transfers subject to destination restrictions. Movemint documents separately configurable sub-events with pricing, capacity, schedule, duplication, ordering, and combined limits. These inform the proposed requirements above. Fine-grained federation rules, capacity semantics, and all edge cases must be validated independently; this brief does not assert either competitor supports every proposed behavior.
 
 ### 2. Rider registration
 
@@ -331,14 +327,8 @@ Do not replace Berkeley Omnium's registration merely because the software is ava
 
 ## Research baseline
 
-Reviewed November 14, 2026. Product requirements above are proposed; listed competitor capabilities are reference points, not promised integrations.
+Reviewed November 14, 2026. Product requirements above are proposed; listed sources are reference points, not promised integrations.
 
 - [USA Cycling organizer guidance](https://usacycling.org/host-an-event)
-- [BikeReg director FAQ and published fees](https://www.bikereg.com/users/public/Director/FAQ.aspx)
-- [BikeReg LiveReg workflow](https://www.bikereg.com/Users/Public/Director/LiveRegGuide.aspx)
-- [RunSignup competitive USA Cycling integration announcement](https://info.runsignup.com/2026/03/25/runsignup-now-supports-usa-cycling-competitive-races/)
-- [BikeReg category headers and category-specific questions](https://www.bikereg.com/Users/Public/Director/Feature.aspx?fid=25&nc=1)
-- [BikeReg category transfers and destination restrictions](https://www.bikereg.com/Users/Public/Director/Feature.aspx?fid=54&nc=1)
-- [Movemint sub-event configuration and combined limits](https://docs.movemint.cc/organizers/setting-up-your-event/registration/sub-events)
 - [road-results.com results upload instructions](https://www.road-results.com/upload)
 - [CrossMgr publishing to RoadResults.com](https://www.sites.google.com/site/crossmgrsoftware/project-updates/crossmgrautomaticallypublishtocrossresultscomroadresultscom)
