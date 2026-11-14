@@ -1,6 +1,52 @@
 import type { LimitUsage } from '../shared/capacity';
 import type { CreateEventInput, EventConfig, TestEntry } from '../shared/schema';
 import type { Issue } from '../shared/validation';
+import type { ReadinessItem, RiderDetails, WaiverAcceptance } from '../shared/checkout';
+import type { Quote } from '../shared/pricing';
+
+export interface PublicEvent {
+  eventId: string;
+  publishedVersion: number;
+  organizationName: string;
+  config: EventConfig;
+  remaining: Record<string, number | null>;
+  today: string;
+  holdMinutes: number;
+}
+
+export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
+
+export interface OrderView {
+  id: string;
+  eventId: string;
+  eventName: string;
+  isDemo: boolean;
+  publishedVersion: number;
+  status: OrderStatus;
+  rider: RiderDetails;
+  waiver: WaiverAcceptance;
+  guardianRequired: boolean;
+  quote: Quote;
+  totalCents: number;
+  holdExpiresAt: string;
+  checkInCode: string | null;
+  createdAt: string;
+  confirmedAt: string | null;
+  refundPolicy: string;
+  entries: {
+    id: string;
+    categoryId: string;
+    categoryName: string;
+    code: string;
+    raceName: string;
+    dayId: string;
+    startTime: string | null;
+    status: 'held' | 'confirmed' | 'released';
+    licenseReviewed: boolean;
+    licenseReviewNote: string | null;
+    readiness: ReadinessItem[];
+  }[];
+}
 
 export interface EventPayload {
   id: string;
@@ -76,4 +122,12 @@ export const api = {
   addTestEntries: (id: string, categoryId: string, count: number) =>
     request<{ result: TestEntryResult; event: EventPayload }>('POST', `/api/events/${id}/test-entries`, { categoryId, count }),
   clearTestEntries: (id: string) => request<{ removed: number; event: EventPayload }>('DELETE', `/api/events/${id}/test-entries`),
+  publicEvent: (id: string) => request<PublicEvent>('GET', `/api/public/events/${id}`),
+  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; rider: RiderDetails; waiver: WaiverAcceptance }) =>
+    request<OrderView>('POST', `/api/public/events/${eventId}/orders`, body),
+  order: (id: string) => request<OrderView>('GET', `/api/orders/${id}`),
+  pay: (id: string, attemptId: string, outcome: 'success' | 'failure') => request<OrderView>('POST', `/api/orders/${id}/payment`, { attemptId, outcome }),
+  cancelOrder: (id: string) => request<OrderView>('POST', `/api/orders/${id}/cancel`),
+  orders: (eventId: string) => request<OrderView[]>('GET', `/api/events/${eventId}/orders`),
+  reviewLicense: (entryId: string, note: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/license-review`, { note }),
 };

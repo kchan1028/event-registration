@@ -43,6 +43,47 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX test_entries_by_event ON test_entries(event_id);
   `,
+  `
+  -- Rider orders in the checkout prototype. Payment is simulated; no money moves.
+  CREATE TABLE orders (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES events(id),
+    published_version INTEGER NOT NULL,
+    client_request_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    rider_json TEXT NOT NULL,
+    waiver_json TEXT NOT NULL,
+    quote_json TEXT NOT NULL,
+    total_cents INTEGER NOT NULL,
+    hold_expires_at TEXT NOT NULL,
+    check_in_code TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    confirmed_at TEXT,
+    UNIQUE (event_id, client_request_id)
+  );
+  CREATE INDEX orders_by_event ON orders(event_id);
+  CREATE TABLE order_entries (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL REFERENCES orders(id),
+    event_id TEXT NOT NULL REFERENCES events(id),
+    category_id TEXT NOT NULL,
+    rider_ref TEXT NOT NULL,
+    status TEXT NOT NULL,
+    license_reviewed INTEGER NOT NULL DEFAULT 0,
+    license_review_note TEXT,
+    license_reviewed_at TEXT
+  );
+  CREATE INDEX order_entries_by_event ON order_entries(event_id);
+  -- Each simulated payment notification is processed once.
+  CREATE TABLE payment_attempts (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL REFERENCES orders(id),
+    outcome TEXT NOT NULL,
+    result_status TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  `,
 ];
 
 export function openDb(path: string): Db {

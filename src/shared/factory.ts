@@ -1,4 +1,4 @@
-import type { Category, CreateEventInput, EligibilityPath, EventConfig, Race, Template } from './schema';
+import { DEFAULT_REGISTRATION_SETTINGS, type Category, type CreateEventInput, type EligibilityPath, type EventConfig, type Race, type Template } from './schema';
 
 export function newId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
@@ -42,6 +42,7 @@ export function configFromTemplate(input: CreateEventInput): EventConfig {
     schemaVersion: 1,
     event: { name: input.name, timeZone: input.timeZone, venue: input.venue ?? '', isDemo: false, demoNotice: '' },
     ruleSet: { source: '', season: Number(input.startDate.slice(0, 4)) },
+    registration: structuredClone(DEFAULT_REGISTRATION_SETTINGS),
     days,
     races,
     displayGroups: races.map((r, i) => ({ id: newId('dg'), name: r.name, sortOrder: i })),

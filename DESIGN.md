@@ -296,6 +296,16 @@ A 12px track on Tyvek Deep with a 6px radius and a faint inset ring. Each catego
 - **Issue row:** Tyvek button row, 6px radius, 13px text with a status-colored icon and a 12px 600 muted location line; hover fills Tyvek Deep.
 - **Pending integration:** pending-colored 12.5px text with a dashed-circle icon, stacked on pending-bg when grouped.
 
+### Rider checkout components
+
+- **Stepper:** numbered steps (Races, Your details, Waiver, Review and pay). The current step is an ink-filled numeral; finished steps show a green check on the ok ground. The numbers carry real order, so they are allowed here.
+- **Race option:** a full-width checkbox row on canvas with a hairline border and 8px corners: an outlined box (ink fill and white check when picked), the code chip and category name, the eligibility summary, length and places, and the price as a bib numeral on the right. Picked rows get an ink border and a 1px ink ring. Rows the rider cannot enter sit on Tyvek with muted text. Below the row: one status chip (You qualify, Organizer review, Not eligible, Full, Closed) and one reason line.
+- **Start block:** each start time as a bib numeral with the staging time beneath it, then the race options that start together, with a clip icon line when more than one category shares the start.
+- **Entry tray:** sticky right rail on desktop; on phones a bottom bar (count, total numeral, View) that expands into a sheet. Quote lines are Tyvek rows with the code chip, name, race, price, and a green discount line naming the bundle or "Additional race". The total is a 26px numeral over a hairline.
+- **Hold timer:** pending-tone pill with a clip icon and a countdown numeral.
+- **Check-in ticket:** Tyvek panel with a 1.5px ink outline and a 44px numeral code (34px on phones).
+- **Readiness list:** icon plus label per item: green check for done, amber warning for organizer review, red for missing.
+
 ## Do's and Don'ts
 
 ### Do:

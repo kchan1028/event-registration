@@ -108,6 +108,7 @@ CSV import of category schedules is P0: provide a template, map columns, validat
 - Allow multiple eligible criterium entries when the approved schedule permits them; flag overlapping starts and configurable recovery/transition conflicts.
 - A bundle selects a valid category in each component race. Do not assume the same label, eligibility, or available capacity on both days.
 - Show an itemized preview of additional-race discounts, bundle pricing, and fees. Define discount precedence and prevent unintended stacking.
+- Discount precedence (decided November 14, 2026): at most one bundle applies per order, the one with the largest discount whose races all have an entry, and its discount is split across one entry per bundle race. Every other entry after the first full-price entry gets the additional-race discount, capped at its price. An entry never receives two discounts, and free entries receive none.
 
 #### Simulated entries before payments exist
 

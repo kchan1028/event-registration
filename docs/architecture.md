@@ -27,7 +27,7 @@ flowchart LR
     REPO -->|"immediate write transactions"| DB
 ```
 
-The browser and the server import the same rules module (`src/shared`), so the preview, the issue list, and the server's save and publish checks always agree. The organizer edits a working copy; changes autosave about half a second after typing stops, carrying the revision number they started from. The server refuses a save from an out-of-date revision instead of overwriting newer work. Every write runs inside an immediate SQLite transaction, which makes the capacity check and the insert of a test entry one indivisible step, even across two server processes. Publishing copies the draft into an immutable numbered version. Nothing is sent to USA Cycling, a payment provider, or an email service, and there is no sign-in, so the server listens only on the local machine.
+The browser and the server import the same rules module (`src/shared`), so the preview, the issue list, and the server's save and publish checks always agree. The organizer edits a working copy; changes autosave about half a second after typing stops, carrying the revision number they started from. The server refuses a save from an out-of-date revision instead of overwriting newer work. Every write runs inside an immediate SQLite transaction, which makes the capacity check and the insert of a test entry one indivisible step, even across two server processes. Publishing copies the draft into an immutable numbered version. Rider checkout reads only the latest published version. An order holds every place it needs in one transaction for 10 minutes; held, confirmed, and test entries all count toward limits, and expired holds stop counting without a background job. Simulated payment notifications carry an attempt ID and are processed once. Nothing is sent to USA Cycling, a payment provider, or an email service, and there is no sign-in, so the server listens only on the local machine.
 
 | Concern | Where it lives |
 |---|---|
@@ -39,7 +39,10 @@ The browser and the server import the same rules module (`src/shared`), so the p
 | Demonstration data (labeled examples) | `src/shared/demo.ts` |
 | HTTP routes | `src/server/app.ts` |
 | Transactions and storage | `src/server/repo.ts`, `src/server/db.ts` |
-| Interface | `src/web/` |
+| Pricing, bundles, and discount precedence | `src/shared/pricing.ts` |
+| Checkout rules: conflicts, selection checks, readiness | `src/shared/checkout.ts` |
+| Orders, holds, simulated payment, license review | `src/server/orders.ts` |
+| Interface | `src/web/` (rider checkout in `Register.tsx`, exception queue in `Registrations.tsx`) |
 
 ## Document maintenance rule (mandatory)
 

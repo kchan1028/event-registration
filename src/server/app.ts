@@ -8,17 +8,24 @@ import { configFromTemplate } from '../shared/factory';
 import { createEventInputSchema, eventConfigSchema } from '../shared/schema';
 import { validateConfig } from '../shared/validation';
 import { openDb } from './db';
+import { createOrders, type Orders } from './orders';
 import { createRepo, HttpError, type Repo } from './repo';
 
 export interface AppOptions {
   dbPath: string;
   serveWeb?: boolean;
   logger?: boolean;
+  /** Injectable clock for tests of hold expiry. */
+  now?: () => Date;
+  /** How long checkout holds places before payment. */
+  holdMinutes?: number;
 }
 
-export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo } {
+export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; orders: Orders } {
   const db = openDb(opts.dbPath);
-  const repo = createRepo(db);
+  const clock = opts.now ?? (() => new Date());
+  const repo = createRepo(db, clock);
+  const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10));
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
   app.addHook('onClose', async () => db.close());
@@ -45,7 +52,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo }
       issues: validateConfig(record.config, entries),
       pending: {
         licenseVerification: 'USA Cycling license and category checks are not connected. Every license is unverified and needs review.',
-        payments: 'Payments are not connected. This prototype has no checkout and takes no money.',
+        payments: 'Payments are not connected. Checkout uses a simulated payment and takes no money.',
         signIn: 'Sign-in and required multi-factor authentication are not built yet. Run this prototype only on your own computer.',
       },
     };
@@ -107,6 +114,40 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo }
     return { removed, event: eventPayload(id) };
   });
 
+  // Rider checkout (prototype). Uses the latest published version only.
+  app.get('/api/public/events/:id', async (req) => orders.publicEvent(idParam.parse(req.params).id));
+
+  app.post('/api/public/events/:id/orders', async (req, reply) => {
+    const { id } = idParam.parse(req.params);
+    const body = z
+      .object({
+        clientRequestId: z.string().min(8).max(64),
+        categoryIds: z.array(z.string().min(1).max(64)).min(1).max(10),
+        rider: z.unknown(),
+        waiver: z.unknown(),
+      })
+      .parse(req.body);
+    return reply.status(201).send(orders.createOrder(id, body));
+  });
+
+  app.get('/api/orders/:id', async (req) => orders.getOrder(idParam.parse(req.params).id));
+
+  app.post('/api/orders/:id/payment', async (req) => {
+    const { id } = idParam.parse(req.params);
+    const body = z.object({ attemptId: z.string().min(8).max(64), outcome: z.enum(['success', 'failure']) }).parse(req.body);
+    return orders.pay(id, body.attemptId, body.outcome);
+  });
+
+  app.post('/api/orders/:id/cancel', async (req) => orders.cancel(idParam.parse(req.params).id));
+
+  app.get('/api/events/:id/orders', async (req) => orders.listOrders(idParam.parse(req.params).id));
+
+  app.post('/api/order-entries/:id/license-review', async (req) => {
+    const { id } = idParam.parse(req.params);
+    const body = z.object({ note: z.string().trim().min(3, 'Say how the license was checked.').max(300) }).parse(req.body);
+    return orders.reviewLicense(id, body.note);
+  });
+
   /** Creates the labeled demonstration organization and event. */
   app.post('/api/demo', async (_req, reply) => {
     const org = repo.createOrganization('Example Cycling Club (demonstration)');
@@ -125,5 +166,5 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo }
     });
   }
 
-  return { app, repo };
+  return { app, repo, orders };
 }

@@ -2,7 +2,7 @@
 
 CycleReg (working name; availability not checked) is a proposed registration and race-day platform for volunteer-run U.S. bike races. Its first release targets road races, criteriums, and two-day road race plus criterium weekends. The goal is measurable: less volunteer time spent on setup, registration exceptions, check-in, and handing the event to next year's organizer.
 
-> **Status: local prototype of the organizer category builder.** You can build a road race and criterium weekend, set eligibility, prices, start groups, and shared field limits, preview the rider schedule, and publish a versioned configuration, all on your own computer. Rider checkout, payments, USA Cycling license and waiver checks, and sign-in with MFA are **not built** and are shown as pending in the app. Do not host or share the prototype. Phase 0 discovery has not started.
+> **Status: local prototype of the organizer category builder and rider checkout.** You can build a road race and criterium weekend, publish it, and register as a rider for one day or both, with bundle pricing, held places, and a **simulated** payment, all on your own computer. Real payments, USA Cycling license and waiver checks, and sign-in with MFA are **not built** and are shown as pending in the app. Do not host or share the prototype. Phase 0 discovery has not started.
 
 ## Who it serves and the problem it solves
 
@@ -42,11 +42,13 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Rider-facing schedule preview with an eligibility checker | Implemented |
 | Validation that blocks publishing on errors; warnings need acknowledgement; immutable published versions | Implemented and tested |
 | Autosave to a local SQLite database, safe against stale saves | Implemented and tested |
+| Rider checkout: eligibility check, start-ordered schedule with conflict warnings, bundle and additional-race discounts, guardian and waiver steps, all-or-nothing 10-minute holds, simulated payment with decline and retry | Implemented and tested |
+| Confirmation with a check-in code and per-entry readiness; organizer Registrations queue with license review | Implemented and tested |
 | Light and dark themes, following the system setting, with a header toggle | Implemented; contrast checked manually, no automated test yet |
-| CSV import, bundles and discounts, change-impact preview, rider checkout, exports | Planned |
+| CSV import, change-impact preview, real payments and refunds, check-in, exports | Planned |
 
 <details>
-<summary>More screens: category editor, rider preview, publishing, phone layout</summary>
+<summary>More screens: category editor, rider preview, publishing, rider checkout, registrations, phone layouts</summary>
 
 ![Category editor with eligibility conditions for Masters 35+ Cat 3/4](docs/screenshots/04-category-editor.png)
 
@@ -55,6 +57,16 @@ The category schedule lists what riders buy, grouped under display headers that 
 ![Review and publish page with error and warning counts](docs/screenshots/06-review-and-publish.png)
 
 ![Category schedule on a 390-pixel-wide phone screen](docs/screenshots/07-mobile-schedule.png)
+
+![Rider checkout: a Cat 3 masters rider picks both days and the weekend bundle applies](docs/screenshots/09-register-choose-races.png)
+
+![Rider checkout on a phone, with the order total in a bottom bar](docs/screenshots/10-mobile-register.png)
+
+![Review step with places held and a simulated payment](docs/screenshots/11-register-review-and-pay.png)
+
+![Confirmation with a check-in code and license review still pending](docs/screenshots/12-registration-confirmed.png)
+
+![Organizer Registrations view with entries waiting for license review](docs/screenshots/13-organizer-registrations.png)
 
 </details>
 
@@ -70,11 +82,11 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5273/` and select **Load demonstration event**, or create your own organization. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
+Open `http://127.0.0.1:5273/` and select **Load demonstration event**, or create your own organization. To try rider checkout, publish the event from **Review and publish**, then select **Open rider registration**. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
 
 ## How it is meant to work
 
-The diagrams below describe behavior from [product.md](product.md). The rider journey is **planned**: only the preview exists. In the organizer workflow, the "Before registration opens" steps are implemented except CSV import, category questions, waivers, bib ranges, bundles, and discounts; the later stages are planned.
+The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented as a prototype with **simulated** payment; real payment confirmation and the race-day scan are planned. In the organizer workflow, the "Before registration opens" steps are implemented except CSV import, category questions, and bib ranges; the exception queue is a prototype; race day and after-event stages are planned.
 
 ### 1. Rider registration journey
 
@@ -194,6 +206,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | Product brief and roadmap | Drafted; proposed, not approved |
 | Repository and contributor documentation | Implemented November 14, 2026 |
 | Category builder milestone (local organizer prototype) | Implemented November 14, 2026; shared-cap, eligibility, and fixture criteria verified by automated tests. See [roadmap.md](roadmap.md#category-builder-milestone) |
+| Rider checkout prototype (simulated payment) | Implemented November 14, 2026; buy-both-days, payment retry, license uncertainty, multi-race discount, and bundle criteria verified by automated tests. See [roadmap.md](roadmap.md#rider-checkout-prototype) |
 | Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; not yet used by the app |
 | Stack | Chosen for the prototype only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
 | Rider checkout, payments, USA Cycling checks, sign-in with MFA, hosting | Not built |
