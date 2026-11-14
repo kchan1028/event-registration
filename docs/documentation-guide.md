@@ -29,6 +29,7 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | How to propose and review changes | [CONTRIBUTING.md](../CONTRIBUTING.md) | |
 | Technical structure and constraints | [architecture.md](architecture.md) | Labeled Proposed until ADRs accept it |
 | Significant technical decisions | [decisions/](decisions/README.md) | One file per decision |
+| Operating model: support, incidents, monitoring, backups, handoff | [operations.md](operations.md) | Labeled Proposed until there is a running system |
 | Domain rules for code | [coding-guide.md](coding-guide.md) | |
 | Public page and copy rules | [content-guide.md](content-guide.md) | |
 | Writing rules, status vocabulary, glossary | This file | |
@@ -51,6 +52,7 @@ Current layout:
     ├── coding-guide.md
     ├── content-guide.md
     ├── documentation-guide.md
+    ├── operations.md
     └── decisions/
         └── README.md
 ```
