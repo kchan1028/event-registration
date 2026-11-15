@@ -84,6 +84,24 @@ describe('check-in API', () => {
     expect((await list()).riders.find((r) => r.orderId === rider('Blake').orderId)?.bib).toBeNull();
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload: { ...payload, orderIds: [rider('Blake').orderId, rider('Dana').orderId] } })).statusCode).toBe(409);
   });
+
+  it('binds race/category and sort choices to the preview', async () => {
+    const { app, eventId, first, rider, setBibs } = await setup();
+    await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
+    const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: { categories: { id: string; raceId: string }[] } };
+    const alex = rider('Alex').orderId;
+    const card = first.riders.find((r) => r.orderId === alex) as Card & { entries: { categoryId: string }[] };
+    const categoryId = card.entries[0].categoryId;
+    const raceId = event.config.categories.find((c) => c.id === categoryId)!.raceId;
+    const payload = { dayId: first.dayId, orderIds: [alex], categoryId, raceId, sort: 'registration' };
+    const preview = await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload });
+    expect(preview.statusCode).toBe(200);
+    const plan = preview.json() as { fingerprint: string; categoryId: string; raceId: string; sort: string };
+    expect(plan).toMatchObject({ categoryId, raceId, sort: 'registration' });
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/apply`, payload: { ...payload, sort: 'start', fingerprint: plan.fingerprint } })).statusCode).toBe(409);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload: { ...payload, categoryId: 'cat_missing' } })).statusCode).toBe(422);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/apply`, payload: { ...payload, fingerprint: plan.fingerprint } })).statusCode).toBe(200);
+  });
   it('seeds fictional riders with ready and blocked cases', async () => {
     const { seeded, first } = await setup();
     expect(seeded.statusCode).toBe(201);
