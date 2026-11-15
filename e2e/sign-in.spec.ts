@@ -23,10 +23,18 @@ test('riders browse events signed out and sign in before entering details', asyn
   const seeded = await page.request.post('/api/demo/purchase-flow', { headers: { Authorization: 'Bearer test:organizer@example.test' } });
   expect([200, 201]).toContain(seeded.status());
 
-  await page.goto('/#/register');
-  // .first(): parallel first loads of the shared fixture can create it twice (unlocked demo loader).
-  await page.getByRole('link', { name: /Demo Valley Criterium/ }).first().click();
+  // The shared fixture loader is not locked: a parallel test may still be publishing it (or have
+  // created it twice), so reload until the event is listed and take the first link.
+  const event = page.getByRole('link', { name: /Demo Valley Criterium/ }).first();
+  await expect(async () => {
+    await page.goto('/#/register');
+    await page.reload();
+    await expect(event).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
+  await event.click();
   await expect(page.getByRole('heading', { name: 'About you' })).toBeVisible();
+  // Riders can sign in before choosing races, so checkout is not interrupted.
+  await expect(page.getByRole('note').filter({ hasText: 'Sign in now so checkout is not interrupted' })).toBeVisible();
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
   await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
   await page.getByRole('button', { name: 'Continue to racer details' }).click();

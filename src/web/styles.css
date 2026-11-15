@@ -4125,3 +4125,16 @@ fieldset:disabled .field label {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--s-1) var(--s-3);
 }
+
+/* Rider sign-in before race choice, so checkout is not interrupted (D01 racer follow-up). */
+.signin-early {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  background: var(--tyvek);
+  font-size: 14px;
+}

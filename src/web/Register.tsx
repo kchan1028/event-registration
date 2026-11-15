@@ -304,6 +304,18 @@ export function Register({ eventId }: { eventId: string }) {
           </div>
         </section>
 
+        {!signedIn && !offerToken && draft.step === 'races' && session.status !== 'loading' && (
+          <p className="signin-early" role="note">
+            <span>Sign in now so checkout is not interrupted later. You stay signed in on this device.</span>
+            {session.status === 'unconfigured' ? (
+              <span className="muted small">Sign-in is not set up on this computer.</span>
+            ) : (
+              <button type="button" className="btn btn--secondary btn--small" onClick={session.signIn}>
+                Sign in with email
+              </button>
+            )}
+          </p>
+        )}
         <nav aria-label="Registration progress">
           <ol className="stepper">
             {STEPS.map((s, i) => {
