@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { bibScopeKey, bibSettingsSchema, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
+import { bibScopeKey, bibSettingsSchema, bibBatchExclusion, type BibBatch, type BibPlan, type PaymentState, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
 import { categoryBibRange } from '../shared/categoryExtras';
 import { checkSelection, needsGuardian, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { evaluateCategory } from '../shared/eligibility';
@@ -74,7 +74,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   function riderCard(o: Rider, dayId: string, state: DayState) {
     const today = o.entries.filter((e) => e.dayId === dayId && e.status !== 'released' && e.status !== 'withdrawn');
     const readiness = mergeReadiness(today.map((e) => e.readiness));
-    const payment = o.status === 'confirmed' ? 'confirmed' : 'not_complete';
+    const payment: PaymentState = o.status === 'confirmed' ? 'confirmed' : 'not_complete';
     const result = checkInResult({ payment, entriesToday: today.length, readiness });
     const bibRows = state.bibs.get(o.id) ?? [];
     const history = bibRows.map((r) => ({ bib: r.bib, assignedAt: r.assigned_at, releasedAt: r.released_at, reason: r.release_reason }));
@@ -163,8 +163,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   }
 
   /** Preview uses the same event lock and allocation rules as apply. No bib changes here. */
-  type BibBatch = { dayId: string; orderIds: string[]; raceId?: string; categoryId?: string; sort?: 'name' | 'registration' | 'start' };
-  async function bibPlan(eventId: string, batch: BibBatch) {
+  async function bibPlan(eventId: string, batch: BibBatch): Promise<BibPlan> {
     const { dayId, orderIds, raceId, categoryId } = batch;
     const sort = batch.sort ?? 'name';
     const cfg = await config(eventId);
@@ -185,7 +184,8 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const o = byId.get(id);
       if (!o) throw new HttpError(404, 'A selected rider was not found.');
       const card = riderCard(o, dayId, state);
-      if (o.status !== 'confirmed' || card.entries.length === 0 || card.bib !== null) throw new HttpError(409, 'Select confirmed, unassigned riders entered on this day.');
+      const exclusion = bibBatchExclusion(card);
+      if (exclusion) throw new HttpError(409, exclusion + '. Select confirmed, unassigned riders entered on this day.');
       if (categoryId && !card.entries.some((e) => e.categoryId === categoryId)) throw new HttpError(409, 'A selected rider is not entered in the chosen category.');
       if (raceId && !card.entries.some((e) => cfg.categories.some((c) => c.id === e.categoryId && c.raceId === raceId))) throw new HttpError(409, 'A selected rider is not entered in the chosen race.');
       return { o, card };
@@ -259,6 +259,8 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         published,
         days: cfg.days.map((d) => ({ id: d.id, label: d.label, date: d.date })),
         dayId: day.id,
+        races: cfg.races.filter((r) => r.dayId === day.id).map((r) => ({ id: r.id, name: r.name })),
+        categories: cfg.categories.filter((c) => cfg.races.some((r) => r.id === c.raceId && r.dayId === day.id)).map((c) => ({ id: c.id, name: c.name, raceId: c.raceId })),
         settings: s,
         summary,
         riders: q.trim() ? cards.slice(0, 50) : cards,

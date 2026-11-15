@@ -28,6 +28,7 @@ import { createRefunds } from './refunds';
 import { createWaitlist } from './waitlist';
 import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
 import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
+import { bibBatchSchema } from '../shared/checkin';
 import { can, ROLES, type Permission, type Role } from '../shared/roles';
 
 declare module 'fastify' {
@@ -522,9 +523,9 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   // Race-day check-in. Volunteers see readiness and bib only.
   app.get('/api/events/:id/check-in', async (req) => {
-    const { id } = await onEvent(req, 'checkin');
+    const { id, roles } = await onEvent(req, 'checkin');
     const q = z.object({ day: z.string().max(64).optional(), q: z.string().max(80).default('') }).parse(req.query);
-    return checkIn.list(id, q.day, q.q);
+    return { ...(await checkIn.list(id, q.day, q.q)), roles };
   });
 
   app.put('/api/events/:id/bib-settings', async (req) => {
@@ -553,15 +554,14 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return checkIn.undoCheckIn(p.id, p.orderId, body.dayId, body.reason);
   });
 
-  const bibBatch = z.object({ dayId: z.string().min(1).max(64), orderIds: z.array(z.string().min(1).max(64)).min(1).max(1000), raceId: z.string().min(1).max(64).optional(), categoryId: z.string().min(1).max(64).optional(), sort: z.enum(['name', 'registration', 'start']).optional() });
   app.post('/api/events/:id/bibs/preview', async (req) => {
     await onEvent(req, 'checkin.settings');
-    const body = bibBatch.parse(req.body);
+    const body = bibBatchSchema.parse(req.body);
     return checkIn.previewBibs(idParam.parse(req.params).id, body);
   });
   app.post('/api/events/:id/bibs/apply', async (req) => {
     await onEvent(req, 'checkin.settings');
-    const body = bibBatch.extend({ fingerprint: z.string().regex(/^[a-f0-9]{64}$/) }).parse(req.body);
+    const body = bibBatchSchema.extend({ fingerprint: z.string().regex(/^[a-f0-9]{64}$/) }).parse(req.body);
     return checkIn.applyBibs(idParam.parse(req.params).id, body, body.fingerprint);
   });
 
