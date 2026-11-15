@@ -47,7 +47,36 @@ Recommend **Option B, a managed identity service**, because it can enforce the p
 
 If no provider meets all six at an acceptable cost for a small club, fall back to Option A with an external security review before launch.
 
-No specific provider is chosen here. Before acceptance, compare at least two providers against the six requirements and record dated evidence (documentation links and prices) in this ADR.
+### Recommended provider (from the comparison below)
+
+**Clerk on the Pro plan (about $25 a month at 5,000 monthly active users), with SMS turned off for everyone.** It meets requirements 1, 3, 4, and 6 out of the box, and its "require MFA" setting blocks every page until a second factor is enrolled. Requirement 2 is met by not offering SMS at all (product.md allows SMS for riders but does not require it), which removes the need for per-role factor rules. Requirement 5 is partly met: lockout after repeated failures is built in, but factor-change notices must be sent by CycleReg from Clerk's events.
+
+**Fallback: Better Auth** (an open-source TypeScript library) if a managed provider is ruled out. No licence cost and users stay in our own database, but CycleReg must build the "MFA before any page" gate, step-up, and notices itself, and get an outside security review.
+
+## Provider comparison (sources retrieved 2026-11-14)
+
+Ratings come only from the official pages listed. "NC" means not confirmed. Prices change often; recheck before signing up.
+
+| Provider | 1 Passwordless + MFA before any page | 2 Passkey/TOTP for all, no SMS for organizers | 3 Step-up | 4 Recovery codes | 5 Rate limits + notices | 6 Export | Approx. cost at 5k MAU |
+|---|---|---|---|---|---|---|---|
+| Clerk | Yes | Partial (one app-wide MFA switch; met by turning SMS off) | Yes | Yes | Partial (lockout yes; notices NC) | Yes | $25/mo Pro (free plan has no MFA) |
+| Auth0 | Yes | Yes (per-role factors through Actions) | Yes | Partial | Partial | Partial (export omits MFA enrollments) | $350/mo B2C Essentials |
+| Stytch | Yes (enforced in our code) | Yes (enforced in our code) | Yes | Yes | NC | NC | $0 up to 10k MAU; prebuilt UI lacks MFA screens |
+| WorkOS AuthKit | Partial | Partial (TOTP only; no SMS) | NC | NC | NC | NC | $0 up to 1M MAU |
+| Supabase Auth | Yes | Partial (WebAuthn second factor experimental) | Partial | Partial (experimental) | Partial (factor added/removed emails built in) | Yes (own Postgres) | $0 Free / $25 Pro |
+| Firebase / Identity Platform | Partial | No (no passkeys) | Partial | No | NC | NC | $0 up to 50k MAU, SMS extra |
+| Better Auth (library) | Partial (needs a hook) | Yes | Partial | Yes | Partial | Yes (own database) | $0 plus hosting and email sender |
+| Keycloak (self-hosted) | Partial (no built-in magic link found) | Yes | Yes | Yes | Partial | Partial | $0 plus a server to run |
+
+Key caveats:
+- Only Auth0 documents choosing factors by role, and only on a $350/mo plan. Offering no SMS is the simplest way to meet requirement 2 elsewhere.
+- An emailed link or code proves email ownership only; the second factor must be a passkey or authenticator app, never another email code.
+- Built-in factor-change notices were confirmed only on Supabase (added/removed). Elsewhere CycleReg sends them from provider events.
+- Supabase passkeys and recovery codes are marked experimental; Clerk's lockout default changed in July 2026.
+
+Sources: clerk.com/pricing; clerk.com/docs/guides/secure/reverification; clerk.com/changelog/2026-02-20-require-mfa; clerk.com/changelog/2026-10-29-passkey-second-factor; clerk.com/docs/guides/secure/user-lockout; clerk.com/docs/guides/dashboard/logs/application-logs; auth0.com/pricing; auth0.com/docs/secure/multi-factor-authentication/step-up-authentication; auth0.com/docs/secure/multi-factor-authentication/configure-recovery-codes-for-mfa; auth0.com/docs/api/management/v2/jobs/post-users-exports; stytch.com/pricing; stytch.com/docs/guides/mfa/overview; workos.com/pricing; workos.com/docs/authkit/mfa; supabase.com/pricing; supabase.com/docs/guides/auth/auth-mfa; supabase.com/docs/guides/auth/passkeys; firebase.google.com/docs/auth/web/multi-factor; firebase.google.com/pricing; better-auth.com/docs/plugins/2fa; keycloak.org/docs/latest/server_admin. The Identity Platform pricing page did not load, so its price above the free tier is not confirmed.
+
+Before acceptance: the owner confirms the Clerk choice and cost, and a short spike confirms on a test account that "require MFA" blocks all pages for a magic-link sign-up and that SMS can be fully disabled.
 
 ## Consequences
 
@@ -57,5 +86,5 @@ No specific provider is chosen here. Before acceptance, compare at least two pro
 - A new processor of personal data must be listed in the privacy notice and retention plan.
 - Next: provider comparison, an accepted version of this ADR, then an implementation plan with session, step-up, and recovery tests.
 
-Product impact (product.md): None until accepted; the MFA requirements already in product.md are unchanged.
+Product impact (product.md): None until accepted. If accepted with SMS off, riders and guardians use a passkey or authenticator app; product.md allows but does not require SMS.
 Roadmap impact (roadmap.md): Phase 2 sign-in work waits on acceptance of this ADR.
