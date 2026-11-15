@@ -1,0 +1,47 @@
+import pg from 'pg';
+import { describe, expect, it } from 'vitest';
+import { MIGRATIONS, openDb } from '../src/server/db';
+import { testApp, testDatabaseUrl } from './support/db';
+
+const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const TEXT_TIMESTAMPS = `SELECT table_name, column_name FROM information_schema.columns
+  WHERE table_schema = 'public' AND data_type = 'text' AND (column_name LIKE '%\\_at' OR column_name LIKE '%expires%')`;
+
+describe('migration 13: timestamps become timestamptz', () => {
+  it('converts text timestamps written before the change without altering them', async () => {
+    const url = await testDatabaseUrl({ empty: true });
+    // Build a schema-version-12 database holding text timestamps, as one would exist before this migration.
+    const client = new pg.Client({ connectionString: url });
+    await client.connect();
+    try {
+      await client.query(`CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
+      for (let v = 0; v < 12; v++) {
+        await client.query(MIGRATIONS[v]);
+        await client.query(`INSERT INTO schema_migrations (version) VALUES ($1)`, [v + 1]);
+      }
+      await client.query(`INSERT INTO organizations (id, name, created_at) VALUES ('org_old', 'Old club', '2026-11-14T09:30:15.123Z')`);
+    } finally {
+      await client.end();
+    }
+
+    const db = openDb(url);
+    try {
+      await db.migrate();
+      const row = await db.get<{ created_at: string; type: string }>(`SELECT created_at, pg_typeof(created_at)::text AS type FROM organizations WHERE id = 'org_old'`);
+      expect(row).toEqual({ created_at: '2026-11-14T09:30:15.123Z', type: 'timestamp with time zone' });
+      expect(await db.all(TEXT_TIMESTAMPS)).toEqual([]);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('still returns timestamps through the API as ISO 8601 UTC strings', async () => {
+    const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z'), holdMinutes: 10 });
+    const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
+    const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { updatedAt: string };
+    expect(event.updatedAt).toMatch(ISO);
+    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    const versions = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { versions: { publishedAt: string }[] };
+    expect(versions.versions[0].publishedAt).toMatch(ISO);
+  });
+});

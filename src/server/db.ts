@@ -6,8 +6,10 @@ import pg from 'pg';
  * Inside `transaction`, those calls run on the transaction's connection
  * automatically, so helpers work the same inside and outside a transaction.
  *
- * Timestamps stay ISO 8601 UTC text, as the domain code compares and returns
- * them as strings. JSON columns are jsonb; the driver returns parsed values.
+ * Timestamps are timestamptz (migration 13). The driver hands them back as ISO 8601
+ * UTC strings (`2027-03-01T18:00:00.000Z`), the form the domain code compares and the
+ * API returns, and accepts the same strings as parameters. JSON columns are jsonb;
+ * the driver returns parsed values.
  */
 
 export type Param = string | number | boolean | null | readonly string[] | readonly number[];
@@ -31,7 +33,7 @@ export interface Db {
 }
 
 // seq columns keep insertion order for ties on a timestamp (SQLite used rowid).
-const MIGRATIONS: string[] = [
+export const MIGRATIONS: string[] = [
   `
   CREATE TABLE organizations (
     id text PRIMARY KEY,
@@ -274,7 +276,37 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX entry_resolutions_by_event ON entry_resolutions(event_id, status);
   `,
+  `
+  -- Timestamps move from ISO 8601 text to timestamptz. Every stored value was written by the app
+  -- as an ISO 8601 UTC string, so the cast is exact (millisecond precision is kept).
+  ALTER TABLE organizations ALTER COLUMN created_at TYPE timestamptz USING created_at::timestamptz;
+  ALTER TABLE events ALTER COLUMN created_at TYPE timestamptz USING created_at::timestamptz, ALTER COLUMN updated_at TYPE timestamptz USING updated_at::timestamptz;
+  ALTER TABLE event_versions ALTER COLUMN published_at TYPE timestamptz USING published_at::timestamptz;
+  ALTER TABLE test_entries ALTER COLUMN created_at TYPE timestamptz USING created_at::timestamptz;
+  ALTER TABLE orders ALTER COLUMN hold_expires_at TYPE timestamptz USING hold_expires_at::timestamptz, ALTER COLUMN created_at TYPE timestamptz USING created_at::timestamptz, ALTER COLUMN updated_at TYPE timestamptz USING updated_at::timestamptz, ALTER COLUMN confirmed_at TYPE timestamptz USING confirmed_at::timestamptz;
+  ALTER TABLE order_entries ALTER COLUMN license_reviewed_at TYPE timestamptz USING license_reviewed_at::timestamptz, ALTER COLUMN withdrawn_at TYPE timestamptz USING withdrawn_at::timestamptz;
+  ALTER TABLE payment_attempts ALTER COLUMN created_at TYPE timestamptz USING created_at::timestamptz;
+  ALTER TABLE bib_settings ALTER COLUMN updated_at TYPE timestamptz USING updated_at::timestamptz;
+  ALTER TABLE bib_assignments ALTER COLUMN assigned_at TYPE timestamptz USING assigned_at::timestamptz, ALTER COLUMN released_at TYPE timestamptz USING released_at::timestamptz;
+  ALTER TABLE check_ins ALTER COLUMN checked_in_at TYPE timestamptz USING checked_in_at::timestamptz;
+  ALTER TABLE start_list_snapshots ALTER COLUMN created_at TYPE timestamptz USING created_at::timestamptz;
+  ALTER TABLE waitlist_entries ALTER COLUMN offered_at TYPE timestamptz USING offered_at::timestamptz, ALTER COLUMN offer_expires_at TYPE timestamptz USING offer_expires_at::timestamptz, ALTER COLUMN created_at TYPE timestamptz USING created_at::timestamptz, ALTER COLUMN updated_at TYPE timestamptz USING updated_at::timestamptz;
+  ALTER TABLE entry_changes ALTER COLUMN created_at TYPE timestamptz USING created_at::timestamptz;
+  ALTER TABLE check_in_undos ALTER COLUMN checked_in_at TYPE timestamptz USING checked_in_at::timestamptz, ALTER COLUMN undone_at TYPE timestamptz USING undone_at::timestamptz;
+  ALTER TABLE start_list_locks ALTER COLUMN locked_at TYPE timestamptz USING locked_at::timestamptz;
+  ALTER TABLE rider_links ALTER COLUMN linked_at TYPE timestamptz USING linked_at::timestamptz;
+  ALTER TABLE rider_link_dismissals ALTER COLUMN dismissed_at TYPE timestamptz USING dismissed_at::timestamptz;
+  ALTER TABLE entry_resolutions ALTER COLUMN created_at TYPE timestamptz USING created_at::timestamptz, ALTER COLUMN resolved_at TYPE timestamptz USING resolved_at::timestamptz;
+  `,
 ];
+
+/** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
+const TIMESTAMPTZ_OID = 1184;
+const parseTimestamptz = pg.types.getTypeParser(TIMESTAMPTZ_OID) as (value: string) => Date;
+const types = {
+  getTypeParser: ((oid: number, format?: 'text' | 'binary') =>
+    oid === TIMESTAMPTZ_OID && format !== 'binary' ? (value: string) => parseTimestamptz(value).toISOString() : pg.types.getTypeParser(oid, format)) as typeof pg.types.getTypeParser,
+};
 
 /** Arbitrary constant for the session-level advisory lock held while migrating. */
 const MIGRATION_LOCK = 4_241_017;
@@ -306,7 +338,7 @@ async function applyMigrations(pool: pg.Pool): Promise<void> {
 
 export function openDb(connectionString: string, onPoolError?: (err: Error) => void): Db {
   // Fail fast instead of hanging when the database cannot be reached.
-  const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 10_000 });
+  const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 10_000, types });
   // An idle connection can drop (database restart, test teardown); the pool replaces it.
   pool.on('error', (err) => onPoolError?.(err));
   const tx = new AsyncLocalStorage<{ client: pg.PoolClient; depth: number }>();
