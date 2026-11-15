@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import type { ApiError } from './api';
 
 /**
@@ -8,13 +8,19 @@ import type { ApiError } from './api';
 export function useLoad<T>(fn: () => Promise<T>, deps: readonly unknown[]): { data: T | null; setData: Dispatch<SetStateAction<T | null>>; error: string | null; setError: Dispatch<SetStateAction<string | null>>; reload: () => void } {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Only the newest request may set state, so a slow earlier response cannot overwrite a later one.
+  const latest = useRef(0);
   const reload = useCallback(() => {
+    const request = ++latest.current;
     fn()
       .then((d) => {
+        if (request !== latest.current) return;
         setData(d);
         setError(null);
       })
-      .catch((e: ApiError) => setError(e.message));
+      .catch((e: ApiError) => {
+        if (request === latest.current) setError(e.message);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   useEffect(reload, [reload]);

@@ -44,7 +44,7 @@ export interface ExportOrder {
   /** How the order was paid. Null: no payment recorded. Either way, no real money moved. */
   paidWith: 'simulated' | 'stripe_test' | null;
   /** Refunds, oldest first. */
-  refunds: { entryId: string | null; amountCents: number; status: RefundStatus; at: string }[];
+  refunds: { entryId: string | null; amountCents: number; status: RefundStatus; at: string; duplicateCharge?: boolean }[];
 }
 
 /** Amounts are written as numbers, so the CSV writer leaves them unquoted and negative amounts work. */
@@ -135,7 +135,7 @@ export function ledgerCsv(orders: readonly ExportOrder[]): string {
     for (const r of o.refunds) {
       const code = r.entryId ? (o.entries.find((e) => e.id === r.entryId)?.code ?? '') : '';
       const counted = ACTIVE_REFUND_STATUSES.includes(r.status);
-      rows.push([o.orderNumber, o.status, r.at, 'refund', `Refund (${r.status})`, code, counted ? money(-r.amountCents) : '', counted ? how : `Refund ${r.status}; no money returned`]);
+      rows.push([o.orderNumber, o.status, r.at, 'refund', `${r.duplicateCharge ? 'Refund of duplicate charge' : 'Refund'} (${r.status})`, code, counted ? money(-r.amountCents) : '', counted ? how : `Refund ${r.status}; no money returned`]);
     }
   }
   return writeCsv([LEDGER_COLUMNS, ...rows]);

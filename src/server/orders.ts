@@ -178,8 +178,10 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     );
     // Refunds, without the organizer's reason or who asked: the rider sees this view too.
     const refunds = groupByOrder(
-      await db.all<{ order_id: string; id: string; entry_id: string | null; amount_cents: number; status: RefundStatus; created_at: string }>(
-        `SELECT order_id, id, entry_id, amount_cents, status, created_at FROM refunds WHERE order_id = ANY($1) ORDER BY created_at`,
+      await db.all<{ order_id: string; id: string; entry_id: string | null; amount_cents: number; status: RefundStatus; created_at: string; duplicate_charge: boolean }>(
+        `SELECT r.order_id, r.id, r.entry_id, r.amount_cents, r.status, r.created_at,
+                EXISTS (SELECT 1 FROM provider_events pe WHERE pe.order_id = r.order_id AND pe.result = 'duplicate_charge' AND pe.payment_ref = r.payment_ref) AS duplicate_charge
+           FROM refunds r WHERE r.order_id = ANY($1) ORDER BY r.created_at`,
         [ids],
       ),
     );
@@ -189,7 +191,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       const latestVersion = latestByEvent.get(row.event_id);
       const latest = latestVersion ? configs.get(`${row.event_id}:${latestVersion}`)! : config;
       return { ...buildView(row, config, latest, entries.get(row.id) ?? [], changes.get(row.id) ?? [], corrections.get(row.id) ?? []), paidWith: paidWith.get(row.id) ?? null,
-        refunds: (refunds.get(row.id) ?? []).map((r) => ({ id: r.id, entryId: r.entry_id, amountCents: r.amount_cents, status: r.status, at: r.created_at })),
+        refunds: (refunds.get(row.id) ?? []).map((r) => ({ id: r.id, entryId: r.entry_id, amountCents: r.amount_cents, status: r.status, at: r.created_at, duplicateCharge: r.duplicate_charge })),
       };
     });
   }

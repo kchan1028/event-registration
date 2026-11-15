@@ -199,7 +199,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
     if (!row) throw new HttpError(404, notFound);
     if (allow.rider && row.account_id === account.id) return;
     const roles = await rolesIn(account.id, row.organization_id);
-    if (roles.length === 0) throw new HttpError(404, notFound);
+    // A member who may not view orders learns nothing about whether this one exists.
+    if (roles.length === 0 || (!allow.permission && !can(roles, 'orders.view'))) throw new HttpError(404, notFound);
     if (!allow.permission) throw new HttpError(403, 'Only the rider who placed this order can do this.');
     if (!can(roles, allow.permission)) throw new HttpError(403, 'Your role in this organization does not allow this.');
   }

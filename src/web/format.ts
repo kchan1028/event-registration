@@ -25,7 +25,10 @@ export function byDisplayGroup(config: EventConfig, cats: Category[], restLabel:
     .filter((g) => g.cats.length > 0);
 }
 
-/** How much of an amount has been refunded or is on its way back (active refunds only). */
-export function refundedCents(paidCents: number, refunds: readonly { amountCents: number; status: RefundStatus }[]): number {
-  return paidCents - refundableCents(paidCents, refunds);
+/**
+ * How much of an amount has been refunded or is on its way back (active refunds only).
+ * A refund of a duplicate charge returned a second payment, so it does not reduce what the rider paid for the order.
+ */
+export function refundedCents(paidCents: number, refunds: readonly { amountCents: number; status: RefundStatus; duplicateCharge?: boolean }[]): number {
+  return paidCents - refundableCents(paidCents, refunds.filter((r) => !r.duplicateCharge));
 }

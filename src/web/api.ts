@@ -128,7 +128,8 @@ export interface OrderView {
   /** How the order was paid: the simulated button or Stripe test mode. Null until paid. */
   paidWith: PaymentMode | null;
   /** Refunds, oldest first (no reason: riders see this too). */
-  refunds: { id: string; entryId: string | null; amountCents: number; status: RefundStatus; at: string }[];
+  /** duplicateCharge: the refund returned a second charge for this order, not the order's own payment. */
+  refunds: { id: string; entryId: string | null; amountCents: number; status: RefundStatus; at: string; duplicateCharge: boolean }[];
   answers: { categoryId: string; category: string; label: string; answer: string }[];
   addenda: { categoryId: string; title: string }[];
   id: string;
