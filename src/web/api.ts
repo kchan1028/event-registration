@@ -179,6 +179,7 @@ export interface CheckInRider {
   bib: number | null;
   bibHistory: { bib: number; assignedAt: string; releasedAt: string | null; reason: string | null }[];
   checkedInAt: string | null;
+  undoneCheckIns: { checkedInAt: string; undoneAt: string; bib: number | null; bibReleased: boolean; reason: string }[];
 }
 
 export interface CheckInList {
@@ -244,6 +245,7 @@ export const api = {
     request<CheckInList>('GET', `/api/events/${eventId}/check-in?${new URLSearchParams({ ...(dayId ? { day: dayId } : {}), q })}`),
   saveBibSettings: (eventId: string, settings: BibSettings) => request<BibSettings>('PUT', `/api/events/${eventId}/bib-settings`, settings),
   checkIn: (eventId: string, orderId: string, dayId: string, bib: number | null) => request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}`, { dayId, bib }),
+  undoCheckIn: (eventId: string, orderId: string, dayId: string, reason: string) => request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}/undo`, { dayId, reason }),
   changeBib: (eventId: string, orderId: string, dayId: string, bib: number, reason: string) =>
     request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}/bib`, { dayId, bib, reason }),
   addCheckInDemoRiders: (eventId: string) => request<{ created: number }>('POST', `/api/events/${eventId}/check-in-demo-riders`),

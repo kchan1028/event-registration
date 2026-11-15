@@ -165,6 +165,21 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX entry_changes_by_order ON entry_changes(order_id, created_at);
   `,
+  `
+  -- Undone check-ins. The check_ins row is removed so the rider can be checked in again; this keeps the record.
+  CREATE TABLE check_in_undos (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES events(id),
+    order_id TEXT NOT NULL REFERENCES orders(id),
+    day_id TEXT NOT NULL,
+    checked_in_at TEXT NOT NULL,
+    bib INTEGER,
+    bib_released INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    undone_at TEXT NOT NULL
+  );
+  CREATE INDEX check_in_undos_by_order ON check_in_undos(order_id, day_id);
+  `,
 ];
 
 export function openDb(path: string): Db {

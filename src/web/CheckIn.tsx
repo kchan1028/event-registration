@@ -261,6 +261,23 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext }: { eventId: str
   const [changing, setChanging] = useState(false);
   const [newBib, setNewBib] = useState('');
   const [reason, setReason] = useState('');
+  const [undoing, setUndoing] = useState(false);
+  const [undoReason, setUndoReason] = useState('');
+
+  async function undo(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      onChange(await api.undoCheckIn(eventId, rider.orderId, dayId, undoReason));
+      setUndoing(false);
+      setUndoReason('');
+    } catch (err) {
+      setError((err as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function checkIn(e: FormEvent) {
     e.preventDefault();
@@ -366,12 +383,34 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext }: { eventId: str
               <button type="button" className="btn btn--primary" onClick={onNext}>
                 Next rider
               </button>
-              {!changing && (
+              {!changing && !undoing && (
                 <button type="button" className="btn btn--secondary" onClick={() => setChanging(true)}>
                   Change bib
                 </button>
               )}
+              {!changing && !undoing && (
+                <button type="button" className="btn btn--ghost" onClick={() => setUndoing(true)}>
+                  Undo check-in
+                </button>
+              )}
             </div>
+            {undoing && (
+              <form className="ci-bib__change" onSubmit={undo}>
+                <p className="small">This removes today’s check-in and releases the bib (unless it also covers another day the rider is checked in for). The rider must be checked in again before racing.</p>
+                <label>
+                  Reason
+                  <input className="input" required minLength={3} placeholder="For example: checked in the wrong rider" value={undoReason} onChange={(e) => setUndoReason(e.target.value)} />
+                </label>
+                <div className="ci-bib__actions">
+                  <button type="submit" className="btn btn--primary" disabled={busy}>
+                    Undo check-in
+                  </button>
+                  <button type="button" className="btn btn--ghost" onClick={() => setUndoing(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
             {changing && (
               <form className="ci-bib__change" onSubmit={changeBib}>
                 <label>
@@ -417,7 +456,21 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext }: { eventId: str
           <ul className="ci-history">
             {rider.bibHistory.map((h) => (
               <li key={h.assignedAt}>
-                <strong>{h.bib}</strong> {h.releasedAt ? `replaced: ${h.reason}` : 'current'}
+                <strong>{h.bib}</strong> {h.releasedAt ? `released: ${h.reason}` : 'current'}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {rider.undoneCheckIns.length > 0 && (
+        <div className="ci-section">
+          <h3>Undone check-ins</h3>
+          <ul className="ci-history">
+            {rider.undoneCheckIns.map((u) => (
+              <li key={u.undoneAt}>
+                Checked in {new Date(u.checkedInAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}, undone {new Date(u.undoneAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                {u.bib !== null ? (u.bibReleased ? ` · bib ${u.bib} released` : ` · bib ${u.bib} kept for another day`) : ''}: {u.reason}
               </li>
             ))}
           </ul>
