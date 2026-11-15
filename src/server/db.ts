@@ -219,6 +219,23 @@ const MIGRATIONS: string[] = [
   -- Answers to per-category questions and accepted category waiver addenda, per order.
   ALTER TABLE orders ADD COLUMN extras_json TEXT;
   `,
+  `
+  -- Resolution items for paid entries affected by a published change. One open item per entry at a time.
+  CREATE TABLE entry_resolutions (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES events(id),
+    order_id TEXT NOT NULL REFERENCES orders(id),
+    entry_id TEXT NOT NULL REFERENCES order_entries(id),
+    published_version INTEGER NOT NULL,
+    details_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    rider_notified INTEGER NOT NULL DEFAULT 0,
+    note TEXT,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+  );
+  CREATE INDEX entry_resolutions_by_event ON entry_resolutions(event_id, status);
+  `,
 ];
 
 export function openDb(path: string): Db {

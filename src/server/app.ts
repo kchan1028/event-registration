@@ -15,6 +15,7 @@ import { validateConfig } from '../shared/validation';
 import { openDb } from './db';
 import { createCheckIn } from './checkin';
 import { createIdentity } from './identity';
+import { createResolutions } from './resolutions';
 import { createStartLists } from './startlists';
 import { createOrders, type Orders } from './orders';
 import { createWaitlist } from './waitlist';
@@ -36,6 +37,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const repo = createRepo(db, clock);
   const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10));
   const identity = createIdentity(db, orders, clock);
+  const resolutions = createResolutions(db, orders, clock);
   const checkIn = createCheckIn(db, repo, orders, clock, identity);
   const startLists = createStartLists(db, repo, orders, clock, identity);
   const waitlist = createWaitlist(db, repo, clock);
@@ -106,7 +108,18 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       throw new HttpError(422, `Review who the ${n} changed ${n === 1 ? 'category' : 'categories'} with entries affect before publishing.`, impact);
     }
     const result = repo.publish(id, body.acknowledgeWarnings);
+    // Paid entries the change touches each get an item in the resolution workflow.
+    if (impact && impact.categories.length > 0) resolutions.record(id, result.version, impact);
     return { ...eventPayload(id), publishedVersion: result.version };
+  });
+
+  app.get('/api/events/:id/resolutions', async (req) => resolutions.list(idParam.parse(req.params).id));
+  app.post('/api/events/:id/resolutions/:rid', async (req) => {
+    const p = z.object({ id: z.string().min(1).max(64), rid: z.string().min(1).max(64) }).parse(req.params);
+    const body = z
+      .object({ outcome: z.enum(['kept', 'transferred', 'withdrawn']), riderNotified: z.boolean(), note: z.string().trim().min(3, 'Write what was agreed with the rider.').max(300) })
+      .parse(req.body);
+    return resolutions.resolve(p.id, p.rid, body.outcome, body.riderNotified, body.note);
   });
 
   /**

@@ -60,6 +60,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Organizer CSV exports: entries and a simulated ledger, without contact details | Implemented; automated tests in CI |
 | Per-category rider questions, waiver addenda, and bib ranges | Implemented; automated tests in CI |
 | QR check-in code on the rider confirmation; camera scanning at check-in in Chrome and Edge | Implemented; live camera scan not yet checked |
+| Change resolution workflow for paid entries affected by a published change | Implemented; automated tests in CI |
 | Real payments and refunds, an agreed timer format | Planned |
 
 <details>
