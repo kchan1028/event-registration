@@ -114,6 +114,9 @@ export function CheckIn({ eventId }: { eventId: string }) {
         <button type="button" className="btn btn--secondary btn--small" aria-expanded={showBibs} onClick={() => setShowBibs((v) => !v)}>
           Bib ranges
         </button>
+        <a className="btn btn--secondary btn--small" href={href({ page: 'roster', eventId })}>
+          Fallback roster
+        </a>
       </CheckInBar>
 
       {data?.isDemo && (
