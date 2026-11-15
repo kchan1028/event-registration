@@ -19,7 +19,7 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 | Light and dark display themes | Implemented (November 14, 2026); partly verified | Organizer and rider prototype screens: system default, header toggle on every screen, saved per device, applied before first paint, light palette for print. Token contrast checked against WCAG 2.2 AA in the browser; the rider demo has an automated theme switch test. The check-in screen uses it, with fixed high-contrast result fills for sunlight. |
 | Timer export review packet | Implemented (November 14, 2026) | Column list, sample CSV of fictional riders, and ten questions for the timer and officials in [docs/timer-export-review.md](docs/timer-export-review.md). Not yet sent; the timer's acceptance is a Phase 1 exit gate item. |
 | Phase 1 usability test kit | Implemented (November 14, 2026) | Recruiting, setup, facilitator script, core and optional tasks per role, scoring for the 90% gate, and a results summary template in [docs/usability/](docs/usability/README.md). No sessions have been run. |
-| Phase 0: Establish the case to build | Planned | Not started. The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. Next actions are listed at the end of this document. |
+| Phase 0: Establish the case to build | Planned | Not started. The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. Next actions are listed at the end of this document. Outreach questions for USA Cycling and payment providers are written but not sent. |
 | Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented as prototypes. The race-day check-in prototype and sample timer exports are implemented too. Usability tests have not been run (the [test kit](docs/usability/README.md) is ready), and the export format is not yet agreed with a timer. |
 | Phase 2: Build the registration core | Planned | Depends on Phase 1 and a settled payment model. |
 | Phase 3: Make race day operable | Planned | USAC acceptance gates live sanctioned use. |
@@ -275,7 +275,7 @@ These are roles to assign, not assumed staffing commitments.
 1. Assign a product owner and registration lead for discovery.
 2. Obtain an anonymized existing category setup, timer export, exception list, and reconciliation example.
 3. Schedule one workflow observation and the initial interviews.
-4. Submit federation and payment-model questions before choosing the production stack. ADR 0001 covers only the local prototype.
+4. Submit federation and payment-model questions before choosing the production stack. ADR 0001 covers only the local prototype. The questions are ready to send: [questions for USA Cycling](docs/usac-questions.md) and [payment model questions](docs/payment-model-questions.md).
 5. Research the road-results.com update process with the timer and a recent promoter. Send the timer the [timer export review packet](docs/timer-export-review.md) and record the answers there.
 6. Run the category builder with the registration lead on an anonymized real schedule, and the rider checkout with at least five riders or parents, recording where each needed help (Phase 1 usability test). Use the [usability test kit](docs/usability/README.md).
 7. Complete the build-versus-improve decision and revise estimates from evidence.
