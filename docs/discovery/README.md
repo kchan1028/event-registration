@@ -17,6 +17,8 @@ The app already built does not count as Phase 0 evidence. It was built ahead of 
 | [external-requirements.md](external-requirements.md) | Owners and status for the USA Cycling (USAC), payment-provider, and road-results.com questions, with links to the question packets | Contact USAC; assess payment models; research results uploads |
 | [pilot-selection.md](pilot-selection.md) | Choosing a smaller pilot event, its accountable organizer, and a support owner | Identify a pilot |
 | [interviews/](interviews/D01.md) | Anonymized interview summaries, one file per participant code | Observe and interview |
+| [email-providers.md](email-providers.md) | Case study: which email providers support adding marketing email later, after Amazon SES for transactional mail | Phase 2 research (November 15, 2026) |
+| [guardian-accounts.md](guardian-accounts.md) | How other platforms link guardians and juniors, and a Proposed model for CycleReg | Phase 2 research (November 15, 2026) |
 | [decision-memo.md](decision-memo.md) | The exit-gate decision: continue or stop, with the evidence for each gate condition | Exit gate |
 
 ## Who does what
