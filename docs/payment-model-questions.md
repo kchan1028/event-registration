@@ -1,6 +1,6 @@
 # Payment model questions
 
-Status: Proposed, written November 14, 2026. Stripe is selected by the project owner ([ADR 0002](decisions/0002-stripe-payments.md)); no provider account or integration is configured and no merchant/settlement model is chosen. The prototype's checkout is simulated and moves no money. The owner and status of this question are tracked in the [Phase 0 discovery kit](discovery/external-requirements.md#status).
+Status: Proposed, written November 14, 2026. Stripe is selected by the project owner ([ADR 0002](decisions/0002-stripe-payments.md)); no provider account or integration is configured and no merchant/settlement model is chosen. The app's checkout is simulated and moves no money. The owner and status of this question are tracked in the [Phase 0 discovery kit](discovery/external-requirements.md#status).
 
 Before any live payment, the club must decide who collects the money, who the rider's card statement names, who pays fees, and who absorbs refunds and disputes. That is [open decision 5](../product.md#open-decisions) in product.md, and the rules in [Money and reporting](../product.md#6-money-and-reporting) apply whatever the answer. This page lays out the choices and the questions to answer, first inside the club and then against Stripe's supported configurations and terms.
 

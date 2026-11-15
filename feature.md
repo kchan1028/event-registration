@@ -1,10 +1,10 @@
 # Feature overview
 
-Status: Local prototype. Updated November 14, 2026.
+Status: Local build, not live. Updated November 14, 2026.
 
 CycleReg helps organizers configure road races and criteriums, lets riders try registration with simulated payment, and supports local check-in and sample start lists. It is not ready for live registration: sign-in, real payments, and federation connections are not built.
 
-This is a feature summary, not a second requirements document or roadmap. [product.md](product.md) defines requirements and acceptance criteria. [roadmap.md](roadmap.md) owns delivery status, priorities, dependencies, and verification evidence. “Implemented” below means available in the local prototype; it does not mean approved for a live event or verified with users.
+This is a feature summary, not a second requirements document or roadmap. [product.md](product.md) defines requirements and acceptance criteria. [roadmap.md](roadmap.md) owns delivery status, priorities, dependencies, and verification evidence. “Implemented” below means available in the local build; it does not mean approved for a live event or verified with users.
 
 ## Organizer features
 
@@ -27,7 +27,7 @@ This is a feature summary, not a second requirements document or roadmap. [produ
 | Same-rider linking | Implemented | Suggest likely matches across orders; link only when the organizer confirms |
 | Entries and ledger CSV | Implemented | Download one row per entry and a simulated ledger; contact, emergency, and license-number details are left out |
 
-Details and limits: [category builder](product.md#1a-road-race-and-criterium-category-builder--p0) and [organizer prototype status](roadmap.md#category-builder-milestone).
+Details and limits: [category builder](product.md#1a-road-race-and-criterium-category-builder--p0) and [organizer status](roadmap.md#category-builder-milestone).
 
 ## Rider features
 
@@ -42,7 +42,7 @@ Details and limits: [category builder](product.md#1a-road-race-and-criterium-cat
 | Simulated payment | Implemented | Exercise success, decline, retry, and duplicate notifications without charging money or collecting card details |
 | Confirmation and receipt | Implemented | Show a demo receipt, check-in code, entries, and independent readiness items; payment does not clear an unreviewed license |
 
-Details: [demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-1) and [checkout status](roadmap.md#rider-checkout-prototype). Usability testing with people remains open.
+Details: [demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-1) and [checkout status](roadmap.md#rider-checkout). Usability testing with people remains open.
 
 ## Race-day features
 
@@ -55,7 +55,7 @@ Details: [demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-
 | Start lists | Implemented | List confirmed entries by race, with numbered snapshots and changes between versions |
 | Sample timer CSV | Implemented | Export stable entry identifiers and race data; the format is not yet agreed or round-tripped with a timer |
 
-Details: [check-in status](roadmap.md#check-in-prototype) and [start-list status](roadmap.md#start-lists-and-timer-export). Volunteer usability tests and a timer-approved export remain open.
+Details: [check-in status](roadmap.md#check-in) and [start-list status](roadmap.md#start-lists-and-timer-export). Volunteer usability tests and a timer-approved export remain open.
 
 ## Local demo and interface
 
@@ -63,7 +63,7 @@ Details: [check-in status](roadmap.md#check-in-prototype) and [start-list status
 - The separate Berkeley Omnium fixture includes a $130 two-race package and a podium nomination requiring organizer review. Award approval tools, points, and podium calculation are not built.
 - Light and dark themes are implemented, with system preference, a visible toggle, and a saved device preference.
 - Automated accessibility checks cover main screens in both themes. Manual keyboard, screen-reader, and real-phone passes remain open. See [ACCESSIBILITY.md](ACCESSIBILITY.md).
-- Data is stored in a local SQLite file. No database server is needed. There is no sign-in, so the prototype must stay on localhost and use fictional rider details. See [DATA_MODEL.md](DATA_MODEL.md).
+- Data is stored in a local SQLite file. No database server is needed. There is no sign-in, so the app must stay on localhost and use fictional rider details. See [DATA_MODEL.md](DATA_MODEL.md).
 
 ## Package and bundle terminology
 
@@ -86,7 +86,7 @@ Priorities and measurable gates belong in the [roadmap](roadmap.md#berkeley-week
 
 ## Planned features
 
-These are not available in the prototype. Phase order and dependencies remain in [roadmap.md](roadmap.md).
+These are not available in the app. Phase order and dependencies remain in [roadmap.md](roadmap.md).
 
 | Feature | Status | Requirement reference |
 |---|---|---|

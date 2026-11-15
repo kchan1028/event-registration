@@ -108,7 +108,7 @@ export function Preview({ draft }: { draft: Draft }) {
               </button>
             )}
           </div>
-          <p className="muted small">Racing age is entered directly. The federation's racing-age rule is not calculated in this prototype.</p>
+          <p className="muted small">Racing age is entered directly. The federation's racing-age rule is not calculated yet.</p>
         </section>
 
         {config.days.map((day, di) => (

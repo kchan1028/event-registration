@@ -12,7 +12,7 @@ import type { Orders, OrderView } from './orders';
 import { HttpError, type Repo } from './repo';
 
 /**
- * Race-day check-in (prototype). A rider is one order. Volunteers see only what
+ * Race-day check-in. A rider is one order. Volunteers see only what
  * check-in needs: name, team, entries, readiness, and bib. No email, guardian
  * contact, payment amounts, or emergency details leave this module.
  */

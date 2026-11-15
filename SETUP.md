@@ -38,7 +38,7 @@ Keep `DB_PATH` identical when seeding and starting the app. The home page's othe
 
 Choose an event, select an eligible category, and use made-up rider information or a fictional demo rider. A single road-race entry totals $80; a single criterium entry totals $60. Demo mode allows testing outside the registration windows. Complete the sample waiver and simulated payment. Payment moves no money, and an unreviewed license remains in review.
 
-The prototype has no sign-in. Keep it on this computer at `127.0.0.1`; do not deploy it or expose it to a network. Stop the servers with Ctrl+C.
+The app has no sign-in. Keep it on this computer at `127.0.0.1`; do not deploy it or expose it to a network. Stop the servers with Ctrl+C.
 
 For a single-process built demo:
 

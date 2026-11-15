@@ -354,7 +354,7 @@ function Waitlists({ draft }: { draft: Draft }) {
   return (
     <section className="settings__section" aria-labelledby="wl-title">
       <h3 id="wl-title">Waitlists</h3>
-      <p className="muted small">Freed places go to waiting riders first. Offer them in order; an offer holds the place for 24 hours. No email is sent in this prototype: copy the link to the rider.</p>
+      <p className="muted small">Freed places go to waiting riders first. Offer them in order; an offer holds the place for 24 hours. Email is not sent yet: copy the link to the rider.</p>
       {error && (
         <p className="alert alert--error" role="alert">
           {error}

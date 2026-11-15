@@ -7,15 +7,15 @@ Send this page and the sample file to the event's timer and chief official, ask 
 ## What to send
 
 1. This page, or a PDF of it.
-2. [sample-start-list.csv](fixtures/sample-start-list.csv): a start list exported by the prototype for two fictional events. Every rider, license number, and ID in it is fake.
+2. [sample-start-list.csv](fixtures/sample-start-list.csv): a start list exported by the app for two fictional events. Every rider, license number, and ID in it is fake.
 
 A short message to go with it:
 
-> We're testing a registration prototype and want its start-list export to fit how you work before we build further. Attached is a sample file with made-up riders and a one-page list of the columns. Could you look at it and answer the questions at the end, or tell us what format your timing software imports? A copy of a file you have imported before would help most.
+> We're testing a registration app and want its start-list export to fit how you work before we build further. Attached is a sample file with made-up riders and a one-page list of the columns. Could you look at it and answer the questions at the end, or tell us what format your timing software imports? A copy of a file you have imported before would help most.
 
 ## How the export works today
 
-The prototype exports one CSV per race, per saved snapshot, or for all races of an event in one file. Organizers find it under **Start lists and timer export** in the event builder. Implementation details are in [roadmap.md](../roadmap.md#start-lists-and-timer-export).
+The app exports one CSV per race, per saved snapshot, or for all races of an event in one file. Organizers find it under **Start lists and timer export** in the event builder. Implementation details are in [roadmap.md](../roadmap.md#start-lists-and-timer-export).
 
 - **Who is in it.** Confirmed (paid) entries only. Unpaid holds, cancelled orders, withdrawn entries, and the builder's simulated test entries are left out.
 - **Order.** Start time, then category code, then bib (riders without a bib last), then last name.
@@ -49,7 +49,7 @@ The prototype exports one CSV per race, per saved snapshot, or for all races of 
 
 ## What the sample shows
 
-The sample was generated from the prototype on November 14, 2026, using the fictional riders in [the fixtures](fixtures/README.md). Bibs come from a weekend range of 101 to 299.
+The sample was generated from the app on November 14, 2026, using the fictional riders in [the fixtures](fixtures/README.md). Bibs come from a weekend range of 101 to 299.
 
 | Rider | Situation shown |
 |---|---|

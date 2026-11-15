@@ -150,7 +150,7 @@ components:
 
 **Creative North Star: "The Race-Tent Field Board, with Liquid Glass"**
 
-Status: **Planned design direction**, November 14, 2026. This documentation change does not implement glass, photography, new settings, or purchase capabilities. The existing YAML tokens above describe the prototype baseline; the material recipe and acceptance checks below are targets for future implementation. [product.md](product.md) owns requirements and [roadmap.md](roadmap.md) owns delivery status.
+Status: **Planned design direction**, November 14, 2026. This documentation change does not implement glass, photography, new settings, or purchase capabilities. The existing YAML tokens above describe the current baseline; the material recipe and acceptance checks below are targets for future implementation. [product.md](product.md) owns requirements and [roadmap.md](roadmap.md) owns delivery status.
 
 Apple-inspired means translucent navigation, subtle depth, refined type, and responsive, interruptible interactions. Preserve CycleReg's field-board identity, day hues, Public Sans, and Barlow Condensed numerals. Forms, pricing, race options, receipts, and dense tables stay opaque. Glass belongs to a small functional layer above the content, with no decorative refraction or moving highlights.
 
@@ -350,7 +350,7 @@ Keep category name, structured eligibility summary and review status, race date,
 
 For an event package, show each included race, its date, chosen category, individual price, package total, and savings together on an opaque surface. List missing choices explicitly, for example “Choose a Sunday criterium category,” with an action that moves focus to that race. Do not imply that selecting the package selects categories automatically or reserves places. Keep errors about eligibility, capacity, and missing selections next to the affected race and in the entry summary. Update and politely announce the quoted total without moving focus.
 
-**Current versus Planned:** the local prototype supports same-event package pricing and a Berkeley omnium podium nomination subject to organizer review. The existing code/UI calls that package a “bundle.” Dedicated omnium/stage-race setup, TT registration, and cross-event, cross-organization season passes remain Planned. A nomination is not a result, podium award, or license approval. Do not expose a working purchase action for Planned offerings.
+**Current versus Planned:** the local build supports same-event package pricing and a Berkeley omnium podium nomination subject to organizer review. The existing code/UI calls that package a “bundle.” Dedicated omnium/stage-race setup, TT registration, and cross-event, cross-organization season passes remain Planned. A nomination is not a result, podium award, or license approval. Do not expose a working purchase action for Planned offerings.
 
 Demo examples only: Berkeley road race $80 + criterium $60 = $140 individually, or $130 package, saving $10. The proposed three-race series is Friday TT $50, Saturday road race $80, Sunday criterium $60: $190 individually, $160 package, saving $30. Label that series Planned; it is not proof of TT or series checkout support. Distinguish an event package from a season pass spanning events and organizations. Savings compare the same included entries; show fees separately and never imply an unquoted fee is zero.
 
