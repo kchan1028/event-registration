@@ -395,6 +395,8 @@ Do not replace Berkeley Omnium's registration merely because the software is ava
 
 ## Open decisions
 
+Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/README.md); none has an answer yet.
+
 1. What specific tasks consume the most volunteer time today, and which are limitations of software rather than staffing?
 2. How are both days, multiple entries, shared fields, discounts, and bibs currently configured?
 3. Who will fund development and provide operational support after launch?
