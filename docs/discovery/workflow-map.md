@@ -3,7 +3,8 @@
 Use this map to record how one recent event was actually run, step by step. Fill it from the race director and registration lead interviews, the anonymized files they share, and an observation of check-in if one happens during Phase 0. Record what happened, not what should have happened.
 
 Event mapped: Berkeley Omnium two-day road race and criterium weekend (partial)  
-Sources: [D01](interviews/D01.md), 2026-11-14 (one person answering as promoter, registration lead, and treasurer). No files shared, no observation yet. Every time is an estimate.
+Current tool: BikeReg (D01).  
+Sources: [D01](interviews/D01.md), 2026-11-14, follow-ups 2026-11-15 (one person answering as promoter, registration lead, and treasurer). No files shared, no observation yet. Every time is an estimate.
 
 ## How to fill it in
 
@@ -38,7 +39,7 @@ Start groups that share a field limit, category caps, what happens when a field 
 
 | Step | Who | Tool | Time | Problems | Software limit? |
 |---|---|---|---|---|---|
-| Decide which fields to combine and whether to score them separately; limits of 75 for Novice and 100 for other fields | Promoter | Registration system | Included above | Who or what enforces a shared limit not yet known | Unsure |
+| Decide which fields to combine and whether to score them separately; limits of 75 for Novice and 100 for other fields | Promoter | Registration system | Included above | Many combined Masters fields (for example 35+ Cat 3/4, 35+ Cat 1/2/3). Who or what enforces a shared limit not yet known | Unsure |
 
 ### 3. Prices, discounts, and bundles
 
@@ -46,7 +47,7 @@ Single-day prices, two-day or omnium bundles, additional-race discounts, junior 
 
 | Step | Who | Tool | Time | Problems | Software limit? |
 |---|---|---|---|---|---|
-| Set prices from expected entries and sponsor money | Promoter | Registration system | Included above | Discounts and two-day option not yet discussed | Unsure |
+| Set prices from expected entries and sponsor money; omnium package, junior, collegiate, and women's entry pricing | Promoter | BikeReg | Included above | Discounts need generated discount codes, which D01 finds hard | Unsure |
 
 ### 4. Changes after opening
 
@@ -62,7 +63,7 @@ License problems, junior waivers, wrong category, duplicates, missing informatio
 
 | Step | Who | Tool | Time | Problems | Software limit? |
 |---|---|---|---|---|---|
-| Handle license issues and duplicate entries; an unconfirmed license cannot be cleared (D01 cites a USAC rule) | Registration lead (same person) | Registration system | Not given | Counts not given | Unsure |
+| Handle license issues and duplicate entries; a rider with an unconfirmed license cannot register (D01 cites a USAC rule) | Registration lead (same person) | BikeReg | Not given | Counts not given | No (rule, not tool) |
 
 ### 6. Check-in and bibs
 
@@ -70,7 +71,7 @@ What volunteers look up, what sends a rider to the registration desk, bib assign
 
 | Step | Who | Tool | Time | Problems | Software limit? |
 |---|---|---|---|---|---|
-| Check-in is mostly day-of registration; volunteers confirm license and waiver. Bibs assigned in the registration system | Registration lead, volunteers | Registration system | Bibs: "very time consuming" across multiple fields; hours not given (D01) | Bib assignment across multiple fields | Unsure |
+| Check-in is mostly day-of registration (about 30 riders); volunteers confirm license and waiver. Bibs assigned in BikeReg, one block per field inside 1 to 1000 | Registration lead, volunteers | BikeReg | Bibs about 1 hour, depending on entries (estimate, D01) | Planning bib blocks around expected field sizes | Unsure |
 
 ### 7. Exports and handoffs
 
@@ -78,7 +79,7 @@ Start lists to the timer, race-morning changes, results upload, financial reconc
 
 | Step | Who | Tool | Time | Problems | Software limit? |
 |---|---|---|---|---|---|
-| Export start lists as CSV for the timer. Reconcile total registration fees minus processing fees; ACH payout within a week | Registration lead, treasurer (same person) | Registration system, CSV | Start lists 30 to 60 minutes, or about 5 with a saved template; reconciliation about 8 hours (estimates, D01) | Reconciliation time; what fills it is not yet known | Unsure |
+| Export start lists as CSV for the timer. Reconcile total registration fees minus processing fees; ACH payout within a week | Registration lead, treasurer (same person) | Registration system, CSV | Start lists 30 to 60 minutes, or about 5 with a saved template; reconciliation about 8 hours (estimates, D01) | Reconciliation time: building reports, matching refunds, merchandise sales | Unsure |
 
 ## Summary
 
@@ -86,8 +87,8 @@ Fill in after the map is complete.
 
 | Question | Answer |
 |---|---|
-| The three steps with the highest time cost | Preliminary, from D01 only: reconciliation (about 8 hours), bib assignment across multiple fields (hours not given), start-list CSV setup (30 to 60 minutes without a template) |
+| The three steps with the highest time cost | Preliminary, from D01 only: reconciliation (about 8 hours: reports, refunds, merchandise), bib assignment across multiple fields (about 1 hour), start-list CSV setup (30 to 60 minutes without a template) |
 | The three steps with the most errors or rework | |
 | Which of those are software limits | |
 | Which could be fixed with process, templates, or more volunteers | Start-list export already drops to about 5 minutes with a saved template (D01). Others not yet known. |
-| Configuration the current tool cannot express at all | |
+| Configuration the current tool cannot express at all | None named. Discounts are expressible but need generated codes (D01). |
