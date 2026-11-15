@@ -24,14 +24,14 @@ async function adminClient(): Promise<pg.Client> {
   return admin;
 }
 
-/** A new, empty, migrated database. Returns its connection string. */
-export async function testDatabaseUrl(): Promise<string> {
+/** A new, empty, migrated database (or with `empty`, one with no tables). Returns its connection string. */
+export async function testDatabaseUrl(opts: { empty?: boolean } = {}): Promise<string> {
   const name = `cyclereg_test_${runId}_${process.pid}_${++counter}`;
   const client = await adminClient();
   // Cloning fails while another session is copying the same template; retry briefly.
   for (let attempt = 0; ; attempt++) {
     try {
-      await client.query(`CREATE DATABASE "${name}" TEMPLATE "${template}"`);
+      await client.query(opts.empty ? `CREATE DATABASE "${name}"` : `CREATE DATABASE "${name}" TEMPLATE "${template}"`);
       break;
     } catch (err) {
       if ((err as { code?: string }).code !== '55006' || attempt >= 50) throw err;
