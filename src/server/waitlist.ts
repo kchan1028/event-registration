@@ -110,6 +110,12 @@ export function createWaitlist(db: Db, repo: Repo, clock: () => Date) {
       });
     },
 
+    /** The current status of every waitlist entry for the event, for counts that show no rider details. */
+    async statuses(eventId: string): Promise<WaitlistStatus[]> {
+      const rows = await db.all<Pick<Row, 'status' | 'offer_expires_at'>>(`SELECT status, offer_expires_at FROM waitlist_entries WHERE event_id = $1`, [eventId]);
+      return rows.map((r) => effectiveWaitlistStatus(r.status, r.offer_expires_at, nowIso()));
+    },
+
     /** Every waitlist entry for the event, grouped by category, oldest first. */
     async list(eventId: string) {
       await repo.getEvent(eventId);

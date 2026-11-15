@@ -610,7 +610,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.get('/api/events/:id/summary', async (req) => {
     const { id, roles } = await onEvent(req, 'orders.view');
     const list = (await orders.listOrders(id)).filter(isLiveOrder);
-    return eventSummary(list, await identity.keyOf(id), can(roles, 'export.ledger'));
+    return eventSummary(list, await identity.keyOf(id), await waitlist.statuses(id), can(roles, 'export.ledger'));
   });
 
   // Organizer exports from the database: entries and a ledger (simulated or Stripe test-mode payments and refunds). No contact or emergency details.

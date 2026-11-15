@@ -173,11 +173,14 @@ describe('event summary', () => {
     const held = order({ id: 'ord_5', orderNumber: 'DEMO-EEEE5555', status: 'held', confirmedAt: null, paidWith: null, entries: order().entries.map((e) => ({ ...e, status: 'held' })) });
     const all = [confirmed, sameRider, withdrawn, late, held];
     // ord_2 is linked to ord_1 as the same rider.
-    const s = eventSummary(all, (id) => (id === 'ord_2' ? 'ord_1' : id), true);
+    const s = eventSummary(all, (id) => (id === 'ord_2' ? 'ord_1' : id), ['waiting', 'waiting', 'offered', 'expired', 'accepted'], true);
 
     expect(s.riders).toBe(1);
     expect(s.orders).toEqual({ confirmed: 3, held: 1, paymentFailed: 0, needsAttention: 1 });
     expect(s.entries).toEqual({ confirmed: 4, held: 2, withdrawn: 2 });
+    // Every paid entry still racing awaits a license review in this fixture; withdrawn and unpaid ones never do.
+    expect(s.licenseReviews).toBe(4);
+    expect(s.waitlist).toEqual({ waiting: 2, offered: 1, expired: 1, accepted: 1, removed: 0 });
     expect(s.byCategory.map((c) => [c.code, c.entries])).toEqual([
       ['CR-B', 2],
       ['RR-A', 2],
@@ -192,6 +195,6 @@ describe('event summary', () => {
     expect(-(m.refundedCents + m.duplicateChargeRefundedCents)).toBe(cents('refund'));
     expect(m).toMatchObject({ refundedCents: 2000, duplicateChargeRefundedCents: 8800, netCents: m.receivedCents - 2000, needsAttention: { orders: 1, cents: 8500 } });
 
-    expect(eventSummary(all, (id) => id, false).money).toBeNull();
+    expect(eventSummary(all, (id) => id, [], false).money).toBeNull();
   });
 });

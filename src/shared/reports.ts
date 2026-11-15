@@ -1,5 +1,7 @@
+import { awaitsLicenseReview } from './checkout';
 import type { ExportOrder } from './exports';
 import { ACTIVE_REFUND_STATUSES } from './refunds';
+import type { WaitlistStatus } from './waitlist';
 
 /**
  * Event summary for organizers (product.md "Reporting"). Built from the same live orders as the
@@ -39,15 +41,22 @@ export interface EventSummary {
   orders: { confirmed: number; held: number; paymentFailed: number; needsAttention: number };
   entries: { confirmed: number; held: number; withdrawn: number };
   byCategory: CategoryCount[];
+  /** Paid entries still racing whose license no organizer has reviewed. */
+  licenseReviews: number;
+  /** Waitlist entries by current status; an offer whose time ran out counts as expired. */
+  waitlist: Record<WaitlistStatus, number>;
   /** Null for a role that may not see the ledger. */
   money: MoneySummary | null;
 }
 
-export function eventSummary(orders: readonly ExportOrder[], riderKey: (orderId: string) => string, withMoney: boolean): EventSummary {
+export function eventSummary(orders: readonly ExportOrder[], riderKey: (orderId: string) => string, waitlistStatuses: readonly WaitlistStatus[], withMoney: boolean): EventSummary {
   const riders = new Set<string>();
   const counts = { confirmed: 0, held: 0, paymentFailed: 0, needsAttention: 0 };
   const entries = { confirmed: 0, held: 0, withdrawn: 0 };
   const byCategory = new Map<string, CategoryCount>();
+  let licenseReviews = 0;
+  const waitlist: Record<WaitlistStatus, number> = { waiting: 0, offered: 0, expired: 0, accepted: 0, removed: 0 };
+  for (const w of waitlistStatuses) waitlist[w]++;
   const money: MoneySummary = { entryPriceCents: 0, discountCents: 0, feeCents: 0, receivedCents: 0, refundedCents: 0, duplicateChargeRefundedCents: 0, netCents: 0, needsAttention: { orders: 0, cents: 0 } };
 
   for (const o of orders) {
@@ -57,6 +66,7 @@ export function eventSummary(orders: readonly ExportOrder[], riderKey: (orderId:
     else if (o.status === 'needs_attention') counts.needsAttention++;
 
     for (const e of o.entries) {
+      if (awaitsLicenseReview(o.status, e)) licenseReviews++;
       if (e.status === 'withdrawn') entries.withdrawn++;
       else if (o.status === 'confirmed' && e.status === 'confirmed') {
         entries.confirmed++;
@@ -91,6 +101,8 @@ export function eventSummary(orders: readonly ExportOrder[], riderKey: (orderId:
     orders: counts,
     entries,
     byCategory: [...byCategory.values()].sort((a, b) => a.raceName.localeCompare(b.raceName) || a.code.localeCompare(b.code)),
+    licenseReviews,
+    waitlist,
     money: withMoney ? money : null,
   };
 }
