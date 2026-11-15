@@ -44,7 +44,10 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | USA Cycling questions and answers | [usac-questions.md](usac-questions.md) | Proposed until answered; confirmed requirements move to product.md with source and date |
 | Payment model options and answers | [payment-model-questions.md](payment-model-questions.md) | Proposed until an ADR records the choice |
 | Usability test plan, scripts, tasks, and results | [usability/](usability/README.md) | Kit implemented; results summaries are added after sessions, with participant codes only |
+| Reusable organizer template research | [case studies](case-studies/organizer-templates/README.md) | Dated source observations and proposed setup exercises; not approved templates or a competing roadmap |
 | Demo and category configuration fixtures | [fixtures/](fixtures/README.md) | Fake, illustrative data only. Demo purchase flow fixtures exist; category configuration fixtures are planned |
+
+Detailed competitor profiles and raw research snapshots stay in the ignored local `competitor-profiles/` folder. Do not add tracked links to those files; keep dated public source citations in product.md so the repository remains understandable without local research.
 
 ### Repository structure
 
