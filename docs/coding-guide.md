@@ -227,6 +227,28 @@ Use fake data in all tests. Concurrency and idempotency tests must actually run 
 
 Current coverage (all passing November 14, 2026): category fixtures, eligibility, and the 40/40/60 shared cap in `tests/`; last-place race across two database connections, stale-save rejection, entry-protecting saves, and publish rules in `tests/api.test.ts`; the organizer workflow, the demonstration publish flow, and the phone-width editor drawer (focus in, backdrop close, focus returned) in `e2e/organizer.spec.ts`. Checkout pricing, discount precedence, schedule conflicts, holds, expiry, idempotent payments, and license review are covered in `tests/pricing.test.ts` and `tests/orders.test.ts`, and the rider journeys in `e2e/checkout.spec.ts`. Automated WCAG 2.2 A and AA checks (axe-core) cover the main organizer, check-in, and rider screens in both themes in `e2e/accessibility.spec.ts`. The change impact preview has unit and API tests in `tests/impact.test.ts` (added after the date above; run in CI). Real payments, permissions, the resolution workflow for affected entries, and time-zone edge cases have no tests yet because those features are not built.
 
+### How much to test, and who verifies
+
+**Test each change in proportion to what it touches.**
+
+- Every pull request tests the changed code and the behavior it directly affects.
+- Test more widely when the change touches shared components, sign-in or roles, the database schema, dependencies, or a critical registration flow (checkout, capacity, eligibility, payments, refunds, check-in).
+- Before any deployment, run the full regression suite and the critical user journeys.
+- Keep every required CI check. While the full automated suite stays fast, keep running all of it on every pull request.
+
+**Someone other than the author verifies.**
+
+- When Codex writes the change, Claude Code tests and reviews it. When Claude Code writes it, Codex does.
+- The author still runs the relevant checks before handing off. Independent verification is in addition to those checks, not instead of them.
+- The verifier checks the change against the requirements, edge cases, and possible regressions. Rerunning the author's commands is not enough.
+- If the other agent is unavailable, record independent verification as pending. Never say it passed.
+
+**Record the evidence.**
+
+- Report what was tested, the results, and anything untested or blocked.
+- Keep three things apart: automated tests, manual browser checks, and assumptions nobody verified.
+- Fix material findings and test again before calling verification complete.
+
 ### Review
 
 - Every change is reviewed by someone other than the author when possible (see [CONTRIBUTING.md](../CONTRIBUTING.md#review-expectations)).
