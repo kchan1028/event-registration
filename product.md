@@ -261,6 +261,25 @@ Keep these states independent:
 
 Document permitted transitions before implementation. Financial and signature history must remain traceable after profile corrections.
 
+### Data storage
+
+A database is required. It is the system of record for:
+
+- **User data:** accounts and sign-in factors, rider profiles, guardian relationships, emergency contacts, and organizer roles and permissions.
+- **Event data:** organizations, event weekends, race days, races, categories, start groups, capacity pools, pricing rules, registration windows, and published versions.
+- **Registration and race-day data:** orders, entries, capacity reservations, payment and refund references, waiver signatures, license checks, bib assignments, check-ins, and start-list snapshots.
+- **Audit history** for money, category, waiver, capacity, and permission changes.
+
+Requirements:
+
+- Transactions strong enough to enforce shared capacity limits when riders register at the same moment; the database, not the browser, decides who gets the last place.
+- Encryption at rest and in transit, with least-privilege access to contact, emergency, and minor riders' data.
+- Automated backups with a demonstrated restore, and retention and deletion rules agreed before the pilot (see [Quality requirements](#quality-requirements)).
+- Card details are never stored; keep only the payment provider's references.
+- Organizer exports (entries, start lists, ledger) come from the database, so a successor can take over without manual reconstruction.
+
+The local prototype stores data in a SQLite file on the developer's computer ([ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md)). The hosted database engine and provider are an open decision; see the [decision backlog](docs/decisions/README.md).
+
 ## Integrations and dependencies
 
 | Dependency | Required decision |
