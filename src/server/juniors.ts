@@ -7,7 +7,9 @@ import { HttpError } from './repo';
 /**
  * Guardian access to juniors (product.md "Sign-in and account security"; owner decision,
  * November 15, 2026, from docs/discovery/guardian-accounts.md). A junior is a profile owned by
- * one guardian account, created the first time that guardian registers the junior. The junior
+ * one guardian account, created the first time that guardian registers the junior (or, for
+ * registrations made before profiles existed, the next time the guardian registers or opens
+ * their juniors). The junior
  * has no sign-in of their own unless the guardian names a viewer email: whoever signs in with
  * that email can see the junior's registrations, read-only. Another household sees nothing.
  */
@@ -16,7 +18,7 @@ import { HttpError } from './repo';
 const nameKey = (firstName: string, lastName: string) => `${normalizeText(firstName)} ${normalizeText(lastName)}`;
 
 export function createJuniors(db: Db, clock: () => Date) {
-  /** The guardian's profile for this junior, created on first use. Call inside the order's transaction. */
+  /** The guardian's profile for this junior, created on first use. */
   async function profileFor(guardianAccountId: string, rider: { firstName: string; lastName: string }): Promise<string> {
     const key = nameKey(rider.firstName, rider.lastName);
     await db.run(
@@ -27,7 +29,25 @@ export function createJuniors(db: Db, clock: () => Date) {
     return row!.id;
   }
 
+  /**
+   * Links every junior order this account placed that has no profile yet: one profile per junior
+   * name, one update per junior. Covers the order just placed and any placed before profiles existed.
+   */
+  async function adopt(guardianAccountId: string): Promise<void> {
+    const orders = await db.all<{ id: string; rider_json: { firstName: string; lastName: string } }>(
+      `SELECT id, rider_json FROM orders WHERE account_id = $1 AND junior_profile_id IS NULL AND jsonb_typeof(rider_json->'guardian') = 'object'`,
+      [guardianAccountId],
+    );
+    const byJunior = new Map<string, { rider: { firstName: string; lastName: string }; ids: string[] }>();
+    for (const o of orders) {
+      const key = nameKey(o.rider_json.firstName, o.rider_json.lastName);
+      byJunior.set(key, { rider: o.rider_json, ids: [...(byJunior.get(key)?.ids ?? []), o.id] });
+    }
+    for (const { rider, ids } of byJunior.values()) await db.run(`UPDATE orders SET junior_profile_id = $1 WHERE id = ANY($2)`, [await profileFor(guardianAccountId, rider), ids]);
+  }
+
   async function list(guardianAccountId: string): Promise<JuniorProfile[]> {
+    await adopt(guardianAccountId);
     const rows = await db.all<{ id: string; first_name: string; last_name: string; viewer_email: string | null }>(
       `SELECT id, first_name, last_name, viewer_email FROM junior_profiles WHERE guardian_account_id = $1 ORDER BY created_at, seq`,
       [guardianAccountId],
@@ -36,8 +56,21 @@ export function createJuniors(db: Db, clock: () => Date) {
   }
 
   return {
-    profileFor,
+    adopt,
     list,
+
+    /**
+     * An organizer corrected a junior's name on one order. The profile takes the corrected name so
+     * the next registration finds it; if the guardian already has a profile under that name, the
+     * order moves to it instead. Returns the order's profile.
+     */
+    async renamed(profileId: string, guardianAccountId: string, rider: { firstName: string; lastName: string }): Promise<string> {
+      const key = nameKey(rider.firstName, rider.lastName);
+      const existing = await db.get<{ id: string }>(`SELECT id FROM junior_profiles WHERE guardian_account_id = $1 AND name_key = $2`, [guardianAccountId, key]);
+      if (existing && existing.id !== profileId) return existing.id;
+      await db.run(`UPDATE junior_profiles SET name_key = $1, first_name = $2, last_name = $3 WHERE id = $4`, [key, rider.firstName, rider.lastName, profileId]);
+      return profileId;
+    },
 
     /** Only the junior's guardian may name or clear the viewer email; anyone else gets 404. */
     async setViewer(guardian: { id: string; email: string }, profileId: string, email: string | null): Promise<JuniorProfile[]> {

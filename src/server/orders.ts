@@ -52,6 +52,7 @@ interface OrderRow {
   extras_json: OrderExtras | null;
   coupon_id: string | null;
   account_id: string | null;
+  junior_profile_id: string | null;
 }
 
 interface ChangeRow {
@@ -449,7 +450,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null, accountId],
         );
         // A guardian registering a junior: the order belongs to that guardian's profile for the junior.
-        if (accountId && rider.guardian) await db.run(`UPDATE orders SET junior_profile_id = $1 WHERE id = $2`, [await juniors.profileFor(accountId, rider), id]);
+        if (accountId && rider.guardian) await juniors.adopt(accountId);
         // Demo riders on demo events carry a simulated license result from the fixtures; everyone else needs review.
         const fixture = config.event.isDemo ? demoRider(rider.demoRiderId) : undefined;
         const simulatedValid = !!fixture && fixture.licenseCheck === 'simulated_valid' && fixture.licenseNumber === rider.licenseNumber;
@@ -600,6 +601,11 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           if (cleared.length > 0) await db.run(`UPDATE order_entries SET license_reviewed = false, license_review_note = NULL, license_reviewed_at = NULL WHERE order_id = $1`, [orderId]);
         }
         await db.run(`UPDATE orders SET rider_json = $1, updated_at = $2 WHERE id = $3`, [JSON.stringify(parsed.data), t, orderId]);
+        // A corrected junior name follows to the guardian's profile, so the next registration finds it.
+        if (row.junior_profile_id && row.account_id && changes.some((c) => c.field === 'firstName' || c.field === 'lastName')) {
+          const profileId = await juniors.renamed(row.junior_profile_id, row.account_id, parsed.data);
+          if (profileId !== row.junior_profile_id) await db.run(`UPDATE orders SET junior_profile_id = $1 WHERE id = $2`, [profileId, orderId]);
+        }
         await db.run(
           `INSERT INTO rider_corrections (id, event_id, order_id, changes_json, cleared_reviews_json, reason, corrected_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [newId('cor'), row.event_id, orderId, JSON.stringify(changes), cleared.length > 0 ? JSON.stringify(cleared) : null, reason, by, t],

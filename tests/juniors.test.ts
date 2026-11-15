@@ -1,7 +1,8 @@
+import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 import type { EventConfig } from '../src/shared/schema';
 import { as, fakeAuth } from './support/auth';
-import { testApp } from './support/db';
+import { testApp, testDatabaseUrl } from './support/db';
 
 // Guardian access to juniors (owner decision, November 15, 2026; docs/discovery/guardian-accounts.md):
 // one guardian per junior, and an optional read-only login for the junior. Sessions are faked.
@@ -14,7 +15,8 @@ const JUNIOR = 'sam@family-a.test';
 type Method = 'GET' | 'POST';
 
 async function setup() {
-  const { app } = await testApp({ auth: fakeAuth() });
+  const databaseUrl = await testDatabaseUrl();
+  const { app } = await testApp({ auth: fakeAuth(), databaseUrl });
   const call = (who: string, method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(who), payload });
   const { eventId } = (await call(ORGANIZER, 'POST', '/api/demo')).json() as { eventId: string };
   await call(ORGANIZER, 'POST', `/api/events/${eventId}/publish`, { acknowledgeWarnings: true });
@@ -40,7 +42,7 @@ async function setup() {
     expect(res.statusCode, res.body).toBe(201);
     return (res.json() as { id: string }).id;
   };
-  return { call, registerJunior };
+  return { call, registerJunior, databaseUrl };
 }
 
 describe('guardian and junior access', () => {
@@ -80,5 +82,32 @@ describe('guardian and junior access', () => {
     await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/viewer`, { email: null });
     expect((await call(JUNIOR, 'GET', `/api/orders/${orderId}`)).statusCode).toBe(404);
     expect((await call(JUNIOR, 'GET', '/api/rider/registrations')).json()).toEqual([]);
+  });
+
+  it('links junior orders placed before profiles existed when the guardian opens their juniors', async () => {
+    const { call, registerJunior, databaseUrl } = await setup();
+    const orderId = await registerJunior(PARENT, 'Sam');
+    // As if the order predates migration 24: no profile link and no profile.
+    const client = new pg.Client({ connectionString: databaseUrl });
+    await client.connect();
+    await client.query(`UPDATE orders SET junior_profile_id = NULL`);
+    await client.query(`DELETE FROM junior_profiles`);
+    await client.end();
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string; firstName: string }[];
+    expect(sam.firstName).toBe('Sam');
+    await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/viewer`, { email: JUNIOR });
+    expect((await call(JUNIOR, 'GET', `/api/orders/${orderId}`)).statusCode).toBe(200);
+  });
+
+  it('keeps one profile when an organizer corrects the junior’s name', async () => {
+    const { call, registerJunior } = await setup();
+    const first = await registerJunior(PARENT, 'Sma');
+    const [profile] = (await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string }[];
+    await call(PARENT, 'POST', `/api/rider/juniors/${profile.id}/viewer`, { email: JUNIOR });
+    expect((await call(ORGANIZER, 'POST', `/api/orders/${first}/rider-corrections`, { changes: { firstName: 'Sam' }, reason: 'Typo at checkout' })).statusCode).toBe(200);
+    const second = await registerJunior(PARENT, 'Sam');
+    const juniors = (await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string; firstName: string; viewerEmail: string | null }[];
+    expect(juniors).toEqual([{ id: profile.id, firstName: 'Sam', lastName: 'Example', viewerEmail: JUNIOR }]);
+    expect(((await call(JUNIOR, 'GET', '/api/rider/registrations')).json() as { id: string }[]).map((o) => o.id).sort()).toEqual([first, second].sort());
   });
 });
