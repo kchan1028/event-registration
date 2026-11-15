@@ -11,6 +11,7 @@ import { createEventInputSchema, eventConfigSchema } from '../shared/schema';
 import { validateConfig } from '../shared/validation';
 import { openDb } from './db';
 import { createCheckIn } from './checkin';
+import { createStartLists } from './startlists';
 import { createOrders, type Orders } from './orders';
 import { createRepo, HttpError, type Repo } from './repo';
 
@@ -30,6 +31,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const repo = createRepo(db, clock);
   const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10));
   const checkIn = createCheckIn(db, repo, orders, clock);
+  const startLists = createStartLists(db, repo, orders, clock);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
   app.addHook('onClose', async () => db.close());
@@ -210,6 +212,25 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.post('/api/events/:id/check-in-demo-riders', async (req, reply) => reply.status(201).send(checkIn.addDemoRiders(idParam.parse(req.params).id)));
+
+  // Start lists and the sample timer export (prototype). No contact or payment data.
+  app.get('/api/events/:id/start-lists', async (req) => startLists.overview(idParam.parse(req.params).id));
+
+  app.post('/api/events/:id/start-lists/:raceId/snapshots', async (req, reply) => {
+    const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
+    return reply.status(201).send(startLists.snapshot(p.id, p.raceId));
+  });
+
+  app.get('/api/events/:id/start-lists/:raceId/csv', async (req, reply) => {
+    const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
+    const q = z.object({ snapshot: z.coerce.number().int().min(1).optional() }).parse(req.query);
+    const file = startLists.csv(p.id, p.raceId, q.snapshot ?? null);
+    return reply
+      .header('Content-Type', 'text/csv; charset=utf-8')
+      .header('Content-Disposition', `attachment; filename="${file.filename}"`)
+      .header('Cache-Control', 'no-store')
+      .send(file.body);
+  });
 
   function seed(orgName: string, { config, entryPlan }: ReturnType<typeof buildDemoEvent>) {
     const org = repo.createOrganization(orgName);

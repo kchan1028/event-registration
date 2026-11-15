@@ -3534,3 +3534,74 @@ fieldset:disabled .field label {
     min-height: 48px;
   }
 }
+
+/* ---------- Start lists and timer export ---------- */
+.sl-races {
+  margin: var(--s-4) 0 var(--s-3);
+}
+.sl-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin: var(--s-3) 0;
+}
+.sl-subhead {
+  margin: var(--s-5) 0 var(--s-2);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sl-table td,
+.sl-table th {
+  white-space: nowrap;
+}
+.sl-num {
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.sl-review {
+  color: var(--warn);
+  font-weight: 600;
+}
+.sl-changes {
+  margin: var(--s-4) 0;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.sl-changes.is-none {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.sl-changes h3 {
+  margin: 0 0 var(--s-1);
+  font-size: 14px;
+  font-weight: 600;
+}
+.sl-changes ul {
+  margin: 0;
+  padding-left: var(--s-4);
+  font-size: 14px;
+}
+.sl-changes p {
+  margin: 0;
+}
+.sl-snaps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--hairline-soft);
+}
+.sl-snaps li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--hairline-soft);
+  font-size: 14px;
+  flex-wrap: wrap;
+}

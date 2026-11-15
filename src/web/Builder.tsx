@@ -12,6 +12,7 @@ import { IssuesPanel } from './IssuesPanel';
 import { Pools } from './Pools';
 import { Preview } from './Preview';
 import { Publish } from './Publish';
+import { StartLists } from './StartLists';
 import { Registrations } from './Registrations';
 import { dayHue, Icon, Pending, ThemeToggle } from './ui';
 
@@ -262,6 +263,7 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
           {route.view === 'pools' && <Pools draft={draft} />}
           {route.view === 'publish' && <Publish draft={draft} onOpenIssue={openIssue} />}
           {route.view === 'registrations' && <Registrations draft={draft} />}
+          {route.view === 'startlists' && <StartLists draft={draft} />}
         </main>
         {selectedCategory && !wide && <div className="scrim" aria-hidden="true" onClick={() => setSelected(null)} />}
         <aside
@@ -380,6 +382,13 @@ function Rail({ draft, route, activeRaceId, errors, warnings }: { draft: Draft; 
       </a>
       <a className="rail__item" href={href({ page: 'checkin', eventId: ev })}>
         Race-day check-in
+      </a>
+      <a
+        className={`rail__item ${route.view === 'startlists' ? 'is-active' : ''}`}
+        href={href({ page: 'event', eventId: ev, view: 'startlists' })}
+        aria-current={route.view === 'startlists' ? 'page' : undefined}
+      >
+        Start lists and timer export
       </a>
       <a className={`rail__item ${route.view === 'publish' ? 'is-active' : ''}`} href={href({ page: 'event', eventId: ev, view: 'publish' })} aria-current={route.view === 'publish' ? 'page' : undefined}>
         Review and publish
