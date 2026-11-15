@@ -129,6 +129,7 @@ export const api = {
   createOrganization: (name: string) => request<{ id: string; name: string }>('POST', '/api/organizations', { name }),
   createEvent: (orgId: string, input: CreateEventInput) => request<EventPayload>('POST', `/api/organizations/${orgId}/events`, input),
   createDemo: () => request<{ organizationId: string; eventId: string }>('POST', '/api/demo'),
+  createOmnium: () => request<{ organizationId: string; eventId: string }>('POST', '/api/demo/berkeley-omnium'),
   event: (id: string) => request<EventPayload>('GET', `/api/events/${id}`),
   saveConfig: (id: string, revision: number, config: EventConfig) => request<EventPayload>('PUT', `/api/events/${id}/config`, { revision, config }),
   publish: (id: string, acknowledgeWarnings: boolean) => request<EventPayload & { publishedVersion: number }>('POST', `/api/events/${id}/publish`, { acknowledgeWarnings }),

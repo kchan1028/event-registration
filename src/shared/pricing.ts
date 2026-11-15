@@ -13,6 +13,8 @@ import type { Category, EventConfig } from './schema';
  *    - each_additional_entry: every entry after the first full-price entry;
  *    - once_same_day: once per order, on the cheapest entry outside the bundle on
  *      a day that has two or more entries.
+ * 2a. Before that, when sameRaceExtraEntryCents is set, every entry after the
+ *    most expensive one in the same race (outside the bundle) costs that flat price.
  * 3. An entry receives at most one discount. Free entries receive none.
  * 4. Fees are added once per order after discounts: a flat platform fee and a
  *    processing fee as a percentage of the entries subtotal after discounts,
@@ -123,9 +125,24 @@ export function quote(config: EventConfig, categoryIds: readonly string[], onDat
     appliedBundle = { id: best.b.id, name: best.b.name, discountCents: applied };
   }
 
+  // 2a. Flat price for extra entries in the same race.
+  const flatExtra = new Set<QuoteLine>();
+  const sameRace = settings.sameRaceExtraEntryCents;
+  if (sameRace !== null) {
+    for (const raceId of selectedRaces) {
+      const inRace = lines.filter((l) => l.raceId === raceId).sort((a, b) => b.priceCents - a.priceCents);
+      for (const l of inRace.slice(1)) {
+        if (inBundle.has(l) || l.priceCents <= sameRace) continue;
+        l.discountCents = l.priceCents - sameRace;
+        l.discountReason = 'Extra entry in the same race';
+        flatExtra.add(l);
+      }
+    }
+  }
+
   // 2. Additional-race discount outside the bundle.
   const extra = settings.additionalRaceDiscountCents;
-  const outside = lines.filter((l) => !inBundle.has(l) && l.priceCents > 0);
+  const outside = lines.filter((l) => !inBundle.has(l) && !flatExtra.has(l) && l.priceCents > 0);
   if (extra > 0 && outside.length > 0) {
     if (settings.additionalRaceDiscountMode === 'once_same_day') {
       const byDay = new Map<string, number>();
