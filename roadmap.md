@@ -34,6 +34,7 @@ The product owner requested Stripe payments, communications, rider self-service,
 
 | Work | Status | Delivery placement and dependencies |
 |---|---|---|
+| Selective Liquid Glass visual refinements | Planned; documentation direction only | Apply in future rider/organizer UI work under [DESIGN.md](DESIGN.md); depends on composited contrast, opaque fallback, keyboard/mobile, and reduced-motion checks. No existing milestone is marked complete or reprioritized |
 | Stripe hosted Checkout, refunds, and reconciliation | Planned; provider selected | Phase 2. [ADR 0002](docs/decisions/0002-stripe-payments.md) selects Stripe; merchant, dispute, tax, payout, and Connect operating model still gate live money |
 | Transactional and targeted operational communications | Planned | Phase 2 after accounts/permissions and email-provider decision; delivery status and safe retry required |
 | Rider self-service changes and withdrawals | Planned | Phase 2 after MFA, policy controls, entry-change engine, and Stripe charge/refund handling; existing organizer actions remain implemented |

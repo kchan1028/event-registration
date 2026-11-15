@@ -515,6 +515,10 @@ Status: Implemented in the local prototype (organizer, rider, and check-in scree
 - Status keeps its text and icon in both themes; never rely on color alone. The check-in ready/blocked result must stay readable in bright sunlight in either theme.
 - Printed or exported material (receipts, start lists, timer exports) is unaffected by the screen theme.
 
+### Visual material direction
+
+Status: Planned. The [design system](DESIGN.md) retains the field-board identity and adds Apple-inspired Liquid Glass selectively to navigation, floating controls, and overlay frames. Forms, pricing, dense tables, and race-day results remain opaque. Require strong composited contrast, opaque reduced-transparency alternatives (including an explicit setting), and reduced-motion behavior. Event photography and fluid transitions must preserve registration clarity, keyboard access, and visible demo/integration status. This documentation decision does not implement these refinements or expand purchase support.
+
 ### Sign-in and account security
 
 MFA means a sign-in needs a second, independent proof of identity in addition to the first factor, such as an authenticator app code or a passkey.
