@@ -47,8 +47,9 @@ Details: [demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-
 | Feature | Status | What it does |
 |---|---|---|
 | Rider lookup | Implemented | Search fictional registrations by name, team, bib, or check-in code |
-| Ready or blocked check-in | Implemented | Show outstanding requirements before check-in; repeated check-in is safe |
+| Ready or blocked check-in | Implemented | Show outstanding requirements before check-in; repeated check-in is safe; undo requires a reason and retains history |
 | Bib assignment | Implemented | Assign bibs by event or day, prevent active collisions, and retain change history |
+| Printable fallback roster | Implemented | Print a race-day roster and blocked-rider checklist without private contact or payment details; real-printer and rehearsal checks remain open |
 | Start lists | Implemented | List confirmed entries by race, with numbered snapshots and changes between versions |
 | Sample timer CSV | Implemented | Export stable entry identifiers and race data; the format is not yet agreed or round-tripped with a timer |
 
@@ -62,6 +63,10 @@ Details: [check-in status](roadmap.md#check-in-prototype) and [start-list status
 - Automated accessibility checks cover main screens in both themes. Manual keyboard, screen-reader, and real-phone passes remain open. See [ACCESSIBILITY.md](ACCESSIBILITY.md).
 - Data is stored in a local SQLite file. No database server is needed. There is no sign-in, so the prototype must stay on localhost and use fictional rider details. See [DATA_MODEL.md](DATA_MODEL.md).
 
+## Package and bundle terminology
+
+An event package contains entries in several races within one event, such as an omnium or stage race. A Planned bundle / season pass spans selected events and can include different organizations. The current UI and schema call same-event packages “bundles”; they do not support season passes. No implementation or database migration is implied by this terminology change.
+
 ## Planned features
 
 These are not available in the prototype. Phase order and dependencies remain in [roadmap.md](roadmap.md).
@@ -69,11 +74,20 @@ These are not available in the prototype. Phase order and dependencies remain in
 | Feature | Status | Requirement reference |
 |---|---|---|
 | Accounts, MFA, and organizer roles | Planned | [Sign-in and account security](product.md#sign-in-and-account-security) |
-| Real payments, refunds, payouts, and reconciliation | Planned | [Money and reporting](product.md#6-money-and-reporting) |
+| Stripe hosted Checkout, refunds, payouts, and reconciliation | Planned; Stripe selected, operating model pending | [Money and reporting](product.md#6-money-and-reporting) |
 | Federation license and waiver verification | Planned; access and approval required | [Future USA Cycling integration](product.md#future-usa-cycling-waiver-and-license-integration) |
-| Guided resolution of published changes and rider-initiated change requests | Planned | [Changes after registration opens](product.md#changes-after-registration-opens) |
+| Rider self-service changes, withdrawals, and policy-governed transfers | Planned beyond existing organizer actions | [Rider self-service](product.md#rider-self-service) |
+| Guided resolution of published changes | Planned | [Changes after registration opens](product.md#changes-after-registration-opens) |
 | Automated waitlist promotion and offer-email delivery | Planned | [Capacity and entry integrity](product.md#3-capacity-and-entry-integrity) |
-| QR scanning, printable roster, and agreed timer export | Planned | [Race-day operations](product.md#5-race-day-operations) |
-| Three-day TT / road race / criterium demo series | Planned specification only | [Planned three-day series demo](product.md#planned-three-day-series-demo) |
+| QR scanning and agreed timer export | Planned | [Race-day operations](product.md#5-race-day-operations) |
+| Confirmations, receipts, targeted operational email, and delivery tracking | Planned | [Communications](product.md#communications) |
+| Coupon/referral codes, redemption limits, and count-based pricing | Planned beyond current discounts | [Promotions](product.md#promotions) |
+| Participant workspace, reusable rider identity, saved filtered views, history, and safe bulk actions | Planned beyond event-level lookup | [Participant management](product.md#participant-management) |
+| Automatic confirmed-entry bib assignment and previewed bulk allocation | Planned beyond check-in-time assignment | [Automatic and bulk bib assignment](product.md#automatic-and-bulk-bib-assignment) |
+| Reusable credits, partial redemption, and policy-controlled deferrals | Planned; same-organization first | [Credits and deferrals](product.md#reusable-credits-and-deferrals) |
+| Operational/finance dashboards, scoped exports, and cross-event history | Planned beyond start-list exports | [Reporting](product.md#reporting) |
+| Walk-up/mobile/kiosk race-day registration | Planned beyond check-in | [Race-day registration](product.md#race-day-registration) |
+| Dedicated omnium/stage-race setup, TT, pricing, and overall participation | Planned beyond existing package pricing | [Competition setup](product.md#omnium-and-stage-race-setup) |
+| Multi-event, multi-organization bundles / season passes | Planned | [Season passes](product.md#cross-organization-bundles-and-season-passes) |
 
 Timing hardware, omnium points/results scoring, and full offline synchronization are outside the initial scope. See [scope boundaries](product.md#out-of-scope-initially).

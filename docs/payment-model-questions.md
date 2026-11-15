@@ -1,8 +1,8 @@
 # Payment model questions
 
-Status: Proposed, written November 14, 2026. No provider has been contacted and no model is chosen. The prototype's checkout is simulated and moves no money. The owner and status of this question are tracked in the [Phase 0 discovery kit](discovery/external-requirements.md#status).
+Status: Proposed, written November 14, 2026. Stripe is selected by the project owner ([ADR 0002](decisions/0002-stripe-payments.md)); no provider account or integration is configured and no merchant/settlement model is chosen. The prototype's checkout is simulated and moves no money. The owner and status of this question are tracked in the [Phase 0 discovery kit](discovery/external-requirements.md#status).
 
-Before any live payment, the club must decide who collects the money, who the rider's card statement names, who pays fees, and who absorbs refunds and disputes. That is [open decision 5](../product.md#open-decisions) in product.md, and the rules in [Money and reporting](../product.md#6-money-and-reporting) apply whatever the answer. This page lays out the choices and the questions to answer, first inside the club and then with payment providers.
+Before any live payment, the club must decide who collects the money, who the rider's card statement names, who pays fees, and who absorbs refunds and disputes. That is [open decision 5](../product.md#open-decisions) in product.md, and the rules in [Money and reporting](../product.md#6-money-and-reporting) apply whatever the answer. This page lays out the choices and the questions to answer, first inside the club and then against Stripe's supported configurations and terms.
 
 ## The decision in one sentence
 
@@ -17,7 +17,7 @@ Choose a payment model where the club (or each organizer) is paid through a prov
 | C. Platform collects and pays out | The product collects all money and pays organizers later | Usually means acting as merchant of record or a payment facilitator, with licensing, tax, and liability burdens; out of proportion for a club project. Listed only to rule out |
 | D. Club keeps its current processor | The club's existing payment processor runs checkout, if it offers a hosted page, payment notifications, and refunds through an API | No new account or onboarding; depends entirely on what the current processor supports |
 
-The first pilot needs only one club, so model A, or model D if the club's current processor qualifies, is the likely starting point. The goal is to choose an operating model to test in Phase 2, not to sign up with a provider yet. Model B matters only if other clubs adopt the product, which the roadmap defers until demand is observed ([Phase 6](../roadmap.md#phase-6--expand-only-from-observed-demand)).
+The provider is now Stripe. The first pilot needs one organizer, so evaluate a single-organizer Stripe model for Phase 2 without assuming a merchant-of-record answer. Model D is historical context, not the selected integration. Planned multi-organization season passes in [Phase 6](../roadmap.md#phase-6--expand-only-from-observed-demand) require a separate Connect operating-model decision, participating-organizer approvals, revenue allocation, refund/transfer reversals, and dispute/negative-balance ownership before live sale.
 
 ## Questions for the club
 
@@ -34,9 +34,9 @@ Answer these with the treasurer and race director before talking to providers.
 | 7 | What does the treasurer need to reconcile: per-entry lines, discounts, fees, refunds, payout references? In what format? | | |
 | 8 | Are free or discounted junior entries funded by someone else, and how should that appear in the books? | | |
 
-## Questions for each payment provider
+## Questions for Stripe and the selected operating model
 
-Ask the same questions of every provider considered, and compare the answers side by side. Prefer written answers or links to the provider's published terms.
+Answer these questions for the proposed Stripe configuration; provider selection does not answer the operating-model questions. Prefer written answers or links to the provider's published terms.
 
 | # | Question | Why it matters |
 |---|---|---|
@@ -64,8 +64,8 @@ Record each provider's answers in the findings table below, with the source link
 
 ## What the answers decide
 
-- **Choose the model and provider.** Record the choice as an [ADR](decisions/README.md), with the reasons and the alternatives considered. A payment provider is a significant technical choice under [CONTRIBUTING.md](../CONTRIBUTING.md).
+- **Choose the operating model.** Stripe provider selection is accepted in ADR 0002. Record the merchant/settlement choice as an [ADR](decisions/README.md), with the reasons and the alternatives considered. A payment provider is a significant technical choice under [CONTRIBUTING.md](../CONTRIBUTING.md).
 - **Update product.md.** Replace "establish who collects funds" with the confirmed merchant of record, payout, refund, and dispute owners, with source and date.
-- **Update the roadmap.** Phase 2 ("Build the registration core") depends on a settled payment model; mark that dependency resolved in [roadmap.md](../roadmap.md#delivery-status) only when the ADR is accepted.
+- **Update the roadmap.** Phase 2 ("Build the registration core") depends on a settled payment model; mark that dependency resolved in [roadmap.md](../roadmap.md#delivery-status) only when the operating-model ADR is accepted, not merely because Stripe was selected.
 
 Until then, nothing in this repository creates a provider account, stores keys, or takes a live payment.

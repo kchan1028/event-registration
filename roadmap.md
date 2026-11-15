@@ -28,6 +28,28 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 | Phase 5: Prove a two-day weekend and handoff | Planned | Depends on a successful Phase 4. |
 | Phase 6: Expand only from observed demand | Planned | P2. |
 
+## Planned expansion approved November 14, 2026
+
+The product owner requested Stripe payments, communications, rider self-service, promotions, reporting, race-day registration, explicit omnium/stage-race setup, cross-organization bundles such as season passes, participant management, automatic/bulk bib assignment, and reusable credits/deferrals. These are Planned requirements, not claims of implemented behavior. The current prototypes and live-use gates remain as described below.
+
+| Work | Status | Delivery placement and dependencies |
+|---|---|---|
+| Stripe hosted Checkout, refunds, and reconciliation | Planned; provider selected | Phase 2. [ADR 0002](docs/decisions/0002-stripe-payments.md) selects Stripe; merchant, dispute, tax, payout, and Connect operating model still gate live money |
+| Transactional and targeted operational communications | Planned | Phase 2 after accounts/permissions and email-provider decision; delivery status and safe retry required |
+| Rider self-service changes and withdrawals | Planned | Phase 2 after MFA, policy controls, entry-change engine, and Stripe charge/refund handling; existing organizer actions remain implemented |
+| Coupon codes and basic promotion controls | Planned | Phase 2 after accepted-price snapshots and atomic redemption limits; referral offers and registration-count tiers in Phase 6 |
+| Participant management | Planned beyond event-level queue | Phase 2: reusable identity, scoped workspace, saved views, history, and guarded bulk actions; Phase 5: cross-event history and authorized duplicate-resolution workflows |
+| Automatic and bulk bib assignment | Planned beyond check-in-time assignment | Phase 3 after reusable identity, confirmed-entry lifecycle, bib scopes, access control, and audit; preview/apply and atomic collision enforcement required |
+| Reusable credits and deferrals | Planned | Phase 5 after Phase 2 payment/refund ledger, identity, policy and self-service controls; same-organization first. Cross-organization redemption in Phase 6 only after explicit funding/liability and settlement approval |
+| Operational/finance reporting | Planned beyond existing start-list exports | Phase 2 with role-scoped exports and Stripe reconciliation; prior-year/cross-event reporting in Phase 5 after reusable identity |
+| Race-day registration and payment desk | Planned | Phase 3 after registration/payment core, staff permissions, accepted waivers, and capacity/waitlist enforcement |
+| Dedicated omnium and stage-race setup, including TT | Planned beyond existing same-event package pricing | Phase 1 prototype/requirements exercise; implementation and rehearsal in Phase 5 after the single-event pilot; no results scoring |
+| Cross-event, cross-organization bundles / season passes | Planned | Phase 6 after single-organization operation is proven, participating-organizer approvals, global reservations, isolation controls, and a separate accepted multi-organization Stripe settlement decision |
+
+“Event package” means entries across races within one event. “Bundle / season pass” can span different events and organizations. The existing code/UI's “bundle” is a same-event package only. This terminology change does not migrate data or imply cross-organization purchase support.
+
+The expanded scope requires fresh estimates before implementation; existing effort ranges are baseline estimates, not commitments for these additions. No live Stripe account, email provider, deployment, or federation integration is authorized or configured by this documentation change.
+
 ## Category builder milestone
 
 Built November 14, 2026, on the stack in [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md). It covers the organizer side of the [road race and criterium category builder](product.md#1a-road-race-and-criterium-category-builder--p0) and runs only on a local computer. Setup: [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
@@ -51,7 +73,7 @@ Built November 14, 2026, on the stack in [ADR 0001](docs/decisions/0001-stack-fo
 
 **Not built yet (still required by product.md):** a guided resolution workflow for entries affected by a published change (organizers can transfer or withdraw affected entries one at a time from Registrations); bulk edit and copy-day; category-specific questions, waivers, and bib ranges; rider registration and checkout; exports.
 
-**Pending external dependencies, shown as pending in the interface:** USA Cycling license and waiver checks, payments, and sign-in with required MFA. Until sign-in exists the prototype must not be hosted or shared.
+**Pending external dependencies, shown as pending in the interface:** USA Cycling license and waiver checks, Stripe payments, and sign-in with required MFA. Until sign-in exists the prototype must not be hosted or shared.
 
 ## Rider checkout prototype
 
@@ -161,6 +183,7 @@ Deliverables:
 - Check-in prototype showing ready/blocked states and bib assignment.
 - Light and dark themes with a toggle that defaults to the system preference and remembers the choice. See [product.md](product.md#display-themes).
 - Draft category/start-group model, state transitions, and timer export samples.
+- Prototype explicit omnium/stage-race setup and review requirements for a TT component and overall participation; remain simulated and separate from results scoring.
 - Test with at least two organizers, two check-in volunteers, and five riders/parents. Participants may overlap with discovery.
 
 Exit gate: Participants complete the core tasks without facilitator rescue; all serious confusion is resolved; the timer accepts the proposed sample format; scope is small enough to operate with the identified team. Proposed usability threshold: at least 90% unassisted completion across the core tasks, with no unresolved critical blocker.
@@ -175,17 +198,24 @@ Build:
 - Required multi-factor authentication (MFA) for every account, step-up re-verification for sensitive organizer actions, and audited account recovery. See [product.md](product.md#sign-in-and-account-security).
 - Event/day/race/category/start-group setup and publishing checks.
 - Mobile registration, guardian data, accepted waiver flow, and license-review status, behind one verification interface that can later use a live USAC source without reworking registration. See [product.md](product.md#future-usa-cycling-waiver-and-license-integration).
-- Individual entries and two-day bundles with transparent totals.
+- Individual entries and same-event packages with transparent totals; cross-organization season passes remain Phase 6 work.
 - Capacity reservations and atomic enforcement of shared limits.
-- Hosted payment flow, verified payment notifications, receipts, refunds, and a reconciliable ledger.
+- Stripe hosted Checkout in sandbox first, signature-verified payment notifications, delayed-payment handling, idempotent fulfillment, receipts, entry-level refunds, and a reconciliable ledger. Provider selection is settled in ADR 0002; the merchant and settlement model remains a live-use gate.
 - Registration lookup, manual corrections, cancellation, and organizer-managed waitlists.
-- Transactional email and basic operational reporting.
+- Participant management foundation: reusable rider identity, role-scoped workspace, saved filters/columns, event history, permitted CSV exports, and previewed bulk actions using individual-entry rules.
+- Transactional confirmations, receipts, waitlist offers, payment/refund/change notices, targeted operational email, delivery tracking, and suppression/retry handling. Marketing consent remains separate.
+- MFA-protected rider self-service, policy/eligibility/capacity checks, financial previews, organizer approval where required, and an audit trail.
+- Basic fixed/percentage coupons with eligibility windows, explicit discount precedence, and atomic redemption caps.
+- Role-scoped operational and finance reports that distinguish riders, entries, orders, discounts, fees, refunds, and unsettled exceptions.
 
 Verification:
 
 - Concurrent checkout for the last place, expired reservations, and bundle rollback.
-- Payment failure, timeout, duplicate notification, refund retry, and cancellation scenarios.
+- Stripe sandbox payment failure, delayed success, timeout, duplicate/out-of-order notifications, refund retry, and cancellation scenarios.
+- Duplicate email prevention, failed-delivery visibility, and waitlist-offer expiry.
+- Self-service changes with paid differences/refunds, blocked capacity/eligibility, concurrent final coupon redemption, and report/export reconciliation.
 - Role access, private-data visibility, waiver/version integrity, and keyboard/mobile use.
+- Participant workspace saved-view/export isolation, stable person/entry/order counts, and bulk-action previews with visible refused-record reasons.
 - Contrast and readability of text, forms, buttons, errors, and status indicators in both light and dark themes; theme choice persists without a flash of the wrong theme.
 - MFA enforcement for every account type, step-up prompts on sensitive organizer actions, recovery paths that cannot bypass MFA, and attempt rate limits.
 
@@ -199,6 +229,8 @@ Build:
 
 - Agreed license verification and exception-review workflow, with freshness/source visible.
 - Search and QR check-in, bib-range rules, conflict detection, and repeat-scan handling.
+- Opt-in automatic bib assignment on confirmed entries; deterministic previewed bulk allocation with explicit scopes/ranges, stable tie-breaks, preservation of manual/issued/checked-in assignments, atomic apply, and historical reassignments.
+- Race-day walk-up/mobile/kiosk registration using the same rules as advance entry, staff permissions, explicit surcharges/windows, confirmed Stripe hosted payment, bib handoff, and start-list updates. Physical terminals and cash/check recording need a separate approved workflow.
 - Timer export fields agreed from the road-results research, so results uploads need no retyping.
 - Timestamped start lists, change reports, and tested timer exports.
 - Minimal printable fallback roster and an access-restricted emergency-contact process.
@@ -210,6 +242,8 @@ Rehearsal:
 - Run an entire mock weekend with sample data and staff other than the developer.
 - Include field changes, missing licenses/signatures, refunds, duplicate names, and a lost-connection scenario.
 - Measure check-in speed and validate every export with the timer.
+- Exercise simultaneous automatic/manual/bulk bib allocation, exhausted ranges, stale previews, repeated confirmation, and protected manual/checked-in assignments. Failed batches must leave no partial assignments.
+- Exercise a walk-up rider, a full field with a waitlist, a minor needing a guardian, failed payment, and repeated staff actions without duplicate charges or entries.
 - Reconcile the financial report with provider records and demonstrate backup recovery.
 
 Exit gate: Registration lead, timer, treasurer, and pilot organizer accept the workflow; all P0 defects are closed; contingency and support ownership are documented.
@@ -234,7 +268,11 @@ Indicative effort: 3–5 weeks plus event scheduling. Depends on a successful Ph
 
 Deliverables:
 
-- Exercise both-day bundles, separate day entries, category changes, combined capacities, and bib rules in a full two-day rehearsal.
+- Exercise same-event omnium packages, separate day entries, category changes, combined capacities, and bib rules in a full two-day rehearsal.
+- Implement dedicated omnium/stage-race setup with reviewed cross-day category mappings, overall-participation controls, component pricing, TT scheduling support, and atomic full-package reservations. Rehearse the $130 Berkeley package and the Planned $160 TT/road-race/criterium package with fake riders; points, time aggregation, and results scoring remain out of scope.
+- Extend participant management with authorized cross-event rider history, duplicate-resolution safeguards, saved views/exports, and historical registration-pace reporting after reusable identity and access isolation are verified.
+- Implement same-organization reusable credits and deferrals: auditable balance/expiry/restrictions, atomic reservation/redemption, partial credit plus Stripe, zero-cash fulfillment, destination capacity checks, source/destination linkage, and clear effects on packages/overall participation.
+- Verify partial and concurrent credit spending, failed mixed-payment checkout, repeated refunds/deferrals, expired credit, and unavailable future events. Reconcile cash versus credit liability and never issue cash plus credit for the same value.
 - Validate discounts, partial refunds, reporting per day, and final weekend reconciliation.
 - Confirm that a successor organizer can clone the setup, update rules, and operate it without the original owner.
 - Agree on support coverage and a rollback/cutover plan before any Berkeley Omnium adoption.
@@ -245,15 +283,16 @@ Exit gate: The committee explicitly chooses adoption based on demonstrated workl
 
 Priority: P2. Estimates follow pilot evidence.
 
-Candidate improvements, in likely order:
+Planned expansion and candidate improvements; sequence within this phase depends on pilot evidence:
 
 1. Automated waitlist offers with expiring reservations and explicit payment consent.
-2. Better rider self-service changes, transfers, and refunds under organizer rules.
-3. Series registration and reusable season bib assignments.
-4. Live USAC waiver pull and license validation, as soon as USAC grants access and approves the workflow. This moves ahead of other P2 items when access arrives.
-5. Additional cycling disciplines and other federation integrations.
-6. Offline check-in synchronization, only with a defined conflict-resolution model.
-7. Public event discovery once organizer operations are reliable.
+2. Broader self-service and participant-to-participant transfers beyond the core Phase 2 policy flow, with recipient consent and new waivers.
+3. Cross-organization bundles and season passes: explicit race list, participating-organizer approvals, fixed pricing and financial allocations, all-component reservations, per-organization data isolation, Stripe reconciliation, partial-cancellation policies, and repeat-safe fulfillment. Extend credits/deferrals across organizations only after every affected organization agrees to eligibility, liability, funding, reporting, and settlement rules; never treat a credit as reserved race capacity. First settle the multi-organization merchant/Connect model in a further ADR. Verify two organizations selling one pass without overselling, duplicate payouts, or unauthorized data access.
+4. Referral promotions, count-based price tiers, and reusable season bib assignments.
+5. Live USAC waiver pull and license validation, as soon as USAC grants access and approves the workflow. This moves ahead of other P2 items when access arrives.
+6. Additional cycling disciplines and other federation integrations.
+7. Offline check-in synchronization, only with a defined conflict-resolution model.
+8. Public event discovery once organizer operations are reliable.
 
 Omnium scoring, timing hardware, weather, training tools, and general event ticketing remain outside this roadmap unless discovery establishes a compelling need.
 
