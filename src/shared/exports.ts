@@ -9,6 +9,8 @@ import { csvField } from './startlist';
  */
 
 export interface ExportEntry {
+  /** Entry ID, used to label refunds (absent on older callers). */
+  id?: string;
   categoryId: string;
   code: string;
   categoryName: string;
@@ -36,6 +38,10 @@ export interface ExportOrder {
   entries: ExportEntry[];
   /** Answers to per-category questions; exported on that category's entry row. */
   answers?: { categoryId: string; label: string; answer: string }[];
+  /** How the order was paid. Absent or simulated: no money moved. */
+  paidWith?: 'simulated' | 'stripe_test' | null;
+  /** Refunds, oldest first. */
+  refunds?: { entryId: string | null; amountCents: number; status: string; at: string }[];
 }
 
 /** A CSV cell: numbers stay numbers (so negative amounts work); text is guarded against spreadsheet formulas. */
@@ -99,7 +105,8 @@ export function ledgerCsv(orders: readonly ExportOrder[]): string {
   for (const o of orders) {
     if (o.status !== 'confirmed' && o.status !== 'needs_attention') continue;
     const at = o.confirmedAt ?? o.createdAt;
-    const note = o.status === 'needs_attention' ? 'Payment arrived after the hold ended; no place confirmed. Refund or place to be resolved by the organizer.' : simulated;
+    const how = o.paidWith === 'stripe_test' ? 'Stripe test mode: no real money moved' : simulated;
+    const note = o.status === 'needs_attention' ? 'Payment arrived but no place was confirmed. Refund or place to be resolved by the organizer.' : how;
     for (const l of o.quote.lines) {
       rows.push([o.orderNumber, o.status, at, 'entry', l.name, l.code, money(l.priceCents), note]);
       if (l.discountCents > 0) rows.push([o.orderNumber, o.status, at, 'discount', l.discountReason ?? 'Discount', l.code, money(-l.discountCents), note]);
@@ -121,9 +128,14 @@ export function ledgerCsv(orders: readonly ExportOrder[]): string {
             d > 0 ? 'Rider owes this amount; not settled (payments simulated)' : d < 0 ? 'Refund due to the rider; not settled (payments simulated)' : 'No difference',
           ]);
         } else {
-          rows.push([o.orderNumber, o.status, c.at, 'withdrawal', `Withdrawn from ${c.fromCategoryName}: ${c.reason}`, e.code, '', `Entry amount paid ${money(c.amountPaidCents).toFixed(2)}; any refund is decided and settled outside the app (payments simulated)`]);
+          rows.push([o.orderNumber, o.status, c.at, 'withdrawal', `Withdrawn from ${c.fromCategoryName}: ${c.reason}`, e.code, '', `Entry amount paid ${money(c.amountPaidCents).toFixed(2)}; any refund is a separate refund row`]);
         }
       }
+    }
+    for (const r of o.refunds ?? []) {
+      const code = r.entryId ? (o.entries.find((e) => e.id === r.entryId)?.code ?? '') : '';
+      const counted = r.status === 'requested' || r.status === 'pending' || r.status === 'succeeded';
+      rows.push([o.orderNumber, o.status, r.at, 'refund', `Refund (${r.status})`, code, counted ? money(-r.amountCents) : '', counted ? how : `Refund ${r.status}; no money returned`]);
     }
   }
   return toCsv(LEDGER_COLUMNS, rows);

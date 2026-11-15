@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { formatCents } from '../shared/format';
+import { ACTIVE_REFUND_STATUSES, REFUND_STATUS_LABEL } from '../shared/refunds';
+import { can } from '../shared/roles';
 import { applyCorrection, CORRECTABLE_FIELDS, correctableValue, matchesRegistration, type CorrectableField, type RiderCorrection } from '../shared/lookup';
 import type { Category } from '../shared/schema';
-import { api, ApiError, type OrderStatus, type OrderView, type ResolutionItem, type RiderIdentityOverview, type WaitlistEntryView } from './api';
+import { api, ApiError, type OrderStatus, type OrderView, type OrganizerRefundView, type RefundablePaymentView, type ResolutionItem, type RiderIdentityOverview, type WaitlistEntryView } from './api';
 import { href } from './App';
 import type { Draft } from './Builder';
 import { Coupons } from './Coupons';
@@ -13,7 +15,7 @@ type Filter = 'all' | 'review' | 'attention' | 'unpaid';
 const STATUS_LABEL: Record<OrderStatus, string> = {
   held: 'Places held, unpaid',
   payment_failed: 'Payment declined',
-  confirmed: 'Paid (simulated)',
+  confirmed: 'Paid',
   expired: 'Hold expired',
   cancelled: 'Cancelled by rider',
   needs_attention: 'Needs attention',
@@ -143,14 +145,14 @@ export function Registrations({ draft }: { draft: Draft }) {
 
       <ul className="orders" aria-label="Registrations">
         {shown.map((o) => (
-          <OrderRow key={o.id} order={o} categories={draft.config.categories} onChange={(next) => setOrders((list) => (list ?? []).map((x) => (x.id === next.id ? next : x)))} />
+          <OrderRow key={o.id} order={o} categories={draft.config.categories} canRefund={!draft.data.roles || can(draft.data.roles, 'payments.refund')} onChange={(next) => setOrders((list) => (list ?? []).map((x) => (x.id === next.id ? next : x)))} />
         ))}
       </ul>
     </div>
   );
 }
 
-function OrderRow({ order, categories, onChange }: { order: OrderView; categories: Category[]; onChange: (o: OrderView) => void }) {
+function OrderRow({ order, categories, canRefund, onChange }: { order: OrderView; categories: Category[]; canRefund: boolean; onChange: (o: OrderView) => void }) {
   return (
     <li className="order">
       <div className="order__head">
@@ -185,8 +187,9 @@ function OrderRow({ order, categories, onChange }: { order: OrderView; categorie
       )}
       <RiderCorrections order={order} onChange={onChange} />
       {order.status === 'needs_attention' && (
-        <p className="note note--error">Payment arrived after the hold ended and a place had filled. Nothing was confirmed. Contact the rider about a refund or another race.</p>
+        <p className="note note--error">Payment arrived but no place was confirmed (the hold had ended and a place filled, the rider had cancelled, or the amount did not match). Refund the rider or offer another race.</p>
       )}
+      {(order.status === 'confirmed' || order.status === 'needs_attention') && <RefundPanel order={order} canRefund={canRefund} onChange={onChange} />}
       <ul className="order__entries">
         {order.entries.map((e) => (
           <EntryLine key={e.id} entry={e} confirmed={order.status === 'confirmed'} onChange={onChange}>
@@ -358,6 +361,175 @@ function RiderCorrections({ order, onChange }: { order: OrderView; onChange: (o:
                 {c.changes.map((x) => `${x.label}: “${x.before || 'blank'}” to “${x.after || 'blank'}”`).join('; ')}.
                 {c.licenseReviewsCleared > 0 && ' The license number changed, so the earlier license review was cleared and the license needs review again.'}
               </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+const toCents = (dollars: string) => Math.round(Number(dollars.replace(/[$,\s]/g, '')) * 100);
+const toDollars = (cents: number) => (cents / 100).toFixed(2);
+
+/**
+ * Refunds for one order. A refund returns money from one payment, optionally for one entry; it never
+ * withdraws the entry (use Withdraw for that). Owner and finance roles can refund; others see the history.
+ */
+function RefundPanel({ order, canRefund, onChange }: { order: OrderView; canRefund: boolean; onChange: (o: OrderView) => void }) {
+  const [detail, setDetail] = useState<{ payments: RefundablePaymentView[]; refunds: OrganizerRefundView[] } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [paymentRef, setPaymentRef] = useState<string>('');
+  const [entryId, setEntryId] = useState<string>('');
+  const [amount, setAmount] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const name = `${order.rider.firstName} ${order.rider.lastName}`;
+  const refundKey = order.refunds.map((r) => `${r.id}:${r.status}`).join(',');
+
+  useEffect(() => {
+    if (!open && order.refunds.length === 0) return;
+    api.refunds(order.id).then(setDetail).catch((e: ApiError) => setErr(e.message));
+  }, [order.id, open, refundKey, order.refunds.length]);
+
+  const payment = detail?.payments.find((p) => (p.ref ?? '') === paymentRef) ?? detail?.payments.find((p) => p.kind === 'order') ?? detail?.payments[0];
+  const entries = order.status === 'confirmed' && payment?.kind === 'order' ? order.entries : [];
+  const entryLeft = (id: string) => {
+    const e = order.entries.find((x) => x.id === id);
+    const used = order.refunds.filter((r) => r.entryId === id && ACTIVE_REFUND_STATUSES.includes(r.status)).reduce((s, r) => s + r.amountCents, 0);
+    return Math.max(0, (e?.amountPaidCents ?? 0) - used);
+  };
+  const maxCents = entryId ? Math.min(entryLeft(entryId), payment?.remainingCents ?? 0) : (payment?.remainingCents ?? 0);
+  const entryLabel = (id: string | null) => {
+    const e = id ? order.entries.find((x) => x.id === id) : null;
+    return e ? `${e.code} ${e.categoryName}` : 'Order';
+  };
+
+  const close = () => {
+    setOpen(false);
+    setErr(null);
+    setReason('');
+    setAmount('');
+    setEntryId('');
+  };
+  const submit = async (ev: FormEvent) => {
+    ev.preventDefault();
+    const cents = toCents(amount);
+    if (!Number.isFinite(cents) || cents <= 0) return setErr('Enter an amount above zero, like 25.00.');
+    if (cents > maxCents) return setErr(`At most ${formatCents(maxCents)} can be refunded here.`);
+    if (reason.trim().length < 3) return setErr('Write why the money is being refunded.');
+    setBusy(true);
+    setErr(null);
+    try {
+      onChange(await api.requestRefund(order.id, { paymentRef: payment?.ref ?? null, entryId: entryId || null, amountCents: cents, reason: reason.trim() }));
+      close();
+    } catch (e2) {
+      setErr((e2 as ApiError).message);
+      api.refunds(order.id).then(setDetail).catch(() => undefined);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const retry = async (id: string) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      onChange(await api.retryRefund(id));
+    } catch (e2) {
+      setErr((e2 as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      {open && detail ? (
+        <form className="correction" onSubmit={submit} noValidate aria-label={`Refund ${name}`}>
+          <p className="small muted">
+            {payment?.provider === 'stripe_test' ? 'The money goes back to the rider’s card through Stripe (test mode: no real money moves).' : 'Simulated payment: the refund is recorded and no money moves.'} A refund does not withdraw an entry; use Withdraw for that.
+          </p>
+          <div className="form-row">
+            {detail.payments.length > 1 && (
+              <Field label="Payment">
+                {(id) => (
+                  <select id={id} className="input" value={payment?.ref ?? ''} onChange={(e) => { setPaymentRef(e.target.value); setEntryId(''); }}>
+                    {detail.payments.map((p) => (
+                      <option key={p.ref ?? 'simulated'} value={p.ref ?? ''}>
+                        {p.kind === 'duplicate' ? 'Duplicate charge' : 'Order payment'} · {formatCents(p.amountCents)} · {formatCents(p.remainingCents)} left
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+            )}
+            {entries.length > 0 && (
+              <Field label="For">
+                {(id) => (
+                  <select id={id} className="input" value={entryId} onChange={(e) => { setEntryId(e.target.value); setAmount(e.target.value ? toDollars(Math.min(entryLeft(e.target.value), payment?.remainingCents ?? 0)) : ''); }}>
+                    <option value="">The order (not one entry)</option>
+                    {entries.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.code} {e.categoryName} · {formatCents(entryLeft(e.id))} left
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+            )}
+            <Field label="Amount (USD)" hint={`Up to ${formatCents(maxCents)}`}>
+              {(id, d) => <input id={id} aria-describedby={d} className="input num" inputMode="decimal" autoComplete="off" value={amount} onChange={(e) => setAmount(e.target.value)} />}
+            </Field>
+          </div>
+          <Field label="Reason for the refund (required)" hint="For example: rider withdrew before the deadline.">
+            {(id, d) => <input id={id} aria-describedby={d} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />}
+          </Field>
+          {err && (
+            <p className="text-error small" role="alert">
+              {err}
+            </p>
+          )}
+          <div className="form-actions">
+            <button className="btn btn--primary btn--small" type="submit" disabled={busy || maxCents === 0}>
+              {busy ? 'Refunding…' : 'Refund'}
+            </button>
+            <button className="btn btn--ghost btn--small" type="button" onClick={close}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        canRefund && (
+          <p className="row-actions">
+            <button className="btn btn--ghost btn--small" aria-label={`Refund ${name}`} onClick={() => setOpen(true)}>
+              Refund
+            </button>
+          </p>
+        )
+      )}
+      {!open && err && (
+        <p className="text-error small" role="alert">
+          {err}
+        </p>
+      )}
+      {detail && detail.refunds.length > 0 && (
+        <ul className="order__entries" aria-label={`Refunds for ${name}`}>
+          {detail.refunds.map((r) => (
+            <li key={r.id} className="order__entry order__change">
+              <span className="small">
+                <strong>
+                  {REFUND_STATUS_LABEL[r.status]}: <span className="num">{formatCents(r.amountCents)}</span>
+                </strong>{' '}
+                · {entryLabel(r.entryId)} · {new Date(r.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                {r.requestedBy ? ` · by ${r.requestedBy}` : ''} · Reason: {r.reason}
+                {r.failureReason && ` · ${r.status === 'failed' ? 'Stripe said' : 'Last error'}: ${r.failureReason}`}
+              </span>
+              {r.status === 'requested' && canRefund && (
+                <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => retry(r.id)}>
+                  Send again
+                </button>
+              )}
             </li>
           ))}
         </ul>

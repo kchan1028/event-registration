@@ -7,6 +7,7 @@ import { DEMO_RIDERS } from '../shared/fixtures';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories } from '../shared/format';
 import { categoryPrice, quote, type Quote } from '../shared/pricing';
 import type { CouponTerms } from '../shared/coupons';
+import { REFUND_STATUS_LABEL } from '../shared/refunds';
 import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, type Category, type EventConfig } from '../shared/schema';
 import { api, ApiError, type OrderView, type PublicEvent, type PublicEventSummary, type WaitlistOffer } from './api';
 import { href, navigate } from './App';
@@ -1394,6 +1395,16 @@ export function OrderPage({ orderId }: { orderId: string }) {
               </li>
             ))}
           </ul>
+          {order.refunds.length > 0 && (
+            <ul className="small" aria-label="Refunds">
+              {order.refunds.map((r) => (
+                <li key={r.id}>
+                  {REFUND_STATUS_LABEL[r.status]}: <span className="num">{formatCents(r.amountCents)}</span>
+                  {r.entryId ? ` for ${order.entries.find((e) => e.id === r.entryId)?.categoryName ?? 'an entry'}` : ''} · {formatDate(r.at.slice(0, 10))}
+                </li>
+              ))}
+            </ul>
+          )}
           <p className="quote__total">
             <span>{confirmed ? (order.paidWith === 'stripe_test' ? 'Total paid (Stripe test mode)' : 'Total (simulated, not charged)') : 'Not charged'}</span>
             <span className="num">{formatCents(confirmed ? order.totalCents : 0)}</span>

@@ -1,4 +1,5 @@
 import type { LimitUsage } from '../shared/capacity';
+import type { RefundStatus } from '../shared/refunds';
 import type { CreateEventInput, EventConfig, TestEntry } from '../shared/schema';
 import type { Issue } from '../shared/validation';
 import type { ReadinessItem, RiderDetails, WaiverAcceptance } from '../shared/checkout';
@@ -93,9 +94,33 @@ export interface PublicEventSummary {
   categoryCount: number;
 }
 
+export interface RefundablePaymentView {
+  ref: string | null;
+  provider: 'simulated' | 'stripe_test';
+  kind: 'order' | 'duplicate';
+  amountCents: number;
+  refundedCents: number;
+  remainingCents: number;
+}
+
+export interface OrganizerRefundView {
+  id: string;
+  entryId: string | null;
+  paymentRef: string | null;
+  provider: 'simulated' | 'stripe_test';
+  amountCents: number;
+  reason: string;
+  status: RefundStatus;
+  failureReason: string | null;
+  requestedBy: string | null;
+  createdAt: string;
+}
+
 export interface OrderView {
   /** How the order was paid: the simulated button or Stripe test mode. Null until paid. */
   paidWith: 'simulated' | 'stripe_test' | null;
+  /** Refunds, oldest first (no reason: riders see this too). */
+  refunds: { id: string; entryId: string | null; amountCents: number; status: RefundStatus; at: string }[];
   answers: { categoryId: string; category: string; label: string; answer: string }[];
   addenda: { categoryId: string; title: string }[];
   id: string;
@@ -356,6 +381,9 @@ export const api = {
   order: (id: string) => request<OrderView>('GET', `/api/orders/${id}`),
   pay: (id: string, attemptId: string, outcome: 'success' | 'failure') => request<OrderView>('POST', `/api/orders/${id}/payment`, { attemptId, outcome }),
   startCheckout: (id: string) => request<{ kind: 'redirect'; url: string } | { kind: 'confirmed' }>('POST', `/api/orders/${id}/checkout-session`),
+  refunds: (orderId: string) => request<{ payments: RefundablePaymentView[]; refunds: OrganizerRefundView[] }>('GET', `/api/orders/${orderId}/refunds`),
+  requestRefund: (orderId: string, body: { paymentRef: string | null; entryId: string | null; amountCents: number; reason: string }) => request<OrderView>('POST', `/api/orders/${orderId}/refunds`, body),
+  retryRefund: (refundId: string) => request<OrderView>('POST', `/api/refunds/${refundId}/retry`),
   cancelOrder: (id: string) => request<OrderView>('POST', `/api/orders/${id}/cancel`),
   orders: (eventId: string) => request<OrderView[]>('GET', `/api/events/${eventId}/orders`),
   transferEntry: (entryId: string, toCategoryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/transfer`, { toCategoryId, reason }),

@@ -23,6 +23,7 @@ import { createStartLists } from './startlists';
 import { createCoupons } from './coupons';
 import { createOrders, type Orders } from './orders';
 import { createPayments, paymentsFromEnv, publicAppUrl, type PaymentProvider } from './payments';
+import { createRefunds } from './refunds';
 import { createWaitlist } from './waitlist';
 import { createRepo, HttpError, type Repo } from './repo';
 import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
@@ -71,7 +72,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const provider = opts.auth ?? authProviderFromEnv();
   const access = createAccess(db, provider, clock);
   const paymentProvider = opts.payments ?? paymentsFromEnv();
-  const payments = createPayments(db, orders, paymentProvider, clock, opts.appUrl ?? (paymentProvider.mode === 'simulated' ? '' : publicAppUrl()));
+  const refunds = createRefunds(db, paymentProvider, clock);
+  const payments = createPayments(db, orders, paymentProvider, clock, opts.appUrl ?? (paymentProvider.mode === 'simulated' ? '' : publicAppUrl()), refunds.onRefundEvent);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
   // Migrations run once before the server accepts requests (listen, or the first inject in tests).
@@ -436,6 +438,25 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return payments.startCheckout(id);
   });
 
+  // Refunds: money back to the rider from one payment, optionally for one entry. Owner or finance role.
+  app.get('/api/orders/:id/refunds', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrderOrganizer(me(req), id, 'orders.view');
+    return refunds.list(id);
+  });
+  app.post('/api/orders/:id/refunds', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrderOrganizer(me(req), id, 'payments.refund');
+    await refunds.request(id, req.body, me(req).id);
+    return orders.getOrder(id);
+  });
+  app.post('/api/refunds/:id/retry', async (req) => {
+    const orderId = await refunds.orderOf(idParam.parse(req.params).id);
+    await access.requireOrderOrganizer(me(req), orderId, 'payments.refund');
+    await refunds.retry(idParam.parse(req.params).id);
+    return orders.getOrder(orderId);
+  });
+
   // Stripe notifications. Public, because Stripe calls it; trusted only after the signature on the raw body verifies.
   app.register(async (scope) => {
     scope.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => done(null, body));
@@ -569,7 +590,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return reply.status(201).send(await startLists.lock(p.id, p.raceId));
   });
 
-  // Organizer exports from the database: entries and a (simulated) ledger. No contact or emergency details.
+  // Organizer exports from the database: entries and a ledger (simulated or Stripe test-mode payments and refunds). No contact or emergency details.
   app.get('/api/events/:id/exports/:kind', async (req, reply) => {
     const p = z.object({ id: z.string().min(1).max(64), kind: z.enum(['entries.csv', 'ledger.csv']) }).parse(req.params);
     await onEvent(req, p.kind === 'entries.csv' ? 'export.entries' : 'export.ledger');

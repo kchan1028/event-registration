@@ -5,6 +5,7 @@ import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNo
 import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { termsOf } from '../shared/coupons';
+import type { RefundStatus } from '../shared/refunds';
 import { applyCorrection, matchesRegistration, type FieldChange, type RiderCorrection } from '../shared/lookup';
 import { categoryPrice, quote, todayIn, type Quote } from '../shared/pricing';
 import { checkExtras, describeAnswers, EMPTY_EXTRAS, orderExtrasSchema, pruneExtras, type OrderExtras } from '../shared/categoryExtras';
@@ -161,12 +162,21 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         )
       ).map((r) => [r.order_id, r.provider]),
     );
+    // Refunds, without the organizer's reason or who asked: the rider sees this view too.
+    const refunds = groupBy(
+      await db.all<{ order_id: string; id: string; entry_id: string | null; amount_cents: number; status: RefundStatus; created_at: string }>(
+        `SELECT order_id, id, entry_id, amount_cents, status, created_at FROM refunds WHERE order_id = ANY($1) ORDER BY created_at`,
+        [ids],
+      ),
+    );
     return rows.map((row) => {
       const config = configs.get(`${row.event_id}:${row.published_version}`)!;
       // A transfer can move an entry to a category added in a later published version.
       const latestVersion = latestByEvent.get(row.event_id);
       const latest = latestVersion ? configs.get(`${row.event_id}:${latestVersion}`)! : config;
-      return { ...buildView(row, config, latest, entries.get(row.id) ?? [], changes.get(row.id) ?? [], corrections.get(row.id) ?? []), paidWith: paidWith.get(row.id) ?? null };
+      return { ...buildView(row, config, latest, entries.get(row.id) ?? [], changes.get(row.id) ?? [], corrections.get(row.id) ?? []), paidWith: paidWith.get(row.id) ?? null,
+        refunds: (refunds.get(row.id) ?? []).map((r) => ({ id: r.id, entryId: r.entry_id, amountCents: r.amount_cents, status: r.status, at: r.created_at })),
+      };
     });
   }
 
