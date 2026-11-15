@@ -57,6 +57,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Organizer transfers and withdrawals of paid entries, with price differences logged | Implemented; real refunds Planned |
 | Category builder: copy a day's races to another day, bulk edit with before/after preview | Implemented; automated tests in CI |
 | Same-rider suggestions across orders, linked only when the organizer confirms | Implemented; automated tests in CI |
+| Organizer CSV exports: entries and a simulated ledger, without contact details | Implemented; automated tests in CI |
 | Real payments and refunds, QR scanning, an agreed timer format | Planned |
 
 <details>
