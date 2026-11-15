@@ -9,6 +9,7 @@ import { refundedCents } from './format';
 import { ChangesToResolve } from './registrations/ChangesToResolve';
 import { OrderRow } from './registrations/OrderRow';
 import { SameRider } from './registrations/SameRider';
+import { Summary } from './registrations/Summary';
 import { Waitlists } from './registrations/Waitlists';
 import { DownloadLink, Pending } from './ui';
 import { useLoad } from './useLoad';
@@ -69,6 +70,8 @@ export function Registrations({ draft }: { draft: Draft }) {
       ) : (
         <p className="note">Riders can register once the event is published. {draft.readOnly ? 'A registration manager or owner publishes it.' : 'Publish from Review and publish.'}</p>
       )}
+
+      {published && <Summary eventId={eventId} refreshKey={orders} />}
 
       <form role="search" className="reg-search" onSubmit={(e) => e.preventDefault()}>
         <label htmlFor="reg-search">Find a registration</label>

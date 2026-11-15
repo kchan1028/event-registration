@@ -11,6 +11,7 @@ import { configFromTemplate } from '../shared/factory';
 import { buildFixtureEvents, FIXTURE_ORG_NAME } from '../shared/fixtures';
 import { createEventInputSchema, eventConfigSchema } from '../shared/schema';
 import { entriesCsv, ledgerCsv } from '../shared/exports';
+import { eventSummary } from '../shared/reports';
 import { riderCorrectionSchema } from '../shared/lookup';
 import { changeImpact, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
@@ -27,7 +28,7 @@ import { createRefunds } from './refunds';
 import { createWaitlist } from './waitlist';
 import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
 import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
-import { ROLES, type Permission, type Role } from '../shared/roles';
+import { can, ROLES, type Permission, type Role } from '../shared/roles';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -603,6 +604,13 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/events/:id/start-lists/:raceId/lock', async (req, reply) => {
     const p = await onEvent(req, 'startlists', raceParams);
     return reply.status(201).send(await startLists.lock(p.id, p.raceId));
+  });
+
+  // Counts for anyone who may see registrations; the money breakdown only for roles that may download the ledger.
+  app.get('/api/events/:id/summary', async (req) => {
+    const { id, roles } = await onEvent(req, 'orders.view');
+    const list = (await orders.listOrders(id)).filter(isLiveOrder);
+    return eventSummary(list, await identity.keyOf(id), can(roles, 'export.ledger'));
   });
 
   // Organizer exports from the database: entries and a ledger (simulated or Stripe test-mode payments and refunds). No contact or emergency details.

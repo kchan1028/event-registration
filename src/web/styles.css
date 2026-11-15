@@ -3261,7 +3261,7 @@ fieldset:disabled .field label {
   background: #000;
   object-fit: cover;
 }
-.ci__summary {
+.stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 1px;
@@ -3269,15 +3269,15 @@ fieldset:disabled .field label {
   background: var(--hairline);
   border-bottom: 1px solid var(--hairline);
 }
-.ci__summary > div {
+.stat-grid > div {
   padding: var(--s-2) var(--s-4);
   background: var(--canvas);
 }
-.ci__summary dt {
+.stat-grid dt {
   font-size: 12px;
   color: var(--muted);
 }
-.ci__summary dd {
+.stat-grid dd {
   margin: 0;
   font: 600 26px/1.1 var(--font-num);
   font-variant-numeric: tabular-nums;
@@ -3646,7 +3646,7 @@ fieldset:disabled .field label {
     position: static;
     max-height: none;
   }
-  .ci__summary {
+  .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .ci-detail {
@@ -4162,4 +4162,27 @@ fieldset:disabled .field label {
   padding: var(--s-3);
   background: var(--tyvek);
   border-radius: var(--r-md);
+}
+
+/* Registrations summary: counts reuse .stat-grid; money is a short ledger-style table. */
+.reg-summary .stat-grid {
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.reg-summary__money {
+  max-width: 360px;
+}
+.reg-summary__money td {
+  text-align: right;
+}
+.reg-summary__money th {
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 400;
+}
+.reg-summary__total th,
+.reg-summary__total td {
+  border-top: 1px solid var(--hairline);
+  font-weight: 600;
 }

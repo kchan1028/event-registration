@@ -12,6 +12,7 @@ import type { BibSettings, checkInTiming, CheckInResult, PaymentState } from '..
 import type { WaitlistJoin, WaitlistStatus } from '../shared/waitlist';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
+import type { EventSummary } from '../shared/reports';
 import type { Invitation, MembershipChange, Role } from '../shared/roles';
 
 /** simulated: the labeled demo button. stripe_test: Stripe hosted Checkout in test mode. */
@@ -377,6 +378,7 @@ export const api = {
   dismissRiderMatch: (eventId: string, a: string, b: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/dismiss`, { orderIds: [a, b] }),
   unlinkRider: (eventId: string, orderId: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/unlink`, { orderId }),
   resolutions: (eventId: string) => request<ResolutionItem[]>('GET', `/api/events/${eventId}/resolutions`),
+  summary: (eventId: string) => request<EventSummary>('GET', `/api/events/${eventId}/summary`),
   resolveItem: (eventId: string, id: string, body: { outcome: 'kept' | 'transferred' | 'withdrawn'; riderNotified: boolean; note: string }) =>
     request<ResolutionItem[]>('POST', `/api/events/${eventId}/resolutions/${id}`, body),
   waitlist: (eventId: string) => request<{ offerHours: number; entries: WaitlistEntryView[] }>('GET', `/api/events/${eventId}/waitlist`),
