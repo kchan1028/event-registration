@@ -235,6 +235,18 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.get('/api/events/:id/orders', async (req) => orders.listOrders(idParam.parse(req.params).id));
 
+  // Organizer transfers and withdrawals of paid entries. A reason is required and logged.
+  app.post('/api/order-entries/:id/transfer', async (req) => {
+    const { id } = idParam.parse(req.params);
+    const body = z.object({ toCategoryId: z.string().min(1).max(64), reason: z.string().trim().min(3, 'Write why the entry is moving.').max(300) }).parse(req.body);
+    return orders.transferEntry(id, body.toCategoryId, body.reason);
+  });
+  app.post('/api/order-entries/:id/withdraw', async (req) => {
+    const { id } = idParam.parse(req.params);
+    const body = z.object({ reason: z.string().trim().min(3, 'Write why the entry is withdrawn.').max(300) }).parse(req.body);
+    return orders.withdrawEntry(id, body.reason);
+  });
+
   app.post('/api/order-entries/:id/license-review', async (req) => {
     const { id } = idParam.parse(req.params);
     const body = z.object({ note: z.string().trim().min(3, 'Say how the license was checked.').max(300) }).parse(req.body);

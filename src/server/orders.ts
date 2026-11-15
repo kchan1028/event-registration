@@ -1,9 +1,10 @@
 import { randomInt } from 'node:crypto';
 import { canAdmit, remainingForCategory } from '../shared/capacity';
-import { checkSelection, checkSignature, enforcesWindows, localNow, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
+import { evaluateCategory } from '../shared/eligibility';
+import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNow, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
-import { quote, todayIn, type Quote } from '../shared/pricing';
+import { categoryPrice, quote, todayIn, type Quote } from '../shared/pricing';
 import type { EventConfig } from '../shared/schema';
 import { blocksPublicSale, effectiveWaitlistStatus, type StoredWaitlistStatus } from '../shared/waitlist';
 import type { Db } from './db';
@@ -37,7 +38,9 @@ interface EntryRow {
   order_id: string;
   category_id: string;
   rider_ref: string;
-  status: 'held' | 'confirmed' | 'released';
+  status: 'held' | 'confirmed' | 'released' | 'withdrawn';
+  original_category_id: string | null;
+  withdrawn_at: string | null;
   license_reviewed: number;
   license_review_note: string | null;
   license_reviewed_at: string | null;
@@ -73,15 +76,26 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     const row = orderRow.get(id);
     if (!row) throw new HttpError(404, 'Order not found.');
     const config = repo.getVersion(row.event_id, row.published_version);
+    // A transfer can move an entry to a category added in a later published version.
+    const latestVersion = repo.getEvent(row.event_id).publishedVersion;
+    const latest = latestVersion && latestVersion !== row.published_version ? repo.getVersion(row.event_id, latestVersion) : config;
+    const findCat = (id: string) => config.categories.find((c) => c.id === id) ?? latest.categories.find((c) => c.id === id);
+    const changes = db
+      .prepare<[string], { entry_id: string; kind: 'transfer' | 'withdraw'; from_category_id: string; to_category_id: string | null; amount_paid_cents: number; new_price_cents: number | null; difference_cents: number | null; reason: string; created_at: string }>(
+        `SELECT entry_id, kind, from_category_id, to_category_id, amount_paid_cents, new_price_cents, difference_cents, reason, created_at FROM entry_changes WHERE order_id = ? ORDER BY created_at, rowid`,
+      )
+      .all(id);
     const rider = JSON.parse(row.rider_json) as RiderDetails;
     const waiver = JSON.parse(row.waiver_json) as WaiverAcceptance;
     const q = JSON.parse(row.quote_json) as Quote;
     const status = effectiveStatus(row);
     const guardianRequired = entryRows.all(id).some((e) => config.categories.find((c) => c.id === e.category_id)?.eligibility.guardianRequired);
     const entries = entryRows.all(id).map((e) => {
-      const cat = config.categories.find((c) => c.id === e.category_id);
-      const race = config.races.find((r) => r.id === cat?.raceId);
-      const sg = config.startGroups.find((g) => g.id === cat?.startGroupId);
+      const cat = findCat(e.category_id);
+      const cfg = config.categories.some((c) => c.id === e.category_id) ? config : latest;
+      const race = cfg.races.find((r) => r.id === cat?.raceId);
+      const sg = cfg.startGroups.find((g) => g.id === cat?.startGroupId);
+      const paidLine = q.lines.find((l) => l.categoryId === (e.original_category_id ?? e.category_id));
       return {
         id: e.id,
         categoryId: e.category_id,
@@ -93,6 +107,21 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         status: e.status === 'held' && status === 'expired' ? 'released' : e.status,
         licenseReviewed: e.license_reviewed === 1,
         licenseReviewNote: e.license_review_note,
+        /** What the rider paid for this entry at purchase (after discounts). Never changed by a transfer or withdrawal. */
+        amountPaidCents: paidLine?.totalCents ?? 0,
+        withdrawnAt: e.withdrawn_at,
+        changes: changes
+          .filter((c) => c.entry_id === e.id)
+          .map((c) => ({
+            kind: c.kind,
+            fromCategoryName: findCat(c.from_category_id)?.name ?? 'Removed category',
+            toCategoryName: c.to_category_id ? (findCat(c.to_category_id)?.name ?? 'Removed category') : null,
+            amountPaidCents: c.amount_paid_cents,
+            newPriceCents: c.new_price_cents,
+            differenceCents: c.difference_cents,
+            reason: c.reason,
+            at: c.created_at,
+          })),
         readiness: readiness({
           licenseReviewed: e.license_reviewed === 1,
           licenseNote: e.license_review_note,
@@ -348,6 +377,71 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       repo.getEvent(eventId);
       const ids = db.prepare<[string], { id: string }>(`SELECT id FROM orders WHERE event_id = ? ORDER BY created_at DESC`).all(eventId);
       return ids.map((r) => view(r.id));
+    },
+
+    /**
+     * Organizer moves a paid entry to another category. Eligibility, capacity, the waitlist,
+     * schedule conflicts, and the guardian waiver are rechecked. The price paid is kept; any
+     * difference is recorded for the organizer to settle outside the app (payments are simulated).
+     */
+    transferEntry(entryId: string, toCategoryId: string, reason: string) {
+      return db
+        .transaction(() => {
+          const e = db.prepare<[string], EntryRow & { event_id: string }>(`SELECT * FROM order_entries WHERE id = ?`).get(entryId);
+          if (!e) throw new HttpError(404, 'Entry not found.');
+          const row = orderRow.get(e.order_id)!;
+          if (effectiveStatus(row) !== 'confirmed' || e.status !== 'confirmed') throw new HttpError(409, 'Only a paid, active entry can be transferred.');
+          if (e.category_id === toCategoryId) throw new HttpError(422, 'Choose a different category.');
+          const { config } = publishedConfig(e.event_id);
+          const target = config.categories.find((c) => c.id === toCategoryId);
+          if (!target || target.status !== 'active') throw new HttpError(422, 'That category is not open for entries.');
+          const others = entryRows.all(e.order_id).filter((x) => x.id !== e.id && x.status === 'confirmed');
+          if (others.some((x) => x.category_id === target.id)) throw new HttpError(409, `This rider is already entered in ${target.name}.`);
+
+          const rider = JSON.parse(row.rider_json) as RiderDetails;
+          const waiver = JSON.parse(row.waiver_json) as WaiverAcceptance;
+          const elig = evaluateCategory(target, profileOf(rider));
+          if (elig.status === 'ineligible') throw new HttpError(422, `Not eligible for ${target.name}: ${elig.reasons.join('; ')}.`);
+          if (target.eligibility.guardianRequired && waiver.signerRole !== 'guardian') throw new HttpError(422, `${target.name} needs a waiver signed by a parent or guardian. Register the rider again with a guardian instead.`);
+          const block = findConflicts(config, [...others.map((x) => x.category_id), target.id]).find((c) => c.level === 'block');
+          if (block) throw new HttpError(409, block.message);
+          if (waitlistBlockers(config, e.event_id).has(target.id)) throw new HttpError(409, `${target.name} has riders on its waitlist. Offer the place through the waitlist instead.`);
+          const room = canAdmit(config, repo.entries(e.event_id).filter((x) => x.id !== e.id), target.id, e.rider_ref);
+          if (!room.ok) throw new HttpError(409, room.reason === 'full' ? `${target.name} is full (${room.blockedBy.name}: ${room.blockedBy.used} of ${room.blockedBy.limit}).` : `${target.name} cannot take this entry.`);
+
+          const q = JSON.parse(row.quote_json) as Quote;
+          const paid = q.lines.find((l) => l.categoryId === (e.original_category_id ?? e.category_id))?.totalCents ?? 0;
+          const race = config.races.find((r) => r.id === target.raceId);
+          const day = config.days.find((d) => d.id === race?.dayId);
+          const newPrice = categoryPrice(target, todayIn(config.event.timeZone, clock()), day?.date ?? '').cents;
+          const t = nowIso();
+          db.prepare(`UPDATE order_entries SET original_category_id = COALESCE(original_category_id, category_id), category_id = ? WHERE id = ?`).run(target.id, e.id);
+          db.prepare(
+            `INSERT INTO entry_changes (id, event_id, order_id, entry_id, kind, from_category_id, to_category_id, amount_paid_cents, new_price_cents, difference_cents, reason, created_at) VALUES (?, ?, ?, ?, 'transfer', ?, ?, ?, ?, ?, ?, ?)`,
+          ).run(newId('chg'), e.event_id, e.order_id, e.id, e.category_id, target.id, paid, newPrice, newPrice - paid, reason, t);
+          return view(e.order_id);
+        })
+        .immediate();
+    },
+
+    /** Organizer withdraws a paid entry. The place is freed; the amount paid is recorded, and any refund is handled outside the app. */
+    withdrawEntry(entryId: string, reason: string) {
+      return db
+        .transaction(() => {
+          const e = db.prepare<[string], EntryRow & { event_id: string }>(`SELECT * FROM order_entries WHERE id = ?`).get(entryId);
+          if (!e) throw new HttpError(404, 'Entry not found.');
+          const row = orderRow.get(e.order_id)!;
+          if (effectiveStatus(row) !== 'confirmed' || e.status !== 'confirmed') throw new HttpError(409, 'Only a paid, active entry can be withdrawn.');
+          const q = JSON.parse(row.quote_json) as Quote;
+          const paid = q.lines.find((l) => l.categoryId === (e.original_category_id ?? e.category_id))?.totalCents ?? 0;
+          const t = nowIso();
+          db.prepare(`UPDATE order_entries SET status = 'withdrawn', withdrawn_at = ? WHERE id = ?`).run(t, e.id);
+          db.prepare(
+            `INSERT INTO entry_changes (id, event_id, order_id, entry_id, kind, from_category_id, to_category_id, amount_paid_cents, new_price_cents, difference_cents, reason, created_at) VALUES (?, ?, ?, ?, 'withdraw', ?, NULL, ?, NULL, NULL, ?, ?)`,
+          ).run(newId('chg'), e.event_id, e.order_id, e.id, e.category_id, paid, reason, t);
+          return view(e.order_id);
+        })
+        .immediate();
     },
 
     /** Organizer marks a license as reviewed. Needs a reason; the time is recorded. */

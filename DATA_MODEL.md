@@ -2,7 +2,7 @@
 
 This describes the database the local prototype uses today. It covers tables, relationships, important fields, constraints, and what happens when data is removed. The intended product data model, including entities that are not built yet, is in [product.md](product.md#data-model) and [product.md](product.md#data-storage).
 
-**Status:** Implemented (local prototype). Describes schema version 5 (five migrations) as of November 14, 2026.
+**Status:** Implemented (local prototype). Describes schema version 6 (six migrations) as of November 14, 2026.
 
 **Source of truth:** the migrations in [src/server/db.ts](src/server/db.ts) and the event configuration schema in [src/shared/schema.ts](src/shared/schema.ts). If this file disagrees with them, the code wins; fix this file in the same change.
 
@@ -38,6 +38,7 @@ erDiagram
     events ||--o{ start_list_snapshots : "start lists"
     events ||--o{ waitlist_entries : "waitlists"
     orders |o--o| waitlist_entries : "redeems offer"
+    order_entries ||--o{ entry_changes : "transfers and withdrawals"
 ```
 
 An organization owns events. Each event has one editable draft and any number of immutable published versions. Riders register through orders against one published version; each order holds one entry per category bought. Bibs, check-ins, and start-list snapshots belong to the event, and bibs and check-ins also point at the order (one order is one rider). `order_entries`, `bib_assignments`, and `check_ins` also carry `event_id` directly so they can be queried per event.
@@ -126,10 +127,29 @@ One row per category in an order.
 | `id` | Primary key |
 | `order_id` | References `orders` |
 | `event_id` | References `events`. Indexed |
-| `category_id` | Category ID inside the order's published version |
+| `category_id` | Current category ID. Inside the order's published version, or a later one after a transfer |
 | `rider_ref` | Opaque rider reference shared by all entries in the order |
-| `status` | `held`, `confirmed`, or `released` |
+| `status` | `held`, `confirmed`, `released`, or `withdrawn` (an organizer withdrew a paid entry; it no longer takes a place, races, or appears on start lists) |
+| `original_category_id` | Category bought at purchase, set on the first transfer (null means unchanged). Used to find what was paid for the entry in `orders.quote_json` |
+| `withdrawn_at` | When the organizer withdrew the entry |
 | `license_reviewed`, `license_review_note`, `license_reviewed_at` | Organizer's manual license review. Defaults to not reviewed |
+
+### entry_changes
+
+Log of organizer transfers and withdrawals of paid entries (migration 6). The order's price is never changed; money differences are recorded here and settled outside the app while payments are simulated.
+
+| Column | Notes |
+|---|---|
+| `id` | Primary key |
+| `event_id`, `order_id`, `entry_id` | References `events`, `orders`, `order_entries`. Indexed by (`order_id`, `created_at`) |
+| `kind` | `transfer` or `withdraw` |
+| `from_category_id` | Category before the change |
+| `to_category_id` | Category after a transfer; null for a withdrawal |
+| `amount_paid_cents` | What the rider paid for this entry at purchase, after discounts |
+| `new_price_cents` | Current price of the new category (transfers only) |
+| `difference_cents` | `new_price_cents` − `amount_paid_cents`. Positive: the rider owes; negative: a refund is due |
+| `reason` | Required organizer note |
+| `created_at` | |
 
 ### payment_attempts
 

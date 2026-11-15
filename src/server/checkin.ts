@@ -37,7 +37,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
 
   function riderCard(o: OrderView, dayId: string, s: BibSettings) {
     const scope = bibScopeKey(s, dayId);
-    const today = o.entries.filter((e) => e.dayId === dayId && e.status !== 'released');
+    const today = o.entries.filter((e) => e.dayId === dayId && e.status !== 'released' && e.status !== 'withdrawn');
     const readiness = mergeReadiness(today.map((e) => e.readiness));
     const payment = o.status === 'confirmed' ? 'confirmed' : 'not_complete';
     const result = checkInResult({ payment, entriesToday: today.length, readiness });

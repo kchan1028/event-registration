@@ -84,7 +84,19 @@ export interface OrderView {
     raceName: string;
     dayId: string;
     startTime: string | null;
-    status: 'held' | 'confirmed' | 'released';
+    status: 'held' | 'confirmed' | 'released' | 'withdrawn';
+    amountPaidCents: number;
+    withdrawnAt: string | null;
+    changes: {
+      kind: 'transfer' | 'withdraw';
+      fromCategoryName: string;
+      toCategoryName: string | null;
+      amountPaidCents: number;
+      newPriceCents: number | null;
+      differenceCents: number | null;
+      reason: string;
+      at: string;
+    }[];
     licenseReviewed: boolean;
     licenseReviewNote: string | null;
     readiness: ReadinessItem[];
@@ -225,6 +237,8 @@ export const api = {
   pay: (id: string, attemptId: string, outcome: 'success' | 'failure') => request<OrderView>('POST', `/api/orders/${id}/payment`, { attemptId, outcome }),
   cancelOrder: (id: string) => request<OrderView>('POST', `/api/orders/${id}/cancel`),
   orders: (eventId: string) => request<OrderView[]>('GET', `/api/events/${eventId}/orders`),
+  transferEntry: (entryId: string, toCategoryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/transfer`, { toCategoryId, reason }),
+  withdrawEntry: (entryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/withdraw`, { reason }),
   reviewLicense: (entryId: string, note: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/license-review`, { note }),
   checkInList: (eventId: string, dayId: string | null, q: string) =>
     request<CheckInList>('GET', `/api/events/${eventId}/check-in?${new URLSearchParams({ ...(dayId ? { day: dayId } : {}), q })}`),

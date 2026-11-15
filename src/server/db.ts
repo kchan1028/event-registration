@@ -144,6 +144,27 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX waitlist_by_category ON waitlist_entries(event_id, category_id, created_at);
   `,
+  `
+  -- Organizer transfers and withdrawals of paid entries. The price paid is never changed;
+  -- differences are recorded here and settled outside the app while payments are simulated.
+  ALTER TABLE order_entries ADD COLUMN original_category_id TEXT;
+  ALTER TABLE order_entries ADD COLUMN withdrawn_at TEXT;
+  CREATE TABLE entry_changes (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES events(id),
+    order_id TEXT NOT NULL REFERENCES orders(id),
+    entry_id TEXT NOT NULL REFERENCES order_entries(id),
+    kind TEXT NOT NULL,
+    from_category_id TEXT NOT NULL,
+    to_category_id TEXT,
+    amount_paid_cents INTEGER NOT NULL,
+    new_price_cents INTEGER,
+    difference_cents INTEGER,
+    reason TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX entry_changes_by_order ON entry_changes(order_id, created_at);
+  `,
 ];
 
 export function openDb(path: string): Db {
