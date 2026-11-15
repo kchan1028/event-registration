@@ -32,7 +32,7 @@ describe('check-in rules', () => {
   });
 });
 
-type Card = { orderId: string; name: string; checkInCode: string | null; bib: number | null; checkedInAt: string | null; result: { ready: boolean }; bibHistory: { bib: number; reason: string | null }[] };
+type Card = { orderId: string; name: string; checkInCode: string | null; bib: number | null; checkedInAt: string | null; result: { ready: boolean }; bibHistory: { bib: number; reason: string | null }[]; undoneCheckIns: { bib: number | null; bibReleased: boolean; reason: string }[] };
 type List = { dayId: string; days: { id: string }[]; riders: Card[] };
 
 async function setup() {
@@ -113,5 +113,48 @@ describe('check-in API', () => {
     expect((await list(code.replace('-', '').toLowerCase())).riders.map((r) => r.name)).toEqual(['Harper Demo']);
     const raw = JSON.stringify(await list());
     expect(raw).not.toMatch(/@example\.com|totalCents|emergencyContact|licenseNumber/);
+  });
+  it('undoes a check-in with a reason: check-in removed, bib released, record kept, rider can check in again', async () => {
+    const { app, eventId, first, rider, checkIn, setBibs } = await setup();
+    await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
+    const alex = rider('Alex').orderId;
+    const undo = (orderId: string, reason: string, dayId = first.dayId) => app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${orderId}/undo`, payload: { dayId, reason } });
+
+    expect((await undo(alex, 'Not checked in yet')).statusCode).toBe(409);
+    await checkIn(alex);
+    expect((await undo(alex, '')).statusCode).toBe(400);
+
+    const res = await undo(alex, 'Checked in the wrong rider');
+    expect(res.statusCode).toBe(200);
+    const card = res.json() as Card;
+    expect(card.checkedInAt).toBeNull();
+    expect(card.bib).toBeNull();
+    expect(card.undoneCheckIns).toEqual([expect.objectContaining({ bib: 100, bibReleased: true, reason: 'Checked in the wrong rider' })]);
+    expect(card.bibHistory[0].reason).toBe('Check-in undone: Checked in the wrong rider');
+
+    const again = (await checkIn(alex)).json() as Card;
+    expect(again.checkedInAt).not.toBeNull();
+    expect(again.bib).toBe(100); // released, so it is the next free bib again
+  });
+
+  it('keeps a weekend bib while the rider is still checked in on the other day', async () => {
+    const { app, eventId, first, list, checkIn, setBibs } = await setup();
+    await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
+    const [sat, sun] = first.days.map((d) => d.id);
+    const sunList = await list('', sun);
+    const both = first.riders.find((r) => r.result.ready && sunList.riders.some((x) => x.orderId === r.orderId && x.result.ready))!;
+    expect(both).toBeTruthy();
+    const undo = (dayId: string) => app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${both.orderId}/undo`, payload: { dayId, reason: 'Testing undo' } });
+
+    const satCard = (await checkIn(both.orderId, null, sat)).json() as Card;
+    await checkIn(both.orderId, null, sun);
+    const afterSat = (await undo(sat)).json() as Card;
+    expect(afterSat.checkedInAt).toBeNull();
+    expect(afterSat.bib).toBe(satCard.bib); // still covers Sunday
+    expect(afterSat.undoneCheckIns[0]).toMatchObject({ bibReleased: false });
+
+    const afterSun = (await undo(sun)).json() as Card;
+    expect(afterSun.bib).toBeNull();
+    expect(afterSun.undoneCheckIns[0]).toMatchObject({ bibReleased: true });
   });
 });
