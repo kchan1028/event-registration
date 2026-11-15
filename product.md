@@ -513,6 +513,14 @@ Status: Research needed. Results publishing stays out of scope; the question is 
 
 What is known (road-results.com upload page, reviewed November 14, 2026): results are added by an account holder uploading a CSV. All categories go on one sheet with labeled category and column headers, and a name column is the minimum. A file already prepared for USAC results upload can be reused. Timing software such as CrossMgr can produce the upload file directly. No public API was found.
 
+Public research (November 15, 2026; details and sources in the [timer export review](docs/timer-export-review.md#what-public-sources-already-say)):
+
+- Both road-results.com and USA Cycling take a results CSV uploaded by the promoter or timer. road-results.com accepts a file already uploaded to USA Cycling as is.
+- USA Cycling's results template has ten columns: race date, discipline, category, gender, class, age group, rider license, first name, last name, and place, with codes for DNS, DQ, DNP, and DNF. Both sites match results to riders mainly by name; the license number helps but is not required.
+- No public API or automatic feed was found for either site, and no public statement that road-results.com imports USA Cycling results on its own.
+
+So one file in USA Cycling's format can serve both uploads. The start-list export already carries race date, category, license number, and names; discipline, gender, class, and age group would need to come from the category setup, and place comes from timing.
+
 The questions below, with a sample export, are packaged for the timer in [docs/timer-export-review.md](docs/timer-export-review.md).
 
 To research before Phase 3:

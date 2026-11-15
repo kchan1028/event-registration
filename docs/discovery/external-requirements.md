@@ -10,7 +10,7 @@ The USAC questions were emailed on November 15, 2026; nothing else has been sent
 |---|---|---|---|---|
 | USAC integration and accepted license and waiver processes | KC (project owner), assigned 2026-11-15 | Yes, emailed to USA Cycling 2026-11-15 | No (waiting) | Public research recorded 2026-11-15 in [USAC questions](../usac-questions.md#what-public-sources-already-say); not an answer from USAC |
 | Payment-provider operating model | Not assigned | No | No | |
-| Results path to road-results.com | Not assigned | No | No | See the [timer export review](../timer-export-review.md) |
+| Results path to road-results.com | Not assigned | No | No | Public research recorded 2026-11-15 in the [timer export review](../timer-export-review.md#what-public-sources-already-say); who uploads for our events still needs the timer |
 
 ## USA Cycling
 
