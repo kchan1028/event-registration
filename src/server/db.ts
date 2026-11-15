@@ -192,6 +192,10 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX start_list_locks_by_race ON start_list_locks(event_id, race_id, locked_at);
   `,
+  `
+  -- Measured check-in time: from the volunteer starting a search (or scan) to a successful check-in, in milliseconds.
+  ALTER TABLE check_ins ADD COLUMN duration_ms INTEGER;
+  `,
 ];
 
 export function openDb(path: string): Db {

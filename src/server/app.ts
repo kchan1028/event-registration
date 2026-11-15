@@ -264,8 +264,10 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.post('/api/events/:id/check-in/:orderId', async (req) => {
     const p = z.object({ id: z.string().min(1).max(64), orderId: z.string().min(1).max(64) }).parse(req.params);
-    const body = z.object({ dayId: z.string().min(1).max(64), bib: z.number().int().min(1).max(99999).nullable().default(null) }).parse(req.body);
-    return checkIn.checkIn(p.id, p.orderId, body.dayId, body.bib);
+    const body = z
+      .object({ dayId: z.string().min(1).max(64), bib: z.number().int().min(1).max(99999).nullable().default(null), durationMs: z.number().int().min(0).max(86_400_000).nullable().default(null) })
+      .parse(req.body);
+    return checkIn.checkIn(p.id, p.orderId, body.dayId, body.bib, body.durationMs);
   });
 
   app.post('/api/events/:id/check-in/:orderId/bib', async (req) => {

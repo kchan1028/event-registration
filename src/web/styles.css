@@ -3238,7 +3238,7 @@ fieldset:disabled .field label {
 }
 .ci__summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 1px;
   margin: 0;
   background: var(--hairline);
@@ -3257,6 +3257,11 @@ fieldset:disabled .field label {
   font: 600 26px/1.1 var(--font-num);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
+}
+.ci__timing {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
 }
 .ci__notice {
   display: flex;

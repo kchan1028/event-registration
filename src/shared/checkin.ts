@@ -80,3 +80,15 @@ export function mergeReadiness(lists: ReadinessItem[][]): ReadinessItem[] {
   }
   return [...out.values()];
 }
+
+/** Longest check-in that still counts as one standard check-in; longer ones are left out as interrupted. */
+export const MAX_TIMED_CHECK_IN_MS = 10 * 60_000;
+
+/** Median and 95th percentile (nearest rank) of measured check-in times, in whole seconds. */
+export function checkInTiming(durationsMs: readonly number[]): { timed: number; medianSeconds: number | null; p95Seconds: number | null } {
+  const xs = durationsMs.filter((d) => d > 0 && d <= MAX_TIMED_CHECK_IN_MS).sort((a, b) => a - b);
+  if (xs.length === 0) return { timed: 0, medianSeconds: null, p95Seconds: null };
+  const rank = (p: number) => xs[Math.min(xs.length - 1, Math.ceil(p * xs.length) - 1)];
+  const median = xs.length % 2 ? xs[(xs.length - 1) / 2] : (xs[xs.length / 2 - 1] + xs[xs.length / 2]) / 2;
+  return { timed: xs.length, medianSeconds: Math.round(median / 1000), p95Seconds: Math.round(rank(0.95) / 1000) };
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../src/server/app';
-import { checkInResult, mergeReadiness, nextFreeBib } from '../src/shared/checkin';
+import { checkInResult, checkInTiming, mergeReadiness, nextFreeBib } from '../src/shared/checkin';
 import type { ReadinessItem } from '../src/shared/checkout';
 
 const done = (key: ReadinessItem['key']): ReadinessItem => ({ key, label: key, state: 'done' });
@@ -24,6 +24,14 @@ describe('check-in rules', () => {
   it('merges readiness so one unfinished entry blocks the day', () => {
     const merged = mergeReadiness([[done('license')], [{ key: 'license', label: 'x', state: 'needs_review' }]]);
     expect(merged).toEqual([{ key: 'license', label: 'x', state: 'needs_review' }]);
+  });
+
+  it('summarizes check-in times as median and 95th percentile, ignoring implausible ones', () => {
+    expect(checkInTiming([])).toEqual({ timed: 0, medianSeconds: null, p95Seconds: null });
+    expect(checkInTiming([10_000, 20_000, 30_000])).toEqual({ timed: 3, medianSeconds: 20, p95Seconds: 30 });
+    const twenty = Array.from({ length: 20 }, (_, i) => (i + 1) * 1000); // 1..20 s
+    expect(checkInTiming(twenty)).toMatchObject({ medianSeconds: 11, p95Seconds: 19 });
+    expect(checkInTiming([0, 15_000, 11 * 60_000])).toEqual({ timed: 1, medianSeconds: 15, p95Seconds: 15 });
   });
 
   it('finds the lowest free bib and reports a full range', () => {
@@ -156,5 +164,18 @@ describe('check-in API', () => {
     const afterSun = (await undo(sun)).json() as Card;
     expect(afterSun.bib).toBeNull();
     expect(afterSun.undoneCheckIns[0]).toMatchObject({ bibReleased: true });
+  });
+  it('records a measured check-in time once and summarizes the day', async () => {
+    const { app, eventId, first, rider, checkIn, setBibs } = await setup();
+    await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
+    const timed = (orderId: string, durationMs: number | null) => app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${orderId}`, payload: { dayId: first.dayId, bib: null, durationMs } });
+    await timed(rider('Alex').orderId, 12_000);
+    await timed(rider('Alex').orderId, 99_000); // repeat check-in: first measurement kept
+    await timed(rider('Blake').orderId, 30_000);
+    await timed(rider('Emery').orderId, 20 * 60_000); // interrupted, left out
+    await checkIn(rider('Harper').orderId); // no measurement sent
+    const summary = (await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in?q=` })).json() as { summary: { checkedIn: number; timing: { timed: number; medianSeconds: number | null; p95Seconds: number | null } } };
+    expect(summary.summary.checkedIn).toBe(4);
+    expect(summary.summary.timing).toEqual({ timed: 2, medianSeconds: 21, p95Seconds: 30 });
   });
 });

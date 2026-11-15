@@ -19,6 +19,13 @@ export function CheckIn({ eventId }: { eventId: string }) {
   const [showBibs, setShowBibs] = useState(false);
   const detailRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  /** When the volunteer started looking for the current rider (first keystroke or scan into an empty search). */
+  const startedAt = useRef<number | null>(null);
+  const takeDuration = () => {
+    const start = startedAt.current;
+    startedAt.current = null;
+    return start === null ? null : Math.round(performance.now() - start);
+  };
 
   const load = useCallback(
     (query: string, day: string | null) =>
@@ -75,6 +82,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
 
   function nextRider() {
     setSelectedId(null);
+    startedAt.current = null;
     setQ('');
     searchRef.current?.focus();
   }
@@ -146,6 +154,15 @@ export function CheckIn({ eventId }: { eventId: string }) {
               <dt>Bibs issued</dt>
               <dd>{data.summary.bibsIssued}</dd>
             </div>
+            <div>
+              <dt>Median check-in</dt>
+              <dd>{data.summary.timing.medianSeconds === null ? 'Not timed yet' : `${data.summary.timing.medianSeconds} s`}</dd>
+              {data.summary.timing.timed > 0 && (
+                <span className="ci__timing">
+                  95th percentile {data.summary.timing.p95Seconds} s · {data.summary.timing.timed} timed
+                </span>
+              )}
+            </div>
           </dl>
 
           {!rangeSet(data) && (
@@ -169,7 +186,11 @@ export function CheckIn({ eventId }: { eventId: string }) {
                   autoFocus
                   placeholder="Name, team, bib, or check-in code"
                   value={q}
-                  onChange={(e) => setQ(e.target.value)}
+                  onChange={(e) => {
+                    if (!q && e.target.value && startedAt.current === null) startedAt.current = performance.now();
+                    if (!e.target.value) startedAt.current = null;
+                    setQ(e.target.value);
+                  }}
                 />
               </form>
               <p className="ci__count" aria-live="polite">
@@ -194,7 +215,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
 
             <section className="ci__detail" ref={detailRef} tabIndex={-1} aria-label="Rider check-in">
               {selected ? (
-                <RiderDetail key={selected.orderId + data.dayId} eventId={eventId} dayId={data.dayId} rider={selected} onChange={replace} onNext={nextRider} />
+                <RiderDetail key={selected.orderId + data.dayId} eventId={eventId} dayId={data.dayId} rider={selected} onChange={replace} onNext={nextRider} takeDuration={takeDuration} />
               ) : (
                 <div className="ci__placeholder">
                   <p>Search for a rider or scan their check-in code.</p>
@@ -254,7 +275,7 @@ function RowStatus({ r }: { r: CheckInRider }) {
   );
 }
 
-function RiderDetail({ eventId, dayId, rider, onChange, onNext }: { eventId: string; dayId: string; rider: CheckInRider; onChange: (r: CheckInRider) => void; onNext: () => void }) {
+function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: { eventId: string; dayId: string; rider: CheckInRider; onChange: (r: CheckInRider) => void; onNext: () => void; takeDuration: () => number | null }) {
   const [bib, setBib] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -284,7 +305,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext }: { eventId: str
     setBusy(true);
     setError(null);
     try {
-      onChange(await api.checkIn(eventId, rider.orderId, dayId, bib.trim() ? Number(bib) : null));
+      onChange(await api.checkIn(eventId, rider.orderId, dayId, bib.trim() ? Number(bib) : null, takeDuration()));
     } catch (err) {
       setError((err as ApiError).message);
     } finally {

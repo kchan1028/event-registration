@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { bibScopeKey, bibSettingsSchema, checkInResult, DEFAULT_BIB_SETTINGS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
+import { bibScopeKey, bibSettingsSchema, checkInResult, checkInTiming, DEFAULT_BIB_SETTINGS, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
 import { checkSelection, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { evaluateCategory } from '../shared/eligibility';
 import { newId } from '../shared/factory';
@@ -131,6 +131,13 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         checkedIn: enteredToday.filter((c) => c.checkedInAt).length,
         blocked: enteredToday.filter((c) => !c.result.ready).length,
         bibsIssued: takenBibs(eventId, scope).size,
+        /** Measured standard check-ins for this day (product.md target: median under 30 s, 95th percentile under 90 s). */
+        timing: checkInTiming(
+          db
+            .prepare<[string, string], { duration_ms: number }>(`SELECT duration_ms FROM check_ins WHERE event_id = ? AND day_id = ? AND duration_ms IS NOT NULL`)
+            .all(eventId, day.id)
+            .map((r) => r.duration_ms),
+        ),
       };
       return {
         eventId,
@@ -163,7 +170,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
      * Check a ready rider in and issue a bib. Repeating it is safe: the first
      * check-in time and the existing bib come back unchanged.
      */
-    checkIn(eventId: string, orderId: string, dayId: string, requestedBib: number | null) {
+    checkIn(eventId: string, orderId: string, dayId: string, requestedBib: number | null, durationMs: number | null = null) {
       requireDay(config(eventId), dayId);
       return db
         .transaction(() => {
@@ -172,7 +179,9 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
           if (!card.result.ready) throw new HttpError(409, `Not ready to race: ${card.result.blockers.map((b) => b.label.toLowerCase()).join(', ')}.`);
           const s = settings(eventId);
           if (card.bib === null) assign(eventId, orderId, dayId, s, requestedBib);
-          db.prepare(`INSERT OR IGNORE INTO check_ins (id, event_id, order_id, day_id, checked_in_at) VALUES (?, ?, ?, ?, ?)`).run(newId('chk'), eventId, orderId, dayId, nowIso());
+          // Only a first, plausible measurement is kept; a repeat check-in never overwrites it.
+          const duration = durationMs !== null && durationMs > 0 && durationMs <= MAX_TIMED_CHECK_IN_MS ? Math.round(durationMs) : null;
+          db.prepare(`INSERT OR IGNORE INTO check_ins (id, event_id, order_id, day_id, checked_in_at, duration_ms) VALUES (?, ?, ?, ?, ?, ?)`).run(newId('chk'), eventId, orderId, dayId, nowIso(), duration);
           return cardFor(eventId, orderId, dayId);
         })
         .immediate();
