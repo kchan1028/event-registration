@@ -29,11 +29,6 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     return row ? bibSettingsSchema.parse(row.settings_json) : DEFAULT_BIB_SETTINGS;
   }
 
-  async function activeBib(eventId: string, scope: string, orderId: string): Promise<number | null> {
-    const row = await db.get<{ bib: number }>(`SELECT bib FROM bib_assignments WHERE event_id = $1 AND scope = $2 AND order_id = $3 AND released_at IS NULL`, [eventId, scope, orderId]);
-    return row?.bib ?? null;
-  }
-
   async function takenBibs(eventId: string, scope: string): Promise<Set<number>> {
     const rows = await db.all<{ bib: number }>(`SELECT bib FROM bib_assignments WHERE event_id = $1 AND scope = $2 AND released_at IS NULL`, [eventId, scope]);
     return new Set(rows.map((r) => r.bib));
@@ -55,23 +50,37 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     };
   }
 
-  async function riderCard(o: Rider, dayId: string, s: BibSettings) {
-    const scope = bibScopeKey(s, dayId);
+  type BibRow = { order_id: string; bib: number; assigned_at: string; released_at: string | null; release_reason: string | null };
+  type UndoRow = { order_id: string; checked_in_at: string; undone_at: string; bib: number | null; bib_released: boolean; reason: string };
+
+  /** Check-ins, bibs, and undone check-ins for one event, day, and bib scope, read once for every rider card. */
+  async function dayState(eventId: string, dayId: string, scope: string) {
+    const checkIns = await db.all<{ order_id: string; checked_in_at: string }>(`SELECT order_id, checked_in_at FROM check_ins WHERE event_id = $1 AND day_id = $2`, [eventId, dayId]);
+    const bibs = await db.all<BibRow>(
+      `SELECT order_id, bib, assigned_at, released_at, release_reason FROM bib_assignments WHERE event_id = $1 AND scope = $2 ORDER BY assigned_at, seq`,
+      [eventId, scope],
+    );
+    const undos = await db.all<UndoRow>(
+      `SELECT order_id, checked_in_at, undone_at, bib, bib_released, reason FROM check_in_undos WHERE event_id = $1 AND day_id = $2 ORDER BY undone_at, seq`,
+      [eventId, dayId],
+    );
+    const by = <T extends { order_id: string }>(rows: T[]) => {
+      const m = new Map<string, T[]>();
+      for (const r of rows) m.set(r.order_id, [...(m.get(r.order_id) ?? []), r]);
+      return m;
+    };
+    return { checkedInAt: new Map(checkIns.map((c) => [c.order_id, c.checked_in_at])), bibs: by(bibs), undos: by(undos) };
+  }
+  type DayState = Awaited<ReturnType<typeof dayState>>;
+
+  function riderCard(o: Rider, dayId: string, state: DayState) {
     const today = o.entries.filter((e) => e.dayId === dayId && e.status !== 'released' && e.status !== 'withdrawn');
     const readiness = mergeReadiness(today.map((e) => e.readiness));
     const payment = o.status === 'confirmed' ? 'confirmed' : 'not_complete';
     const result = checkInResult({ payment, entriesToday: today.length, readiness });
-    const checkIn = await db.get<{ checked_in_at: string }>(`SELECT checked_in_at FROM check_ins WHERE order_id = $1 AND day_id = $2`, [o.id, dayId]);
-    const history = (
-      await db.all<{ bib: number; assigned_at: string; released_at: string | null; release_reason: string | null }>(
-        `SELECT bib, assigned_at, released_at, release_reason FROM bib_assignments WHERE event_id = $1 AND scope = $2 AND order_id = $3 ORDER BY assigned_at, seq`,
-        [o.eventId, scope, o.id],
-      )
-    ).map((r) => ({ bib: r.bib, assignedAt: r.assigned_at, releasedAt: r.released_at, reason: r.release_reason }));
-    const undone = await db.all<{ checked_in_at: string; undone_at: string; bib: number | null; bib_released: boolean; reason: string }>(
-      `SELECT checked_in_at, undone_at, bib, bib_released, reason FROM check_in_undos WHERE order_id = $1 AND day_id = $2 ORDER BY undone_at, seq`,
-      [o.id, dayId],
-    );
+    const bibRows = state.bibs.get(o.id) ?? [];
+    const history = bibRows.map((r) => ({ bib: r.bib, assignedAt: r.assigned_at, releasedAt: r.released_at, reason: r.release_reason }));
+    const undone = state.undos.get(o.id) ?? [];
     return {
       orderId: o.id,
       checkInCode: o.checkInCode,
@@ -83,9 +92,9 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       entries: today.map((e) => ({ id: e.id, categoryId: e.categoryId, categoryName: e.categoryName, code: e.code, raceName: e.raceName, startTime: e.startTime })),
       readiness,
       result,
-      bib: await activeBib(o.eventId, scope, o.id),
+      bib: bibRows.find((r) => r.released_at === null)?.bib ?? null,
       bibHistory: history,
-      checkedInAt: checkIn?.checked_in_at ?? null,
+      checkedInAt: state.checkedInAt.get(o.id) ?? null,
       undoneCheckIns: undone.map((u) => ({ checkedInAt: u.checked_in_at, undoneAt: u.undone_at, bib: u.bib, bibReleased: u.bib_released, reason: u.reason })),
     };
   }
@@ -102,7 +111,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     return [...groups.values()].map(mergeRider);
   }
 
-  function matches(card: Awaited<ReturnType<typeof riderCard>>, q: string): boolean {
+  function matches(card: ReturnType<typeof riderCard>, q: string): boolean {
     const needle = q.trim().toLowerCase();
     if (!needle) return true;
     const bare = (v: string) => v.toLowerCase().replace(/[\s-]/g, '');
@@ -127,7 +136,8 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const x = await orders.getOrder(id);
       if (x.status !== 'cancelled' && x.status !== 'expired') group.push(x);
     }
-    return riderCard(mergeRider(group.length ? group : [o]), dayId, await settings(eventId));
+    const s = await settings(eventId);
+    return riderCard(mergeRider(group.length ? group : [o]), dayId, await dayState(eventId, dayId, bibScopeKey(s, dayId)));
   }
 
   /** Assign a bib inside the configured range without colliding with an active one. */
@@ -161,9 +171,8 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const cfg = await config(eventId);
       const day = dayId ? requireDay(cfg, dayId) : cfg.days[0];
       const s = await settings(eventId);
-      const all = [];
-      for (const o of await riders(eventId)) all.push(await riderCard(o, day.id, s));
-      all.sort((a, b) => a.name.localeCompare(b.name));
+      const state = await dayState(eventId, day.id, bibScopeKey(s, day.id));
+      const all = (await riders(eventId)).map((o) => riderCard(o, day.id, state)).sort((a, b) => a.name.localeCompare(b.name));
       const enteredToday = all.filter((c) => c.entries.length > 0);
       // A search also finds riders with no entry today, so the volunteer sees why; the plain list shows only today's riders.
       const cards = q.trim() ? all.filter((c) => matches(c, q)) : enteredToday;
