@@ -17,6 +17,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showBibs, setShowBibs] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const detailRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   /** When the volunteer started looking for the current rider (first keystroke or scan into an empty search). */
@@ -63,7 +64,12 @@ export function CheckIn({ eventId }: { eventId: string }) {
    */
   async function onSearchSubmit(e: FormEvent) {
     e.preventDefault();
-    const query = q.trim();
+    await lookup(q);
+  }
+
+  /** Look up typed, scanned, or camera-read text and open the rider when exactly one matches. */
+  async function lookup(text: string) {
+    const query = text.trim();
     if (!query) return;
     try {
       const fresh = await api.checkInList(eventId, dayId, query);
@@ -193,6 +199,27 @@ export function CheckIn({ eventId }: { eventId: string }) {
                   }}
                 />
               </form>
+              <button
+                type="button"
+                className="btn btn--secondary btn--small ci__scan-btn"
+                aria-expanded={scanning}
+                onClick={() => {
+                  if (!scanning && startedAt.current === null) startedAt.current = performance.now();
+                  setScanning((v) => !v);
+                }}
+              >
+                {scanning ? 'Stop camera' : 'Scan with camera'}
+              </button>
+              {scanning && (
+                <CameraScan
+                  onCode={(code) => {
+                    setScanning(false);
+                    setQ(code);
+                    void lookup(code);
+                  }}
+                  onClose={() => setScanning(false)}
+                />
+              )}
               <p className="ci__count" aria-live="polite">
                 {q ? `${riders.length} ${riders.length === 1 ? 'match' : 'matches'}` : `${riders.length} riders on ${day?.label ?? 'this day'}`}
               </p>
@@ -621,5 +648,87 @@ function BibSettingsPanel({ data, onSaved, onClose }: { data: CheckInList; onSav
         </p>
       )}
     </form>
+  );
+}
+
+/** Minimal typing for the browser's built-in BarcodeDetector (Chrome and Edge). */
+interface DetectedBarcode {
+  rawValue: string;
+}
+interface BarcodeDetectorLike {
+  detect(source: HTMLVideoElement): Promise<DetectedBarcode[]>;
+}
+type BarcodeDetectorCtor = new (opts: { formats: string[] }) => BarcodeDetectorLike;
+
+/**
+ * Read a check-in QR code with the device camera. Uses the browser's built-in barcode detector,
+ * so it works in Chrome and Edge; elsewhere it explains that typing or a USB scanner still works.
+ * The video stays on this device; nothing is recorded or sent.
+ */
+function CameraScan({ onCode, onClose }: { onCode: (code: string) => void; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
+
+  useEffect(() => {
+    if (!Detector) return;
+    let stream: MediaStream | null = null;
+    let timer: number | null = null;
+    let done = false;
+    const detector = new Detector({ formats: ['qr_code'] });
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        if (done || !videoRef.current) return;
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        timer = window.setInterval(async () => {
+          if (done || !videoRef.current) return;
+          try {
+            const found = await detector.detect(videoRef.current);
+            const value = found[0]?.rawValue?.trim();
+            if (value && !done) {
+              done = true;
+              onCode(value);
+            }
+          } catch {
+            /* frame not ready yet */
+          }
+        }, 250);
+      } catch {
+        setError('The camera could not be opened. Allow camera access for this page, or type the code instead.');
+      }
+    })();
+    return () => {
+      done = true;
+      if (timer !== null) window.clearInterval(timer);
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!Detector) {
+    return (
+      <p className="ci__notice small" role="status">
+        This browser cannot read QR codes from the camera. Use Chrome or Edge, a USB scanner, or type the code.{' '}
+        <button type="button" className="link-btn" onClick={onClose}>
+          Close
+        </button>
+      </p>
+    );
+  }
+  return (
+    <div className="ci__camera">
+      <video ref={videoRef} className="ci__video" muted playsInline aria-label="Camera view for scanning a check-in QR code" />
+      {error ? (
+        <p className="text-error small" role="alert">
+          {error}
+        </p>
+      ) : (
+        <p className="muted small" role="status">
+          Hold the rider’s QR code in front of the camera.
+        </p>
+      )}
+    </div>
   );
 }

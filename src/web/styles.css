@@ -2592,6 +2592,13 @@ button.issue {
   line-height: 1;
   letter-spacing: 0.06em;
 }
+.ticket__qr {
+  display: block;
+  margin: var(--s-2) 0;
+  background: #fff;
+  border-radius: var(--r-sm);
+  image-rendering: pixelated;
+}
 .done__entries {
   list-style: none;
   margin: 0;
@@ -3235,6 +3242,19 @@ fieldset:disabled .field label {
   gap: var(--s-3);
   margin-left: auto;
   flex-wrap: wrap;
+}
+.ci__scan-btn {
+  margin-top: var(--s-2);
+}
+.ci__camera {
+  margin-top: var(--s-2);
+}
+.ci__video {
+  width: 100%;
+  max-height: 240px;
+  border-radius: var(--r-md);
+  background: #000;
+  object-fit: cover;
 }
 .ci__summary {
   display: grid;

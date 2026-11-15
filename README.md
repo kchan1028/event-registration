@@ -59,7 +59,8 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Same-rider suggestions across orders, linked only when the organizer confirms | Implemented; automated tests in CI |
 | Organizer CSV exports: entries and a simulated ledger, without contact details | Implemented; automated tests in CI |
 | Per-category rider questions, waiver addenda, and bib ranges | Implemented; automated tests in CI |
-| Real payments and refunds, QR scanning, an agreed timer format | Planned |
+| QR check-in code on the rider confirmation; camera scanning at check-in in Chrome and Edge | Implemented; live camera scan not yet checked |
+| Real payments and refunds, an agreed timer format | Planned |
 
 <details>
 <summary>More screens: category editor, rider preview, publishing, rider checkout, registrations, phone layouts</summary>

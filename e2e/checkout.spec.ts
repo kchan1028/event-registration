@@ -59,6 +59,8 @@ test('two races on one day: second-race discount, fees, signature errors, back n
   await page.getByRole('button', { name: /Complete simulated payment \(\$59\.65\)/ }).click();
 
   await expect(page.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
+  // The check-in code is also shown as a QR code for scanning at the check-in table.
+  await expect(page.getByRole('img', { name: /QR code for check-in code/ })).toBeVisible();
   await expect(page.locator('.reg__meta')).toContainText(/order DEMO-/);
   await expect(page.locator('.receipt')).toHaveAttribute('data-watermark', 'DEMO');
   await expect(page.locator('.receipt')).toContainText('Simulated payment: no money is charged.');
