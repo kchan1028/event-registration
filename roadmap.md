@@ -20,7 +20,7 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 | Light and dark display themes | Implemented (November 14, 2026); partly verified | Organizer and rider prototype screens: system default, header toggle on every screen, saved per device, applied before first paint, light palette for print. Token contrast checked against WCAG 2.2 AA in the browser; the rider demo has an automated theme switch test. The check-in screen uses it, with fixed high-contrast result fills for sunlight. |
 | Timer export review packet | Implemented (November 14, 2026) | Column list, sample CSV of fictional riders, and ten questions for the timer and officials in [docs/timer-export-review.md](docs/timer-export-review.md). Not yet sent; the timer's acceptance is a Phase 1 exit gate item. |
 | Phase 1 usability test kit | Implemented (November 14, 2026) | Recruiting, setup, facilitator script, core and optional tasks per role, scoring for the 90% gate, and a results summary template in [docs/usability/](docs/usability/README.md). No sessions have been run. |
-| Phase 0: Establish the case to build | Planned | Not started. The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. Next actions are listed at the end of this document. Outreach questions for USA Cycling and payment providers are written but not sent. |
+| Phase 0: Establish the case to build | In progress | The [discovery kit](docs/discovery/README.md) is implemented (interview guides, workflow map, workload baseline, options comparison, USAC and payment questions, pilot selection, decision memo). No interviews, observations, or measurements have been done, no owners are named, and nothing has been sent to USAC or payment providers. The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. Next actions are listed at the end of this document. Send-ready versions of the outreach questions: [questions for USA Cycling](docs/usac-questions.md) and [payment model questions](docs/payment-model-questions.md). |
 | Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented as prototypes. The race-day check-in prototype and sample timer exports are implemented too. Usability tests have not been run (the [test kit](docs/usability/README.md) is ready), and the export format is not yet agreed with a timer. |
 | Phase 2: Build the registration core | Planned | Depends on Phase 1 and a settled payment model. |
 | Phase 3: Make race day operable | Planned | USAC acceptance gates live sanctioned use. |
@@ -128,6 +128,8 @@ Deliverables:
 - Identify a smaller pilot event, its accountable organizer, and a support owner.
 
 Exit gate: A specific, recurring problem has a measurable workload cost; a custom product has a credible advantage; a team and budget exist; external requirements have named owners. If not, recommend improving the incumbent workflow and stop the build.
+
+Tools: the [discovery kit](docs/discovery/README.md) has a file for each deliverable and a [decision memo](docs/discovery/decision-memo.md) that records the exit-gate evidence. Phase 0 is Verified only when the product owner signs that memo.
 
 ## Phase 1 — Test the experience without live money
 
@@ -273,10 +275,10 @@ These are roles to assign, not assumed staffing commitments.
 
 ## Next actions
 
-1. Assign a product owner and registration lead for discovery.
+1. Assign a product owner and registration lead for discovery, and record them in the [decision memo](docs/discovery/decision-memo.md#team-and-owners).
 2. Obtain an anonymized existing category setup, timer export, exception list, and reconciliation example.
-3. Schedule one workflow observation and the initial interviews.
-4. Submit federation and payment-model questions before choosing the production stack. ADR 0001 covers only the local prototype. The questions are ready to send: [questions for USA Cycling](docs/usac-questions.md) and [payment model questions](docs/payment-model-questions.md).
+3. Schedule one workflow observation and the initial interviews, using the [interview guides](docs/discovery/interview-guides.md), [workflow map](docs/discovery/workflow-map.md), and [workload baseline](docs/discovery/workload-baseline.md).
+4. Submit federation and payment-model questions before choosing the production stack, using [questions for USA Cycling](docs/usac-questions.md) and [payment model questions](docs/payment-model-questions.md); track owners and status in [external-requirements.md](docs/discovery/external-requirements.md). ADR 0001 covers only the local prototype.
 5. Research the road-results.com update process with the timer and a recent promoter. Send the timer the [timer export review packet](docs/timer-export-review.md) and record the answers there.
 6. Run the category builder with the registration lead on an anonymized real schedule, and the rider checkout with at least five riders or parents, recording where each needed help (Phase 1 usability test). Use the [usability test kit](docs/usability/README.md).
-7. Complete the build-versus-improve decision and revise estimates from evidence.
+7. Complete the build-versus-improve decision with the [options comparison](docs/discovery/options-comparison.md), shortlist a pilot with [pilot-selection.md](docs/discovery/pilot-selection.md), and revise estimates from evidence in the [decision memo](docs/discovery/decision-memo.md).

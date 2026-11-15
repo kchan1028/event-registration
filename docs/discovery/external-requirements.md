@@ -1,0 +1,33 @@
+# External requirements
+
+Use this file to track who owns each question the project cannot answer on its own: USA Cycling (USAC), payment providers, and the results path to road-results.com. Each needs a named owner before Phase 0 can exit. The questions themselves, and their answers, live in the linked packets so there is one copy of each.
+
+Nothing has been sent. The packets include draft messages for the owner to adapt and send from their own account. Do not claim any integration or approval exists until the answer is recorded in its packet with a date.
+
+## Status
+
+| Question area | Owner | Sent | Answer received | Outcome |
+|---|---|---|---|---|
+| USAC integration and accepted license and waiver processes | Not assigned | No | No | |
+| Payment-provider operating model | Not assigned | No | No | |
+| Results path to road-results.com | Not assigned | No | No | See the [timer export review](../timer-export-review.md) |
+
+## USA Cycling
+
+Goal: learn whether a registration platform can be accepted for sanctioned events, and what process applies until any integration exists. Background: [future USAC integration](../../product.md#future-usa-cycling-waiver-and-license-integration) in product.md.
+
+The questions, the message to send, and the answer table live in one place: [questions for USA Cycling](../usac-questions.md). Record answers there, then update the status row above.
+
+## Payment-provider operating models
+
+Goal: choose an operating model to test in Phase 2, not a provider. Background: the [payment decision](../decisions/README.md) in the decision backlog. Cards are never stored by this project; payment uses a provider's hosted flow.
+
+The models, the questions for the treasurer and for each provider, and the place to record findings live in [payment model questions](../payment-model-questions.md). Record findings there, then update the status row above.
+
+## Results path to road-results.com
+
+The questions and a sample start list are in the [timer export review packet](../timer-export-review.md); send it to the timer and record answers there. Also ask one recent promoter of a comparable event who uploads results and from what file. Background: [results site updates](../../product.md#results-site-updates-research) in product.md.
+
+| Event | Who uploads | File used | Columns that matter | Date asked | Source |
+|---|---|---|---|---|---|
+| | | | | | |

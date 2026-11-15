@@ -1,6 +1,6 @@
 # Questions for USA Cycling
 
-Status: Proposed, written November 14, 2026. Not yet sent. Answers go in the table at the end of this page.
+Status: Proposed, written November 14, 2026. Not yet sent. Answers go in the table at the end of this page; the owner and status are tracked in the [Phase 0 discovery kit](discovery/external-requirements.md#status).
 
 USA Cycling's answers decide whether this product can handle waivers and license checks for sanctioned events at all, so they come before any choice of production stack or live pilot. This is a [Phase 0](../roadmap.md#phase-0--establish-the-case-to-build) deliverable and [open decision 4](../product.md#open-decisions) in product.md. Until the answers are in, the prototype keeps using simulated checks and organizer review only.
 
