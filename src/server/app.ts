@@ -76,7 +76,16 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     };
   }
 
-  app.get('/api/health', async () => ({ ok: true }));
+  // Health check for a load balancer or platform: answers 503 while the database cannot be reached.
+  app.get('/api/health', async (_req, reply) => {
+    try {
+      await db.get('SELECT 1');
+      return { ok: true };
+    } catch (err) {
+      app.log.error(err);
+      return reply.status(503).send({ ok: false, error: 'The database cannot be reached.' });
+    }
+  });
 
   app.get('/api/organizations', async () => repo.listOrganizations());
 
