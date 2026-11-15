@@ -84,6 +84,36 @@ const MIGRATIONS: string[] = [
     created_at TEXT NOT NULL
   );
   `,
+  `
+  -- Race-day check-in prototype.
+  CREATE TABLE bib_settings (
+    event_id TEXT PRIMARY KEY REFERENCES events(id),
+    settings_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  -- Bib history: a changed bib is released with a reason, never deleted.
+  CREATE TABLE bib_assignments (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES events(id),
+    scope TEXT NOT NULL,
+    order_id TEXT NOT NULL REFERENCES orders(id),
+    bib INTEGER NOT NULL,
+    assigned_at TEXT NOT NULL,
+    released_at TEXT,
+    release_reason TEXT
+  );
+  CREATE UNIQUE INDEX bib_active_number ON bib_assignments(event_id, scope, bib) WHERE released_at IS NULL;
+  CREATE UNIQUE INDEX bib_active_rider ON bib_assignments(event_id, scope, order_id) WHERE released_at IS NULL;
+  -- One check-in per rider (order) per race day; repeats return the first.
+  CREATE TABLE check_ins (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES events(id),
+    order_id TEXT NOT NULL REFERENCES orders(id),
+    day_id TEXT NOT NULL,
+    checked_in_at TEXT NOT NULL,
+    UNIQUE (event_id, order_id, day_id)
+  );
+  `,
 ];
 
 export function openDb(path: string): Db {

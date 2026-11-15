@@ -161,3 +161,18 @@ describe('publishing', () => {
     await app.close();
   });
 });
+
+describe('Berkeley Omnium demo', () => {
+  it('seeds both races with every 2026 field and no publish-blocking errors', async () => {
+    const { app } = buildApp({ dbPath: ':memory:' });
+    const res = await app.inject({ method: 'POST', url: '/api/demo/berkeley-omnium' });
+    expect(res.statusCode).toBe(201);
+    const { eventId } = res.json() as { eventId: string };
+    const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as Payload;
+    expect(event.config.races.map((r) => r.name)).toEqual(['Berkeley Hills Road Race', 'Berkeley Streets Criterium']);
+    expect(event.config.startGroups.filter((g) => g.raceId === event.config.races[0].id)).toHaveLength(16);
+    expect(event.config.startGroups.filter((g) => g.raceId === event.config.races[1].id)).toHaveLength(12);
+    expect(event.issues.filter((i) => i.level === 'error')).toEqual([]);
+    expect(event.entries.length).toBeGreaterThan(0);
+  });
+});

@@ -178,7 +178,7 @@ Rules:
 - **Validation.** Required fields are marked. Errors appear next to the field when the rider tries to continue, say what is wrong and how to fix it, are summarized at the top of the step, and are announced to screen readers. See the [accessibility rules](docs/coding-guide.md#accessibility-and-mobile-usability).
 - **Simulation labeling.** Every demo screen shows a persistent, readable "Demo" label. The order review, payment step, confirmation, and receipt also state "Simulated payment: no money is charged". Buttons say "Complete simulated payment", never "Pay" or "Buy". The receipt is watermarked as a demo.
 - **Separate states.** Entry, payment, and readiness states stay independent in the demo, as in the product. A simulated paid entry is not shown as cleared to race.
-- **Fake data only.** Demo events, riders, prices, fees, and the sample waiver are fictional fixtures in [docs/fixtures/](docs/fixtures/README.md), which also lists the worked orders and totals a demo must reproduce. Never use real rider data or present demo prices and fees as real ones.
+- **Fake rider data only.** Demo riders, prices, fees, and the sample waiver are fictional fixtures in [docs/fixtures/](docs/fixtures/README.md), which also lists the worked orders and totals a demo must reproduce. Never use real rider data or present demo prices and fees as real ones. The one real event allowed is the Berkeley Omnium, which its promoter has approved as demo event data: its fields, distances, times, and field limits come from the published race information, while its entries stay simulated and its fees stay placeholders until the promoter sets them.
 
 ### 3. Capacity and entry integrity
 
@@ -199,6 +199,8 @@ Rules:
 - Support owner, registration manager, check-in volunteer, timer/export, and finance roles. Owners can transfer responsibility to a successor.
 
 ### 5. Race-day operations
+
+Status: check-in search, ready/blocked result, bib ranges, bib history, and repeat-safe check-in are Implemented in the local prototype on fake data (see [roadmap.md](roadmap.md#check-in-prototype)). QR scanning, start-list snapshots, exports, and the printable roster are Planned.
 
 - Search or scan a check-in code; codes identify entries and contain no sensitive rider details.
 - Show readiness, missing requirements, race/category, and bib assignment clearly.
@@ -319,7 +321,7 @@ To research before Phase 3:
 
 ### Display themes
 
-Status: Implemented in the local organizer prototype (home, builder, and rider preview screens); signed-in sync and the screens not yet built (rider checkout, check-in) are Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
+Status: Implemented in the local prototype (organizer, rider, and check-in screens); signed-in sync is Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
 
 - Default to the device's system preference (light or dark) on first visit.
 - Provide a visible, keyboard-accessible light/dark toggle on every screen, with an accessible name that states the current theme.

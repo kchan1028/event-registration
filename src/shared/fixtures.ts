@@ -145,6 +145,7 @@ function build(
       bundles: [],
       additionalRaceDiscountCents: 0,
       additionalRaceDiscountMode: 'each_additional_entry',
+      sameRaceExtraEntryCents: null,
       recoveryMinutes: 15,
       refundPolicy: 'Demo policy for usability testing: no real money is charged, so nothing is refunded.',
       waiverText: FIXTURE_WAIVER_TEXT,

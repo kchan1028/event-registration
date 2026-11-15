@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { checkSelection, findConflicts, profileOf } from '../src/shared/checkout';
+import { buildBerkeleyOmniumEvent } from '../src/shared/berkeleyOmnium';
 import { buildDemoEvent } from '../src/shared/demo';
 import { categoryPrice, quote } from '../src/shared/pricing';
 import type { EventConfig } from '../src/shared/schema';
@@ -161,6 +162,24 @@ describe('demo purchase flow fixtures (docs/fixtures)', () => {
     const plan = buildFixtureEvents()[0];
     const m35 = plan.config.categories.find((c) => c.name === 'Masters 35+ Cat 3/4')!;
     expect(plan.entryPlan.find((p) => p.categoryId === m35.id)?.count).toBe(m35.cap);
+  });
+});
+
+describe('flat price for an extra entry in the same race (Berkeley Omnium: second crit race $20)', () => {
+  const omnium = () => buildBerkeleyOmniumEvent().config;
+
+  it('charges the second criterium entry $20 and leaves the first at full price', () => {
+    const c = omnium();
+    const q = quote(c, [id(c, 'CR-M35-34'), id(c, 'CR-E4')], '2027-03-15');
+    expect(q.lines.map((l) => l.totalCents).sort((a, b) => b - a)).toEqual([5000, 2000]);
+    expect(q.lines.filter((l) => l.discountReason === 'Extra entry in the same race')).toHaveLength(1);
+  });
+
+  it('does not touch entries in different races, or a cheaper extra entry', () => {
+    const c = omnium();
+    expect(quote(c, [id(c, 'RR-M35-34'), id(c, 'CR-M35-34')], '2027-03-15').totalCents).toBe(6000 + 5000);
+    c.registration.sameRaceExtraEntryCents = 9000;
+    expect(quote(c, [id(c, 'CR-M35-34'), id(c, 'CR-E4')], '2027-03-15').totalCents).toBe(10000);
   });
 });
 
