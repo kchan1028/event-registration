@@ -238,6 +238,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [SECURITY.md](SECURITY.md) | How to report a security problem privately, and a summary of security requirements |
 | [ACCESSIBILITY.md](ACCESSIBILITY.md) | Accessibility target, how it will be checked, and how to report a barrier |
 | [LICENSE.md](LICENSE.md) | MIT License |
+| [DATA_MODEL.md](DATA_MODEL.md) | Current database: tables, relationships, constraints, and deletion behavior |
 | [docs/architecture.md](docs/architecture.md) | What is built, the proposed target architecture, and open technical questions |
 | [docs/csv-category-format.md](docs/csv-category-format.md) | Columns and rules for importing and exporting category schedules |
 | [SETUP.md](SETUP.md) | Quick start: install, run, and test the prototype |

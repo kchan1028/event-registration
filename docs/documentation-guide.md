@@ -13,6 +13,7 @@ Every change must review both [product.md](../product.md) and [roadmap.md](../ro
 - Mark roadmap work complete only after its acceptance criteria are verified.
 - Distinguish planned, implemented, and verified behavior.
 - Do not maintain a competing product roadmap elsewhere.
+- Whenever a change affects the database schema, entities, relationships, constraints, or data behavior, update [`DATA_MODEL.md`](../DATA_MODEL.md) in the same change. Database changes are not complete until the documentation reflects them.
 
 The change summary format is in [CONTRIBUTING.md](../CONTRIBUTING.md#change-summary).
 
@@ -30,6 +31,7 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Accessibility target, checks, and barrier reports | [ACCESSIBILITY.md](../ACCESSIBILITY.md) | Detailed rules stay in the coding guide |
 | License | [LICENSE.md](../LICENSE.md) | MIT |
 | Technical structure and constraints | [architecture.md](architecture.md) | Labeled Proposed until ADRs accept it |
+| Current database tables, relationships, constraints, and deletion behavior | [DATA_MODEL.md](../DATA_MODEL.md) | Describes what is implemented; the target model is in `product.md` |
 | Significant technical decisions | [decisions/](decisions/README.md) | One file per decision |
 | Operating model: support, incidents, monitoring, backups, handoff | [operations.md](operations.md) | Labeled Proposed until there is a running system |
 | Domain rules for code | [coding-guide.md](coding-guide.md) | |
