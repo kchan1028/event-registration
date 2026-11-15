@@ -151,6 +151,35 @@ These are illustrative product fixtures, not an approved BHRR schedule or statem
 | Rider entering two criteriums | Two valid entries and an additional-race discount, with schedule conflict checks |
 | Weekend entry with different day categories | One order, independently validated category selections, atomic reservation across both days |
 
+### Reusable organizer templates
+
+Status: Planned enhancement for later implementation, beyond the existing format templates and Berkeley demo loaders. Current road-race, criterium, and weekend templates create event structure without categories. This enhancement does not replace the category builder or add a separate template for every possible field combination.
+
+Use three reusable layers:
+
+| Layer | Contents | Organizer choices |
+|---|---|---|
+| Event format | Day/race structure and package setup appropriate to the format | Road race, criterium, omnium; stage race only when TT support exists |
+| Category presets | Editable names, explicit eligibility paths, guardian requirements, and classification definitions | Elite, novice, masters age/license combinations, junior age bands, collegiate; select individual categories from each set |
+| Start configuration | Deliberate category membership in starts, separate classifications, and explicit capacity links | Separate starts or a shared start with separate scoring and a configured field limit |
+
+- Organizers choose a starter, add/remove/edit category presets, arrange starts, and set event-specific dates, times, lengths, prices, windows, capacities, and package/overall-participation rules. Changes remain editable in the regular builder. Applying a preset is an explicit configuration action, never an inference from a display label.
+- Provide a named Berkeley example assembled from these layers, clearly labeled as draft/example data. Reuse the road-race and criterium category sets independently: shared masters starts, collegiate/domestic paths, junior groupings, and women's race choices can differ by day. Do not assume identical cross-day categories or awards. Do not generate every age/license/class combination automatically.
+- Let an organizer save a reviewed setup for their organization and copy a previous edition without copying riders, entries, payments, signatures, bib assignments, or check-in records. Template visibility and editing require appropriate organization permissions; public sharing is not implied.
+- Record template version, source event/version where applicable, season, rule source, and review status. Applying or copying creates fresh configuration IDs and remaps all included category/start/classification/capacity/package references. Later template edits must not mutate existing drafts, published versions, or paid orders.
+- Never treat missing values as approved defaults. Unset caps, ambiguous eligibility, dates, start/staging times, prices, capacity relationships, and outdated rule sources appear in a required review checklist. Starter values may be retained only with their provenance and explicit review; the normal publish validation still applies. A template is not current federation approval.
+- Provide a before/after preview when adding presets to a populated draft, showing duplicate labels/codes and affected references. Never silently merge categories, classifications, starts, or capacity pools. Existing post-publication impact checks remain mandatory.
+
+Acceptance: an organizer uses the same two masters category presets to configure separate road-race starts and a shared criterium start with separate classifications, without creating separate full-event templates. A second organizer loads the named Berkeley example, edits it, saves an organization template, and creates next season's draft with fresh IDs and no participants or financial/signature history. Unknown rules/limits remain visible for review, and later source-template changes do not modify previously created events. Verify with organizers before calling the workflow complete.
+
+#### Template case-study coverage
+
+Status: Research documented November 14, 2026; reusable template implementation remains Planned. The [case-study set](docs/case-studies/organizer-templates/README.md) covers Redlands Bicycle Classic, Chicago Grit, Tulsa Tough, Berkeley Omnium, Golden State Race Series, and California Bicycle Racing (CBR, confirmed by the product owner).
+
+Use their proposed setup exercises to validate selectable presets, per-day category availability, independent staging/start times, shared starts versus classifications, package membership versus overall participation, copied-event overrides, and unresolved-source review. These are representative research cases, not approved event configurations or implemented acceptance tests. Their source editions and original publication links are recorded per case; never import real rider records or infer federation approval.
+
+The cases expose design dependencies to resolve before claiming coverage: Chicago's ten-day program exceeds the current seven-day schema limit; TT and circuit representation, team-managed invitational entry, dual-duration starts, and flexible future-use entitlements are not implemented. Do not silently truncate, relabel, split, or auto-correct a source to make a template load. A missing capability or contradictory source value must be shown as unresolved. Professional/team workflows and open-ended season benefits require a further scope decision; results scoring remains excluded.
+
 ### Omnium and stage-race setup
 
 Status: Planned organizer workflow. Same-event package pricing exists, but there is no dedicated competition setup or editable podium/overall-participation configuration. Time-trial support is not built.
@@ -553,7 +582,7 @@ Reviewed November 14, 2026. Product requirements above are proposed; listed sour
 
 ### BikeReg feature research snapshot
 
-Reviewed November 14, 2026 for the [feature gap review](competitor-profiles/bikereg.md). These are documented competitor claims, not hands-on verification or new CycleReg requirements. No parity claim is made.
+Reviewed November 14, 2026 for a local BikeReg feature-gap review. These are documented competitor claims, not hands-on verification or new CycleReg requirements. No parity claim is made.
 
 - [BikeReg features](https://www.bikereg.com/features): refunds, credits, participant transfers, event-user permissions, email, custom questions, merchandise, coupons, block pricing, and reporting.
 - [Payment policy](https://www.bikereg.com/Users/Public/Director/PaymentPolicy.aspx): organizer disbursements.
@@ -566,10 +595,24 @@ CycleReg scope and phase priorities remain unchanged. Refer to the existing live
 
 ### Movemint feature research snapshot
 
-Reviewed November 14, 2026 for the [Movemint comparison](competitor-profiles/movemint.md), excluding volunteer-management functions. This records official documentation claims, not verified live behavior or additional CycleReg requirements. Requirements and roadmap priorities are unchanged by this review.
+Reviewed November 14, 2026 for a local Movemint comparison, excluding volunteer-management functions. This records official documentation claims, not verified live behavior or additional CycleReg requirements. Requirements and roadmap priorities are unchanged by this review.
 
 - [Series passes](https://docs.movemint.cc/organizers/event-setup/series), updated October 16, 2026: multi-event registration in one purchase, pass pricing/caps/windows, locked component membership after first sale, and organizer pass transfers. Independent-organizer revenue splitting is not established by this page.
 - [Financials](https://docs.movemint.cc/organizer-dashboard/financials) and [refunds](https://docs.movemint.cc/organizers/managing-participants/refund-a-participant): Stripe-backed payout management and full/partial refunds; registration removal and refunds are separate actions.
 - [Communications](https://docs.movemint.cc/organizer-dashboard/communications-hub/email), [CRM](https://docs.movemint.cc/organizers/managing-participants/crm), [audiences](https://docs.movemint.cc/organizers/comms-marketing/audiences), and [dashboard](https://docs.movemint.cc/organizers/data-tools/organizer-dashboard): scheduled audience-based email, participant history/exports, saved views, and event/date-filtered reporting.
 - [Rider transfers](https://docs.movemint.cc/athletes/registrations/transfer-your-registration), [event-day registration](https://docs.movemint.cc/organizers/pre-race-event-day/event-day-registration), [admin roles](https://docs.movemint.cc/organizers/event-setup/admin-roles), and [questions](https://docs.movemint.cc/organizers/setting-up-your-event/registration/questions): participant changes, on-site workflows, event-scoped access, and configurable forms.
 - [Event groups](https://docs.movemint.cc/organizers/event-setup/groups), [FAQ](https://docs.movemint.cc/organizers/resources/faqs), [pricing](https://docs.movemint.cc/resources/pricing), and [refund protection](https://docs.movemint.cc/organizers/premium-add-ons/how-refund-protection-works): group discounts/credits, merchandise, timer/results integration, optional services, and guest registration. No current USAC or specialized omnium/stage-race scoring parity is inferred.
+
+
+### Organizer template case-study sources
+
+Reviewed November 14, 2026 for [six setup case studies](docs/case-studies/organizer-templates/README.md). These are dated publication observations and proposed configuration exercises, not official federation-rule verification or new working integrations.
+
+| Case | Publication baseline |
+|---|---|
+| Redlands Bicycle Classic | [2026 men's technical guide](https://redlandsclassic.com/wp-content/uploads/2026/04/2026_Mens_Tech_Guide_Final3.pdf) and [licensed-racing page](https://redlandsclassic.com/usac-licensed-racing/); distinguish professional stages from separate public racing |
+| Chicago Grit | [2026 flyer](https://chicago-grit.com/wp-content/uploads/2026/07/2026-GRIT-Flyer-0705-1.pdf) and [technical guide](https://chicago-grit.com/wp-content/uploads/2026/07/2026-GRIT-Tech-Guide-0705-1.pdf); day-specific programs and separate daily/overall classifications |
+| Tulsa Tough | [Dated 2026 weekend schedule](https://www.tulsatough.com/blue-dome-criterium); category availability differs across the three days |
+| Berkeley Omnium | [Racing page](https://berkeleyomnium.com/racing); 2026 schedules presented alongside 2027 dates; local fixture is draft interpretation |
+| Golden State Race Series | [NCNCA 2026 listing](https://ncnca.org/event/golden-state-race-series-circuit-3/) linking the [promoter flyer](https://d377h05jk13k61.cloudfront.net/usacycling/d61585ec1312abb04dc5e9f4df32fb18.pdf), plus [published timer classification rules](https://www.ontheday.net/2026/gsrs/stage_race/classification_rules/); conflicts remain for promoter review |
+| California Bicycle Racing | [2026 Carson flyer](https://californiabicycleracing.com/wp-content/uploads/2026/04/04.19.26-Carson-Flyer-V2.pdf), [Roger Millikan flyer](https://californiabicycleracing.com/wp-content/uploads/2026/01/02.22.26_Roger_Millikan_flyer.pdf), and [organizer site](https://californiabicycleracing.com/); repeated events with special-day overrides and source conflicts |
