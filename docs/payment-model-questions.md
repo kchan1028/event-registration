@@ -25,14 +25,14 @@ Answer these with the treasurer and race director before talking to providers.
 
 | # | Question | Answer | Date |
 |---|---|---|---|
-| 1 | Which legal entity receives entry fees (club, a nonprofit, an individual)? Does it already have a bank account and a payment provider? Which model would the club accept, and who must approve it? | | |
-| 2 | Is the club tax-exempt? Does anyone need tax forms for the money collected? | | |
+| 1 | Which legal entity receives entry fees (club, a nonprofit, an individual)? Does it already have a bank account and a payment provider? Which model would the club accept, and who must approve it? | A nonprofit corporation receives the entry fees and has its own bank account. Today's provider is BikeReg. Who must approve a switch was not stated. (Project owner, in chat.) | 2026-11-15 |
+| 2 | Is the club tax-exempt? Does anyone need tax forms for the money collected? | A nonprofit corporation. Whether it holds 501(c)(3) or other federal tax-exempt status was not stated. Tax reports are needed (D01). (Project owner, in chat.) | 2026-11-15 |
 | 3 | Who may issue refunds, and up to what amount without a second person? | Today on BikeReg: the organizer approves refunds; riders transfer entries themselves. No amount limit or second approver was named ([D01](discovery/interviews/D01.md)). | 2026-11-14 |
-| 4 | Who handles a disputed card charge, and how is the race day's evidence (entry, waiver, check-in) gathered? | No disputes or chargebacks so far (D01). Owner not named. | 2026-11-14 |
+| 4 | Who handles a disputed card charge, and how is the race day's evidence (entry, waiver, check-in) gathered? | No disputes or chargebacks so far (D01). The organizer would handle a dispute and gather the evidence (project owner, in chat, 2026-11-15). | 2026-11-15 |
 | 5 | Does the club absorb processing fees, pass them to riders, or split them? Is a per-entry platform fee acceptable ([business model hypothesis](../product.md#business-model-hypothesis))? | Today riders pay about 10% on top and the club pays none (D01's figure, not checked against BikeReg's published fees). Platform fee acceptability not asked. | 2026-11-14 |
 | 6 | How soon after registration closes does the club need the money? | Today payouts arrive by ACH within a week (D01). The club would accept a different provider or payout schedule; conditions not stated. | 2026-11-14 |
 | 7 | What does the treasurer need to reconcile: per-entry lines, discounts, fees, refunds, payout references? In what format? | Reports for USA Cycling, taxes, and marketing analytics; reconciliation also covers refunds and merchandise sales, about 8 hours per event (D01). Format not stated. | 2026-11-15 |
-| 8 | Are free or discounted junior entries funded by someone else, and how should that appear in the books? | | |
+| 8 | Are free or discounted junior entries funded by someone else, and how should that appear in the books? | Sometimes funded by a sponsor, not always. How it should appear in the books was not stated. (Project owner, in chat.) | 2026-11-15 |
 
 ## Questions for Stripe and the selected operating model
 
@@ -83,7 +83,8 @@ Stripe's public pages, checked November 15, 2026. Most pages show no effective d
 - Nonprofit pricing will not apply to race entries, so plan on standard card fees. For example, a $50 entry costs $1.75 in card fees (2.9% of $50 plus 30¢; our calculation). D01 reports riders pay about 10% on top today; a direct comparison needs BikeReg's published fees with a date.
 - Stripe's first payout takes 7 to 14 days, longer than the club's current payout within a week (D01); later payouts take 2 business days.
 - Connect (model B) adds loss responsibility and per-account costs; it matters only for multi-organization season passes.
-- Still needs the club: questions 1, 2, and 8 (legal entity, tax status, junior funding), and who owns disputes. These feed [ADR 0005](decisions/0005-merchant-and-settlement-model.md).
+- The club side now points to model A: a nonprofit corporation with its own bank account opens the Stripe account, and the organizer owns refunds and disputes. Stripe will need the corporation's EIN and the SSNs of the people tied to the account.
+- Still open for [ADR 0005](decisions/0005-merchant-and-settlement-model.md): who approves the switch, whether the corporation has 501(c)(3) status (it does not change Stripe pricing for entries, but affects tax paperwork), and how sponsor-funded junior entries are booked.
 
 ## What the answers decide
 
