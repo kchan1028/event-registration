@@ -4,6 +4,7 @@ import { evaluateCategory, summarizeEligibility, type EligibilityResult, type Ri
 import { formatCents, formatDate, formatLength, formatTime, sortCategories, startGroupFor } from '../shared/format';
 import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, type Category } from '../shared/schema';
 import { countIssues } from '../shared/validation';
+import { formatLocalDateTime } from '../shared/checkout';
 import { href } from './App';
 import type { Draft } from './Builder';
 import { Tally } from './FieldBoard';
@@ -195,6 +196,13 @@ function PreviewRow({ draft, cat, result }: { draft: Draft; cat: Category; resul
           <dd>
             {priceLine(cat)}
             {cat.pricing.dayOfSurchargeCents > 0 && <span className="pv-row__sub">+{formatCents(cat.pricing.dayOfSurchargeCents)} on race day</span>}
+          </dd>
+        </div>
+        <div>
+          <dt>Registration</dt>
+          <dd>
+            {cat.registration.opensAt ? `Opens ${formatLocalDateTime(cat.registration.opensAt)}` : 'No opening time'}
+            <span className="pv-row__sub">{cat.registration.closesAt ? `Closes ${formatLocalDateTime(cat.registration.closesAt)}` : 'No closing time'}</span>
           </dd>
         </div>
         <div>

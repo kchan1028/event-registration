@@ -163,3 +163,42 @@ describe('demo purchase flow fixtures (docs/fixtures)', () => {
     expect(plan.entryPlan.find((p) => p.categoryId === m35.id)?.count).toBe(m35.cap);
   });
 });
+
+import { enforcesWindows, localNow, windowState } from '../src/shared/checkout';
+
+describe('registration windows', () => {
+  it('reads the clock in the event time zone, including daylight saving', () => {
+    expect(localNow('America/Los_Angeles', new Date('2027-03-01T18:00:00Z'))).toBe('2027-03-01T10:00'); // PST
+    expect(localNow('America/Los_Angeles', new Date('2027-04-22T03:30:00Z'))).toBe('2027-04-21T20:30'); // PDT
+    expect(localNow('America/New_York', new Date('2027-01-01T04:59:00Z'))).toBe('2026-12-31T23:59');
+  });
+
+  it('opens at the opening minute and closes at the closing minute', () => {
+    const cat = { registration: { opensAt: '2027-02-01T09:00', closesAt: '2027-04-22T20:00' } };
+    expect(windowState(cat, '2027-02-01T08:59')).toBe('not_yet');
+    expect(windowState(cat, '2027-02-01T09:00')).toBe('open');
+    expect(windowState(cat, '2027-04-22T19:59')).toBe('open');
+    expect(windowState(cat, '2027-04-22T20:00')).toBe('closed');
+    expect(windowState({ registration: { opensAt: null, closesAt: null } }, '2030-01-01T00:00')).toBe('open');
+  });
+
+  it('only demo events can ignore windows, and real events always enforce them', () => {
+    const c = demo();
+    expect(enforcesWindows(c)).toBe(false);
+    c.registration.demoIgnoreWindows = false;
+    expect(enforcesWindows(c)).toBe(true);
+    c.registration.demoIgnoreWindows = true;
+    c.event.isDemo = false;
+    expect(enforcesWindows(c)).toBe(true);
+  });
+
+  it('a real event refuses a selection outside its window with a plain message', () => {
+    const c = demo();
+    c.event.isDemo = false;
+    const rider = profileOf({ racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null });
+    const r = checkSelection(c, [id(c, 'RR-M35-34')], rider, { nowLocal: '2027-01-15T12:00' });
+    expect(r.ok).toBe(false);
+    expect(r.problems[0]).toMatch(/opens Feb 1, 2027, 9:00 AM/);
+    expect(checkSelection(c, [id(c, 'RR-M35-34')], rider, { nowLocal: '2027-03-01T12:00' }).ok).toBe(true);
+  });
+});

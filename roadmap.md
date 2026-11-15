@@ -62,7 +62,9 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 | Multi-race discount | Two non-conflicting criteriums get the additional-race discount exactly once and stay distinct entries |
 | Mixed-category weekend bundle | Each day's category passes its own rules; if any place is full, nothing is held |
 
-**Not built yet:** real payments, refunds, and payouts; enforcement of registration open and close times (the prototype lets anyone try checkout now); rider accounts and access to past receipts; category transfers and withdrawals; waitlists; emergency contact collection (deferred until role-based access exists); email receipts; timer exports. (Check-in and bib assignment: see [Check-in prototype](#check-in-prototype).)
+**Registration windows (added November 14, 2026):** checkout refuses categories outside their opening and closing times, read in the event's time zone; a hold taken while a window is open can still be paid within the hold, and a late payment after the window closed goes to the organizer's queue. Demo events can let testers register at any time; the rider page then says "Demo mode" and when real registration opens. Verified by unit, API, and Playwright tests.
+
+**Not built yet:** real payments, refunds, and payouts; rider accounts and access to past receipts; category transfers and withdrawals; waitlists; emergency contact collection (deferred until role-based access exists); email receipts; timer exports. (Check-in and bib assignment: see [Check-in prototype](#check-in-prototype).)
 
 **Pending external dependencies:** a payment provider, USA Cycling license and waiver checks, and sign-in with required MFA. Rider data entered in the prototype stays in the local database; use made-up details.
 

@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import { canAdmit, remainingForCategory } from '../shared/capacity';
-import { checkSelection, checkSignature, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
+import { checkSelection, checkSignature, enforcesWindows, localNow, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { quote, todayIn, type Quote } from '../shared/pricing';
@@ -146,7 +146,17 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       const entries = repo.entries(eventId);
       const remaining: Record<string, number | null> = {};
       for (const c of config.categories) remaining[c.id] = remainingForCategory(config, entries, c.id);
-      return { eventId, publishedVersion: version, organizationName, config, remaining, today: todayIn(config.event.timeZone, clock()), holdMinutes };
+      return {
+        eventId,
+        publishedVersion: version,
+        organizationName,
+        config,
+        remaining,
+        today: todayIn(config.event.timeZone, clock()),
+        nowLocal: localNow(config.event.timeZone, clock()),
+        enforceWindows: enforcesWindows(config),
+        holdMinutes,
+      };
     },
 
     /**
@@ -165,7 +175,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           const waiver = waiverAcceptanceSchema.parse(input.waiver);
           if (waiver.version !== config.registration.waiverVersion) throw new HttpError(409, 'The waiver changed while you were registering. Read the current version and accept it again.');
 
-          const check = checkSelection(config, input.categoryIds, profileOf(rider));
+          // Registration windows are checked when places are held; a hold taken while open may be paid within its time.
+          const check = checkSelection(config, input.categoryIds, profileOf(rider), { nowLocal: localNow(config.event.timeZone, clock()) });
           if (!check.ok) throw new HttpError(422, check.problems[0], check.problems);
           if (check.needsGuardian && !rider.guardian) throw new HttpError(422, 'Riders under 18 need a parent or guardian. Enter their name.');
           const signatureProblem = checkSignature(rider, waiver, check.needsGuardian);
@@ -232,7 +243,11 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
             const config = repo.getVersion(row.event_id, row.published_version);
             const ids = entryRows.all(orderId).map((e) => e.category_id);
             const riderRef = entryRows.all(orderId)[0]?.rider_ref ?? `rider-${orderId}`;
-            next = admitAll(config, row.event_id, ids, riderRef).ok ? 'confirmed' : 'needs_attention';
+            // The hold ended, so the order needs places again: windows must still be open and every place free.
+            const nowLocal = localNow(config.event.timeZone, clock());
+            const windowsOpen =
+              !enforcesWindows(config) || ids.every((id) => { const c = config.categories.find((x) => x.id === id); return !c || windowState(c, nowLocal) === 'open'; });
+            next = windowsOpen && admitAll(config, row.event_id, ids, riderRef).ok ? 'confirmed' : 'needs_attention';
           }
 
           if (next !== row.status) {

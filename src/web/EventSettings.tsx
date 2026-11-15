@@ -216,6 +216,12 @@ export function EventSettings({ draft }: { draft: Draft }) {
             {(id) => <input id={id} className="input" value={config.registration.processingFeeLabel} onChange={(e) => update((c) => ({ ...c, registration: { ...c.registration, processingFeeLabel: e.target.value } }))} maxLength={60} />}
           </Field>
         </div>
+        {config.event.isDemo && (
+          <label className="check">
+            <input type="checkbox" checked={config.registration.demoIgnoreWindows} onChange={(e) => update((c) => ({ ...c, registration: { ...c.registration, demoIgnoreWindows: e.target.checked } }))} />
+            Demo event: let testers register outside the registration windows (real events always enforce them)
+          </label>
+        )}
         <Field label="Refund policy shown before payment">
           {(id) => <textarea id={id} className="input" rows={3} value={config.registration.refundPolicy} onChange={(e) => update((c) => ({ ...c, registration: { ...c.registration, refundPolicy: e.target.value } }))} maxLength={1000} />}
         </Field>

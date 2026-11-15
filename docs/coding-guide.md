@@ -101,6 +101,7 @@ The event records the rule source and season in `ruleSet`; validation warns when
 - Define discount precedence explicitly and prevent unintended stacking. A multi-race discount applies exactly once per qualifying purchase.
 - At checkout, show an itemized total, including every fee. On purchase, **snapshot** the accepted price and the rule versions on the order line. Later configuration changes never reprice a paid entry.
 - Fees are configured per event (`registration.platformFeeCents`, `registration.processingFeeBasisPoints`) and added once per order after discounts; the processing fee rounds half up to the cent (`src/shared/pricing.ts`).
+- Registration windows are stored as local date-times in the event's time zone. Compare them with `localNow(timeZone, clock)` from `src/shared/checkout.ts`, never with the server's own clock or UTC strings. Check windows when places are held; `enforcesWindows()` decides whether a demo event may skip them.
 
 ### Configuration versioning
 

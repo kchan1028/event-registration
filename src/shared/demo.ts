@@ -144,6 +144,7 @@ export function buildDemoEvent(): { config: EventConfig; entryPlan: { categoryId
       platformFeeLabel: 'Platform fee',
       processingFeeBasisPoints: 0,
       processingFeeLabel: 'Processing fee',
+      demoIgnoreWindows: true,
       recoveryMinutes: 15,
       refundPolicy:
         'Example policy: full refund less a $5 processing fee until 7 days before the race; no refunds after that. Category transfers are free until registration closes.',
