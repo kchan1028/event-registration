@@ -2,7 +2,7 @@
 
 CycleReg will handle rider contact details, emergency contacts, license numbers, waivers, and payments, so security problems are taken seriously even at the documentation stage. This file explains what to report, how to report it privately, and which security rules the product is held to.
 
-> **Status: local build only.** The organizer workspace runs on `127.0.0.1` with no sign-in and stores data in a local PostgreSQL database ([setup](docs/runbooks/local-setup.md)). There is no deployed website, no payment processing, and no real rider data. It must not be hosted or shared until sign-in with MFA and role-based access exist. The server enforces this: it refuses to listen on any address other than `127.0.0.1`, `localhost`, or `::1` (`src/server/listen.ts`), and the [Render deploy files](docs/runbooks/deploy-render.md) are not to be used until sign-in ships. Unless a section says otherwise, the security requirements below are Planned, not Implemented.
+> **Status: local build only.** The organizer workspace runs on `127.0.0.1` with no sign-in and stores data in a local PostgreSQL database ([setup](docs/runbooks/local-setup.md)). There is no deployed website, no payment processing, and no real rider data. It must not be hosted or shared until sign-in and role-based access exist, and it must not hold real rider data or take live payments until MFA is required for every account (Phase 3, before the live pilot). The server enforces this: it refuses to listen on any address other than `127.0.0.1`, `localhost`, or `::1` (`src/server/listen.ts`), and the [Render deploy files](docs/runbooks/deploy-render.md) are not to be used until sign-in ships. Unless a section says otherwise, the security requirements below are Planned, not Implemented.
 
 ## Supported versions
 
@@ -50,7 +50,7 @@ Each rule has one home. The links below point to it; this list is a summary, not
 
 | Area | Rule summary | Home |
 |---|---|---|
-| Sign-in | MFA required for every account; step-up re-verification for sensitive organizer actions; recovery never bypasses MFA | [product.md](product.md#sign-in-and-account-security) |
+| Sign-in | Phase 2: passwordless email sign-in for every account, fictional data only. Phase 3, before the live pilot: MFA required for every account; step-up re-verification for sensitive organizer actions; recovery never bypasses MFA | [product.md](product.md#sign-in-and-account-security) |
 | Payments | Hosted provider flow only; card numbers and security codes are never stored | [docs/architecture.md](docs/architecture.md#data-boundaries) |
 | Roles | Server-side permission checks per role and event; least access by default | [docs/coding-guide.md](docs/coding-guide.md#roles) |
 | Privacy | Collect only required data; restrict emergency contacts; keep personal data out of logs, analytics, and URLs | [docs/coding-guide.md](docs/coding-guide.md#privacy) |

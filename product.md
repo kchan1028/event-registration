@@ -230,7 +230,7 @@ Status: Planned documentation only. The current app does not support time trials
 
 Status: Planned; organizer transfers and withdrawals already exist in the local build.
 
-After MFA sign-in, riders can view their registrations, receipts, waiver/readiness requirements, waitlist offers, and pending changes. Policies determine whether a change can be completed directly or requires organizer approval. Category-change previews must recheck eligibility, capacity, schedule conflicts, waivers, overall-participation rules, and package/pass effects, and show any charge or refund before submission. Transfers to another person require an explicit event policy, separate recipient consent and eligibility, and new required waivers; a signature is never transferred. Changes are reasoned, audited, and notified to affected parties. No rider can access another rider's private registration by guessing an order ID.
+After sign-in, riders can view their registrations, receipts, waiver/readiness requirements, waitlist offers, and pending changes. Policies determine whether a change can be completed directly or requires organizer approval. Category-change previews must recheck eligibility, capacity, schedule conflicts, waivers, overall-participation rules, and package/pass effects, and show any charge or refund before submission. Transfers to another person require an explicit event policy, separate recipient consent and eligibility, and new required waivers; a signature is never transferred. Changes are reasoned, audited, and notified to affected parties. No rider can access another rider's private registration by guessing an order ID.
 
 Acceptance: an authenticated rider completes an allowed change or withdrawal, sees the financial effect, and retains the original receipt plus a change record; a blocked change gives a reason and organizer-review path. Failed or duplicate payment/refund processing cannot apply the entry change twice. Self-service must not bypass a waitlist or capacity limit.
 
@@ -418,7 +418,8 @@ Acceptance: a walk-up rider can register, satisfy or be routed for required chec
 | Organizer handoff | A second authorized organizer can operate the event and access its runbook without the original owner's credentials |
 | Demo purchase flow | Using fake data only, a tester goes from event list through entry choice, racer details, waiver signature, order review with all fees, simulated payment, and confirmation without facilitator help; missing required fields block progress with field-level messages; back navigation keeps entered data; every payment-related screen and the receipt are labeled as simulated, and no real payment details are requested |
 | Switch display theme | First visit follows the device's light or dark setting; the rider or volunteer can switch with a visible toggle; the choice persists on that device; text, form fields, buttons, focus indicators, errors, and status indicators meet contrast targets in both themes |
-| Sign in with MFA | No account of any type reaches signed-in pages without completing a second factor; organizer sensitive actions prompt re-verification; recovery without recovery codes is audited and cannot be self-served by the first factor alone |
+| Sign in (first release, Phase 2) | No account of any type reaches signed-in pages without completing passwordless email sign-in (an emailed link or code); sign-in attempts are rate-limited; the app holds only fictional data and takes no live payments while this is the only factor |
+| Sign in with MFA (Phase 3, required before the live pilot) | No account of any type reaches signed-in pages without completing a second factor; organizer sensitive actions prompt re-verification; recovery without recovery codes is audited and cannot be self-served by the first factor alone |
 
 ### Berkeley weekend acceptance criteria
 
@@ -536,7 +537,7 @@ To research before Phase 3:
 - Phone, tablet, and desktop support; keyboard access, readable labels, clear errors, and accessible checkout.
 - Light and dark display themes on every rider and organizer screen. See [Display themes](#display-themes).
 - Server-enforced authorization and capacity; encrypted transport and protected secrets; least-privilege access to contact and emergency details.
-- Multi-factor authentication (MFA) is required for every account sign-in: riders, guardians, and all organizer roles. A password or emailed link alone never grants access. See [Sign-in and account security](#sign-in-and-account-security).
+- Every account signs in: riders, guardians, and all organizer roles. Sign-in starts as a passwordless emailed link or code (Phase 2). Multi-factor authentication (MFA) for every account follows in Phase 3 and is required before the live pilot: no real rider data or live payments under email-only sign-in. See [Sign-in and account security](#sign-in-and-account-security).
 - No sensitive rider data in public participant lists by default. Define retention and deletion rules before the pilot.
 - Audit money, category, waiver, capacity, and permission changes.
 - Backups with a demonstrated restore; monitoring for registration/payment failures and stuck capacity reservations.
@@ -560,7 +561,14 @@ Status: Planned. The [design system](DESIGN.md) retains the field-board identity
 
 ### Sign-in and account security
 
-MFA means a sign-in needs a second, independent proof of identity in addition to the first factor, such as an authenticator app code or a passkey.
+MFA means a sign-in needs a second, independent proof of identity in addition to the first factor, such as an authenticator app code or a passkey. A second emailed code is not a second factor: it goes to the same inbox as the first.
+
+Delivery is phased (decided November 15, 2026; [ADR 0003](docs/decisions/0003-sign-in-and-mfa.md) as amended):
+
+- **First release (Phase 2): email sign-in.** Every account signs in with a passwordless emailed link or code before reaching rider, guardian, or organizer pages. Sign-in attempts are rate-limited, every person has their own account (no shared organizer credentials), and organizer roles still control what each person can see and do. While this is the only factor, the app holds only fictional data and takes no live payments; hosted use is limited to staging and rehearsals.
+- **MFA (Phase 3, required before the live pilot in Phase 4).** The requirements below apply from then on. They are Planned.
+
+MFA requirements:
 
 - Require MFA at every sign-in for every account type. Enrollment happens during account creation; an account cannot reach rider, guardian, or organizer pages until a second factor is enrolled.
 - Offer at least one phishing-resistant option (passkey or security key) and an authenticator-app option. SMS codes, if offered at all, are a fallback only and are not allowed for organizer roles.
@@ -610,7 +618,7 @@ Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/R
 4. Will USAC approve integration and the proposed license/waiver workflow?
 5. Stripe is selected. Which merchant, Connect charge/transfer, settlement, refund, dispute, and tax-responsibility model works for the club and multi-organization season passes?
 6. What timer formats, refund policies, retention periods, and organizer permissions are required?
-7. Which MFA methods and recovery process keep rider and guardian checkout usable, especially for occasional riders and race-morning registration? MFA itself is required; the methods are decided in the authentication ADR.
+7. Which MFA methods and recovery process keep rider and guardian checkout usable, especially for occasional riders and race-morning registration? MFA itself is required before the live pilot; the first release uses email sign-in only. The methods are decided in the authentication ADR.
 8. How do results reach road-results.com for our events, and what should the timer export include to support it?
 
 9. For minors entering adult/open categories, which age convention determines guardian acceptance, and who confirms the applicable policy? Do not infer legal minor status solely from racing-age/category labels.

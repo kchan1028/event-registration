@@ -12,6 +12,6 @@ describe('listen address', () => {
   });
 
   it('refuses a network address until sign-in exists (ADR 0003)', () => {
-    for (const HOST of ['0.0.0.0', '::', '192.168.1.20']) expect(() => listenHost({ HOST })).toThrow(/sign-in with MFA/);
+    for (const HOST of ['0.0.0.0', '::', '192.168.1.20']) expect(() => listenHost({ HOST })).toThrow(/sign-in \(ADR 0003\) is not built/);
   });
 });
