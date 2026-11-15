@@ -5,6 +5,7 @@ import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { quote, todayIn, type Quote } from '../shared/pricing';
 import type { EventConfig } from '../shared/schema';
+import { blocksPublicSale, effectiveWaitlistStatus, type StoredWaitlistStatus } from '../shared/waitlist';
 import type { Db } from './db';
 import { HttpError, type Repo } from './repo';
 
@@ -124,9 +125,37 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     };
   }
 
-  /** Re-check and take places for every entry of an order, all or nothing. */
-  function admitAll(config: EventConfig, eventId: string, categoryIds: string[], riderRef: string): { ok: true } | { ok: false; message: string; categoryId: string } {
-    const current = repo.entries(eventId);
+  /**
+   * Waitlist rows that keep a category off public sale (waiting riders and live offers),
+   * per category. Only categories with the waitlist turned on count.
+   */
+  function waitlistBlockers(config: EventConfig, eventId: string): Map<string, { id: string; status: 'waiting' | 'offered' }[]> {
+    const enabled = new Set(config.categories.filter((c) => c.waitlistEnabled).map((c) => c.id));
+    const out = new Map<string, { id: string; status: 'waiting' | 'offered' }[]>();
+    if (enabled.size === 0) return out;
+    const rows = db
+      .prepare<[string], { id: string; category_id: string; status: StoredWaitlistStatus; offer_expires_at: string | null }>(
+        `SELECT id, category_id, status, offer_expires_at FROM waitlist_entries WHERE event_id = ? AND status IN ('waiting', 'offered')`,
+      )
+      .all(eventId);
+    for (const r of rows) {
+      if (!enabled.has(r.category_id)) continue;
+      const status = effectiveWaitlistStatus(r.status, r.offer_expires_at, nowIso());
+      if (!blocksPublicSale(status)) continue;
+      out.set(r.category_id, [...(out.get(r.category_id) ?? []), { id: r.id, status: status as 'waiting' | 'offered' }]);
+    }
+    return out;
+  }
+
+  /** Re-check and take places for every entry of an order, all or nothing. `excludeEntryIds` drops a redeemed offer's own reservation. */
+  function admitAll(
+    config: EventConfig,
+    eventId: string,
+    categoryIds: string[],
+    riderRef: string,
+    excludeEntryIds: readonly string[] = [],
+  ): { ok: true } | { ok: false; message: string; categoryId: string } {
+    const current = repo.entries(eventId).filter((e) => !excludeEntryIds.includes(e.id));
     for (const categoryId of categoryIds) {
       const r = canAdmit(config, current, categoryId, riderRef);
       const name = config.categories.find((c) => c.id === categoryId)?.name ?? 'A category';
@@ -144,10 +173,15 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     publicEvent(eventId: string) {
       const { config, version, organizationName } = publishedConfig(eventId);
       const entries = repo.entries(eventId);
+      const blockers = waitlistBlockers(config, eventId);
       const remaining: Record<string, number | null> = {};
-      for (const c of config.categories) remaining[c.id] = remainingForCategory(config, entries, c.id);
+      // A category with riders waiting is not on public sale, so it reads as full.
+      for (const c of config.categories) remaining[c.id] = blockers.has(c.id) ? 0 : remainingForCategory(config, entries, c.id);
+      const waitlist: Record<string, { waiting: number }> = {};
+      for (const c of config.categories) if (c.waitlistEnabled) waitlist[c.id] = { waiting: blockers.get(c.id)?.length ?? 0 };
       return {
         eventId,
+        waitlist,
         publishedVersion: version,
         organizationName,
         config,
@@ -164,7 +198,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
      * Either all entries are held or none are. A repeated request with the
      * same client request ID returns the first order instead of a duplicate.
      */
-    createOrder(eventId: string, input: { clientRequestId: string; categoryIds: string[]; rider?: unknown; waiver?: unknown }) {
+    createOrder(eventId: string, input: { clientRequestId: string; categoryIds: string[]; rider?: unknown; waiver?: unknown; offerToken?: string | null }) {
       return db
         .transaction(() => {
           const existing = db.prepare<[string, string], { id: string }>(`SELECT id FROM orders WHERE event_id = ? AND client_request_id = ?`).get(eventId, input.clientRequestId);
@@ -182,9 +216,34 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           const signatureProblem = checkSignature(rider, waiver, check.needsGuardian);
           if (signatureProblem) throw new HttpError(422, signatureProblem);
 
+          // A waitlist offer lets its rider take the reserved place in that one category.
+          let offer: { id: string; category_id: string } | null = null;
+          if (input.offerToken) {
+            const row = db
+              .prepare<[string, string], { id: string; category_id: string; status: StoredWaitlistStatus; offer_expires_at: string | null }>(
+                `SELECT id, category_id, status, offer_expires_at FROM waitlist_entries WHERE offer_token = ? AND event_id = ?`,
+              )
+              .get(input.offerToken, eventId);
+            const status = row ? effectiveWaitlistStatus(row.status, row.offer_expires_at, nowIso()) : null;
+            if (!row || status === 'removed') throw new HttpError(404, 'This waitlist offer was not found or was withdrawn.');
+            if (status === 'expired') throw new HttpError(409, 'This waitlist offer has expired. Ask the organizer whether a place is still open.');
+            if (status === 'accepted') throw new HttpError(409, 'This waitlist offer has already been used.');
+            if (!input.categoryIds.includes(row.category_id)) throw new HttpError(422, 'Include the category you were offered a place in.');
+            offer = row;
+          }
+          // Waitlist first: while riders are waiting, freed places are not sold to the public.
+          const blockers = waitlistBlockers(config, eventId);
+          for (const categoryId of input.categoryIds) {
+            if (offer && categoryId === offer.category_id) continue;
+            if (blockers.has(categoryId)) {
+              const name = config.categories.find((c) => c.id === categoryId)?.name ?? 'A category';
+              throw new HttpError(409, `${name} is full and has a waitlist. Places go to riders on the waitlist first. Nothing was held.`, { categoryId });
+            }
+          }
+
           const id = newId('ord');
           const riderRef = `rider-${id}`;
-          const admitted = admitAll(config, eventId, input.categoryIds, riderRef);
+          const admitted = admitAll(config, eventId, input.categoryIds, riderRef, offer ? [offer.id] : []);
           if (!admitted.ok) throw new HttpError(409, `${admitted.message} Nothing was held. Choose another race and try again.`, { categoryId: admitted.categoryId });
 
           const q = quote(config, input.categoryIds, todayIn(config.event.timeZone, clock()));
@@ -203,6 +262,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           for (const categoryId of input.categoryIds) {
             ins.run(newId('oe'), id, eventId, categoryId, riderRef, simulatedValid ? 1 : 0, simulatedValid ? 'Simulated license check: valid (demo fixture)' : null, simulatedValid ? t : null);
           }
+          if (offer) db.prepare(`UPDATE waitlist_entries SET order_id = ?, updated_at = ? WHERE id = ?`).run(id, t, offer.id);
           return view(id);
         })
         .immediate();
@@ -247,13 +307,16 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
             const nowLocal = localNow(config.event.timeZone, clock());
             const windowsOpen =
               !enforcesWindows(config) || ids.every((id) => { const c = config.categories.find((x) => x.id === id); return !c || windowState(c, nowLocal) === 'open'; });
-            next = windowsOpen && admitAll(config, row.event_id, ids, riderRef).ok ? 'confirmed' : 'needs_attention';
+            // A live offer behind this order reserves its own place; don't count it against the rider.
+            const ownOffer = db.prepare<[string], { id: string }>(`SELECT id FROM waitlist_entries WHERE order_id = ?`).all(orderId).map((r) => r.id);
+            next = windowsOpen && admitAll(config, row.event_id, ids, riderRef, ownOffer).ok ? 'confirmed' : 'needs_attention';
           }
 
           if (next !== row.status) {
             if (next === 'confirmed') {
               db.prepare(`UPDATE orders SET status = 'confirmed', check_in_code = ?, confirmed_at = ?, updated_at = ? WHERE id = ?`).run(checkInCode(), t, t, orderId);
               db.prepare(`UPDATE order_entries SET status = 'confirmed' WHERE order_id = ?`).run(orderId);
+              db.prepare(`UPDATE waitlist_entries SET status = 'accepted', updated_at = ? WHERE order_id = ? AND status = 'offered'`).run(t, orderId);
             } else {
               db.prepare(`UPDATE orders SET status = ?, updated_at = ? WHERE id = ?`).run(next, t, orderId);
               if (next === 'needs_attention') db.prepare(`UPDATE order_entries SET status = 'released' WHERE order_id = ?`).run(orderId);

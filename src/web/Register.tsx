@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { checkSignature, findConflicts, formatLocalDateTime, MESSAGES, riderDetailsSchema, windowMessage, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
 import { evaluateCategory, summarizeEligibility, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories } from '../shared/format';
 import { categoryPrice, quote, type Quote } from '../shared/pricing';
 import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, type Category, type EventConfig } from '../shared/schema';
-import { api, ApiError, type OrderView, type PublicEvent, type PublicEventSummary } from './api';
+import { api, ApiError, type OrderView, type PublicEvent, type PublicEventSummary, type WaitlistOffer } from './api';
 import { href, navigate } from './App';
 import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
 
@@ -34,6 +34,9 @@ interface Draft {
   waiver: { read: boolean; signatureName: string; agreed: boolean };
   orderId: string | null;
   clientRequestId: string;
+  /** Private link token from a waitlist offer; lets this rider take the reserved place. */
+  offerToken?: string | null;
+  offerCategoryId?: string | null;
 }
 
 const EMPTY_PROFILE: RiderProfile = { racingAge: null, licenseCategory: null, licenseType: null, competitionClass: null, collegiateDivision: null };
@@ -197,8 +200,34 @@ export function Register({ eventId }: { eventId: string }) {
   const [error, setError] = useState<ApiError | null>(null);
   const [draft, update] = useStoredDraft(eventId);
 
+  const [offer, setOffer] = useState<WaitlistOffer | null>(null);
+  const [offerError, setOfferError] = useState<string | null>(null);
+
   useEffect(() => {
     api.publicEvent(eventId).then(setEv).catch(setError);
+  }, [eventId]);
+
+  // A waitlist offer link (#/register/<event>?offer=<token>) preselects the offered category and prefills the rider.
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('offer');
+    if (!token) return;
+    api
+      .waitlistOffer(token)
+      .then((o) => {
+        if (o.eventId !== eventId) return;
+        setOffer(o);
+        if (o.status !== 'offered') return;
+        update((d) => ({
+          ...d,
+          offerToken: token,
+          offerCategoryId: o.categoryId,
+          selected: d.selected.includes(o.categoryId) ? d.selected : [...d.selected, o.categoryId],
+          profile: d.profile.racingAge === null ? { racingAge: o.rider.racingAge, licenseCategory: o.rider.licenseCategory, licenseType: o.rider.licenseType, competitionClass: o.rider.competitionClass, collegiateDivision: o.rider.collegiateDivision } as RiderProfile : d.profile,
+          details: d.details.firstName ? d.details : { ...d.details, firstName: o.rider.firstName, lastName: o.rider.lastName, email: o.rider.email },
+        }));
+      })
+      .catch((e: ApiError) => setOfferError(e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
   if (error) {
@@ -251,6 +280,12 @@ export function Register({ eventId }: { eventId: string }) {
               <strong>Demo data.</strong> {config.event.demoNotice}
             </p>
           )}
+          {offerError && (
+            <p className="note note--warn" role="alert">
+              {offerError}
+            </p>
+          )}
+          {offer && <OfferBanner offer={offer} />}
           <div className="pending-stack">
             <Pending>Payment is simulated. No card is asked for and no money is charged.</Pending>
             <Pending>USA Cycling license checks are not connected. Demo riders carry a simulated license result; everyone else is reviewed by the organizer.</Pending>
@@ -338,7 +373,9 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
     for (const id of draft.selected) {
       const cat = config.categories.find((c) => c.id === id);
       if (cat && checking && evaluateCategory(cat, draft.profile).status === 'ineligible') errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.ineligible}` });
-      if (cat && ev.remaining[id] === 0) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.full}` });
+      // A waitlist offer reserves this rider's place, so its category is not full for them.
+      const offeredHere = !!draft.offerToken && draft.offerCategoryId === id;
+      if (cat && ev.remaining[id] === 0 && !offeredHere) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.full}` });
       const wmsg = cat && ev.enforceWindows ? windowMessage(cat, windowState(cat, ev.nowLocal)) : null;
       if (wmsg) errs.push({ id: `opt-${id}`, message: wmsg });
     }
@@ -459,6 +496,8 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                                     result={result(cat)}
                                     conflicts={draft.selected.includes(cat.id) ? conflicts.filter((c) => c.a === cat.id || c.b === cat.id) : []}
                                     onToggle={() => toggle(cat.id)}
+                                    offered={!!draft.offerToken && draft.offerCategoryId === cat.id}
+                                    waitlist={ev.waitlist?.[cat.id] ? <JoinWaitlist ev={ev} cat={cat} draft={draft} /> : null}
                                   />
                                 ))}
                               </div>
@@ -531,9 +570,13 @@ function RaceOption({
   result,
   conflicts,
   onToggle,
+  offered = false,
+  waitlist = null,
 }: {
   config: EventConfig;
   cat: Category;
+  offered?: boolean;
+  waitlist?: ReactNode;
   today: string;
   selected: boolean;
   remaining: number | null;
@@ -546,7 +589,8 @@ function RaceOption({
   const race = config.races.find((r) => r.id === cat.raceId);
   const day = config.days.find((d) => d.id === race?.dayId);
   const price = categoryPrice(cat, today, day?.date ?? '');
-  const full = remaining === 0;
+  // A waitlist offer reserves this rider's place, so the category is open to them even when it reads as full.
+  const full = remaining === 0 && !offered;
   const outside = enforceWindows && window !== 'open';
   const closed = cat.status !== 'active';
   const disabled = !selected && (full || closed || outside || result?.status === 'ineligible');
@@ -556,8 +600,10 @@ function RaceOption({
       ? { cls: 'muted', text: `Opens ${formatLocalDateTime(cat.registration.opensAt!)}` }
       : outside
         ? { cls: 'muted', text: 'Registration closed' }
+    : offered
+      ? { cls: 'eligible', text: 'Place offered to you' }
     : full
-      ? { cls: 'muted', text: 'Full' }
+      ? { cls: 'muted', text: waitlist ? 'Full · waitlist' : 'Full' }
       : result?.status === 'ineligible'
         ? { cls: 'ineligible', text: 'Not eligible' }
         : result?.status === 'needs_review'
@@ -578,7 +624,7 @@ function RaceOption({
           </span>
           <span className="opt__elig">{summarizeEligibility(cat)}</span>
           <span className="opt__facts">
-            {formatLength(cat.length)} · {remaining === null ? 'Places open' : full ? 'No places left' : `${remaining} places left`}
+            {formatLength(cat.length)} · {offered ? 'Your place is held' : remaining === null ? 'Places open' : full ? 'No places left' : `${remaining} places left`}
           </span>
         </span>
         <span className="opt__price num">
@@ -588,7 +634,8 @@ function RaceOption({
       </button>
       <div className="opt__status" id={`opt-${cat.id}-why`}>
         {status && <span className={`status status--${status.cls}`}>{status.text}</span>}
-        {full && <span className="opt__reason">{MESSAGES.full}</span>}
+        {full && !waitlist && <span className="opt__reason">{MESSAGES.full}</span>}
+        {full && waitlist}
         {!outside && cat.registration.closesAt && window === 'open' && <span className="opt__reason">Registration closes {formatLocalDateTime(cat.registration.closesAt)}</span>}
         {result && result.status === 'ineligible' && <span className="opt__reason">{result.reasons.join('; ')}</span>}
         {result && result.status === 'needs_review' && <span className="opt__reason">{result.reasons.join('; ')}</span>}
@@ -856,6 +903,7 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
         categoryIds: draft.selected,
         rider: riderFrom(draft, needsGuardian) as RiderDetails,
         waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: w.signatureName.trim(), signerRole: needsGuardian ? 'guardian' : 'rider' },
+        offerToken: draft.offerToken ?? null,
       });
       update((x) => ({ ...x, orderId: order.id, step: 'review', reached: Math.max(x.reached, 3) }));
     } catch (e) {
@@ -1125,5 +1173,101 @@ export function OrderPage({ orderId }: { orderId: string }) {
         </section>
       </main>
     </div>
+  );
+}
+
+/** Shown when a rider opens a waitlist offer link. */
+function OfferBanner({ offer }: { offer: WaitlistOffer }) {
+  const until = offer.offerExpiresAt ? new Date(offer.offerExpiresAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : null;
+  if (offer.status === 'offered') {
+    return (
+      <p className="note note--ok" role="note">
+        <strong>Waitlist offer:</strong> a place in {offer.categoryName} is held for you until {until}. Finish registering and complete the simulated payment before then, or it goes to the next rider.
+      </p>
+    );
+  }
+  const why = offer.status === 'expired' ? 'has expired' : offer.status === 'accepted' ? 'has already been used' : 'was withdrawn';
+  return (
+    <p className="note note--warn" role="alert">
+      This waitlist offer for {offer.categoryName} {why}. Contact the organizer if you still want a place.
+    </p>
+  );
+}
+
+/** Join a full category's waitlist with the "About you" answers and a name and email the organizer can use. */
+function JoinWaitlist({ ev, cat, draft }: { ev: PublicEvent; cat: Category; draft: Draft }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ firstName: draft.details.firstName, lastName: draft.details.lastName, email: draft.details.email });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [joined, setJoined] = useState<{ position: number | null } | null>(null);
+  const waiting = ev.waitlist[cat.id]?.waiting ?? 0;
+  const p = draft.profile;
+
+  if (joined) {
+    return (
+      <span className="opt__reason" role="status">
+        You are number {joined.position ?? '?'} on the waitlist for {cat.name}. If a place opens, the organizer sends you a private link and you have 24 hours to register. No email is sent in this demo.
+      </span>
+    );
+  }
+  if (!open) {
+    return (
+      <span className="opt__reason waitlist-join">
+        Full. {waiting > 0 ? `${waiting} ${waiting === 1 ? 'rider is' : 'riders are'} waiting. ` : ''}Freed places go to the waitlist first.
+        <button type="button" className="btn btn--secondary btn--small" onClick={() => setOpen(true)}>
+          Join the waitlist
+        </button>
+      </span>
+    );
+  }
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (p.racingAge === null) {
+      setError('Answer "About you" above first, so the organizer knows you can enter this category.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.joinWaitlist(ev.eventId, { categoryId: cat.id, ...form, ...p });
+      setJoined({ position: r.position });
+    } catch (err) {
+      setError((err as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const id = (k: string) => `wl-${cat.id}-${k}`;
+  return (
+    <form className="waitlist-form" onSubmit={submit} aria-label={`Join the waitlist for ${cat.name}`}>
+      <div className="waitlist-form__row">
+        <label htmlFor={id('first')}>
+          First name
+          <input id={id('first')} className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} autoComplete="given-name" />
+        </label>
+        <label htmlFor={id('last')}>
+          Last name
+          <input id={id('last')} className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} autoComplete="family-name" />
+        </label>
+        <label htmlFor={id('email')}>
+          Email
+          <input id={id('email')} className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" />
+        </label>
+      </div>
+      {error && (
+        <span className="text-error small" role="alert">
+          {error}
+        </span>
+      )}
+      <div className="waitlist-form__actions">
+        <button type="submit" className="btn btn--primary btn--small" disabled={busy}>
+          {busy ? 'Joining…' : 'Join the waitlist'}
+        </button>
+        <button type="button" className="btn btn--ghost btn--small" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }

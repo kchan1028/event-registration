@@ -43,11 +43,20 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
     `SELECT e.*, o.name AS organization_name FROM events e JOIN organizations o ON o.id = e.organization_id WHERE e.id = ?`,
   );
   // Places taken: simulated test entries, confirmed registrations, and unexpired checkout holds.
-  const entriesStmt = db.prepare<[string, string, string], { id: string; category_id: string; rider_ref: string }>(
+  // Places in use: test entries, confirmed and unexpired held order entries, and live waitlist
+  // offers (an offer reserves its place until it expires or its rider's order holds the place instead).
+  const entriesStmt = db.prepare<[string, string, string, string, string, string], { id: string; category_id: string; rider_ref: string }>(
     `SELECT id, category_id, rider_ref FROM test_entries WHERE event_id = ?
      UNION ALL
      SELECT oe.id, oe.category_id, oe.rider_ref FROM order_entries oe JOIN orders o ON o.id = oe.order_id
-     WHERE oe.event_id = ? AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > ?))`,
+     WHERE oe.event_id = ? AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > ?))
+     UNION ALL
+     SELECT w.id, w.category_id, 'waitlist-' || w.id FROM waitlist_entries w
+     WHERE w.event_id = ? AND w.status = 'offered' AND w.offer_expires_at > ?
+       AND NOT EXISTS (
+         SELECT 1 FROM order_entries oe JOIN orders o ON o.id = oe.order_id
+         WHERE o.id = w.order_id AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > ?))
+       )`,
   );
   const insertEntry = db.prepare(`INSERT INTO test_entries (id, event_id, category_id, rider_ref, created_at) VALUES (?, ?, ?, ?, ?)`);
 
@@ -71,7 +80,8 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
   }
 
   function entries(eventId: string): TestEntry[] {
-    return entriesStmt.all(eventId, eventId, clock().toISOString()).map((r) => ({ id: r.id, categoryId: r.category_id, riderRef: r.rider_ref }));
+    const t = clock().toISOString();
+    return entriesStmt.all(eventId, eventId, t, eventId, t, t).map((r) => ({ id: r.id, categoryId: r.category_id, riderRef: r.rider_ref }));
   }
 
   /** Rules that protect existing entries; enforced on every save. */

@@ -68,6 +68,8 @@ export const categorySchema = z.object({
   registration: z.object({ opensAt: localDateTime.nullable(), closesAt: localDateTime.nullable() }),
   cap: limit,
   startGroupId: id.nullable(),
+  /** Organizer-managed waitlist when the category is full (product.md capacity rules). Off unless set. */
+  waitlistEnabled: z.boolean().optional(),
   classifications: z.array(z.object({ code: z.string().max(24), label: z.string().max(80) })).max(4),
   dualScoringApproved: z.boolean(),
   prizeText: z.string().max(500),

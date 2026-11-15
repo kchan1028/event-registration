@@ -127,6 +127,23 @@ const MIGRATIONS: string[] = [
     UNIQUE (event_id, race_id, version)
   );
   `,
+  `
+  -- Organizer-managed waitlists. An active offer reserves a place for 24 hours.
+  CREATE TABLE waitlist_entries (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES events(id),
+    category_id TEXT NOT NULL,
+    rider_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    offer_token TEXT UNIQUE,
+    offered_at TEXT,
+    offer_expires_at TEXT,
+    order_id TEXT REFERENCES orders(id),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX waitlist_by_category ON waitlist_entries(event_id, category_id, created_at);
+  `,
 ];
 
 export function openDb(path: string): Db {

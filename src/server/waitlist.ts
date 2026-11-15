@@ -1,0 +1,169 @@
+import { randomBytes } from 'node:crypto';
+import { canAdmit } from '../shared/capacity';
+import { checkSelection, localNow, profileOf } from '../shared/checkout';
+import { newId } from '../shared/factory';
+import type { EventConfig } from '../shared/schema';
+import { blocksPublicSale, effectiveWaitlistStatus, OFFER_HOURS, waitlistJoinSchema, type StoredWaitlistStatus, type WaitlistJoin, type WaitlistStatus } from '../shared/waitlist';
+import type { Db } from './db';
+import { HttpError, type Repo } from './repo';
+
+/**
+ * Organizer-managed waitlists. Riders join a full category that has a waitlist;
+ * the organizer offers places in order; an offer reserves the place for
+ * OFFER_HOURS and is redeemed through a private link at checkout. No email is
+ * sent: the organizer copies the link to the rider. Policy is in shared/waitlist.ts.
+ */
+
+interface Row {
+  id: string;
+  event_id: string;
+  category_id: string;
+  rider_json: string;
+  status: StoredWaitlistStatus;
+  offer_token: string | null;
+  offered_at: string | null;
+  offer_expires_at: string | null;
+  order_id: string | null;
+  created_at: string;
+}
+
+export function createWaitlist(db: Db, repo: Repo, clock: () => Date) {
+  const nowIso = () => clock().toISOString();
+  const byId = db.prepare<[string, string], Row>(`SELECT * FROM waitlist_entries WHERE id = ? AND event_id = ?`);
+  const byCategory = db.prepare<[string, string], Row>(`SELECT * FROM waitlist_entries WHERE event_id = ? AND category_id = ? ORDER BY created_at, rowid`);
+
+  function published(eventId: string): EventConfig {
+    const record = repo.getEvent(eventId);
+    if (!record.publishedVersion) throw new HttpError(409, 'Registration is not open: this event has no published version yet.');
+    return repo.getVersion(eventId, record.publishedVersion);
+  }
+
+  function status(r: Row): WaitlistStatus {
+    return effectiveWaitlistStatus(r.status, r.offer_expires_at, nowIso());
+  }
+
+  /** Position among riders still in line (waiting or holding a live offer), 1-based; null once out of line. */
+  function position(r: Row): number | null {
+    const line = byCategory.all(r.event_id, r.category_id).filter((x) => blocksPublicSale(status(x)));
+    const i = line.findIndex((x) => x.id === r.id);
+    return i === -1 ? null : i + 1;
+  }
+
+  function view(r: Row) {
+    const rider = JSON.parse(r.rider_json) as WaitlistJoin;
+    return {
+      id: r.id,
+      categoryId: r.category_id,
+      firstName: rider.firstName,
+      lastName: rider.lastName,
+      email: rider.email,
+      racingAge: rider.racingAge,
+      status: status(r),
+      position: position(r),
+      joinedAt: r.created_at,
+      offeredAt: r.offered_at,
+      offerExpiresAt: r.offer_expires_at,
+      offerToken: status(r) === 'offered' ? r.offer_token : null,
+      orderId: r.order_id,
+    };
+  }
+
+  return {
+    /** A rider joins the waitlist of a full category that has the waitlist turned on. */
+    join(eventId: string, input: unknown) {
+      return db
+        .transaction(() => {
+          const config = published(eventId);
+          const body = waitlistJoinSchema.parse(input);
+          const cat = config.categories.find((c) => c.id === body.categoryId);
+          if (!cat || cat.status === 'archived') throw new HttpError(404, 'That category is no longer offered.');
+          if (!cat.waitlistEnabled) throw new HttpError(409, `${cat.name} does not have a waitlist.`);
+
+          const rows = byCategory.all(eventId, cat.id);
+          const inLine = rows.filter((r) => blocksPublicSale(status(r)));
+          const full = !canAdmit(config, repo.entries(eventId), cat.id, `waitlist-check-${newId('x')}`).ok;
+          if (!full && inLine.length === 0) throw new HttpError(409, `${cat.name} still has places. Register for it instead of joining the waitlist.`);
+
+          // Same eligibility and registration-window rules as checkout; capacity is the reason they are here.
+          const check = checkSelection(config, [cat.id], profileOf(body), { nowLocal: localNow(config.event.timeZone, clock()) });
+          if (!check.ok) throw new HttpError(422, check.problems[0], check.problems);
+
+          const email = body.email.toLowerCase();
+          const already = inLine.find((r) => (JSON.parse(r.rider_json) as WaitlistJoin).email.toLowerCase() === email);
+          if (already) return view(already);
+
+          const id = newId('wl');
+          const t = nowIso();
+          db.prepare(`INSERT INTO waitlist_entries (id, event_id, category_id, rider_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'waiting', ?, ?)`).run(
+            id,
+            eventId,
+            cat.id,
+            JSON.stringify(body),
+            t,
+            t,
+          );
+          return view(byId.get(id, eventId)!);
+        })
+        .immediate();
+    },
+
+    /** Every waitlist entry for the event, grouped by category, oldest first. */
+    list(eventId: string) {
+      repo.getEvent(eventId);
+      const rows = db.prepare<[string], Row>(`SELECT * FROM waitlist_entries WHERE event_id = ? ORDER BY created_at, rowid`).all(eventId);
+      return { offerHours: OFFER_HOURS, entries: rows.map(view) };
+    },
+
+    /** Offer the rider a place. Needs a free place, which the offer then reserves for OFFER_HOURS. */
+    offer(eventId: string, entryId: string) {
+      return db
+        .transaction(() => {
+          const config = published(eventId);
+          const row = byId.get(entryId, eventId);
+          if (!row) throw new HttpError(404, 'Waitlist entry not found.');
+          if (status(row) !== 'waiting') throw new HttpError(409, 'Only a rider who is still waiting can be offered a place.');
+          const name = config.categories.find((c) => c.id === row.category_id)?.name ?? 'This category';
+          const room = canAdmit(config, repo.entries(eventId), row.category_id, `waitlist-${row.id}`);
+          if (!room.ok) throw new HttpError(409, `${name} has no free place to offer. Raise its limit or wait until a place frees up.`);
+          const t = nowIso();
+          const expires = new Date(clock().getTime() + OFFER_HOURS * 3_600_000).toISOString();
+          db.prepare(`UPDATE waitlist_entries SET status = 'offered', offer_token = ?, offered_at = ?, offer_expires_at = ?, updated_at = ? WHERE id = ?`).run(
+            randomBytes(18).toString('base64url'),
+            t,
+            expires,
+            t,
+            row.id,
+          );
+          return view(byId.get(row.id, eventId)!);
+        })
+        .immediate();
+    },
+
+    /** Take a rider off the list (they found another race, or asked to be removed). An open offer is withdrawn. */
+    remove(eventId: string, entryId: string) {
+      const row = byId.get(entryId, eventId);
+      if (!row) throw new HttpError(404, 'Waitlist entry not found.');
+      if (status(row) === 'accepted') throw new HttpError(409, 'This rider already registered from the waitlist.');
+      db.prepare(`UPDATE waitlist_entries SET status = 'removed', updated_at = ? WHERE id = ?`).run(nowIso(), row.id);
+      return view(byId.get(row.id, eventId)!);
+    },
+
+    /** What a rider sees when opening an offer link. Only the holder of the link can read it. */
+    offerByToken(token: string) {
+      const row = db.prepare<[string], Row>(`SELECT * FROM waitlist_entries WHERE offer_token = ?`).get(token);
+      if (!row) throw new HttpError(404, 'This waitlist offer was not found.');
+      const config = published(row.event_id);
+      const rider = JSON.parse(row.rider_json) as WaitlistJoin;
+      return {
+        eventId: row.event_id,
+        categoryId: row.category_id,
+        categoryName: config.categories.find((c) => c.id === row.category_id)?.name ?? 'Removed category',
+        status: status(row),
+        offerExpiresAt: row.offer_expires_at,
+        rider,
+      };
+    },
+  };
+}
+
+export type Waitlist = ReturnType<typeof createWaitlist>;

@@ -15,6 +15,7 @@ import { openDb } from './db';
 import { createCheckIn } from './checkin';
 import { createStartLists } from './startlists';
 import { createOrders, type Orders } from './orders';
+import { createWaitlist } from './waitlist';
 import { createRepo, HttpError, type Repo } from './repo';
 
 export interface AppOptions {
@@ -34,6 +35,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10));
   const checkIn = createCheckIn(db, repo, orders, clock);
   const startLists = createStartLists(db, repo, orders, clock);
+  const waitlist = createWaitlist(db, repo, clock);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
   app.addHook('onClose', async () => db.close());
@@ -201,9 +203,24 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
         categoryIds: z.array(z.string().min(1).max(64)).min(1).max(10),
         rider: z.unknown(),
         waiver: z.unknown(),
+        offerToken: z.string().min(10).max(64).nullable().optional(),
       })
       .parse(req.body);
     return reply.status(201).send(orders.createOrder(id, body));
+  });
+
+  // Organizer-managed waitlists (src/server/waitlist.ts).
+  app.post('/api/public/events/:id/waitlist', async (req, reply) => reply.status(201).send(waitlist.join(idParam.parse(req.params).id, req.body)));
+  app.get('/api/public/offers/:token', async (req) => waitlist.offerByToken(z.object({ token: z.string().min(10).max(64) }).parse(req.params).token));
+  app.get('/api/events/:id/waitlist', async (req) => waitlist.list(idParam.parse(req.params).id));
+  const waitlistParams = z.object({ id: z.string().min(1).max(64), entryId: z.string().min(1).max(64) });
+  app.post('/api/events/:id/waitlist/:entryId/offer', async (req) => {
+    const p = waitlistParams.parse(req.params);
+    return waitlist.offer(p.id, p.entryId);
+  });
+  app.post('/api/events/:id/waitlist/:entryId/remove', async (req) => {
+    const p = waitlistParams.parse(req.params);
+    return waitlist.remove(p.id, p.entryId);
   });
 
   app.get('/api/orders/:id', async (req) => orders.getOrder(idParam.parse(req.params).id));

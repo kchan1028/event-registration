@@ -16,7 +16,7 @@ export type Route =
   | { page: 'event'; eventId: string; view: 'setup' | 'pools' | 'publish' | 'preview' | 'registrations' | 'import' | 'startlists' };
 
 export function parseHash(hash: string): Route {
-  const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
+  const parts = hash.replace(/^#\/?/, '').split('?')[0].split('/').filter(Boolean).map(decodeURIComponent);
   if (parts[0] === 'register' && parts[1]) return { page: 'register', eventId: parts[1] };
   if (parts[0] === 'register') return { page: 'events' };
   if (parts[0] === 'orders' && parts[1]) return { page: 'order', orderId: parts[1] };
