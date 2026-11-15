@@ -297,6 +297,31 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE rider_links ALTER COLUMN linked_at TYPE timestamptz USING linked_at::timestamptz;
   ALTER TABLE rider_link_dismissals ALTER COLUMN dismissed_at TYPE timestamptz USING dismissed_at::timestamptz;
   ALTER TABLE entry_resolutions ALTER COLUMN created_at TYPE timestamptz USING created_at::timestamptz, ALTER COLUMN resolved_at TYPE timestamptz USING resolved_at::timestamptz;
+  `,  `
+  -- Coupon codes per event (product.md: Promotions). Terms are copied into orders.quote_json at
+  -- purchase, so editing or turning off a coupon never reprices an order. A redemption is the order
+  -- itself: it counts while the order's hold is live and once it is paid; an expired, cancelled, or
+  -- needs-attention order does not count. Counting and creating orders take the event lock.
+  CREATE TABLE coupons (
+    id text PRIMARY KEY,
+    seq bigint GENERATED ALWAYS AS IDENTITY,
+    event_id text NOT NULL REFERENCES events(id),
+    code text NOT NULL,
+    kind text NOT NULL CHECK (kind IN ('fixed', 'percent')),
+    amount_cents integer CHECK (amount_cents > 0),
+    percent integer CHECK (percent BETWEEN 1 AND 100),
+    category_ids jsonb NOT NULL,
+    valid_from text,
+    valid_until text,
+    max_redemptions integer CHECK (max_redemptions > 0),
+    active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    UNIQUE (event_id, code),
+    CHECK ((kind = 'fixed' AND amount_cents IS NOT NULL AND percent IS NULL) OR (kind = 'percent' AND percent IS NOT NULL AND amount_cents IS NULL))
+  );
+  ALTER TABLE orders ADD COLUMN coupon_id text REFERENCES coupons(id);
+  CREATE INDEX orders_by_coupon ON orders(coupon_id) WHERE coupon_id IS NOT NULL;
   `,
 ];
 

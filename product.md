@@ -372,11 +372,18 @@ Acceptance: payment confirmation triggers one logical confirmation despite repea
 
 ### Promotions
 
-Status: Planned beyond existing package and extra-entry pricing. Configure fixed-amount or percentage coupon codes, eligible events/categories, validity windows, global/per-rider redemption limits, and explicit combinability. Referral offers and registration-count price tiers follow after the basic coupon workflow. Count committed redemptions atomically and release abandoned reservations so concurrent checkouts cannot exceed a limit. Lock the accepted discount and tier price in the order.
+Status: basic event coupons are Implemented in the local build (see below); the rest is Planned. Configure fixed-amount or percentage coupon codes, eligible events/categories, validity windows, global/per-rider redemption limits, and explicit combinability. Referral offers and registration-count price tiers follow after the basic coupon workflow. Count committed redemptions atomically and release abandoned reservations so concurrent checkouts cannot exceed a limit. Lock the accepted discount and tier price in the order.
 
 Preview discount precedence before checkout. An entry receives at most one price reduction under the default rule. Combining a coupon with a package or season pass requires an explicit approved rule; no accidental stacking. Cross-organization promotions require every affected organization's approval and an agreed allocation of the discount. Zero-cost entries remain zero, and no discount creates a negative price.
 
 Acceptance: an eligible code applies once with the advertised saving; expired, exhausted, or inapplicable codes explain why they do not apply. Concurrent final redemptions cannot exceed the configured limit. Refund and cancellation handling follows the published redemption policy.
+
+Basic coupons (Implemented in the local build, November 15, 2026; see [roadmap.md](roadmap.md#rider-checkout)):
+
+- An organizer creates codes per event on **Registrations**: a percentage off each eligible entry or a fixed amount off the order, optional start and end times in the event's time zone, eligible categories (none ticked means all), and an optional total cap. Codes are case-insensitive and can be turned off and on; they are never deleted.
+- Discount precedence (product decision, November 15, 2026): one code per order. The coupon applies after the bundle, same-race extra-entry, and additional-race discounts, and only to eligible entries none of those discounted, so an entry still receives at most one reduction. A percentage rounds half up to the cent per entry; a fixed amount is split across the eligible entries in proportion to price and never exceeds them. Fees are calculated after the coupon. Combining a coupon with a bundle is not offered; it would need an explicit approved rule.
+- Redemption policy: a held order reserves a redemption; paying confirms it; an expired or cancelled hold releases it. A payment after the hold expired confirms only if the cap still has room, otherwise it goes to the organizer's queue. A paid order keeps the discount it accepted even if the code is later turned off or edited, and a transfer or withdrawal does not return the redemption.
+- Not built: per-rider limits, combinability rules, cross-organization promotions, referral offers and registration-count tiers.
 
 ### Reporting
 
