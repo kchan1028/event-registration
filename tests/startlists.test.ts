@@ -51,7 +51,7 @@ describe('start-list CSV and diff', () => {
   });
 });
 
-type Overview = { races: { raceId: string; raceName: string; rows: StartListRow[]; snapshots: { version: number }[]; changesSinceLastSnapshot: { changed: unknown[] } | null }[] };
+type Overview = { races: { raceId: string; raceName: string; rows: StartListRow[]; snapshots: { version: number }[]; changesSinceLastSnapshot: { changed: unknown[] } | null; lock: { snapshotVersion: number; lockedAt: string } | null; changesSinceLock: { added: unknown[]; removed: unknown[]; changed: unknown[] } | null }[] };
 
 async function setup() {
   const { app } = buildApp({ dbPath: ':memory:', now: () => new Date('2027-03-01T18:00:00Z') });
@@ -111,5 +111,34 @@ describe('start-list API', () => {
     const { app } = buildApp({ dbPath: ':memory:' });
     const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
     expect((await app.inject({ method: 'GET', url: `/api/events/${eventId}/start-lists` })).statusCode).toBe(409);
+  });
+  it('locks a start list at a snapshot, never blocks later changes, and shows them as revisions', async () => {
+    const { app, eventId, overview } = await setup();
+    const raceId = (await overview()).races[0].raceId;
+    expect((await overview()).races[0].lock).toBeNull();
+
+    const locked = await app.inject({ method: 'POST', url: `/api/events/${eventId}/start-lists/${raceId}/lock` });
+    expect(locked.statusCode).toBe(201);
+    expect(locked.json()).toMatchObject({ version: 1 });
+    let race = (await overview()).races[0];
+    expect(race.lock?.snapshotVersion).toBe(1);
+    expect(race.changesSinceLock).toEqual({ added: [], removed: [], changed: [] });
+
+    // A check-in after the lock still goes through and shows as a revision (bib assigned).
+    const list = (await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in?q=` })).json() as { dayId: string; riders: { orderId: string; result: { ready: boolean } }[] };
+    const ready = list.riders.find((r) => r.result.ready)!;
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${ready.orderId}`, payload: { dayId: list.dayId, bib: null } })).statusCode).toBe(200);
+    // A plain snapshot afterwards does not move the lock.
+    await app.inject({ method: 'POST', url: `/api/events/${eventId}/start-lists/${raceId}/snapshots` });
+    race = (await overview()).races[0];
+    expect(race.lock?.snapshotVersion).toBe(1);
+    expect(race.changesSinceLock?.changed).toHaveLength(1);
+
+    // Locking again moves the lock to a new snapshot of the current list.
+    const again = (await app.inject({ method: 'POST', url: `/api/events/${eventId}/start-lists/${raceId}/lock` })).json() as { version: number };
+    expect(again.version).toBe(3);
+    race = (await overview()).races[0];
+    expect(race.lock?.snapshotVersion).toBe(3);
+    expect(race.changesSinceLock).toEqual({ added: [], removed: [], changed: [] });
   });
 });

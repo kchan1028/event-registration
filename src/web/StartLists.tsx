@@ -41,6 +41,20 @@ export function StartLists({ draft }: { draft: Draft }) {
     }
   }
 
+  async function lock() {
+    if (!race) return;
+    setBusy(true);
+    try {
+      const l = await api.lockStartList(eventId, race.raceId);
+      setNotice(`Locked ${race.raceName} at snapshot v${l.version} (${l.riders} ${l.riders === 1 ? 'rider' : 'riders'}). Send that version to the timer; later changes show below as revisions.`);
+      load();
+    } catch (e) {
+      setError((e as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="settings settings--wide">
       <h2 className="page-title">Start lists and timer export</h2>
@@ -83,6 +97,9 @@ export function StartLists({ draft }: { draft: Draft }) {
             <button type="button" className="btn btn--secondary" onClick={snapshot} disabled={busy}>
               Save snapshot
             </button>
+            <button type="button" className="btn btn--secondary" onClick={lock} disabled={busy}>
+              {race.lock ? 'Lock again at current list' : 'Lock start list'}
+            </button>
             {data.races.length > 1 && (
               <a className="btn btn--ghost" href={api.startListCsvUrl(eventId, 'all')} download>
                 All races in one CSV
@@ -95,7 +112,24 @@ export function StartLists({ draft }: { draft: Draft }) {
             </p>
           )}
 
-          {race.changesSinceLastSnapshot && race.snapshots[0] && <Changes title={`Changes since snapshot v${race.snapshots[0].version}`} diff={race.changesSinceLastSnapshot} />}
+          {race.lock && (
+            <div className="note" role="status">
+              <span>
+              <strong>Locked</strong> at snapshot v{race.lock.snapshotVersion} on {new Date(race.lock.lockedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}.{' '}
+              <a href={api.startListCsvUrl(eventId, race.raceId, race.lock.snapshotVersion)} download>
+                Download the locked list
+              </a>
+              . Changes are still allowed; each one appears below as a revision for the timer.
+              {race.changesSinceLock && summary(race.changesSinceLock) === 'no changes' && ' No revisions yet.'}
+              </span>
+            </div>
+          )}
+          {race.lock && race.changesSinceLock && summary(race.changesSinceLock) !== 'no changes' && (
+            <Changes title={`Revisions since the lock (v${race.lock.snapshotVersion})`} diff={race.changesSinceLock} />
+          )}
+          {race.changesSinceLastSnapshot && race.snapshots[0] && (!race.lock || race.snapshots[0].version !== race.lock.snapshotVersion) && (
+            <Changes title={`Changes since snapshot v${race.snapshots[0].version}`} diff={race.changesSinceLastSnapshot} />
+          )}
 
           <h3 className="sl-subhead">
             {race.raceName} · {race.rows.length} {race.rows.length === 1 ? 'rider' : 'riders'}

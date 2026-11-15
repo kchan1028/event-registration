@@ -2,7 +2,7 @@
 
 This describes the database the local prototype uses today. It covers tables, relationships, important fields, constraints, and what happens when data is removed. The intended product data model, including entities that are not built yet, is in [product.md](product.md#data-model) and [product.md](product.md#data-storage).
 
-**Status:** Implemented (local prototype). Describes schema version 7 (seven migrations) as of November 14, 2026.
+**Status:** Implemented (local prototype). Describes schema version 8 (eight migrations) as of November 14, 2026.
 
 **Source of truth:** the migrations in [src/server/db.ts](src/server/db.ts) and the event configuration schema in [src/shared/schema.ts](src/shared/schema.ts). If this file disagrees with them, the code wins; fix this file in the same change.
 
@@ -37,6 +37,7 @@ erDiagram
     orders ||--o{ check_ins : "checked in"
     orders ||--o{ check_in_undos : "undone check-ins"
     events ||--o{ start_list_snapshots : "start lists"
+    events ||--o{ start_list_locks : "locked start lists"
     events ||--o{ waitlist_entries : "waitlists"
     orders |o--o| waitlist_entries : "redeems offer"
     order_entries ||--o{ entry_changes : "transfers and withdrawals"
@@ -251,6 +252,18 @@ Organizer-managed waitlists (migration 5). A rider joins a full category whose w
 
 Paying for the offer's order sets `status` to `accepted`. Removing a rider withdraws any open offer.
 
+### start_list_locks
+
+Start-list locks (migration 8). The organizer locks a race's start list when sending it to the timer. Locking saves a new `start_list_snapshots` row and records the lock against it. Changes after a lock are allowed and are shown as revisions against the locked snapshot. Locking again adds a new row; the most recent row is the current lock.
+
+| Column | Notes |
+|---|---|
+| `id` | Primary key |
+| `event_id` | References `events` |
+| `race_id` | Race ID inside the event configuration. Indexed with `event_id` and `locked_at` |
+| `snapshot_version` | The `start_list_snapshots.version` that was locked |
+| `locked_at` | |
+
 ## Event configuration (JSON)
 
 `events.draft_json` and `event_versions.config_json` hold one document validated by `eventConfigSchema` in [src/shared/schema.ts](src/shared/schema.ts) (`schemaVersion: 1`). It contains:
@@ -320,3 +333,13 @@ The prototype does not delete records except simulated test entries.
 ## Not in the database yet
 
 These are in [product.md](product.md#data-model) but do not exist in the prototype: user accounts and sign-in factors, organizer roles and permissions, rider profiles separate from orders, guardian relationships as records, real payments and refunds, automated waitlist promotion, USA Cycling license and waiver checks, and an audit log.
+
+
+## Planned expansion, not current schema
+
+The [season-pass requirements](product.md#cross-organization-bundles-and-season-passes) require a common purchase linking components across organizations/events, participant approvals, accepted rule versions, and per-organization discount/revenue/refund allocations. Current `orders.event_id` and event-local `registration.bundles` cannot represent that purchase. Planned Stripe payment, refund, transfer, and payout references need distinct reconciliation state; successful payment does not mean an organizer has been paid. Reusable rider identity, scoped reporting, promotion redemptions, communications, and overall-participation decisions likewise need an explicit data design before implementation. No SQL migrations, constraints, state transitions, or stored data changed in this documentation update. The target requirements live in product.md; this file continues to describe the existing database above.
+
+
+### Planned participant, bib, and credit extensions
+
+[Participant management](product.md#participant-management) requires reusable rider identity plus organization/role-scoped history, saved views, record-action audits, and identity-correction safeguards; current orders still hold independent rider copies. [Automatic/bulk bib allocation](product.md#automatic-and-bulk-bib-assignment) must retain the existing active-number uniqueness and assignment history while adding stable batch previews, concurrency checks, and atomic application; no batch or automatic-allocation state is stored today. [Credits and deferrals](product.md#reusable-credits-and-deferrals) need an auditable balance ledger with issuance, reservation, redemption, release, expiry and restoration records, original payment allocations, issuing-organization/currency/restriction references, and linked source/destination decisions. These are target requirements only. No current database tables, migrations, constraints, or data behavior changed in this documentation update.

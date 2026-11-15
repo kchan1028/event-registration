@@ -2,7 +2,7 @@
 
 **Status: partly implemented.** The [local category builder prototype](#what-exists-today-implemented) is built on the stack in [ADR 0001](decisions/0001-stack-for-category-builder-milestone.md). Everything under [Proposed logical components](#proposed-logical-components) beyond that prototype is still proposed. Components become decided only through accepted [architecture decision records](decisions/README.md).
 
-The short version: CycleReg needs one source of truth with strong consistency for capacity and money, a clear boundary between public schedule pages and private organizer and rider data, and replaceable connections to a payment provider, an email provider, timer files, and (if approved) USA Cycling. The production stack stays open until Phase 0 answers the federation and payment questions, as [roadmap.md](../roadmap.md#next-actions) requires.
+The short version: CycleReg needs one source of truth with strong consistency for capacity and money, a clear boundary between public schedule pages and private organizer and rider data, and replaceable connections to Stripe (selected in [ADR 0002](decisions/0002-stripe-payments.md), integration Planned), an email provider, timer files, and (if approved) USA Cycling. The production stack stays open until Phase 0 answers the federation and payment questions, as [roadmap.md](../roadmap.md#next-actions) requires.
 
 ## What exists today (implemented)
 
@@ -93,7 +93,7 @@ flowchart LR
         DB[("Single primary datastore")]
     end
     subgraph External["External services (none chosen)"]
-        PAY["Payment provider, hosted checkout"]
+        PAY["Stripe hosted Checkout, Planned"]
         MAIL["Transactional email provider"]
         FED["USA Cycling, if access is approved"]
         TIMER["Timer software, via agreed files"]
@@ -140,7 +140,7 @@ Each of these needs an ADR before implementation depends on it. Options and trad
 
 1. Application stack (language, framework, front-end approach)
 2. Primary datastore and the capacity-locking approach
-3. Payment provider and merchant-of-record model
+3. Merchant-of-record and Stripe charge/transfer/settlement operating model (provider selected in ADR 0002)
 4. USA Cycling license and waiver path
 5. Hosting, backups, and monitoring
 6. Authentication for riders, guardians, and organizers (MFA is required for all accounts; the ADR chooses methods and recovery)
@@ -151,3 +151,8 @@ Each of these needs an ADR before implementation depends on it. Options and trad
 ## How this document changes
 
 When an ADR is accepted, update the matching section here, change its label from Proposed to the ADR's decision, and link the ADR. Keep this document describing the system as it is decided, and leave the reasoning in the ADRs.
+
+
+## Planned multi-organization purchases
+
+The [product requirements](../product.md#cross-organization-bundles-and-season-passes) distinguish same-event packages from cross-event, cross-organization bundles/season passes. The current event-scoped configuration and orders implement only same-event purchases. Planned passes require approved membership across organizations, accepted per-event configuration references, a shared purchase record with component entries and financial allocations, all-component capacity reservations, and role-isolated views. Design and migration details remain open; no cross-organization tables, approvals, settlements, or Stripe accounts exist today. Stripe provider selection does not settle the multi-party operating model.

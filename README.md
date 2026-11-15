@@ -22,7 +22,7 @@ CycleReg proposes a guided cycling workflow: categories modeled the way road and
 
 Berkeley Omnium (Berkeley Bicycle Club) is the reference scenario and proposed first design partner. It is not an approved migration, and it stays on its current registration system until the launch criteria in [product.md](product.md#launch-criteria) pass.
 
-See [feature.md](feature.md) for a concise overview of implemented and planned features.
+See [feature.md](feature.md) for a concise overview of implemented and planned features. Stripe is selected for Planned payments ([ADR 0002](docs/decisions/0002-stripe-payments.md)); integration is not built. Planned expansion includes communications, rider self-service, promotions, reporting, race-day registration, dedicated omnium/stage-race setup, and multi-organization season passes. The current UI's bundles are same-event packages only.
 
 ## What works today
 
@@ -51,7 +51,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Light and dark themes, following the system setting, with a header toggle | Implemented; contrast checked manually, no automated test yet |
 | Automated accessibility checks (WCAG 2.2 A and AA, axe-core) on the main screens in both themes | Implemented; run in CI. Keyboard, screen-reader, and real-phone passes not done |
 | CSV import and export of category schedules, with column matching and per-row errors ([format](docs/csv-category-format.md)) | Implemented and tested |
-| Start lists per race, numbered snapshots with changes since the last one, and a sample timer CSV (format not yet agreed with a timer) | Implemented; automated tests in CI |
+| Start lists per race, numbered snapshots with changes since the last one, a start-list lock with revisions since the lock, and a sample timer CSV (format not yet agreed with a timer) | Implemented; automated tests in CI |
 | Change-impact preview on Review and publish (affected categories, riders, orders; paid prices kept) | Implemented; resolution workflow for affected entries still Planned |
 | Organizer-managed waitlists: per-category setting, waitlist first, 24-hour offer links | Implemented; automated promotion and email delivery Planned |
 | Organizer transfers and withdrawals of paid entries, with price differences logged | Implemented; real refunds Planned |

@@ -7,7 +7,7 @@ First design partner: Berkeley Omnium / Berkeley Bicycle Club (proposed)
 
 ## Product decision
 
-Build a cycling-only registration and race-day operations platform for volunteer-run U.S. bike races. **Road racing and criteriums are the primary market and must be fully supported in the first release**, including two-day weekends and omnium entry bundles. Other cycling disciplines are deferred. Expand only after the product demonstrably reduces organizer work.
+Build a cycling-only registration and race-day operations platform for volunteer-run U.S. bike races. **Road racing and criteriums are the primary market and must be fully supported in the first release**, including two-day weekends and omnium entry bundles. Time trials are Planned for stage-race registration after the initial road-race/criterium pilot. Other cycling disciplines are deferred. Multi-organization season passes are Planned after single-organization purchase and reconciliation are proven.
 
 Berkeley Omnium is the reference scenario, not an approved migration. Its small committee also carries club responsibilities and needs successors. The product must make setup, check-in, exception handling, and handoff easier without requiring the developer to operate every event.
 
@@ -64,7 +64,10 @@ Category configuration is a first-release requirement, not a later enhancement. 
 | Start group/field | Riders starting together, subject to one shared field limit | Two separately scored masters categories sharing a start |
 | Classification | Label/code sent to the timer for scoring and awards | Separate masters age classifications in one field |
 | Capacity pool | Explicit limit shared across selected categories or fields | Approved combined field cap |
-| Bundle | Purchase containing an entry in each specified race | Road race + criterium weekend entry |
+| Event package | Purchase containing an entry in each specified race within one event | Road race + criterium omnium package |
+| Bundle / season pass | Purchase across explicitly participating events and organizations | A season pass for races hosted by several clubs |
+
+Terminology decision (November 14, 2026): the current code and organizer UI call same-event packages "bundles". That implementation is retained for compatibility; it does not support the Planned cross-event, cross-organization bundle defined above. An omnium or stage-race package does not by itself create a separate award classification.
 
 A display header must never create a capacity rule accidentally. Combining starts must not merge classifications, change prices, or create additional entries. A rider counts once toward a shared start-group capacity even if that rider has multiple classification tags; dual scoring is allowed only when explicitly configured and approved.
 
@@ -108,7 +111,7 @@ CSV import of category schedules is P0: provide a template, map columns, validat
 - Allow multiple eligible criterium entries when the approved schedule permits them; flag overlapping starts and configurable recovery/transition conflicts.
 - A bundle selects a valid category in each component race. Do not assume the same label, eligibility, or available capacity on both days.
 - Show an itemized preview of additional-race discounts, bundle pricing, and fees. Define discount precedence and prevent unintended stacking.
-- Discount precedence (decided November 14, 2026): at most one bundle applies per order, the one saving the most whose races all have an entry; it covers one entry per bundle race and either takes a fixed discount or sets a fixed bundle price. The additional-race discount then applies outside the bundle in one of two organizer-chosen ways: to every entry after the first full-price entry, or once per order when two or more entries share a day (the demo fixtures use this). An entry never receives two discounts, and free entries receive none. Fees (a flat platform fee and a percentage processing fee on the entries subtotal after discounts, rounded half up to the cent) are added once per order after discounts and shown before payment.
+- Current same-event package discount precedence (the code calls a package a bundle; decided November 14, 2026): at most one bundle applies per order, the one saving the most whose races all have an entry; it covers one entry per bundle race and either takes a fixed discount or sets a fixed bundle price. The additional-race discount then applies outside the bundle in one of two organizer-chosen ways: to every entry after the first full-price entry, or once per order when two or more entries share a day (the demo fixtures use this). An entry never receives two discounts, and free entries receive none. Fees (a flat platform fee and a percentage processing fee on the entries subtotal after discounts, rounded half up to the cent) are added once per order after discounts and shown before payment.
 
 Berkeley Omnium demo package (November 14, 2026): one independently eligible category in Berkeley Hills Road Race and one in Berkeley Streets Criterium cost $130 as a fixed-price package. The organizer set individual entry prices at $80 for the road race and $60 for the criterium across all demo categories, so the package saves $10 before any configured fees. The applied bundle records one omnium podium nomination with the two selected category IDs and a `needs_review` status in the order quote. This is separate from each race's classifications and creates no third race entry or capacity consumption. A nomination on a held order is provisional; only confirmed orders represent entered packages. The organizer must approve award categories, cross-day category combinations, participation requirements, and final eligibility. Points, results, podium calculation, and nomination approval tools are not built. These prices were supplied by the organizer for the local prototype; purchases remain simulated. Existing seeded events and published orders are unchanged; load a new Berkeley demo to use this package.
 
@@ -148,6 +151,31 @@ These are illustrative product fixtures, not an approved BHRR schedule or statem
 | Rider entering two criteriums | Two valid entries and an additional-race discount, with schedule conflict checks |
 | Weekend entry with different day categories | One order, independently validated category selections, atomic reservation across both days |
 
+### Omnium and stage-race setup
+
+Status: Planned organizer workflow. Same-event package pricing exists, but there is no dedicated competition setup or editable podium/overall-participation configuration. Time-trial support is not built.
+
+- Choose single race, omnium, or stage race. Add ordered days and component races, including a TT when supported; configure TT distance, category schedule, and rider start intervals separately from a mass-start field.
+- Keep purchasable categories, race starts, capacity, per-race classifications, and overall-participation records separate. Define permitted category combinations across races explicitly; never match eligibility or award groups by category labels alone.
+- Configure individual-race entry availability independently from the full-event package. Omnium and stage-race participation rules must be organizer-defined and reviewed; no assumed federation rule applies merely because a format was chosen.
+- Configure fixed package pricing and list exactly which race entries it includes. Reserve every component atomically. Record an explicit overall-participation selection and its review status, separate from payment and race readiness. Provide organizer controls for reviewing nominations without implementing results scoring.
+- Preview partial selections, ineligible combinations, a full component race, extra entries, category transfers, withdrawals, and the effect on overall participation before publishing. Preserve accepted rules and prices; never silently convert individual entries into overall participation or revoke it after a change.
+
+Acceptance: an organizer configures the Berkeley $130 road-race/criterium package and the Planned $160 TT/road-race/criterium package, sees all entries and savings before checkout, and explicitly controls overall-participation rules. A full component prevents sale of the entire package. Both formats export component entries and reviewed overall-participation identifiers for the timer; no points, elapsed-time aggregation, or results are calculated here.
+
+### Cross-organization bundles and season passes
+
+Status: Planned. A bundle can include races from multiple events run by different organizations. The first version offers an explicit published list of races, one eligible category per required component, one total price, and stated savings and policies. Flexible credits, unlimited passes, and choosing races after purchase require a later product decision; the first version creates the selected entries at purchase.
+
+- A coordinating organization proposes the bundle; every participating organization approves its races, category mappings, capacity participation, revenue allocation, cancellation terms, and refund responsibilities before sale. Publishing requires all approvals.
+- Each component points to its organization, event, race, selected category, and accepted configuration version. One purchase can create event-specific orders or allocations linked to a common purchase record; an organization's users can access only their own riders, entries, and permitted financial information.
+- Recheck eligibility, dates, waivers, windows, and capacity per race. Reserve all required components atomically; a sold-out or unavailable race prevents the purchase. A pass is not a guarantee that eligibility or readiness is cleared.
+- Itemize entry allocations, discounts, fees, and each organization's proceeds. Revenue shares and discount allocations must reconcile exactly to the purchase total. Define coupon compatibility, rounding, tax responsibility, settlement timing, and cancellation/partial-refund allocation before publication.
+- Confirm fulfillment only from authoritative payment notifications. Failed payment releases all component holds. Delayed payment, a participant account that cannot receive funds, or transfer failure produces an actionable exception with reconciliation status, not an invented successful payout.
+- Refunds, category changes, withdrawals, and cancellation of one participating event must preserve the accepted bundle policy and historical allocation. Show the rider any effect on remaining entries and overall eligibility before confirmation; never silently reprice remaining paid entries.
+
+Acceptance: two approved organizations sell one season pass for their selected races; the rider enters details once and reviews every entry and organization-specific requirement. Concurrent purchase cannot oversell any component. Duplicate notifications create no duplicate entries or settlements. Each organization can reconcile only its allocated proceeds; a partial cancellation produces an auditable refund allocation and clear status for the remaining races. Live sales depend on the accepted multi-organization Stripe operating model.
+
 ### Standalone Berkeley demo events
 
 Implemented local demo: Berkeley Hills Road Race and Berkeley Streets Criterium can be seeded as separate published events, each with its own race day, race, categories, and capacity usage. Base prices are $80 and $60 respectively. These fixtures contain no package or podium nomination, no prefilled entries, zero fees and surcharges, and no extra-entry discount. Demo mode permits testing outside registration windows. The seed creates both events atomically and reruns preserve event IDs, edits, and published versions without deleting other local data. See [demo setup](SETUP.md) and [event reference](docs/fixtures/events.md).
@@ -156,7 +184,7 @@ Implemented local demo: Berkeley Hills Road Race and Berkeley Streets Criterium 
 
 The previously requested Demo Three-Day Series uses Berkeley Omnium's category definitions as draft reference data: Friday time trial $50, Saturday road race $80, and Sunday criterium $60. A fixed $160 package includes one independently eligible entry in all three races, saving $30 against the $190 base total. Reservation must be all or nothing. Two-day selections receive no series package discount. The TT category set copies the road-race category definitions for review; this is not approval of TT eligibility rules.
 
-Status: Planned documentation only. The current prototype does not support time trials or load this series. Dates, TT scheduling and capacity, fees, additional discounts, and series awards remain unset. This demo specification does not expand first-release live scope or add points/results scoring.
+Status: Planned documentation only. The current prototype does not support time trials or load this series. Dates, TT scheduling and capacity, fees, additional discounts, and series awards remain unset. This specification feeds the Planned stage-race setup workflow after the initial pilot; it adds no points/results scoring.
 
 ### 2. Rider registration
 
@@ -168,6 +196,38 @@ Status: Planned documentation only. The current prototype does not support time 
 - Confirm entries only after authoritative payment confirmation. Handle delayed or failed payments explicitly.
 - Permit organizer-configured changes, withdrawals, and refund requests. Show policy before checkout.
   - Status: organizer transfers and withdrawals of paid entries are Implemented in the local prototype (see [roadmap.md](roadmap.md#rider-checkout-prototype)). A transfer rechecks eligibility, capacity, the waitlist, schedule conflicts, and the guardian waiver; the price paid is kept and any difference is recorded as owed or due. Rider-initiated change requests and real refunds are Planned.
+
+### Rider self-service
+
+Status: Planned; organizer transfers and withdrawals already exist in the local prototype.
+
+After MFA sign-in, riders can view their registrations, receipts, waiver/readiness requirements, waitlist offers, and pending changes. Policies determine whether a change can be completed directly or requires organizer approval. Category-change previews must recheck eligibility, capacity, schedule conflicts, waivers, overall-participation rules, and package/pass effects, and show any charge or refund before submission. Transfers to another person require an explicit event policy, separate recipient consent and eligibility, and new required waivers; a signature is never transferred. Changes are reasoned, audited, and notified to affected parties. No rider can access another rider's private registration by guessing an order ID.
+
+Acceptance: an authenticated rider completes an allowed change or withdrawal, sees the financial effect, and retains the original receipt plus a change record; a blocked change gives a reason and organizer-review path. Failed or duplicate payment/refund processing cannot apply the entry change twice. Self-service must not bypass a waitlist or capacity limit.
+
+### Reusable credits and deferrals
+
+Status: Planned. A reusable credit is an auditable amount owed by its issuing organization to a rider for eligible future purchases. A deferral moves participation to a future event under an approved policy; it is not the same as a category transfer, a cash refund, or a guaranteed place next season.
+
+#### Reusable credits
+
+- Authorized finance staff can issue a credit with the source entry/payment when applicable, rider, issuing organization, currency, amount in integer cents, reason, allowed events/categories, expiry, and policy version. Riders see the original amount, remaining balance, expiry, restrictions, and redemption history. Do not infer matching rider identity from email alone.
+- Treat credit as a payment allocation after the published price, discounts, and applicable fees are calculated, not as a second price discount. Define eligible charges, fee/tax treatment, partial use, expiry, cancellation, and restoration rules before publishing the credit policy. A credit is not a Stripe balance, payout, or automatic promise of cash redemption.
+- Reserve credit during checkout and commit redemption atomically with the confirmed purchase. Expired/failed/cancelled holds release the reserved credit. Concurrent checkouts cannot spend the same balance twice. If Stripe collects a remaining amount, repeated or delayed notifications cannot duplicate credit usage or entries; exceptions require an explicit resolution record.
+- Support purchases partly paid by credit and partly by Stripe. If the eligible total is fully covered, confirm from the internal credit transaction without creating a fictitious Stripe charge. Preserve the accepted quote and separate cash/credit amounts on receipts and reports.
+- A refund, withdrawal, deferral, or cancellation records whether value is returned as cash or credit, under the accepted policy. Never both refund and issue credit for the same value. Refunds restore the appropriate original payment allocations under the policy; duplicate requests cannot over-refund or over-credit.
+- Start with same-organization credits. Cross-organization redemption, including a season-pass component, requires participating-organizer consent, explicit liability/funding allocation, and the approved multi-organization settlement model. Do not assume one club's credit can pay another club's entry.
+
+Acceptance: a $50 credit can pay $30 of one eligible entry and the remaining $20 toward another; balances, receipts, and finance exports reconcile. Two concurrent attempts cannot spend the final balance twice. An expired or restricted credit is refused with an explanation. Failed mixed credit/Stripe checkout leaves no duplicate redemption or silently lost value.
+
+#### Deferrals
+
+- Organizers configure the deferral window, eligible source/destination events and categories, maximum deferrals, fee or price-difference policy, and whether rider requests require approval. Show the financial and participation consequences before the rider agrees.
+- A direct move to an available published future event rechecks destination eligibility for its race date, registration window, capacity, schedule, guardian/waiver requirements, and waitlist priority. Change source and destination entries atomically. Do not release the original entry if a required destination reservation fails.
+- If next season is not published or no place is available, an approved credit-based deferral may withdraw the source entry and issue restricted future credit. State clearly that the credit reserves no destination place and cannot bypass the waitlist.
+- Keep the source order, accepted rules/prices, source withdrawal, destination entry or credit reference, reason, and decision history linked. Do not copy a signed waiver, race readiness, or event-specific bib into a new event. Notify the rider and refresh affected start lists. Changes to an omnium/stage package or season pass require review of remaining component entries and overall participation.
+
+Acceptance: an eligible rider can defer under the published policy with one traceable source/destination record or credit issuance. An unavailable target leaves the original entry unchanged unless the rider explicitly accepts a credit-based deferral. A replay cannot issue a second credit, consume a second place, or withdraw the source twice.
 
 ### 2a. Clickable demo purchase flow — Phase 1
 
@@ -213,9 +273,22 @@ Rules:
 - Provide transactional confirmations and targeted operational messages. Marketing consent is separate.
 - Support owner, registration manager, check-in volunteer, timer/export, and finance roles. Owners can transfer responsibility to a successor.
 
+### Participant management
+
+Status: Planned beyond the Implemented event-level Registrations queue, organizer transfers/withdrawals, and check-in lookup. This manages race participants, not volunteer recruitment or staffing.
+
+- Provide a participant workspace across events an organizer is authorized to manage, backed by reusable rider identity. Distinguish people, event registrations, race entries, orders, waitlist records, credits, and payment/readiness states; several entries must not become several unrelated rider profiles.
+- Search by rider, team, permitted license identifier, bib, order, event, or category. Filter by race/day, status, missing waiver/license review, payment exception, waitlist, and package/pass membership. Show a history of registrations, communications, changes, credits, and deferrals with source dates and reasons.
+- Save named filtered views with selected columns and deterministic sorting for registration, check-in, timing, and finance tasks. Export the authorized view to CSV with a generated-at time, active filters, stable IDs, and spreadsheet-formula protection. Export only fields permitted for the role; saved views never bypass current access checks.
+- Provide permitted record actions for corrections, review, waitlist offers, transfers, withdrawals, refund/credit requests, deferrals, and confirmation resend. Show affected records, eligibility/capacity/financial consequences, and confirmation before bulk changes. Apply the same per-entry rules as individual changes and report success/failure per selected record; never silently skip or partially apply an individual entry change.
+- Flag possible duplicate people for authorized review without automatically merging by name, email, or license label. Any correction or future identity merge must preserve entry, financial, waiver, and audit history. Do not turn an event-participant list into an unrestricted mailing list.
+- Organization and role boundaries apply to search, history, saved views, exports, and bulk actions. A season-pass coordinator sees only the approved shared data; one organization cannot browse another's private rider/finance records. Emergency contacts and minors' details retain restricted access.
+
+Acceptance: an authorized organizer finds one rider's multiple race entries without inflating unique-rider counts, saves and reloads a view, and exports matching permitted rows. A denied organization or role cannot access those records through search, exports, or a saved-view URL. Bulk preview and results make refused records and reasons visible, and no operation silently merges identity or rewrites accepted financial/waiver records.
+
 ### 5. Race-day operations
 
-Status: check-in search, ready/blocked result, bib ranges, bib history, repeat-safe check-in, and undoing a mistaken check-in with a reason are Implemented in the local prototype on fake data (see [roadmap.md](roadmap.md#check-in-prototype)). Start-list snapshots with recorded changes and a sample CSV export are Implemented too (see [roadmap.md](roadmap.md#start-lists-and-timer-export)); the CSV format is not yet agreed with a timer. A printable fallback roster with an exception checklist is Implemented (see [roadmap.md](roadmap.md#check-in-prototype)). QR scanning and an agreed export format with a tested round trip are Planned.
+Status: check-in search, ready/blocked result, bib ranges, bib history, repeat-safe check-in, and undoing a mistaken check-in with a reason are Implemented in the local prototype on fake data (see [roadmap.md](roadmap.md#check-in-prototype)). Start-list snapshots with recorded changes, an organizer start-list lock whose later changes show as revisions, and a sample CSV export are Implemented too (see [roadmap.md](roadmap.md#start-lists-and-timer-export)); the CSV format is not yet agreed with a timer. A printable fallback roster with an exception checklist is Implemented (see [roadmap.md](roadmap.md#check-in-prototype)). QR scanning and an agreed export format with a tested round trip are Planned.
 
 - Search or scan a check-in code; codes identify entries and contain no sensitive rider details.
 - Show readiness, missing requirements, race/category, and bib assignment clearly.
@@ -226,13 +299,58 @@ Status: check-in search, ready/blocked result, bib ranges, bib history, repeat-s
 - Provide a minimal printable roster and exception checklist as a race-day fallback. Keep emergency contacts separate and access-restricted.
 - First release requires connectivity for live changes. Full offline synchronization is deferred and must not be advertised.
 
+### Automatic and bulk bib assignment
+
+Status: Planned beyond the Implemented check-in-time next-free/manual assignment, bib ranges, collision protection, and bib history.
+
+- Configure allocation per event or day and map ranges explicitly to the applicable races/start groups/categories without allowing duplicate active numbers inside the configured collision scope. A shared start or multiple classifications must not accidentally allocate extra bibs to the same rider. Range/category overlap and invalid scope combinations produce actionable errors before use.
+- Offer opt-in automatic allocation after entry confirmation, not during an unpaid hold. Replayed confirmation or background retries reuse the same active assignment. Receiving a bib does not imply a waiver, verified license, or readiness clearance.
+- Offer bulk allocation for selected confirmed registrations, scoped by day/race/category and optionally unassigned riders only. Configure sort by surname/given name, registration time, or category/start order, with a stable ID tie-breaker. Preview rider, current bib, proposed bib, range, and conflicts before applying.
+- Preserve existing manual assignments, checked-in riders, and issued/printed bibs by default. Reassignment requires an authorized role, a reason, a before/after preview, and new start-list snapshots where needed. Do not erase assignment history or override the existing rule that an organizer category transfer keeps its issued bib; identify a conflict for deliberate resolution instead.
+- Apply an approved bulk allocation atomically; insufficient range space, concurrent allocation conflict, or stale preview requires correction and a fresh preview without leaving half the selected riders assigned. Concurrent automatic/manual/bulk actions must respect the same uniqueness constraints.
+- Report assignments and excluded riders with reasons, preserve audit history, and allow later walk-up riders to consume only available numbers. A reset/reallocation is a controlled historical change, not deletion of issued-bib history. Cross-event season bib reuse remains a separate later feature.
+
+Acceptance: allocate a full confirmed field in stable order, repeat without changing bibs, and run concurrent allocations without collisions. An exhausted range or changed preview applies no partial batch. Existing manual and checked-in assignments remain intact; approved changes preserve history and appear in the next start-list revision. Paying or receiving a bib alone never marks a rider cleared.
+
 ### 6. Money and reporting
 
-- Use a payment provider's hosted payment flow; do not store card details.
+- Use Stripe hosted Checkout for the Planned payment integration, selected by the product owner November 14, 2026 ([ADR 0002](docs/decisions/0002-stripe-payments.md)). No Stripe integration or account is configured today; the current demo stays simulated. Never store card details.
 - Establish who collects funds, who is merchant of record, who handles payouts, and who bears disputes before taking live payments.
 - Record order totals, line items, discounts, processing/platform fees, refunds, and settlement references.
 - Support partial refunds against specific entries with an explicit effect on capacity and bundle pricing.
 - Export a reconciliation report that a treasurer can match to provider statements.
+
+### Communications
+
+Status: Planned. Deliver registration confirmations, receipts, payment/refund updates, waitlist offers and expiry notices, entry-change decisions, and race-day instructions through transactional email. Organizer tools target operational messages by event, race, category, or readiness exception. Changes to race schedules or cancellations show the affected audience and a preview before sending.
+
+Use versioned templates, an audit trail, delivery/bounce status, safe retries, and suppression handling. A failed delivery appears in the organizer queue without changing entry or payment state. Sensitive data, waiver signatures, and emergency contacts stay out of message content and public links. Marketing messages require separate consent and an unsubscribe mechanism; an operational message must not silently become a marketing campaign. The email provider remains an open decision.
+
+Acceptance: payment confirmation triggers one logical confirmation despite repeated notifications; an offered waitlist place reaches the intended rider with its expiry and secure access; organizers can identify undelivered notices and retry safely.
+
+### Promotions
+
+Status: Planned beyond existing package and extra-entry pricing. Configure fixed-amount or percentage coupon codes, eligible events/categories, validity windows, global/per-rider redemption limits, and explicit combinability. Referral offers and registration-count price tiers follow after the basic coupon workflow. Count committed redemptions atomically and release abandoned reservations so concurrent checkouts cannot exceed a limit. Lock the accepted discount and tier price in the order.
+
+Preview discount precedence before checkout. An entry receives at most one price reduction under the default rule. Combining a coupon with a package or season pass requires an explicit approved rule; no accidental stacking. Cross-organization promotions require every affected organization's approval and an agreed allocation of the discount. Zero-cost entries remain zero, and no discount creates a negative price.
+
+Acceptance: an eligible code applies once with the advertised saving; expired, exhausted, or inapplicable codes explain why they do not apply. Concurrent final redemptions cannot exceed the configured limit. Refund and cancellation handling follows the published redemption policy.
+
+### Reporting
+
+Status: Planned reporting workspace; prototype start lists, snapshots, and sample CSV already exist. Provide role-restricted event/day/race/category counts, unique riders versus entries versus orders, revenue and discount breakdowns, fees, refunds, issued/redeemed/expired/outstanding credit balances, deferrals, payment exceptions, outstanding readiness items, and waitlist activity. Count credit liability separately from cash receipts and avoid counting a deferral as new cash revenue. Finance reports link entry allocations to Stripe payment, refund, transfer, and payout references. Export totals reconcile exactly, including per-organization season-pass allocations.
+
+After reusable rider identity and organization permissions exist, support cross-event participant search, registration-history lookup, and prior-year registration pace comparisons within authorized data. Seasonal reports expose each organization's own entries and allocations; the coordinating organization receives only the approved aggregate view. Avoid expanding personal-data collection solely for analytics.
+
+Acceptance: filters and exports agree with a timestamped source dataset; transfers, withdrawals, refunds, and duplicate notifications preserve accurate counts and money totals; an organizer cannot see another organization's protected rider or finance data.
+
+### Race-day registration
+
+Status: Planned, distinct from the Implemented check-in workflow. Authorized staff can add a walk-up rider or direct them to a mobile/kiosk entry flow while enforcing the same eligibility, registration-window, capacity, guardian, waiver, and waitlist rules as advance registration. Configure race-day opening/closing times and surcharges explicitly. Staff need a reason and audit record for an allowed exception and cannot override hard capacity or mandatory requirements.
+
+Use the selected Stripe hosted payment flow for online collection. Cash/check recording, complimentary entries, and any physical card-terminal integration require explicit permissions, reconciliation rules, and a further integration decision; do not imply they are supported by selecting Stripe. Never collect card numbers in CycleReg. Show pending payment separately from readiness, then issue a bib and update the timestamped start list only under the applicable confirmed-entry rules. Connectivity is required; the printable roster remains a contingency, not offline synchronization.
+
+Acceptance: a walk-up rider can register, satisfy or be routed for required checks, complete confirmed payment, and appear once in the correct start list without overselling the last place. A failed payment does not clear check-in, and repeated staff actions cannot create duplicate entries or charges.
 
 ## Core flows and acceptance criteria
 
@@ -264,7 +382,7 @@ Status: check-in search, ready/blocked result, bib ranges, bib history, repeat-s
 
 Organization → Event weekend → Race day → Race → Registration categories / start groups.
 
-Display groups organize category presentation independently of start groups. Each registration category references versioned eligibility/pricing rules, a start group, and explicit classification mappings. Capacity pools have explicit membership and limits; a reservation consumes each applicable pool once per rider/start as configured. Bundle line items reference the selected category for each component race. Race length is structured as distance, laps, duration, or duration plus laps, with units and partial-final-lap information where applicable.
+Display groups organize category presentation independently of start groups. Each registration category references versioned eligibility/pricing rules, a start group, and explicit classification mappings. Capacity pools have explicit membership and limits; a reservation consumes each applicable pool once per rider/start as configured. Same-event package line items reference the selected category for each component race. Planned cross-organization bundles additionally need a common purchase record, explicit organization/event/race/category and accepted-version references, approvals, and per-organization discount/revenue/refund allocations. Current event-scoped orders do not implement these relationships. Race length is structured as distance, laps, duration, or duration plus laps, with units and partial-final-lap information where applicable.
 
 Rider profiles and guardian relationships are separate from event entries. Orders contain entry and fee line items; payment attempts, refunds, waiver signatures, license checks, bib assignments, check-ins, and audit records reference stable IDs.
 
@@ -300,7 +418,7 @@ The local prototype stores data in a SQLite file on the developer's computer ([A
 | Dependency | Required decision |
 |---|---|
 | USA Cycling | Confirm partner access, license/category validation, one-day licenses, accepted waiver/guardian workflows, and required reporting directly with USAC |
-| Payments | Confirm connected organizer accounts, payouts, refunds, disputes, tax handling, and onboarding with the chosen provider |
+| Payments | Stripe selected in ADR 0002; hosted Checkout planned. Confirm the merchant/Connect operating model, organizer onboarding, revenue allocation, payouts, refunds, disputes, and tax responsibility before live use |
 | Timer / officials | Obtain actual accepted files and required race-day changes workflow |
 | Email | Select a transactional provider with delivery status and suppression handling |
 | Existing registrations | Confirm export rights and mappings; never assume signatures or payment tokens transfer |
@@ -418,7 +536,7 @@ Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/R
 2. How are both days, multiple entries, shared fields, discounts, and bibs currently configured?
 3. Who will fund development and provide operational support after launch?
 4. Will USAC approve integration and the proposed license/waiver workflow?
-5. Which payment and settlement model works for the club?
+5. Stripe is selected. Which merchant, Connect charge/transfer, settlement, refund, dispute, and tax-responsibility model works for the club and multi-organization season passes?
 6. What timer formats, refund policies, retention periods, and organizer permissions are required?
 7. Which MFA methods and recovery process keep rider and guardian checkout usable, especially for occasional riders and race-morning registration? MFA itself is required; the methods are decided in the authentication ADR.
 8. How do results reach road-results.com for our events, and what should the timer export include to support it?
@@ -430,3 +548,27 @@ Reviewed November 14, 2026. Product requirements above are proposed; listed sour
 - [USA Cycling organizer guidance](https://usacycling.org/host-an-event)
 - [road-results.com results upload instructions](https://www.road-results.com/upload)
 - [CrossMgr publishing to RoadResults.com](https://www.sites.google.com/site/crossmgrsoftware/project-updates/crossmgrautomaticallypublishtocrossresultscomroadresultscom)
+
+
+### BikeReg feature research snapshot
+
+Reviewed November 14, 2026 for the [feature gap review](competitor-profiles/bikereg.md). These are documented competitor claims, not hands-on verification or new CycleReg requirements. No parity claim is made.
+
+- [BikeReg features](https://www.bikereg.com/features): refunds, credits, participant transfers, event-user permissions, email, custom questions, merchandise, coupons, block pricing, and reporting.
+- [Payment policy](https://www.bikereg.com/Users/Public/Director/PaymentPolicy.aspx): organizer disbursements.
+- [LiveReg guide](https://www.bikereg.com/Users/Public/Director/LiveRegGuide.aspx): on-site payments, manual entries, bib assignment, release forms, and configurable timer downloads.
+- [Official USAC integration announcement, July 16, 2019](https://blog.athletereg.com/2019/07/bikereg-and-usa-cycling-launch-first-round-of-new-offerings-for-event-directors/): historical permit, waiver, and license-validation integration. Current coverage requires confirmation.
+- [Two Days of Buffalo 2025 registration notes](https://www.bikereg.com/CommonFiles/CustomControls/Registration/RegNotes.aspx?eventID=69261): full TT/criterium/road-race entry alongside individual stages, with overall awards restricted to full-event entrants. This does not establish built-in scoring or a dedicated setup wizard.
+
+CycleReg scope and phase priorities remain unchanged. Refer to the existing live-pilot gates and results-scoring exclusion before treating a competitor feature as work to build.
+
+
+### Movemint feature research snapshot
+
+Reviewed November 14, 2026 for the [Movemint comparison](competitor-profiles/movemint.md), excluding volunteer-management functions. This records official documentation claims, not verified live behavior or additional CycleReg requirements. Requirements and roadmap priorities are unchanged by this review.
+
+- [Series passes](https://docs.movemint.cc/organizers/event-setup/series), updated October 16, 2026: multi-event registration in one purchase, pass pricing/caps/windows, locked component membership after first sale, and organizer pass transfers. Independent-organizer revenue splitting is not established by this page.
+- [Financials](https://docs.movemint.cc/organizer-dashboard/financials) and [refunds](https://docs.movemint.cc/organizers/managing-participants/refund-a-participant): Stripe-backed payout management and full/partial refunds; registration removal and refunds are separate actions.
+- [Communications](https://docs.movemint.cc/organizer-dashboard/communications-hub/email), [CRM](https://docs.movemint.cc/organizers/managing-participants/crm), [audiences](https://docs.movemint.cc/organizers/comms-marketing/audiences), and [dashboard](https://docs.movemint.cc/organizers/data-tools/organizer-dashboard): scheduled audience-based email, participant history/exports, saved views, and event/date-filtered reporting.
+- [Rider transfers](https://docs.movemint.cc/athletes/registrations/transfer-your-registration), [event-day registration](https://docs.movemint.cc/organizers/pre-race-event-day/event-day-registration), [admin roles](https://docs.movemint.cc/organizers/event-setup/admin-roles), and [questions](https://docs.movemint.cc/organizers/setting-up-your-event/registration/questions): participant changes, on-site workflows, event-scoped access, and configurable forms.
+- [Event groups](https://docs.movemint.cc/organizers/event-setup/groups), [FAQ](https://docs.movemint.cc/organizers/resources/faqs), [pricing](https://docs.movemint.cc/resources/pricing), and [refund protection](https://docs.movemint.cc/organizers/premium-add-ons/how-refund-protection-works): group discounts/credits, merchandise, timer/results integration, optional services, and guest registration. No current USAC or specialized omnium/stage-race scoring parity is inferred.

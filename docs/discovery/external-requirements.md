@@ -20,7 +20,7 @@ The questions, the message to send, and the answer table live in one place: [que
 
 ## Payment-provider operating models
 
-Goal: choose an operating model to test in Phase 2, not a provider. Background: the [payment decision](../decisions/README.md) in the decision backlog. Cards are never stored by this project; payment uses a provider's hosted flow.
+Goal: choose a Stripe operating model to test in Phase 2. Stripe is selected in [ADR 0002](../decisions/0002-stripe-payments.md); merchant, payout, refund, dispute, and multi-organization settlement responsibilities remain open. Background: the [payment decision](../decisions/README.md) in the decision backlog. Cards are never stored by this project; payment uses a provider's hosted flow.
 
 The models, the questions for the treasurer and for each provider, and the place to record findings live in [payment model questions](../payment-model-questions.md). Record findings there, then update the status row above.
 
