@@ -305,7 +305,8 @@ async function applyMigrations(pool: pg.Pool): Promise<void> {
 }
 
 export function openDb(connectionString: string, onPoolError?: (err: Error) => void): Db {
-  const pool = new pg.Pool({ connectionString });
+  // Fail fast instead of hanging when the database cannot be reached.
+  const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 10_000 });
   // An idle connection can drop (database restart, test teardown); the pool replaces it.
   pool.on('error', (err) => onPoolError?.(err));
   const tx = new AsyncLocalStorage<{ client: pg.PoolClient; depth: number }>();
@@ -343,16 +344,20 @@ export function openDb(connectionString: string, onPoolError?: (err: Error) => v
         }
       }
       const client = await pool.connect();
+      // A connection whose ROLLBACK failed is broken; destroy it instead of returning it to the pool.
+      let broken = false;
       try {
         await client.query('BEGIN');
         const result = await tx.run({ client, depth: 0 }, fn);
         await client.query('COMMIT');
         return result;
       } catch (err) {
-        await client.query('ROLLBACK').catch(() => undefined);
+        await client.query('ROLLBACK').catch(() => {
+          broken = true;
+        });
         throw err;
       } finally {
-        client.release();
+        client.release(broken);
       }
     },
 
