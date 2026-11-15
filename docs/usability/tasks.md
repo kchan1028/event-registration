@@ -36,7 +36,7 @@ Task wording avoids the names of buttons and screens on purpose, so the test sho
 
 **Success:** Guardian details entered, the waiver signed by Jordan as guardian, confirmation shows Juniors 10-14 and a total of **$18.45**.
 
-**Watch for:** whether the parent understands whose details go where; the typed-name signature matching the guardian; the "minor without guardian" message if they skip it.
+**Watch for:** whether the parent understands whose details go where; the typed-name signature matching the guardian; the "minor without guardian" message if they skip it. The demo rider picker fills in the guardian for Casey, which hides the "whose details go where" question. In at least one parent session, ask the participant to choose "None" in the picker and type made-up details for both child and guardian.
 
 **Follow-up:** "Who signed the waiver, and does anything else still need to happen before Casey races?"
 
@@ -81,7 +81,7 @@ At the payment step, ask the participant to choose **Simulate a declined payment
 
 **Success:** The start group **Juniors 15-16 and 17-18** in the Berkeley Streets Criterium has a field limit of 60. No category cap, capacity pool, or display group was created or changed instead.
 
-**Watch for:** confusing a start group's field limit with a category cap; looking in the wrong race or day; trusting autosave.
+**Watch for:** confusing a start group's field limit with a category cap; looking in the wrong race or day; trusting autosave; finding the start groups at all, since they sit below the category schedule on the race page.
 
 **Follow-up:** "If a rider entered both Junior 15-16 and Junior 17-18, how many places would that use?" (Expected: they cannot; the categories start together. A rider counts once toward a shared start group.)
 
@@ -139,10 +139,11 @@ At the payment step, ask the participant to choose **Simulate a declined payment
 
 **Starting state.** Fresh session database. Then, before the participant arrives:
 
-1. On the home page select **fictional example weekend** to load the example event, then open it and publish it from **Review and publish** (acknowledge the warnings).
+1. On the home page select **fictional example weekend** to load the example event, then publish it from **Review and publish** (acknowledge the warnings if any are listed).
 2. Open **Race-day check-in** from the left-hand menu, select **Add fictional demo riders**, then open **Bib ranges**, keep **One bib all weekend**, set 100 to 299, and save.
 3. Open **Registrations** for the same event, find **Harper Demo**, and write down or print the check-in code shown under the order. This is the code for V2.
-4. Return to **Race-day check-in**, choose **Saturday**, and leave the search box empty.
+4. Return to **Race-day check-in**, choose **Saturday**, find **Alex Demo**, and check Alex in with the next bib. V5 needs Alex to hold a bib already.
+5. Select **Next rider** so the search box is empty.
 
 The demo riders include ready riders (Alex, Blake, Casey, Emery, Harper), riders whose license still needs review (Dana, Gray), and one unpaid rider (Frankie).
 

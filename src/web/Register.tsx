@@ -1046,7 +1046,11 @@ export function OrderPage({ orderId }: { orderId: string }) {
               <p className="ticket__code num">{order.checkInCode}</p>
               <p className="muted small">Show this at check-in. It identifies your entry and contains no personal details.</p>
             </div>
-            <p className="note note--warn">A simulated payment does not clear you to race. Each entry below lists what is still needed.</p>
+            {order.entries.some((e) => e.readiness.some((r) => r.state !== 'done')) ? (
+              <p className="note note--warn">Not cleared to race yet. A simulated payment does not clear you; each entry below shows what is still needed.</p>
+            ) : (
+              <p className="note">Everything below is done. Bring your check-in code on race morning to collect your bib.</p>
+            )}
           </>
         ) : order.status === 'needs_attention' ? (
           <>
