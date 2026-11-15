@@ -188,6 +188,7 @@ export type CouponView = CouponTerms & {
   validFrom: string | null;
   validUntil: string | null;
   maxRedemptions: number | null;
+  maxPerRider: number | null;
   active: boolean;
   createdAt: string;
   redemptions: { confirmed: number; reserved: number };

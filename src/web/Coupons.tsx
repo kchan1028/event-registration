@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { formatLocalDateTime } from '../shared/checkout';
+import { perRiderText } from '../shared/coupons';
 import { formatCents, sortCategories } from '../shared/format';
 import type { Category } from '../shared/schema';
 import { api, ApiError, type CouponView } from './api';
@@ -20,10 +21,11 @@ interface Form {
   validFrom: string;
   validUntil: string;
   maxRedemptions: number | null;
+  maxPerRider: number | null;
   categoryIds: string[];
 }
 
-const EMPTY: Form = { code: '', kind: 'percent', amountCents: 1000, percent: 10, validFrom: '', validUntil: '', maxRedemptions: null, categoryIds: [] };
+const EMPTY: Form = { code: '', kind: 'percent', amountCents: 1000, percent: 10, validFrom: '', validUntil: '', maxRedemptions: null, maxPerRider: null, categoryIds: [] };
 
 function windowText(c: CouponView): string {
   if (c.validFrom && c.validUntil) return `${formatLocalDateTime(c.validFrom)} to ${formatLocalDateTime(c.validUntil)}`;
@@ -51,7 +53,7 @@ export function Coupons({ eventId, categories, races }: { eventId: string; categ
     setBusy(true);
     setFormError(null);
     try {
-      const shared = { code: form.code, validFrom: form.validFrom || null, validUntil: form.validUntil || null, maxRedemptions: form.maxRedemptions, categoryIds: form.categoryIds };
+      const shared = { code: form.code, validFrom: form.validFrom || null, validUntil: form.validUntil || null, maxRedemptions: form.maxRedemptions, maxPerRider: form.maxPerRider, categoryIds: form.categoryIds };
       await api.createCoupon(eventId, form.kind === 'fixed' ? { ...shared, kind: 'fixed', amountCents: form.amountCents } : { ...shared, kind: 'percent', percent: form.percent ?? 0 });
       setForm(EMPTY);
       setAdding(false);
@@ -124,6 +126,7 @@ export function Coupons({ eventId, categories, races }: { eventId: string; categ
                         of <span className="num">{c.maxRedemptions}</span>
                       </span>
                     )}
+                    {c.maxPerRider !== null && <span className="muted small"> · {perRiderText(c.maxPerRider)} per rider</span>}
                   </td>
                   <td>
                     <button className="btn btn--ghost btn--small" onClick={() => toggle(c)} aria-label={`${c.active ? 'Turn off' : 'Turn on'} ${c.code}`}>
@@ -188,6 +191,9 @@ export function Coupons({ eventId, categories, races }: { eventId: string; categ
             </Field>
             <Field label="Total uses (optional)" hint="Blank means no cap.">
               {(id, d) => <IntInput id={id} describedBy={d} value={form.maxRedemptions} min={1} max={100000} onCommit={(v) => set({ maxRedemptions: v })} />}
+            </Field>
+            <Field label="Uses per rider (optional)" hint="Blank means no limit. Same license number, or same name and email, counts as one rider.">
+              {(id, d) => <IntInput id={id} describedBy={d} value={form.maxPerRider} min={1} max={100} onCommit={(v) => set({ maxPerRider: v })} />}
             </Field>
           </div>
           <fieldset className="subfields">

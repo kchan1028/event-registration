@@ -38,6 +38,8 @@ const windowFields = {
   validUntil: localDateTime.nullable(),
   /** Total redemptions allowed across all riders. Null: no cap. */
   maxRedemptions: z.number().int().min(1).max(100_000).nullable(),
+  /** Redemptions allowed for one rider (matched by `sameRiderReasons`). Null: no per-rider limit. */
+  maxPerRider: z.number().int().min(1).max(100).nullable(),
 };
 
 export const couponInputSchema = z
@@ -51,18 +53,28 @@ export function couponWindowState(c: { validFrom: string | null; validUntil: str
   return state === 'closed' ? 'ended' : state;
 }
 
-/** Why a code cannot be used right now, in words for the rider. Null when it can. */
+/**
+ * Why a code cannot be used right now, in words for the rider. Null when it can.
+ * `riderUsed`: this rider's live redemptions of the code (0 before the rider's details are known).
+ */
 export function couponUnavailableReason(
-  c: { code: string; active: boolean; validFrom: string | null; validUntil: string | null; maxRedemptions: number | null },
+  c: { code: string; active: boolean; validFrom: string | null; validUntil: string | null; maxRedemptions: number | null; maxPerRider: number | null },
   nowLocal: string,
   used: number,
+  riderUsed: number,
 ): string | null {
   if (!c.active) return `${c.code} is no longer available.`;
   const state = couponWindowState(c, nowLocal);
   if (state === 'not_yet') return `${c.code} starts working ${formatLocalDateTime(c.validFrom!)}.`;
   if (state === 'ended') return `${c.code} expired ${formatLocalDateTime(c.validUntil!)}.`;
   if (c.maxRedemptions !== null && used >= c.maxRedemptions) return `${c.code} has been fully redeemed.`;
+  if (c.maxPerRider !== null && riderUsed >= c.maxPerRider) return `${c.code} can be used ${perRiderText(c.maxPerRider)} per rider, and this rider has already used it.`;
   return null;
+}
+
+/** "once" or "3 times", for the per-rider limit. */
+export function perRiderText(n: number): string {
+  return n === 1 ? 'once' : `${n} times`;
 }
 
 /** Copy only the terms out of a stored or public coupon, so extra fields never reach a quote. */

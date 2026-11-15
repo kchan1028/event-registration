@@ -26,7 +26,7 @@ This is a feature summary, not a second requirements document or roadmap. [produ
 | Draft autosave | Implemented | Save locally with stale-save protection |
 | Registration queue | Implemented | Review simulated orders, outstanding readiness items, and manual license-review notes |
 | Registration lookup and corrections | Implemented | Find registrations by rider, guardian, email, team, order, or check-in code; preserve reasoned before/after correction history. Recording the signed-in actor remains Planned |
-| Basic coupons | Implemented | Configure event-scoped fixed or percentage codes with windows, category eligibility, and atomic total redemption caps; per-rider limits and combinability remain Planned |
+| Basic coupons | Implemented | Configure event-scoped fixed or percentage codes with windows, category eligibility, atomic total redemption caps, and per-rider limits (same-rider rule); combinability remains Planned |
 | Published-change resolution | Implemented | Resolve affected paid entries through organizer transfer, withdrawal, or unchanged acceptance while preserving accepted prices and an append-only history |
 | Same-rider linking | Implemented | Suggest likely matches across orders; link only when the organizer confirms |
 | Entries and ledger CSV | Implemented | Download one row per entry and a simulated ledger; contact, emergency, and license-number details are left out |

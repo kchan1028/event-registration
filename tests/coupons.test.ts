@@ -64,16 +64,18 @@ describe('coupon pricing (shared rule)', () => {
   });
 
   it('windows and caps: not yet, open, ended, exhausted, off', () => {
-    const base = { code: 'X', active: true, validFrom: '2027-03-01T09:00', validUntil: '2027-03-10T00:00', maxRedemptions: 2 };
-    expect(couponUnavailableReason(base, '2027-03-01T08:59', 0)).toMatch(/starts working/);
-    expect(couponUnavailableReason(base, '2027-03-01T09:00', 1)).toBeNull();
-    expect(couponUnavailableReason(base, '2027-03-10T00:00', 0)).toMatch(/expired/);
-    expect(couponUnavailableReason(base, '2027-03-02T00:00', 2)).toMatch(/fully redeemed/);
-    expect(couponUnavailableReason({ ...base, active: false }, '2027-03-02T00:00', 0)).toMatch(/no longer available/);
+    const base = { code: 'X', active: true, validFrom: '2027-03-01T09:00', validUntil: '2027-03-10T00:00', maxRedemptions: 2, maxPerRider: null };
+    expect(couponUnavailableReason(base, '2027-03-01T08:59', 0, 0)).toMatch(/starts working/);
+    expect(couponUnavailableReason(base, '2027-03-01T09:00', 1, 0)).toBeNull();
+    expect(couponUnavailableReason(base, '2027-03-10T00:00', 0, 0)).toMatch(/expired/);
+    expect(couponUnavailableReason(base, '2027-03-02T00:00', 2, 0)).toMatch(/fully redeemed/);
+    expect(couponUnavailableReason({ ...base, active: false }, '2027-03-02T00:00', 0, 0)).toMatch(/no longer available/);
+    expect(couponUnavailableReason({ ...base, maxPerRider: 1 }, '2027-03-02T00:00', 1, 1)).toBe('X can be used once per rider, and this rider has already used it.');
+    expect(couponUnavailableReason({ ...base, maxPerRider: 2 }, '2027-03-02T00:00', 1, 1)).toBeNull();
   });
 
   it('normalizes codes to upper case and rejects bad windows and percentages', () => {
-    expect(couponInputSchema.parse({ kind: 'percent', code: ' spring-10 ', percent: 10, categoryIds: [], validFrom: null, validUntil: null, maxRedemptions: null }).code).toBe('SPRING-10');
+    expect(couponInputSchema.parse({ kind: 'percent', code: ' spring-10 ', percent: 10, categoryIds: [], validFrom: null, validUntil: null, maxRedemptions: null, maxPerRider: null }).code).toBe('SPRING-10');
     expect(couponInputSchema.safeParse({ kind: 'fixed', code: 'ABC', amountCents: 500, categoryIds: [], validFrom: '2027-03-02T00:00', validUntil: '2027-03-01T00:00', maxRedemptions: null }).success).toBe(false);
     expect(couponInputSchema.safeParse({ kind: 'percent', code: 'ABC', percent: 120, categoryIds: [], validFrom: null, validUntil: null, maxRedemptions: null }).success).toBe(false);
   });
@@ -94,11 +96,15 @@ async function setup() {
   const code = (c: string) => event.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
   let n = 0;
-  const order = (categoryIds: string[], couponCode: string | null) =>
-    app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `cpn-${++n}-xxxxxxxx`, categoryIds, rider: RIDER, waiver, couponCode } });
+  const order = (categoryIds: string[], couponCode: string | null, rider = RIDER) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/rider/events/${eventId}/orders`,
+      payload: { clientRequestId: `cpn-${++n}-xxxxxxxx`, categoryIds, rider, waiver: { ...waiver, signatureName: `${rider.firstName} ${rider.lastName}` }, couponCode },
+    });
   const pay = (orderId: string) => app.inject({ method: 'POST', url: `/api/orders/${orderId}/payment`, payload: { attemptId: `att-${Math.random().toString(36).slice(2)}`, outcome: 'success' } });
   const createCoupon = (body: Record<string, unknown>) =>
-    app.inject({ method: 'POST', url: `/api/events/${eventId}/coupons`, payload: { kind: 'percent', percent: 20, categoryIds: [], validFrom: null, validUntil: null, maxRedemptions: null, ...body } });
+    app.inject({ method: 'POST', url: `/api/events/${eventId}/coupons`, payload: { kind: 'percent', percent: 20, categoryIds: [], validFrom: null, validUntil: null, maxRedemptions: null, maxPerRider: null, ...body } });
   const check = (c: string) => app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/coupons/check`, payload: { code: c } });
   const list = async () => (await app.inject({ method: 'GET', url: `/api/events/${eventId}/coupons` })).json() as { id: string; code: string; active: boolean; redemptions: { confirmed: number; reserved: number } }[];
   return { app, url, eventId, code, waiver, order, pay, createCoupon, check, list, clock };
@@ -211,6 +217,34 @@ describe('coupons API', () => {
     expect(((await s.pay(fast.id)).json() as Order).status).toBe('confirmed');
     expect(((await s.pay(slow.id)).json() as Order).status).toBe('needs_attention');
     expect((await s.list())[0].redemptions).toEqual({ confirmed: 1, reserved: 0 });
+  });
+
+  it('a per-rider limit counts the same rider across orders, and two juniors from one family separately', async () => {
+    const s = await setup();
+    await s.createCoupon({ code: 'ONCE', maxPerRider: 1 });
+    const first = (await s.order([s.code('RR-M35-34')], 'ONCE')).json() as Order;
+    expect(first.couponCode).toBe('ONCE');
+    // Same name and email in a second order: the same rider.
+    const again = await s.order([s.code('RR-D23')], 'ONCE');
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error).toMatch(/once per rider.*Nothing was held/);
+    // Checking the code before details are entered cannot tell who the rider is, so it passes.
+    expect((await s.check('ONCE')).statusCode).toBe(200);
+    // A sibling on the same family email is a different rider.
+    expect((await s.order([s.code('RR-D23')], 'ONCE', { ...RIDER, firstName: 'Sibling' })).statusCode).toBe(201);
+    // Cancelling the first hold gives the rider their use back.
+    await s.app.inject({ method: 'POST', url: `/api/orders/${first.id}/cancel` });
+    expect((await s.order([s.code('RR-D23')], 'ONCE')).statusCode).toBe(201);
+  });
+
+  it('a late payment does not confirm when the same rider used up their limit meanwhile', async () => {
+    const s = await setup();
+    await s.createCoupon({ code: 'ONCE', maxPerRider: 1 });
+    const slow = (await s.order([s.code('RR-M35-34')], 'ONCE')).json() as Order;
+    s.clock.advance(11);
+    const fast = (await s.order([s.code('RR-D23')], 'ONCE')).json() as Order;
+    expect(((await s.pay(fast.id)).json() as Order).status).toBe('confirmed');
+    expect(((await s.pay(slow.id)).json() as Order).status).toBe('needs_attention');
   });
 
   it('two riders racing for the last redemption on two connections: exactly one order gets it', async () => {
