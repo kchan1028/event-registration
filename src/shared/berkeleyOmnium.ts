@@ -6,13 +6,13 @@ import type { Category, CollegiateDivision, EligibilityPath, EventConfig, Gender
  * The Berkeley Omnium (Berkeley Hills Road Race and Berkeley Streets Criterium), used with the promoter's
  * permission as the working demo event. Fields, distances, staging and start times, race lengths and field limits
  * come from the 2026 Berkeley Omnium race information; dates and the registration window are the 2027 edition's.
- * Entry fees are placeholders until the 2027 fees are set; the $15 day-of surcharge and $20 second criterium race are the 2026 rules. Riders and entries stay simulated.
+ * Organizer-set entry fees: $80 road race, $60 criterium, $130 package; the $15 day-of surcharge and $20 second criterium race are the 2026 rules. Riders and entries stay simulated.
  */
 
 export const OMNIUM_ORG_NAME = 'Berkeley Bicycle Club';
 
 export const OMNIUM_NOTICE =
-  'Berkeley Omnium working copy. Fields and times are from the 2026 race information, dated for April 17–18, 2027. Entry fees are placeholders, entries are simulated, and eligibility is a draft to check against current USA Cycling rules.';
+  'Berkeley Omnium working copy. Fields and times are from the 2026 race information, dated for April 17–18, 2027. Organizer-set entry fees: $80 road race, $60 criterium, or $130 for both (save $10). The package includes an omnium podium nomination subject to organizer review. Entries are simulated, and eligibility is a draft to check against current USA Cycling rules.';
 
 const ALL: LicenseCategory[] = ['1', '2', '3', '4', '5'];
 
@@ -38,16 +38,6 @@ interface FieldSpec {
   guardian?: boolean;
   description?: string;
 }
-
-/** Placeholder road race and criterium fees by display group, in cents. Not the Omnium's real fees. */
-const FEES: Record<Group, [number, number]> = {
-  elite: [6000, 5000],
-  masters: [6000, 5000],
-  women: [5500, 4500],
-  novice: [4000, 3500],
-  collegiate: [3500, 3000],
-  juniors: [2500, 2000],
-};
 
 const WOMEN_SPLIT_NOTE = 'The race information does not split the long and short races by license category. Set the categories before opening registration.';
 
@@ -109,7 +99,7 @@ export function buildBerkeleyOmniumEvent(): { config: EventConfig; entryPlan: { 
         status: 'active',
         eligibility: { paths: [eligibility(f)], organizerReview: false, guardianRequired: f.guardian ?? false },
         length,
-        pricing: { baseCents: FEES[f.group][raceId === rr.id ? 0 : 1], dayOfSurchargeCents: 1500, priceChanges: [] },
+        pricing: { baseCents: raceId === rr.id ? 8000 : 6000, dayOfSurchargeCents: 1500, priceChanges: [] },
         registration,
         cap: null,
         startGroupId: sg.id,
@@ -229,7 +219,14 @@ export function buildBerkeleyOmniumEvent(): { config: EventConfig; entryPlan: { 
     },
     ruleSet: { source: '2026 Berkeley Omnium race information. Eligibility drafted from field names; check against current USA Cycling rules.', season: 2027 },
     registration: {
-      bundles: [],
+      bundles: [{
+        id: newId('bundle'),
+        name: 'Berkeley Omnium package + podium nomination',
+        raceIds: [rr.id, crit.id],
+        discountCents: 0,
+        priceCents: 13000,
+        omnium: { code: 'BERKELEY-OMNIUM', label: 'Berkeley Omnium podium' },
+      }],
       additionalRaceDiscountCents: 0,
       additionalRaceDiscountMode: 'each_additional_entry',
       // Berkeley Omnium rule (2026 race information): a second criterium race costs $20, flat, on race day too.

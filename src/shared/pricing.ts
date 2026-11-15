@@ -43,7 +43,12 @@ export interface QuoteFee {
 export interface Quote {
   onDate: string;
   lines: QuoteLine[];
-  bundle: { id: string; name: string; discountCents: number } | null;
+  bundle: { id: string; name: string; discountCents: number; omnium?: {
+    code: string;
+    label: string;
+    categoryIds: string[];
+    status: 'needs_review';
+  } } | null;
   subtotalCents: number;
   discountCents: number;
   entriesTotalCents: number;
@@ -122,7 +127,14 @@ export function quote(config: EventConfig, categoryIds: readonly string[], onDat
   if (best) {
     const applied = allocate(best.picked, best.saving, best.b.name);
     best.picked.forEach((l) => inBundle.add(l));
-    appliedBundle = { id: best.b.id, name: best.b.name, discountCents: applied };
+    appliedBundle = {
+      id: best.b.id, name: best.b.name, discountCents: applied,
+      ...(best.b.omnium ? { omnium: {
+        ...best.b.omnium,
+        categoryIds: best.picked.map((l) => l.categoryId),
+        status: 'needs_review' as const,
+      } } : {}),
+    };
   }
 
   // 2a. Flat price for extra entries in the same race.

@@ -4,6 +4,8 @@ Last verified: November 14, 2026 on macOS 26 (Apple silicon) with Node.js 20.19 
 
 This runs the organizer workspace prototype on your own computer. It has no sign-in, so it listens only on `127.0.0.1` and must not be exposed to a network or deployed.
 
+For the two standalone Berkeley demo events, follow [Set up the Berkeley demo](../../SETUP.md). It seeds a separate database and publishes both events for rider testing.
+
 ## What you need
 
 - Node.js 20 or later, from [nodejs.org](https://nodejs.org/). Check with `node -v`.
@@ -30,7 +32,7 @@ No database server, cloud account, or API key is needed. Nothing connects to USA
    npm run seed:omnium
    ```
 
-   Expected result: a line starting `Demonstration event created in data/cyclereg.sqlite`. You can also load it from the home page. `npm run seed:demo` loads the fictional example weekend instead.
+   Expected result: a line starting `Demonstration events created in data/cyclereg.sqlite`. You can also load it from the home page. `npm run seed:demo` loads the fictional example weekend instead.
 
 4. Start the development servers:
 

@@ -1,77 +1,84 @@
-# Setup
+# Set up the Berkeley demo
 
-Quick start for running the CycleReg prototype on your own computer. The full steps, configuration, and expected output are in [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md), which is the source of truth if the two ever disagree.
+Status: Implemented local demo. Commands checked November 14, 2026.
 
-The prototype has no sign-in. It listens only on `127.0.0.1` and must not be exposed to a network or deployed.
+This setup uses two standalone events: Berkeley Hills Road Race ($80) and Berkeley Streets Criterium ($60). Each has one day and one race, with Berkeley's draft category definitions. There is no package, series, podium nomination, extra-entry discount, surcharge, or fee in these two fixtures. Payments and rider details must be simulated.
 
-## Requirements
+Use Node.js 20 or later and npm. See [local setup](docs/runbooks/local-setup.md) for installation requirements and troubleshooting.
 
-- Node.js 20 or later (`node -v`) and npm
-- Git
-- A database. The app stores user data (rider details, waivers), event data, registrations, bibs, check-ins, and start lists in it and does not run without one. Locally this is a SQLite file that the app creates and migrates on first start, so there is nothing to install. See [Database](#database).
-- No cloud account or API key. Nothing connects to USA Cycling or a payment provider.
+A database is required for event data, registrations, waivers, bibs, check-ins, and start lists. Locally it is a SQLite file created and migrated automatically; no database server is needed. The general setup defaults to `data/cyclereg.sqlite`. The steps below deliberately use a separate demo database.
 
-## Run it
+## Prepare and seed
+
+From the repository root, install dependencies if you have not already done so:
 
 ```bash
 npm ci
 ```
 
+Seed a dedicated demo database:
+
 ```bash
-npm run dev
+DB_PATH=data/berkeley-demo.sqlite npm run seed:berkeley
 ```
 
-Open `http://127.0.0.1:5273/`. Create an organization, select **Load Berkeley Omnium**, or select **Open the rider demo**.
+Expected result: `Demonstration events created in data/berkeley-demo.sqlite`, followed by the organization and event IDs. The seed publishes both events so they appear in the rider event list. It creates no rider registrations, orders, or simulated capacity entries. Running it again reports `already exist` and preserves the existing event IDs, organizer edits, and published versions.
 
-To preload demo data from the command line instead:
+The database is a local SQLite file created automatically and ignored by Git. No database server or credentials are required. Existing databases are not cleared or migrated to this fixture. Use this dedicated file for a catalog containing only the two events; seeding into a database with other events keeps those events.
+
+## Run the demo
 
 ```bash
-npm run seed:omnium
+DB_PATH=data/berkeley-demo.sqlite npm run dev
 ```
 
-`npm run seed:demo` loads the fictional example weekend.
+Open the rider event list at `http://127.0.0.1:5273/#/register`. It should list Berkeley Hills Road Race and Berkeley Streets Criterium. The organizer workspace is at `http://127.0.0.1:5273/`.
 
-## Database
+Keep `DB_PATH` identical when seeding and starting the app. The home page's other sample-loading buttons still load their existing fixtures; they are not needed for this demo.
 
-- Default location: `data/cyclereg.sqlite`. Set `DB_PATH` to use a different file.
-- Created automatically by `npm run dev`, `npm start`, or a seed command. Pending migrations run on startup.
-- `better-sqlite3` (installed by `npm ci`) provides SQLite; no separate database server is needed for the local prototype.
-- The `data/` folder is ignored by Git. It can hold test registrations, so do not commit or share it.
-- To start over, stop the app and delete `data/cyclereg.sqlite`.
+Choose an event, select an eligible category, and use made-up rider information or a fictional demo rider. A single road-race entry totals $80; a single criterium entry totals $60. Demo mode allows testing outside the registration windows. Complete the sample waiver and simulated payment. Payment moves no money, and an unreviewed license remains in review.
 
-Tables, relationships, and deletion behavior: [DATA_MODEL.md](DATA_MODEL.md). The hosted database for a real event is an open decision ([product.md](product.md#data-storage)).
+The prototype has no sign-in. Keep it on this computer at `127.0.0.1`; do not deploy it or expose it to a network. Stop the servers with Ctrl+C.
 
-## Check it
+For a single-process built demo:
 
 ```bash
-curl http://127.0.0.1:5273/api/health
-```
-
-Expected output: `{"ok":true}`.
-
-## Tests
-
-```bash
-npm run check
-```
-
-Runs the TypeScript check, unit and API tests, and a production build.
-
-```bash
-npx playwright install chromium
+npm run build
 ```
 
 ```bash
-npm run test:e2e
+DB_PATH=data/berkeley-demo.sqlite npm start
 ```
 
-## Configuration
+Then open `http://127.0.0.1:3001/#/register`.
+
+## Check the data
+
+With the development servers running:
+
+```bash
+curl http://127.0.0.1:5273/api/public/events
+```
+
+Expected result: a JSON array containing the two event names, each with one race day and one race. Category definitions and fixture notes are in [events.md](docs/fixtures/events.md).
+
+Run the automated checks with `npm run check`. The seed tests verify the isolated category references, prices, published catalog, persistence, safe reruns, and preservation of unrelated local data.
+
+## Configuration and troubleshooting
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `DB_PATH` | `data/cyclereg.sqlite` | Local SQLite database |
+| `DB_PATH` | `data/cyclereg.sqlite` | Local SQLite file; use the same value for seeding and running |
 | `PORT` or `API_PORT` | `3001` | API server port |
-| `NODE_ENV=production` | unset | API also serves the built web app from `dist/web` |
-| `HOLD_MINUTES` | `10` | How long checkout holds places before payment |
+| `NODE_ENV=production` | unset | Serves the built web app from `dist/web` |
+| `HOLD_MINUTES` | `10` | Checkout reservation duration |
 
-To start over, delete `data/cyclereg.sqlite`. Problems: see [docs/runbooks/troubleshooting.md](docs/runbooks/troubleshooting.md).
+If port 5273 or 3001 is already in use, stop your existing development server before running the demo. To keep that server running, use the built app on an unused port instead:
+
+```bash
+DB_PATH=data/berkeley-demo.sqlite PORT=3106 npm start
+```
+
+Then open `http://127.0.0.1:3106/#/register`. Build first with `npm run build` as shown above.
+
+Database tables and data behavior: [DATA_MODEL.md](DATA_MODEL.md). Other problems: [troubleshooting](docs/runbooks/troubleshooting.md). Keep the database local and uncommitted; it may contain test registrations.
