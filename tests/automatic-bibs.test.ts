@@ -49,6 +49,7 @@ describe('post-close automatic bib allocation', () => {
     expect(new Set(allocated.map((r) => r.bib)).size).toBe(allocated.length);
     await run();
     expect((await list()).riders.map((r) => [r.orderId, r.bib, r.bibHistory])).toEqual(after.riders.map((r) => [r.orderId, r.bib, r.bibHistory]));
+    expect((await app.inject({ method: 'DELETE', url: `/api/events/${eventId}/automatic-bibs` })).json()).toEqual({ cancelled: false });
     const sunday = await list(after.days[1].id);
     for (const r of sunday.riders) {
       const saturday = after.riders.find((s) => s.orderId === r.orderId);
@@ -87,7 +88,7 @@ describe('post-close automatic bib allocation', () => {
     expect((await jobs())[0].completedAt).toBeNull();
   });
 
-  it('keeps a linked rider’s canonical identity when the anchor hold expires', async () => {
+  it('keeps a linked rider’s canonical identity through allocation and desk actions after anchor expiry', async () => {
     const { app, eventId, advance, enable, jobs, run, list } = await setup();
     const before = await list();
     const root = before.riders.find((r) => r.name.startsWith('Frankie'))!;
@@ -100,6 +101,19 @@ describe('post-close automatic bib allocation', () => {
     const after = await list();
     expect(after.riders.find((r) => r.orderId === root.orderId)).toMatchObject({ name: alex.name, bib: expect.any(Number) });
     expect(after.riders.some((r) => r.orderId === alex.orderId)).toBe(false);
+    const allocated = after.riders.find((r) => r.orderId === root.orderId)!;
+    const checked = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex.orderId}`, payload: { dayId: after.dayId, bib: null } });
+    expect(checked.statusCode).toBe(200);
+    expect(checked.json()).toMatchObject({ orderId: root.orderId, bib: allocated.bib, checkedInAt: expect.any(String) });
+    const repeated = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${root.orderId}`, payload: { dayId: after.dayId, bib: null } });
+    expect(repeated.statusCode).toBe(200);
+    expect(repeated.json()).toMatchObject({ bib: allocated.bib, checkedInAt: checked.json().checkedInAt });
+    const changed = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex.orderId}/bib`, payload: { dayId: after.dayId, bib: 199, reason: 'Correct the demo handoff number' } });
+    expect(changed.statusCode).toBe(200);
+    expect(changed.json()).toMatchObject({ orderId: root.orderId, bib: 199 });
+    const undone = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${root.orderId}/undo`, payload: { dayId: after.dayId, reason: 'Undo the demo check-in' } });
+    expect(undone.statusCode).toBe(200);
+    expect(undone.json()).toMatchObject({ orderId: root.orderId, bib: null, checkedInAt: null });
   });
 
   it('rolls back every day on exhaustion and retries after ranges are corrected', async () => {
@@ -121,7 +135,10 @@ describe('post-close automatic bib allocation', () => {
     await enable();
     await enable();
     expect((await jobs()).filter((j) => j.cancelledAt !== null)).toHaveLength(1);
-    expect((await app.inject({ method: 'DELETE', url: `/api/events/${eventId}/automatic-bibs` })).statusCode).toBe(200);
+    const cancelled = await app.inject({ method: 'DELETE', url: `/api/events/${eventId}/automatic-bibs` });
+    expect(cancelled.statusCode).toBe(200);
+    expect(cancelled.json()).toEqual({ cancelled: true });
+    expect((await app.inject({ method: 'DELETE', url: `/api/events/${eventId}/automatic-bibs` })).json()).toEqual({ cancelled: false });
     advance('2027-03-01T18:11:00Z');
     await run();
     expect((await jobs()).every((j) => j.cancelledBy === j.configuredBy && j.completedAt === null)).toBe(true);

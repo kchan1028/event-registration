@@ -381,7 +381,7 @@ export const api = {
     request<CheckInList>('GET', `/api/events/${eventId}/check-in?${new URLSearchParams({ ...(dayId ? { day: dayId } : {}), q })}`),
   automaticBibs: (eventId: string) => request<AutomaticBibJob[]>('GET', `/api/events/${eventId}/automatic-bibs`),
   enableAutomaticBibs: (eventId: string, input: AutomaticBibInput) => request<{ id: string }>('POST', `/api/events/${eventId}/automatic-bibs`, input),
-  disableAutomaticBibs: (eventId: string) => request<{ disabled: boolean }>('DELETE', `/api/events/${eventId}/automatic-bibs`),
+  disableAutomaticBibs: (eventId: string) => request<{ cancelled: boolean }>('DELETE', `/api/events/${eventId}/automatic-bibs`),
   previewBibs: (eventId: string, batch: BibBatch) => request<BibPlan>('POST', `/api/events/${eventId}/bibs/preview`, batch),
   applyBibs: (eventId: string, batch: BibBatch, fingerprint: string) => request<BibPlan & { applied: number }>('POST', `/api/events/${eventId}/bibs/apply`, { ...batch, fingerprint }),
   saveBibSettings: (eventId: string, settings: BibSettings) => request<BibSettings>('PUT', `/api/events/${eventId}/bib-settings`, settings),

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { AutomaticBibInput, AutomaticBibJob } from '../shared/checkin';
+import { BIB_SORT_LABELS, type AutomaticBibInput, type AutomaticBibJob } from '../shared/checkin';
 import { api, type ApiError } from './api';
 
 export function AutomaticBibs({ eventId }: { eventId: string }) {
@@ -51,9 +51,9 @@ export function AutomaticBibs({ eventId }: { eventId: string }) {
     setError('');
     setMessage('');
     try {
-      await api.disableAutomaticBibs(eventId);
+      const result = await api.disableAutomaticBibs(eventId);
       setJobs(null);
-      setMessage('Pending automatic assignment cancelled. Existing bibs are unchanged.');
+      setMessage(result.cancelled ? 'Pending automatic assignment cancelled. Existing bibs are unchanged.' : 'No pending assignment was cancelled. Refresh status to check whether allocation completed.');
       statusRef.current?.focus();
     } catch (err) {
       setError((err as ApiError).message);
@@ -75,9 +75,7 @@ export function AutomaticBibs({ eventId }: { eventId: string }) {
         <fieldset disabled={busy}>
           <legend>Automatic allocation order</legend>
           <label>Sort riders<select className="input" value={sort} onChange={(e) => setSort(e.target.value as AutomaticBibInput['sort'])}>
-            <option value="name">Surname, then given name</option>
-            <option value="registration">Registration time</option>
-            <option value="start">Category / start order</option>
+            {Object.entries(BIB_SORT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>
         </fieldset>
         <div className="ci-bib__actions">

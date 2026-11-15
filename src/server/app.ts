@@ -582,8 +582,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
   app.delete('/api/events/:id/automatic-bibs', async (req) => {
     const { id } = await onEvent(req, 'checkin.settings');
-    await automaticBibs.disable(id, me(req));
-    return { disabled: true };
+    return { cancelled: await automaticBibs.disable(id, me(req)) };
   });
 
   app.post('/api/events/:id/bibs/preview', async (req) => {

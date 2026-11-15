@@ -134,6 +134,11 @@ export const bibBatchSchema = z.object({
   sort: z.enum(['name', 'registration', 'start']).optional(),
 });
 export type BibBatch = z.infer<typeof bibBatchSchema>;
+export const BIB_SORT_LABELS = {
+  name: 'Surname, then given name',
+  registration: 'Registration time',
+  start: 'Category / start order',
+} as const;
 export interface BibPlan {
   dayId: string;
   raceId: string | null;

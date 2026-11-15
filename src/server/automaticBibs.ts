@@ -81,9 +81,9 @@ export function createAutomaticBibs(db: Db, repo: Repo, checkIn: CheckIn, access
       });
     },
     async disable(eventId: string, actor: Account) {
-      await db.transaction(async () => {
+      return db.transaction(async () => {
         await db.lock(eventLock(eventId));
-        await db.run(`UPDATE automatic_bib_jobs SET cancelled_at = $1, cancelled_by = $2 WHERE event_id = $3 AND completed_at IS NULL AND cancelled_at IS NULL`, [clock().toISOString(), actor.id, eventId]);
+        return (await db.run(`UPDATE automatic_bib_jobs SET cancelled_at = $1, cancelled_by = $2 WHERE event_id = $3 AND completed_at IS NULL AND cancelled_at IS NULL`, [clock().toISOString(), actor.id, eventId])) > 0;
       });
     },
     async runDue() {

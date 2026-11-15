@@ -42,11 +42,12 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
    * order's entries, and paid only when every linked order is paid. An unlinked order is unchanged.
    */
   type Rider = OrderView & { checkInCodes: string[] };
-  function mergeRider(group: OrderView[]): Rider {
+  function mergeRider(group: OrderView[], riderKey: string): Rider {
     const sorted = [...group].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
     const first = sorted[0];
     return {
       ...first,
+      id: riderKey,
       status: sorted.every((o) => o.status === 'confirmed') ? 'confirmed' : sorted.find((o) => o.status !== 'confirmed')!.status,
       entries: sorted.flatMap((o) => o.entries),
       checkInCodes: sorted.map((o) => o.checkInCode).filter((c): c is string => !!c),
@@ -106,7 +107,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const k = key(o.id);
       groups.set(k, [...(groups.get(k) ?? []), o]);
     }
-    return [...groups].map(([id, group]) => ({ ...mergeRider(group), id }));
+    return [...groups].map(([id, group]) => mergeRider(group, id));
   }
 
   function matches(card: ReturnType<typeof riderCard>, q: string): boolean {
@@ -133,7 +134,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     const byId = await orders.getOrders(ids);
     const group = ids.map((id) => byId.get(id)).filter((x): x is OrderView => !!x && isLiveOrder(x));
     const s = await settings(eventId);
-    return riderCard(mergeRider(group.length ? group : [o]), dayId, await dayState(eventId, dayId, bibScopeKey(s, dayId)));
+    return riderCard(mergeRider(group.length ? group : [o], key), dayId, await dayState(eventId, dayId, bibScopeKey(s, dayId)));
   }
 
   /** The category bib range for the rider's races that day (earliest start first), if any category sets one. */

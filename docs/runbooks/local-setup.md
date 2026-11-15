@@ -168,7 +168,7 @@ See [troubleshooting.md](troubleshooting.md).
 
 ## Automatic bib assignment after registration closes
 
-In **Race-day check-in → Bib ranges**, save a range for every day that needs one, choose an automatic sort, and select **Enable after-close assignment**. This opts the event into one recorded allocation job. **Refresh automatic status** shows its current reason or result; **Cancel automatic assignment** stops a pending job without changing existing bibs.
+In **Race-day check-in → Bib ranges**, save a range for every day that needs one, choose an automatic sort, and select **Enable after-close assignment**. This opts the event into one recorded allocation job. **Refresh automatic status** shows its current reason or result; **Cancel automatic assignment** stops a pending job without changing existing bibs. If allocation completed first, cancellation reports that no pending job was cancelled; refresh shows the completed result.
 
 The running API checks once a minute and on startup. Every non-archived published category must have closed in the event time zone (or be explicitly closed), and active checkout holds must settle or expire. An unset closing time or the demo's registration-window bypass keeps the job waiting. Use fictional data while organizer MFA remains unbuilt. Range exhaustion leaves all days unchanged, and the job retries after the ranges are corrected. A completed job stays complete; later walk-ups use normal check-in assignment. Re-enabling creates another job, preserving the earlier history.
 
