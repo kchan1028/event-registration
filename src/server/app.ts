@@ -72,7 +72,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   // Sign-in is required for every API route unless the route is marked public. Default deny:
   // a new route is protected even if its author forgets to think about sign-in.
   app.addHook('preHandler', async (req) => {
-    if (!req.url.startsWith('/api/') || req.routeOptions.config.public) return;
+    if (!req.url.startsWith('/api/') || req.routeOptions.config?.public) return;
     const signedIn = await provider.verify(req);
     if (!signedIn) throw new HttpError(401, 'Sign in to continue.');
     req.account = await access.accountFor(signedIn);
