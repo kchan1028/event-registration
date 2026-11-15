@@ -2,7 +2,7 @@
 
 Last verified: November 15, 2026 on macOS 26 (Apple silicon) with Node.js 20.19, npm 10.8, Docker 27.4, and PostgreSQL 17, by the technical lead.
 
-This runs the organizer workspace on your own computer. It has no sign-in, so it listens only on `127.0.0.1` and must not be exposed to a network or deployed.
+This runs the organizer workspace on your own computer, listening on `127.0.0.1`. Sign-in is a passwordless emailed code or link through a Clerk development instance ([ADR 0003](../decisions/0003-sign-in-and-mfa.md), Phase 2). MFA is not built yet, so use fictional data only.
 
 For the two standalone Berkeley demo events, follow [Set up the Berkeley demo](../../SETUP.md). It seeds a separate database and publishes both events for rider testing.
 
@@ -19,8 +19,9 @@ For the two standalone Berkeley demo events, follow [Set up the Berkeley demo](.
 
   Expected result: Docker prints a container ID. Check it with `docker exec cyclereg-postgres pg_isready -U cyclereg`, which prints `accepting connections`. After a restart, run `docker start cyclereg-postgres`. A PostgreSQL you installed another way works too; set `DATABASE_URL` (below) to match it.
 - Optional, for the browser test: about 300 MB of disk space for the Playwright Chromium download.
+- A Clerk development instance for sign-in (free plan). The project owner creates it; see [Sign-in keys](#sign-in-keys). The tests do not need it.
 
-No cloud account or API key is needed. Nothing connects to USA Cycling or a payment provider. The app creates and migrates its tables on start ([DATA_MODEL.md](../../DATA_MODEL.md#storage-and-migrations)).
+Nothing connects to USA Cycling or a payment provider. The app creates and migrates its tables on start ([DATA_MODEL.md](../../DATA_MODEL.md#storage-and-migrations)).
 
 ## Steps
 
@@ -33,15 +34,17 @@ No cloud account or API key is needed. Nothing connects to USA Cycling or a paym
 
    Expected result: npm finishes without errors.
 
-3. Optional: load the Berkeley Omnium into your local database:
+3. Add the Clerk development keys to `.env` in the repository folder, as in [Sign-in keys](#sign-in-keys). Without them the API refuses to start and says `CLERK_SECRET_KEY is not set`.
+
+4. Optional: load the Berkeley Omnium into your local database, owned by the email you will sign in with:
 
    ```bash
-   npm run seed:omnium
+   npm run seed:omnium -- --owner you@example.com
    ```
 
-   Expected result: a line starting `Demonstration events created in database cyclereg`. You can also load it from the home page. `npm run seed:demo` loads the fictional example weekend instead.
+   Expected result: lines starting `Owner: you@example.com.` and `Demonstration events created in database cyclereg`. You can also load it from the home page once signed in. `npm run seed:demo -- --owner you@example.com` loads the fictional example weekend instead.
 
-4. Start the development servers:
+5. Start the development servers:
 
    ```bash
    npm run dev
@@ -49,7 +52,7 @@ No cloud account or API key is needed. Nothing connects to USA Cycling or a paym
 
    Expected result: the API logs `Server listening at http://127.0.0.1:3001` and Vite prints `Local: http://127.0.0.1:5273/`.
 
-5. Open `http://127.0.0.1:5273/` in a browser. Create an organization, or select **Load Berkeley Omnium**.
+6. Open `http://127.0.0.1:5273/` in a browser and select **Sign in with email**. Clerk emails you a code or link. Then create an organization (you become its owner), or select **Load Berkeley Omnium**. Use **Team and roles** under an organization to give other people a role by email.
 
 To run the built app from one process instead (as the end-to-end test does):
 
@@ -79,7 +82,7 @@ Stopping the app with Ctrl+C (or a `SIGTERM` from a hosting platform) lets reque
 npm run check
 ```
 
-This runs the TypeScript check, the unit and API tests (Vitest), and a production build. The API tests need the PostgreSQL server above: they create one migrated template database per run, clone a fresh database for each test (so tests never see each other's data), and drop them all at the end. Your `cyclereg` database is not touched. Set `TEST_DATABASE_URL` to use another server; its user must be allowed to create databases.
+This runs the TypeScript check, the unit and API tests (Vitest), and a production build. The API tests fake sign-in (`tests/support/auth.ts`), so they need no Clerk keys. The API tests need the PostgreSQL server above: they create one migrated template database per run, clone a fresh database for each test (so tests never see each other's data), and drop them all at the end. Your `cyclereg` database is not touched. Set `TEST_DATABASE_URL` to use another server; its user must be allowed to create databases.
 
 ```bash
 npx playwright install chromium
@@ -89,7 +92,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The end-to-end test builds the app, drops and recreates a throwaway `cyclereg_e2e` database on the same server (`E2E_DATABASE_URL` overrides it), starts the app on port 3105, and drives the organizer workflow in Chromium. The reset script refuses any database whose name does not end in `_e2e` or `_test`.
+The end-to-end test builds the app, drops and recreates a throwaway `cyclereg_e2e` database on the same server (`E2E_DATABASE_URL` overrides it), starts the app on port 3105, and drives the organizer workflow in Chromium. It uses a local-only test sign-in (`AUTH_MODE=test`, fictional `.test` emails) instead of Clerk; the server refuses that mode with `NODE_ENV=production` or on any address other than this computer. The reset script refuses any database whose name does not end in `_e2e` or `_test`.
 
 To regenerate the README screenshots:
 
@@ -105,9 +108,33 @@ SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts
 | `TEST_DATABASE_URL` | PostgreSQL server for the API tests (any database on it; tests create their own) | `postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg` | No |
 | `E2E_DATABASE_URL` | Throwaway database for the end-to-end test, reset on each run | `postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_e2e` | No |
 | `PORT` or `API_PORT` | API server port | `3001` (`10000` in the Docker image) | No |
-| `HOST` | Address the API listens on. Only `127.0.0.1`, `localhost`, or `::1` are accepted until sign-in exists ([deploy runbook](deploy-render.md)) | `127.0.0.1` | No |
+| `HOST` | Address the API listens on ([deploy runbook](deploy-render.md)) | `127.0.0.1` | No |
+| `CLERK_SECRET_KEY` | Clerk secret key (`sk_test_...` for a development instance). The API verifies sign-in with it and will not start without it | none | **Yes.** Only in `.env` or the platform's secret store; never commit, log, or paste it |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk publishable key (`pk_test_...`), built into the web app | none | No (public by design), but keep it in `.env` with the secret key |
+| `CLERK_AUTHORIZED_PARTIES` | Comma-separated origins allowed to send session tokens, for example `http://127.0.0.1:5273` locally or the site's own origin when hosted | unset (any origin) | No |
+| `SEED_OWNER_EMAIL` | Same as `--owner` for the seed scripts | unset | No |
 | `NODE_ENV=production` | Makes the API also serve the built web app from `dist/web` | unset | No |
+| `SERVE_WEB=1` | Serves the built web app without production mode (used by the end-to-end test) | unset | No |
+| `AUTH_MODE=test`, `VITE_AUTH_MODE=test` | Local-only test sign-in for the end-to-end test. Refused in production and on network addresses | unset | No |
 | `HOLD_MINUTES` | How long rider checkout holds places before payment | `10` | No |
+
+## Sign-in keys
+
+Sign-in uses a Clerk development instance on the free plan. The project owner creates the Clerk account and instance; agents and scripts never create accounts.
+
+1. In the Clerk Dashboard, create an application. Under sign-in options, turn on **Email address** with **Email verification code** and/or **Email verification link**. Turn off **Password**, **Phone number**, and social sign-in. Clerk applies its own sign-in attempt rate limits and lockout.
+2. Copy the two keys from **API keys** into a file named `.env` in the repository folder (the main checkout, or each worktree you run from). `.env` is gitignored:
+
+   ```bash
+   CLERK_SECRET_KEY=sk_test_replace_me
+   VITE_CLERK_PUBLISHABLE_KEY=pk_test_replace_me
+   ```
+
+3. Restart `npm run dev`. The API and Vite read `.env` when they start. Real environment variables win over `.env`.
+
+Never commit `.env`, and never paste the secret key into an issue, chat, log, or screenshot. If it leaks, roll it in the Clerk Dashboard.
+
+Each person signs in with their own email (one account per email). Organizations created before sign-in existed have no owner; give yourself one by reseeding with `--owner`, or start over below.
 
 ## Start over
 
@@ -117,7 +144,7 @@ To empty your local data, drop the database:
 docker exec cyclereg-postgres dropdb -U cyclereg --force cyclereg
 ```
 
-The next `npm run dev` (or `npm run seed:*`) creates the database again, empty, and its tables. The app creates a missing database only on a local host (`localhost`, `127.0.0.1`, or `::1`), so a separate demo database such as `cyclereg_berkeley` needs no setup step either. Data from the earlier SQLite file (`data/cyclereg.sqlite`) is not imported; reseed with `npm run seed:omnium` or `npm run seed:demo`.
+The next `npm run dev` (or `npm run seed:*`) creates the database again, empty, and its tables. The app creates a missing database only on a local host (`localhost`, `127.0.0.1`, or `::1`), so a separate demo database such as `cyclereg_berkeley` needs no setup step either. Data from the earlier SQLite file (`data/cyclereg.sqlite`) is not imported; reseed with `npm run seed:omnium -- --owner you@example.com` or `npm run seed:demo -- --owner you@example.com`.
 
 ## Common problems
 

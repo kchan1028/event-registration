@@ -10,6 +10,7 @@ import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, type Category, type EventConf
 import { api, ApiError, type OrderView, type PublicEvent, type PublicEventSummary, type WaitlistOffer } from './api';
 import { href, navigate } from './App';
 import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
+import { AccountMenu, SignInPrompt, useSession } from './auth';
 
 /*
  * Clickable demo purchase flow (product.md 2a). Payment is simulated on every
@@ -107,6 +108,7 @@ function DemoHeader() {
       <span className="reg__bar-note">Rider registration with simulated payment</span>
       <span className="reg__bar-end">
         <ThemeToggle />
+        <AccountMenu />
       </span>
     </header>
   );
@@ -206,6 +208,9 @@ export function Register({ eventId }: { eventId: string }) {
 
   const [offer, setOffer] = useState<WaitlistOffer | null>(null);
   const [offerError, setOfferError] = useState<string | null>(null);
+  const session = useSession();
+  const signedIn = session.status === 'signed-in';
+  const offerToken = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('offer');
 
   useEffect(() => {
     api.publicEvent(eventId).then(setEv).catch(setError);
@@ -213,8 +218,8 @@ export function Register({ eventId }: { eventId: string }) {
 
   // A waitlist offer link (#/register/<event>?offer=<token>) preselects the offered category and prefills the rider.
   useEffect(() => {
-    const token = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('offer');
-    if (!token) return;
+    const token = offerToken;
+    if (!token || !signedIn) return; // the offer holds the rider's details, so it opens after sign-in
     api
       .waitlistOffer(token)
       .then((o) => {
@@ -232,7 +237,7 @@ export function Register({ eventId }: { eventId: string }) {
       })
       .catch((e: ApiError) => setOfferError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId]);
+  }, [eventId, signedIn]);
 
   if (error) {
     return (
@@ -325,10 +330,22 @@ export function Register({ eventId }: { eventId: string }) {
           </ol>
         </nav>
 
+        {offerToken && !signedIn && draft.step === 'races' && (
+          <SignInPrompt title="Sign in to use your waitlist offer">Sign in with the email you joined the waitlist with to see the place being held for you.</SignInPrompt>
+        )}
         {draft.step === 'races' && <ChooseRaces ev={ev} draft={draft} update={update} />}
+        {draft.step !== 'races' && !signedIn ? (
+          <SignInPrompt title="Sign in to continue your registration">
+            Your race choices are saved. Sign in with your email to enter your details, sign the waiver, and hold your places. Your registration is kept in your
+            account.
+          </SignInPrompt>
+        ) : (
+          <>
         {draft.step === 'details' && <DetailsStep config={config} draft={draft} update={update} goTo={goTo} />}
         {draft.step === 'waiver' && <Waiver ev={ev} draft={draft} update={update} goTo={goTo} />}
         {draft.step === 'review' && draft.orderId && <Review orderId={draft.orderId} eventId={eventId} goTo={goTo} />}
+          </>
+        )}
       </main>
     </div>
   );
@@ -1269,6 +1286,7 @@ function JoinWaitlist({ ev, cat, draft }: { ev: PublicEvent; cat: Category; draf
   const [joined, setJoined] = useState<{ position: number | null } | null>(null);
   const waiting = ev.waitlist[cat.id]?.waiting ?? 0;
   const p = draft.profile;
+  const session = useSession();
 
   if (joined) {
     return (
@@ -1281,8 +1299,8 @@ function JoinWaitlist({ ev, cat, draft }: { ev: PublicEvent; cat: Category; draf
     return (
       <span className="opt__reason waitlist-join">
         Full. {waiting > 0 ? `${waiting} ${waiting === 1 ? 'rider is' : 'riders are'} waiting. ` : ''}Freed places go to the waitlist first.
-        <button type="button" className="btn btn--secondary btn--small" onClick={() => setOpen(true)}>
-          Join the waitlist
+        <button type="button" className="btn btn--secondary btn--small" onClick={() => (session.status === 'signed-in' ? setOpen(true) : session.signIn())}>
+          {session.status === 'signed-in' ? 'Join the waitlist' : 'Sign in to join the waitlist'}
         </button>
       </span>
     );

@@ -3,6 +3,7 @@ import pg from 'pg';
 import { afterAll, afterEach, inject } from 'vitest';
 import { buildApp, type AppOptions } from '../../src/server/app';
 import { adminUrl } from './server';
+import { DEFAULT_TEST_ORGANIZER, fakeAuth } from './auth';
 
 /**
  * Disposable PostgreSQL databases for API tests. Each call clones the migrated
@@ -43,9 +44,13 @@ export async function testDatabaseUrl(opts: { empty?: boolean } = {}): Promise<s
   return url.toString();
 }
 
-/** buildApp on a fresh database (or the given one). The app is closed after the test. */
+/**
+ * buildApp on a fresh database (or the given one). The app is closed after the test.
+ * Unless `auth` is given, requests without a sign-in header act as one fictional organizer
+ * (tests/support/auth.ts), who owns every organization they create or load.
+ */
 export async function testApp(opts: Partial<AppOptions> = {}) {
-  const built = buildApp({ ...opts, databaseUrl: opts.databaseUrl ?? (await testDatabaseUrl()) });
+  const built = buildApp({ ...opts, auth: opts.auth ?? fakeAuth({ defaultEmail: DEFAULT_TEST_ORGANIZER }), databaseUrl: opts.databaseUrl ?? (await testDatabaseUrl()) });
   open.add(built.app);
   built.app.addHook('onClose', async () => {
     open.delete(built.app);

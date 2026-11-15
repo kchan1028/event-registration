@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('generated omnium supports a complete rider purchase and organizer recovery journey', async ({ page }) => {
   const seeded = await page.request.post('/api/demo/case-studies/omnium');

@@ -1,12 +1,14 @@
 # Render Blueprint for CycleReg (ADR 0004: Render web services and Render Postgres, Pro workspace).
 #
-# NOT APPLIED. Nothing here exists on Render. Do not create a Blueprint from this file until
-# sign-in (ADR 0003) ships: until then the server refuses HOST=0.0.0.0 at start-up
-# (src/server/listen.ts), so a deploy would fail its health check by design.
+# NOT APPLIED. Nothing here exists on Render. Email sign-in (ADR 0003, Phase 2) is built, but the
+# other gates in docs/runbooks/deploy-render.md (cost approval, owner go-ahead, a Clerk instance
+# per environment) still hold. Until MFA ships (Phase 3), hosted use is fictional data only.
 # Steps, costs, and approvals: docs/runbooks/deploy-render.md.
 #
 # Production and staging are separate services with separate databases; staging never holds
-# real rider data. No secrets are written here: DATABASE_URL comes from the database itself.
+# real rider data. No secrets are written here: DATABASE_URL comes from the database itself, and
+# the Clerk keys (sync: false) are entered in the Render Dashboard when the Blueprint is created.
+# VITE_CLERK_PUBLISHABLE_KEY must reach the Docker build as a build argument; confirm Render passes it.
 
 services:
   - type: web
@@ -30,6 +32,12 @@ services:
         fromDatabase:
           name: cyclereg-db
           property: connectionString
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_AUTHORIZED_PARTIES # the site's own origin, for example https://cyclereg.onrender.com
+        sync: false
 
   - type: web
     name: cyclereg-staging
@@ -51,6 +59,12 @@ services:
         fromDatabase:
           name: cyclereg-staging-db
           property: connectionString
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_AUTHORIZED_PARTIES
+        sync: false
 
 databases:
   - name: cyclereg-db

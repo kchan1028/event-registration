@@ -3,7 +3,7 @@ import { formatTime } from '../shared/format';
 import { FIELD_LABELS, type StartListDiff } from '../shared/startlist';
 import { api, ApiError, type StartListOverview } from './api';
 import type { Draft } from './Builder';
-import { Pending } from './ui';
+import { DownloadLink, Pending } from './ui';
 
 /** Start lists per race, timestamped snapshots, and the sample timer CSV. */
 export function StartLists({ draft }: { draft: Draft }) {
@@ -91,9 +91,9 @@ export function StartLists({ draft }: { draft: Draft }) {
           )}
 
           <div className="sl-actions">
-            <a className="btn btn--primary" href={api.startListCsvUrl(eventId, race.raceId)} download>
+            <DownloadLink className="btn btn--primary" href={api.startListCsvUrl(eventId, race.raceId)}>
               Download {race.raceName} CSV
-            </a>
+            </DownloadLink>
             <button type="button" className="btn btn--secondary" onClick={snapshot} disabled={busy}>
               Save snapshot
             </button>
@@ -101,9 +101,9 @@ export function StartLists({ draft }: { draft: Draft }) {
               {race.lock ? 'Lock again at current list' : 'Lock start list'}
             </button>
             {data.races.length > 1 && (
-              <a className="btn btn--ghost" href={api.startListCsvUrl(eventId, 'all')} download>
+              <DownloadLink className="btn btn--ghost" href={api.startListCsvUrl(eventId, 'all')}>
                 All races in one CSV
-              </a>
+              </DownloadLink>
             )}
           </div>
           {notice && (
@@ -116,9 +116,9 @@ export function StartLists({ draft }: { draft: Draft }) {
             <div className="note" role="status">
               <span>
               <strong>Locked</strong> at snapshot v{race.lock.snapshotVersion} on {new Date(race.lock.lockedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}.{' '}
-              <a href={api.startListCsvUrl(eventId, race.raceId, race.lock.snapshotVersion)} download>
+              <DownloadLink href={api.startListCsvUrl(eventId, race.raceId, race.lock.snapshotVersion)}>
                 Download the locked list
-              </a>
+              </DownloadLink>
               . Changes are still allowed; each one appears below as a revision for the timer.
               {race.changesSinceLock && summary(race.changesSinceLock) === 'no changes' && ' No revisions yet.'}
               </span>
@@ -187,9 +187,9 @@ export function StartLists({ draft }: { draft: Draft }) {
                     <span className="muted small"> · schedule version {s.publishedVersion}</span>
                     {s.changesFromPrevious && <span className="small"> · {summary(s.changesFromPrevious)} from v{s.version - 1}</span>}
                   </div>
-                  <a className="btn btn--ghost btn--small" href={api.startListCsvUrl(eventId, race.raceId, s.version)} download>
+                  <DownloadLink className="btn btn--ghost btn--small" href={api.startListCsvUrl(eventId, race.raceId, s.version)}>
                     Download v{s.version}
-                  </a>
+                  </DownloadLink>
                 </li>
               ))}
             </ul>

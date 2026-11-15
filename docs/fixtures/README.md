@@ -47,10 +47,10 @@ Status: Implemented and verified with automated unit, API, and representative br
 Load the complete collection into the configured local PostgreSQL database:
 
 ```bash
-npm run seed:cases
+npm run seed:cases -- --owner you@example.com
 ```
 
-List or load one scenario, or remove only this collection:
+`--owner` (or `SEED_OWNER_EMAIL`) gives the email you sign in with the owner role on the case-study organization. List or load one scenario, or remove only this collection:
 
 ```bash
 npm run seed:cases -- --list

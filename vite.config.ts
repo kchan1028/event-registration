@@ -6,6 +6,8 @@ const apiPort = Number(process.env.API_PORT ?? 3001);
 export default defineConfig({
   plugins: [react()],
   root: 'src/web',
+  // VITE_CLERK_PUBLISHABLE_KEY is read from the repository's .env (gitignored), not src/web.
+  envDir: process.cwd(),
   build: { outDir: '../../dist/web', emptyOutDir: true },
   server: {
     host: '127.0.0.1',

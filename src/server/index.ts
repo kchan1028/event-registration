@@ -1,11 +1,17 @@
+import { existsSync } from 'node:fs';
 import { buildApp } from './app';
+import { authProviderFromEnv, type AuthProvider } from './auth';
 import { DEFAULT_DATABASE_URL, ensureLocalDatabase } from './db';
 import { listenHost } from './listen';
 
+// Local keys (CLERK_SECRET_KEY and others) live in a gitignored .env; real environment variables win.
+if (existsSync('.env')) process.loadEnvFile('.env');
+
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001);
-let host: string;
+const host = listenHost(); // 127.0.0.1 unless HOST says otherwise
+let auth: AuthProvider;
 try {
-  host = listenHost(); // 127.0.0.1 unless HOST says otherwise; a public address is refused until sign-in exists
+  auth = authProviderFromEnv();
 } catch (err) {
   console.error((err as Error).message);
   process.exit(1);
@@ -19,7 +25,9 @@ try {
   process.exit(1);
 }
 
-const { app } = buildApp({ databaseUrl, serveWeb: process.env.NODE_ENV === 'production', logger: true });
+// The built web app is served in production, and by the browser tests (SERVE_WEB=1).
+const serveWeb = process.env.NODE_ENV === 'production' || process.env.SERVE_WEB === '1';
+const { app } = buildApp({ databaseUrl, serveWeb, logger: true, auth });
 
 app.listen({ port, host }).catch((err) => {
   app.log.error(err);

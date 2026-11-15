@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { RequireSignIn } from './auth';
 import { Builder } from './Builder';
 import { CheckIn } from './CheckIn';
 import { Home } from './Home';
@@ -52,9 +53,14 @@ export function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  if (route.page === 'home') return <Home />;
+  // The open event list and rider event pages are public; Register asks riders to sign in before checkout.
   if (route.page === 'register') return <Register key={route.eventId} eventId={route.eventId} />;
   if (route.page === 'events') return <RegisterIndex />;
+  return <RequireSignIn>{signedInPage(route)}</RequireSignIn>;
+}
+
+function signedInPage(route: Exclude<Route, { page: 'register' } | { page: 'events' }>) {
+  if (route.page === 'home') return <Home />;
   if (route.page === 'order') return <OrderPage key={route.orderId} orderId={route.orderId} />;
   if (route.page === 'checkin') return <CheckIn key={route.eventId} eventId={route.eventId} />;
   if (route.page === 'roster') return <Roster key={route.eventId} eventId={route.eventId} />;

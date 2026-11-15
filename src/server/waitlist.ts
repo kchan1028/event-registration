@@ -25,6 +25,7 @@ interface Row {
   offer_expires_at: string | null;
   order_id: string | null;
   created_at: string;
+  account_id: string | null;
 }
 
 export function createWaitlist(db: Db, repo: Repo, clock: () => Date) {
@@ -71,7 +72,7 @@ export function createWaitlist(db: Db, repo: Repo, clock: () => Date) {
 
   return {
     /** A rider joins the waitlist of a full category that has the waitlist turned on. */
-    async join(eventId: string, input: unknown) {
+    async join(eventId: string, input: unknown, accountId: string | null = null) {
       return db.transaction(async () => {
           await db.lock(eventLock(eventId));
           const config = await published(eventId);
@@ -91,17 +92,20 @@ export function createWaitlist(db: Db, repo: Repo, clock: () => Date) {
 
           const email = body.email.toLowerCase();
           const already = inLine.find((r) => r.rider_json.email.toLowerCase() === email);
+          // The same rider joining again sees their place; another account using that email does not.
+          if (already && already.account_id !== accountId) throw new HttpError(409, 'A rider with this email is already on the waitlist for this category.');
           if (already) return view(already);
 
           const id = newId('wl');
           const t = nowIso();
-          await db.run(`INSERT INTO waitlist_entries (id, event_id, category_id, rider_json, status, created_at, updated_at) VALUES ($1, $2, $3, $4, 'waiting', $5, $6)`, [
+          await db.run(`INSERT INTO waitlist_entries (id, event_id, category_id, rider_json, status, created_at, updated_at, account_id) VALUES ($1, $2, $3, $4, 'waiting', $5, $6, $7)`, [
             id,
             eventId,
             cat.id,
             JSON.stringify(body),
             t,
             t,
+            accountId,
           ]);
           return view((await byId(id, eventId))!);
       });

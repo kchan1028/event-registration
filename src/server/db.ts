@@ -298,6 +298,44 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE rider_link_dismissals ALTER COLUMN dismissed_at TYPE timestamptz USING dismissed_at::timestamptz;
   ALTER TABLE entry_resolutions ALTER COLUMN created_at TYPE timestamptz USING created_at::timestamptz, ALTER COLUMN resolved_at TYPE timestamptz USING resolved_at::timestamptz;
   `,
+  `
+  -- Sign-in (ADR 0003, Phase 2 email sign-in). One account per person, keyed by the identity
+  -- provider's user ID; the email is the provider's verified primary address.
+  CREATE TABLE accounts (
+    id text PRIMARY KEY,
+    seq bigint GENERATED ALWAYS AS IDENTITY,
+    provider_user_id text NOT NULL UNIQUE,
+    email text NOT NULL,
+    created_at timestamptz NOT NULL
+  );
+  CREATE UNIQUE INDEX accounts_by_email ON accounts(lower(email));
+  -- Organizer roles. A person can hold several roles in one organization.
+  CREATE TABLE organization_members (
+    organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    account_id text NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    role text NOT NULL CHECK (role IN ('owner', 'registration_manager', 'check_in_volunteer', 'timer_export', 'finance')),
+    granted_by text REFERENCES accounts(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL,
+    PRIMARY KEY (organization_id, account_id, role)
+  );
+  CREATE INDEX organization_members_by_account ON organization_members(account_id);
+  -- A role granted to an email that has no account yet. It becomes a membership the first
+  -- time someone signs in with that verified email. Emails are stored lowercased.
+  CREATE TABLE organization_invitations (
+    organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    email text NOT NULL,
+    role text NOT NULL CHECK (role IN ('owner', 'registration_manager', 'check_in_volunteer', 'timer_export', 'finance')),
+    invited_by text REFERENCES accounts(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL,
+    PRIMARY KEY (organization_id, email, role)
+  );
+  CREATE INDEX organization_invitations_by_email ON organization_invitations(email);
+  -- The signed-in account that placed an order or joined a waitlist. Null for rows made before
+  -- sign-in existed and for simulated demo riders.
+  ALTER TABLE orders ADD COLUMN account_id text REFERENCES accounts(id) ON DELETE SET NULL;
+  CREATE INDEX orders_by_account ON orders(account_id);
+  ALTER TABLE waitlist_entries ADD COLUMN account_id text REFERENCES accounts(id) ON DELETE SET NULL;
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

@@ -16,6 +16,8 @@ import { StartLists } from './StartLists';
 import { Registrations } from './Registrations';
 import { CsvImport } from './CsvImport';
 import { dayHue, Icon, Pending, ThemeToggle } from './ui';
+import { AccountMenu } from './auth';
+import { can, ROLE_LABELS } from '../shared/roles';
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error' | 'conflict';
 
@@ -242,6 +244,14 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
           <strong>Example data.</strong> {config.event.demoNotice}
         </p>
       )}
+      {draft.data.roles && !can(draft.data.roles, 'event.edit') && (
+        <p className="alert alert--warn role-banner" role="note">
+          You are signed in as {draft.data.roles.map((r) => ROLE_LABELS[r].toLowerCase()).join(' and ')} for this organization. You can look at the schedule;
+          changes need a registration manager or owner.{' '}
+          {can(draft.data.roles, 'checkin') && <a href={href({ page: 'checkin', eventId: route.eventId })}>Open check-in</a>}
+          {can(draft.data.roles, 'startlists') && <a href={href({ page: 'event', eventId: route.eventId, view: 'startlists' })}>Open start lists</a>}
+        </p>
+      )}
       <div className={`workspace ${selectedCategory ? 'has-selection' : ''}`}>
         <Rail draft={draft} route={route} activeRaceId={race?.id ?? null} errors={counts.errors} warnings={counts.warnings} />
         <main className="main" id="main">
@@ -331,6 +341,7 @@ function TopBar({ draft, eventId, errors, warnings }: { draft: Draft; eventId: s
           Review and publish
         </a>
         <ThemeToggle />
+        <AccountMenu />
       </nav>
     </header>
   );
@@ -403,7 +414,7 @@ function Rail({ draft, route, activeRaceId, errors, warnings }: { draft: Draft; 
         <p className="rail__pending-title">Not connected yet</p>
         <Pending>USA Cycling license checks</Pending>
         <Pending>Real payments (checkout is simulated)</Pending>
-        <Pending>Sign-in with MFA</Pending>
+        <Pending>Multi-factor sign-in (email sign-in only)</Pending>
       </div>
     </nav>
   );

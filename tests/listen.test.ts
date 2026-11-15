@@ -7,11 +7,7 @@ describe('listen address', () => {
     expect(listenHost({ HOST: '  ' })).toBe('127.0.0.1');
   });
 
-  it('accepts loopback addresses', () => {
-    for (const HOST of ['127.0.0.1', 'localhost', '::1']) expect(listenHost({ HOST })).toBe(HOST);
-  });
-
-  it('refuses a network address until sign-in exists (ADR 0003)', () => {
-    for (const HOST of ['0.0.0.0', '::', '192.168.1.20']) expect(() => listenHost({ HOST })).toThrow(/sign-in \(ADR 0003\) is not built/);
+  it('uses HOST when set, now that sign-in exists (ADR 0003)', () => {
+    for (const HOST of ['127.0.0.1', '0.0.0.0', '::']) expect(listenHost({ HOST })).toBe(HOST);
   });
 });
