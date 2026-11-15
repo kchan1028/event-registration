@@ -1,8 +1,9 @@
 import { createClerkClient, verifyToken } from '@clerk/backend';
 import type { FastifyRequest } from 'fastify';
 import { newId } from '../shared/factory';
-import { can, INVITATION_DAYS, type Invitation, type MembershipAction, type MembershipChange, type Permission, type Role } from '../shared/roles';
+import { can, INVITATION_DAYS, ROLE_LABELS, type Invitation, type MembershipAction, type MembershipChange, type Permission, type Role } from '../shared/roles';
 import type { Db } from './db';
+import type { Mailer } from './email';
 import { HttpError } from './repo';
 
 /**
@@ -127,8 +128,8 @@ export function authProviderFromEnv(env: Record<string, string | undefined> = pr
 /** How many of the most recent role changes the team panel shows. */
 const HISTORY_LIMIT = 50;
 
-/** Accounts, organization roles, and the checks every organizer route makes. */
-export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) {
+/** Accounts, organization roles, and the checks every organizer route makes. `appUrl`: where invitation emails send people to sign in. */
+export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, mailer: Mailer, appUrl: string) {
   const nowIso = () => clock().toISOString();
 
   /** Finds or creates the caller's account, then turns any open invitations for their email into roles and drops expired ones. */
@@ -259,8 +260,11 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
       `SELECT m.account_id, a.email, m.role FROM organization_members m JOIN accounts a ON a.id = m.account_id WHERE m.organization_id = $1 ORDER BY a.email, m.role`,
       [organizationId],
     );
-    const invitations = await db.all<{ email: string; role: Role; expires_at: string }>(
-      `SELECT email, role, expires_at FROM organization_invitations WHERE organization_id = $1 ORDER BY email, role`,
+    const invitations = await db.all<{ email: string; role: Role; expires_at: string; email_status: 'recorded' | 'sent' | 'failed' | null; email_at: string | null }>(
+      `SELECT i.email, i.role, i.expires_at, m.status AS email_status, m.created_at AS email_at FROM organization_invitations i
+       LEFT JOIN LATERAL (SELECT status, created_at FROM email_messages e WHERE e.organization_id = i.organization_id AND e.ref = i.organization_id || ':' || i.email || ':' || i.role
+         ORDER BY e.created_at DESC, e.seq DESC LIMIT 1) m ON true
+       WHERE i.organization_id = $1 ORDER BY i.email, i.role`,
       [organizationId],
     );
     const history = await db.all<{ action: MembershipAction; email: string; role: Role; actor_email: string | null; created_at: string }>(
@@ -270,7 +274,9 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
     );
     return {
       members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role })),
-      invitations: invitations.map((i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at })),
+      invitations: invitations.map(
+        (i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at, lastEmail: i.email_status && i.email_at ? { status: i.email_status, at: i.email_at } : null }),
+      ),
       history: history.map((h): MembershipChange => ({ action: h.action, email: h.email, role: h.role, by: h.actor_email, at: h.created_at })),
     };
   }
@@ -278,7 +284,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
   /**
    * Grants a role to an email: straight away when the person has an account, otherwise as an
    * invitation open for INVITATION_DAYS. Adding an invitation that already exists renews it,
-   * including one that has expired.
+   * including one that has expired. A person who invites or renews also sends the invitation email;
+   * a seed script (no person) sends none.
    */
   async function addMember(organizationId: string, email: string, role: Role, by: Account | null) {
     const normalized = email.trim().toLowerCase();
@@ -304,9 +311,28 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
             t.toISOString(),
             expiresAt,
           ]);
-      if (renewed + invited) await record(organizationId, renewed ? 'invitation_renewed' : 'invited', normalized, role, by?.id ?? null);
+      if (renewed + invited) {
+        await record(organizationId, renewed ? 'invitation_renewed' : 'invited', normalized, role, by?.id ?? null);
+        if (by) await sendInvitation(organizationId, normalized, role, by, expiresAt);
+      }
     }
     return listMembers(organizationId);
+  }
+
+  async function sendInvitation(organizationId: string, email: string, role: Role, by: Account, expiresAt: string) {
+    const org = await db.get<{ name: string }>(`SELECT name FROM organizations WHERE id = $1`, [organizationId]);
+    const until = new Date(expiresAt).toLocaleDateString('en-US', { dateStyle: 'long', timeZone: 'UTC' });
+    await mailer.deliver('organizer_invitation', `${organizationId}:${email}:${role}`, organizationId, {
+      to: email,
+      subject: `You are invited to ${org!.name} on CycleReg`,
+      text: [
+        `${by.email} added you to ${org!.name} as ${ROLE_LABELS[role]}.`,
+        '',
+        `To take up the role, sign in at ${appUrl} with this email address (${email}) by ${until} (UTC). After that, ask an owner to resend the invitation.`,
+        '',
+        'If you did not expect this, you can ignore this email.',
+      ].join('\n'),
+    });
   }
 
   /** Removes one role (or invitation). The last owner cannot be removed, so an organization is never orphaned. */

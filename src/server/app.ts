@@ -28,6 +28,7 @@ import { createPayments, paymentsFromEnv, publicAppUrl, type PaymentProvider } f
 import { createRefunds } from './refunds';
 import { createWaitlist } from './waitlist';
 import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
+import { createMailer, emailFromEnv, type EmailSender } from './email';
 import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
 import { bibBatchSchema } from '../shared/checkin';
 import { can, ROLES, type Permission, type Role } from '../shared/roles';
@@ -58,6 +59,8 @@ export interface AppOptions {
   payments?: PaymentProvider;
   /** Where Stripe sends riders back. Defaults to PUBLIC_APP_URL. */
   appUrl?: string;
+  /** Outgoing email (ADR 0006). Defaults to local (recorded, never sent) unless EMAIL_MODE=ses. */
+  email?: EmailSender;
 }
 
 export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; orders: Orders; access: Access; automaticBibs: AutomaticBibs } {
@@ -77,7 +80,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const startLists = createStartLists(db, repo, orders, clock, identity);
   const waitlist = createWaitlist(db, repo, clock);
   const caseStudies = createCaseStudyFixtures(db, repo, orders);
-  const access = createAccess(db, provider, clock);
+  const access = createAccess(db, provider, clock, createMailer(db, opts.email ?? emailFromEnv(), clock), opts.appUrl || publicAppUrl());
   const automaticBibs = createAutomaticBibs(db, repo, checkIn, access, clock);
   const refunds = createRefunds(db, paymentProvider, clock);
   const payments = createPayments(db, orders, paymentProvider, clock, appUrl, refunds.onRefundEvent);
