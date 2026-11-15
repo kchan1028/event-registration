@@ -63,7 +63,11 @@ interface EntryRow {
 
 function groupBy<T extends { order_id: string }>(rows: T[]): Map<string, T[]> {
   const out = new Map<string, T[]>();
-  for (const r of rows) out.set(r.order_id, [...(out.get(r.order_id) ?? []), r]);
+  for (const r of rows) {
+    const list = out.get(r.order_id);
+    if (list) list.push(r);
+    else out.set(r.order_id, [r]);
+  }
   return out;
 }
 

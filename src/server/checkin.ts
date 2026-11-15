@@ -66,7 +66,11 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     );
     const by = <T extends { order_id: string }>(rows: T[]) => {
       const m = new Map<string, T[]>();
-      for (const r of rows) m.set(r.order_id, [...(m.get(r.order_id) ?? []), r]);
+      for (const r of rows) {
+        const list = m.get(r.order_id);
+        if (list) list.push(r);
+        else m.set(r.order_id, [r]);
+      }
       return m;
     };
     return { checkedInAt: new Map(checkIns.map((c) => [c.order_id, c.checked_in_at])), bibs: by(bibs), undos: by(undos) };
