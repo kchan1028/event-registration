@@ -70,6 +70,21 @@ describe('rider checkout: holds and simulated payment', () => {
     expect((await order([code('RR-M35-34')], { waiver: { ...waiver, version: 'old' } })).statusCode).toBe(409);
   });
 
+  it('does not let a minor self-sign through an adult/open category', async () => {
+    const { order, code, waiver } = await setup();
+    const teen = { ...RIDER, racingAge: 17, licenseCategory: '5' };
+    expect((await order([code('RR-45')], { rider: teen })).statusCode).toBe(422); // no guardian
+    const withGuardian = { ...teen, guardian: { name: 'Test Parent', relationship: 'Parent', email: '', phone: '' } };
+    expect((await order([code('RR-45')], { rider: withGuardian })).statusCode).toBe(422); // rider signed
+    expect((await order([code('RR-45')], { rider: withGuardian, waiver: { ...waiver, signatureName: 'Someone Else', signerRole: 'guardian' } })).statusCode).toBe(422); // wrong signer
+    const ok = await order([code('RR-45')], { rider: withGuardian, waiver: { ...waiver, signatureName: 'Test Parent', signerRole: 'guardian' } });
+    expect(ok.statusCode).toBe(201);
+    const o = ok.json() as Order;
+    expect(o.entries[0].readiness.find((r) => r.key === 'guardian')?.state).toBe('done');
+    const adult = (await order([code('RR-45')], { rider: { ...RIDER, racingAge: 19, licenseCategory: '5' } })).json() as Order;
+    expect(adult.entries[0].readiness.some((r) => r.key === 'guardian')).toBe(false);
+  });
+
   it('confirms on payment once, even when the notification repeats (Payment retry)', async () => {
     const { order, pay, code, entriesCount } = await setup();
     const o = (await order([code('RR-M35-34')])).json() as Order;

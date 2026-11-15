@@ -1,7 +1,7 @@
 import QRCode from 'qrcode';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
-import { checkSignature, findConflicts, formatLocalDateTime, MESSAGES, riderDetailsSchema, windowMessage, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
+import { checkSignature, findConflicts, formatLocalDateTime, mayBeMinor, MESSAGES, riderDetailsSchema, windowMessage, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
 import { evaluateCategory, summarizeEligibility, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories } from '../shared/format';
@@ -879,7 +879,7 @@ function riderFrom(draft: Draft, needsGuardian: boolean): Record<string, unknown
 
 function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; draft: Draft; update: Update; goTo: (s: Step) => void }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const needsGuardian = draft.selected.some((id) => config.categories.find((c) => c.id === id)?.eligibility.guardianRequired);
+  const needsGuardian = mayBeMinor(draft.profile.racingAge) || draft.selected.some((id) => config.categories.find((c) => c.id === id)?.eligibility.guardianRequired);
   const d = draft.details;
   const set = (p: Partial<Details>) => update((x) => ({ ...x, details: { ...x.details, ...p } }));
   const g = d.guardian ?? { name: '', relationship: '', email: '', phone: '' };
@@ -999,7 +999,7 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
       {needsGuardian && (
         <fieldset className="subfields guardian">
           <legend>Parent or guardian (required)</legend>
-          <p className="muted small">A junior entry is in this order, so a parent or guardian signs the waiver for the rider.</p>
+          <p className="muted small">The rider's racing age is 18 or under, or a junior entry is in this order, so a parent or guardian signs the waiver for the rider.</p>
           <div className="form-row">
             <Field label="Guardian name" id={FIELD_IDS['guardian.name']} error={errors['guardian.name']}>
               {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors['guardian.name'] || undefined} className="input" value={g.name} onChange={(e) => setG({ name: e.target.value })} />}
@@ -1032,7 +1032,7 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
 
 function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; update: Update; goTo: (s: Step) => void }) {
   const { config } = ev;
-  const needsGuardian = draft.selected.some((id) => config.categories.find((c) => c.id === id)?.eligibility.guardianRequired);
+  const needsGuardian = mayBeMinor(draft.profile.racingAge) || draft.selected.some((id) => config.categories.find((c) => c.id === id)?.eligibility.guardianRequired);
   const signer = needsGuardian ? (draft.details.guardian?.name ?? '') : `${draft.details.firstName} ${draft.details.lastName}`.trim();
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<{ id: string; message: string }[]>([]);

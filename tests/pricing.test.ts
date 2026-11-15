@@ -111,6 +111,17 @@ describe('selection checks', () => {
     const c = demo();
     expect(checkSelection(c, [id(c, 'RR-J1516')], rider({ racingAge: 16, licenseCategory: null })).needsGuardian).toBe(true);
   });
+
+  it('needs a guardian for racing age 18 or under in an adult/open category without a guardian flag', () => {
+    const c = demo();
+    const open = id(c, 'RR-45');
+    expect(c.categories.find((x) => x.id === open)!.eligibility.guardianRequired).toBe(false);
+    const at = (racingAge: number) => checkSelection(c, [open], rider({ racingAge, licenseCategory: '5' }));
+    expect(at(17).ok).toBe(true);
+    expect(at(17).needsGuardian).toBe(true);
+    expect(at(18).needsGuardian).toBe(true); // racing age 18 can still be 17 on race day
+    expect(at(19).needsGuardian).toBe(false);
+  });
 });
 
 import { readFileSync } from 'node:fs';

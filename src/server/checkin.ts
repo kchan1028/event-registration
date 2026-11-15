@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { bibScopeKey, bibSettingsSchema, checkInResult, checkInTiming, DEFAULT_BIB_SETTINGS, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
 import { categoryBibRange } from '../shared/categoryExtras';
-import { checkSelection, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
+import { checkSelection, mayBeMinor, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { evaluateCategory } from '../shared/eligibility';
 import { newId } from '../shared/factory';
 import { sortCategories } from '../shared/format';
@@ -324,8 +324,8 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         });
         const categoryIds = pickEntries(cfg, full(null));
         if (categoryIds.length === 0) continue;
-        const needsGuardian = categoryIds.some((id) => cfg.categories.find((c) => c.id === id)?.eligibility.guardianRequired);
-        const rider = full(needsGuardian || p.rider.racingAge < 18 ? { name: 'Jordan Demo', relationship: 'Parent', email: 'jordan.demo@example.com', phone: '' } : null);
+        const needsGuardian = mayBeMinor(p.rider.racingAge) || categoryIds.some((id) => cfg.categories.find((c) => c.id === id)?.eligibility.guardianRequired);
+        const rider = full(needsGuardian ? { name: 'Jordan Demo', relationship: 'Parent', email: 'jordan.demo@example.com', phone: '' } : null);
         const waiver: WaiverAcceptance = {
           version: cfg.registration.waiverVersion,
           read: true,

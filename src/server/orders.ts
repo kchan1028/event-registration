@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { canAdmit, remainingForCategory } from '../shared/capacity';
 import { evaluateCategory } from '../shared/eligibility';
-import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNow, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
+import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNow, mayBeMinor, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { termsOf } from '../shared/coupons';
@@ -163,7 +163,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     const q = row.quote_json;
     const extras: OrderExtras = row.extras_json ?? EMPTY_EXTRAS;
     const status = effectiveStatus(row);
-    const guardianRequired = rows.some((e) => config.categories.find((c) => c.id === e.category_id)?.eligibility.guardianRequired);
+    const guardianRequired = mayBeMinor(rider.racingAge) || rows.some((e) => config.categories.find((c) => c.id === e.category_id)?.eligibility.guardianRequired);
     const entries = rows.map((e) => {
       const cat = findCat(e.category_id);
       const cfg = config.categories.some((c) => c.id === e.category_id) ? config : latest;
@@ -203,7 +203,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           licenseReviewed: e.license_reviewed,
           licenseNote: e.license_review_note,
           signerName: waiver.signatureName,
-          guardianRequired: !!cat?.eligibility.guardianRequired,
+          guardianRequired: mayBeMinor(rider.racingAge) || !!cat?.eligibility.guardianRequired,
           guardianSigned: waiver.signerRole === 'guardian',
         }),
       };
@@ -339,7 +339,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         // Registration windows are checked when places are held; a hold taken while open may be paid within its time.
         const check = checkSelection(config, input.categoryIds, profileOf(rider), { nowLocal: localNow(config.event.timeZone, clock()) });
         if (!check.ok) throw new HttpError(422, check.problems[0], check.problems);
-        if (check.needsGuardian && !rider.guardian) throw new HttpError(422, 'Riders under 18 need a parent or guardian. Enter their name.');
+        if (check.needsGuardian && !rider.guardian) throw new HttpError(422, 'Riders with a racing age of 18 or under need a parent or guardian. Enter their name.');
         const signatureProblem = checkSignature(rider, waiver, check.needsGuardian);
         if (signatureProblem) throw new HttpError(422, signatureProblem);
         // Per-category questions and waiver addenda (product.md 1a).
@@ -545,7 +545,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const waiver = row.waiver_json;
         const elig = evaluateCategory(target, profileOf(rider));
         if (elig.status === 'ineligible') throw new HttpError(422, `Not eligible for ${target.name}: ${elig.reasons.join('; ')}.`);
-        if (target.eligibility.guardianRequired && waiver.signerRole !== 'guardian') throw new HttpError(422, `${target.name} needs a waiver signed by a parent or guardian. Register the rider again with a guardian instead.`);
+        if ((target.eligibility.guardianRequired || mayBeMinor(rider.racingAge)) && waiver.signerRole !== 'guardian') throw new HttpError(422, `${target.name} needs a waiver signed by a parent or guardian. Register the rider again with a guardian instead.`);
         const block = findConflicts(config, [...others.map((x) => x.category_id), target.id]).find((c) => c.level === 'block');
         if (block) throw new HttpError(409, block.message);
         if ((await waitlistBlockers(config, e.event_id)).has(target.id)) throw new HttpError(409, `${target.name} has riders on its waitlist. Offer the place through the waitlist instead.`);
