@@ -128,7 +128,7 @@ export function authProviderFromEnv(env: Record<string, string | undefined> = pr
 /** How many of the most recent role changes the team panel shows. */
 const HISTORY_LIMIT = 50;
 
-/** Accounts, organization roles, and the checks every organizer route makes. `appUrl`: where invitation emails send people to sign in. */
+/** Accounts, organization roles, and the checks every organizer route makes. `appUrl`: where invitation emails send people to sign in; empty when email is only recorded. */
 export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, mailer: Mailer, appUrl: string) {
   const nowIso = () => clock().toISOString();
 
@@ -328,7 +328,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       text: [
         `${by.email} added you to ${org!.name} as ${ROLE_LABELS[role]}.`,
         '',
-        `To take up the role, sign in at ${appUrl} with this email address (${email}) by ${until} (UTC). After that, ask an owner to resend the invitation.`,
+        `To take up the role, sign in${appUrl ? ` at ${appUrl}` : ' to CycleReg'} with this email address (${email}) by ${until} (UTC). After that, ask an owner to resend the invitation.`,
         '',
         'If you did not expect this, you can ignore this email.',
       ].join('\n'),

@@ -80,7 +80,9 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const startLists = createStartLists(db, repo, orders, clock, identity);
   const waitlist = createWaitlist(db, repo, clock);
   const caseStudies = createCaseStudyFixtures(db, repo, orders);
-  const access = createAccess(db, provider, clock, createMailer(db, opts.email ?? emailFromEnv(), clock), opts.appUrl || publicAppUrl());
+  const emailSender = opts.email ?? emailFromEnv();
+  // The sign-in link in invitation emails. Only SES sends (never in production), so local email needs no URL setting.
+  const access = createAccess(db, provider, clock, createMailer(db, emailSender, clock), appUrl || (emailSender.mode === 'ses' ? publicAppUrl() : ''));
   const automaticBibs = createAutomaticBibs(db, repo, checkIn, access, clock);
   const refunds = createRefunds(db, paymentProvider, clock);
   const payments = createPayments(db, orders, paymentProvider, clock, appUrl, refunds.onRefundEvent);
