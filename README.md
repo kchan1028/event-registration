@@ -252,6 +252,8 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [docs/decisions/README.md](docs/decisions/README.md) | Architecture decision records, including [0001](docs/decisions/0001-stack-for-category-builder-milestone.md), and the backlog of unresolved decisions |
 | [docs/fixtures/README.md](docs/fixtures/README.md) | Fake demonstration data and sample waiver text used by the rider demo |
 | [docs/timer-export-review.md](docs/timer-export-review.md) | Sample start-list export, its columns, and the questions for the timer and officials |
+| [docs/usac-questions.md](docs/usac-questions.md) | Questions for USA Cycling about waivers, licenses, one-day licenses, and reporting (Phase 0, not yet sent) |
+| [docs/payment-model-questions.md](docs/payment-model-questions.md) | Payment model options and the questions for the club and payment providers (Phase 0, not yet sent) |
 | [docs/usability/README.md](docs/usability/README.md) | Phase 1 usability test kit: recruiting, setup, facilitator script, tasks, scoring, and results summary |
 
 ## Contributing
