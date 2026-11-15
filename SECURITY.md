@@ -1,8 +1,8 @@
 # Security policy
 
-CycleReg will handle rider contact details, emergency contacts, license numbers, waivers, and payments, so security problems are taken seriously even at the documentation stage. This file explains what to report, how to report it privately, and which security rules the product is held to.
+CycleReg will handle rider contact details, emergency contacts, license numbers, waivers, and payments, so security problems are taken seriously while the build is local and holds fictional data. This file explains what to report, how to report it privately, and which security rules the product is held to.
 
-> **Status: local build with email sign-in, fictional data only.** Every API route except the health check, the public event list, and rider event pages requires passwordless email sign-in (Clerk, [ADR 0003](docs/decisions/0003-sign-in-and-mfa.md) Phase 2), and organizer routes check the caller's role in the event's organization on the server (`src/server/auth.ts`, `src/shared/roles.ts`). Data is stored in a local PostgreSQL database ([setup](docs/runbooks/local-setup.md)). There is no deployed website, no payment processing, and no real rider data. Email sign-in is one factor: anyone who controls an account's inbox can sign in as it. So the app must not hold real rider data or take live payments until MFA is required for every organizer role (Phase 3, before the live pilot); riders and guardians stay on email sign-in by owner decision; until then hosted use is limited to staging and rehearsals with fictional data, and the [Render deploy](docs/runbooks/deploy-render.md) still waits on its other gates. Unless a section says otherwise, the security requirements below are Planned, not Implemented.
+> **Status: local build with email sign-in, fictional data only.** Every API route except the health check, the public event list, rider event pages, and the Stripe webhook (trusted only by its verified signature) requires passwordless email sign-in (Clerk, [ADR 0003](docs/decisions/0003-sign-in-and-mfa.md) Phase 2), and organizer routes check the caller's role in the event's organization on the server (`src/server/auth.ts`, `src/shared/roles.ts`). Data is stored in a local PostgreSQL database ([setup](docs/runbooks/local-setup.md)). There is no deployed website, no payments with real money, and no real rider data. Payments are simulated or use Stripe test mode; live keys are refused. Email sign-in is one factor: anyone who controls an account's inbox can sign in as it. So the app must not hold real rider data or take live payments until MFA is required for every organizer role (Phase 3, before the live pilot); riders and guardians stay on email sign-in by owner decision; until then hosted use is limited to staging and rehearsals with fictional data, and the [Render deploy](docs/runbooks/deploy-render.md) still waits on its other gates. Unless a section says otherwise, the security requirements below are Planned, not Implemented.
 
 ## Supported versions
 
@@ -11,7 +11,7 @@ CycleReg will handle rider contact details, emergency contacts, license numbers,
 | Documentation and the local build on the `main` branch | Yes |
 | Released software | None exists yet |
 
-This table will list released versions once there is code to release.
+This table will list released versions once there is a release.
 
 ## What to report
 
@@ -43,6 +43,12 @@ This is a volunteer project with no response-time guarantee. The owner aims to:
 3. Fix the document or code and credit the reporter if they want credit.
 
 Please give the owner a reasonable chance to fix the problem before you discuss it publicly.
+
+## Protected bib reassignment (Implemented locally)
+
+Bulk bib changes require `checkin.settings` (owner or registration manager). Individual corrections retain the existing `checkin` permission for check-in staff. Both paths require a reason and a fresh server-verified before/after preview. Changes to checked-in riders also require an explicit acknowledgement bound to that preview; the former direct individual-change endpoint refuses requests without a preview fingerprint. Linked orders resolve to the canonical rider key.
+
+The server rechecks numbers, ranges, identities, published configuration, and check-in state under the event lock. Conflicts or stale previews apply no changes. Swaps release and replace selected numbers atomically, preserve old assignment rows, record the authenticated actor and reason, and create linked revisions for all affected start lists in the collision scope. Snapshot failure rolls back the entire change. Entry, payment, waiver, license, and check-in states are unchanged. No new public route or contact data is exposed.
 
 ## Security requirements the product is held to (Planned)
 

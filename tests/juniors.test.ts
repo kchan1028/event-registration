@@ -87,7 +87,7 @@ describe('guardian and junior access', () => {
   it('links junior orders placed before profiles existed when the guardian opens their juniors', async () => {
     const { call, registerJunior, databaseUrl } = await setup();
     const orderId = await registerJunior(PARENT, 'Sam');
-    // As if the order predates migration 24: no profile link and no profile.
+    // As if the order predates migration 25: no profile link and no profile.
     const client = new pg.Client({ connectionString: databaseUrl });
     await client.connect();
     await client.query(`UPDATE orders SET junior_profile_id = NULL`);

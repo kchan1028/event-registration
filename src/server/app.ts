@@ -9,7 +9,7 @@ import { buildDemoEvent } from '../shared/demo';
 import { buildCaseStudyScenarios, CASE_STUDY_ORG_ID, CASE_STUDY_REFERENCE_NOW } from '../shared/caseStudies';
 import { configFromTemplate } from '../shared/factory';
 import { buildFixtureEvents, FIXTURE_ORG_NAME } from '../shared/fixtures';
-import { createEventInputSchema, eventConfigSchema } from '../shared/schema';
+import { bibNumberSchema, createEventInputSchema, eventConfigSchema } from '../shared/schema';
 import { entriesCsv, ledgerCsv } from '../shared/exports';
 import { eventSummary } from '../shared/reports';
 import { riderCorrectionSchema } from '../shared/lookup';
@@ -31,7 +31,7 @@ import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './rep
 import { createMailer, emailFromEnv, type EmailSender } from './email';
 import { createJuniors } from './juniors';
 import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
-import { bibBatchSchema } from '../shared/checkin';
+import { bibBatchSchema, bibChangeSchema, bibReassignmentSchema, bibFingerprintSchema } from '../shared/checkin';
 import { can, ROLES, type Permission, type Role } from '../shared/roles';
 
 declare module 'fastify' {
@@ -78,8 +78,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10), coupons, juniors);
   const identity = createIdentity(db, orders, clock);
   const resolutions = createResolutions(db, orders, clock);
-  const checkIn = createCheckIn(db, repo, orders, clock, identity);
   const startLists = createStartLists(db, repo, orders, clock, identity);
+  const checkIn = createCheckIn(db, repo, orders, clock, identity, startLists);
   const waitlist = createWaitlist(db, repo, clock);
   const caseStudies = createCaseStudyFixtures(db, repo, orders);
   const emailSender = opts.email ?? emailFromEnv();
@@ -571,17 +571,19 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/events/:id/check-in/:orderId', async (req) => {
     const p = await onEvent(req, 'checkin', checkInParams);
     const body = z
-      .object({ dayId: z.string().min(1).max(64), bib: z.number().int().min(1).max(99999).nullable().default(null), durationMs: z.number().int().min(0).max(86_400_000).nullable().default(null) })
+      .object({ dayId: z.string().min(1).max(64), bib: bibNumberSchema.nullable().default(null), durationMs: z.number().int().min(0).max(86_400_000).nullable().default(null) })
       .parse(req.body);
     return checkIn.checkIn(p.id, p.orderId, body.dayId, body.bib, body.durationMs);
   });
 
+  app.post('/api/events/:id/check-in/:orderId/bib/preview', async (req) => {
+    const p = await onEvent(req, 'checkin', checkInParams);
+    return checkIn.previewBibChange(p.id, p.orderId, bibChangeSchema.parse(req.body));
+  });
   app.post('/api/events/:id/check-in/:orderId/bib', async (req) => {
     const p = await onEvent(req, 'checkin', checkInParams);
-    const body = z
-      .object({ dayId: z.string().min(1).max(64), bib: z.number().int().min(1).max(99999), reason: z.string().trim().min(3, 'Say why the bib changed.').max(200) })
-      .parse(req.body);
-    return checkIn.changeBib(p.id, p.orderId, body.dayId, body.bib, body.reason);
+    const body = bibChangeSchema.extend({ fingerprint: bibFingerprintSchema }).parse(req.body);
+    return checkIn.changeBib(p.id, p.orderId, body, body.fingerprint, me(req).id);
   });
 
   app.post('/api/events/:id/check-in/:orderId/undo', async (req) => {
@@ -610,8 +612,18 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
   app.post('/api/events/:id/bibs/apply', async (req) => {
     await onEvent(req, 'checkin.settings');
-    const body = bibBatchSchema.extend({ fingerprint: z.string().regex(/^[a-f0-9]{64}$/) }).parse(req.body);
+    const body = bibBatchSchema.extend({ fingerprint: bibFingerprintSchema }).parse(req.body);
     return checkIn.applyBibs(idParam.parse(req.params).id, body, body.fingerprint);
+  });
+
+  app.post('/api/events/:id/bibs/reassign/preview', async (req) => {
+    const { id } = await onEvent(req, 'checkin.settings');
+    return checkIn.previewReassignments(id, bibReassignmentSchema.parse(req.body));
+  });
+  app.post('/api/events/:id/bibs/reassign/apply', async (req) => {
+    const { id } = await onEvent(req, 'checkin.settings');
+    const body = z.object({ batch: bibReassignmentSchema, fingerprint: bibFingerprintSchema }).parse(req.body);
+    return checkIn.applyReassignments(id, body.batch, body.fingerprint, me(req).id);
   });
 
   // Rider identity across orders: suggestions and organizer-confirmed links (src/server/identity.ts).
@@ -647,7 +659,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.post('/api/events/:id/start-lists/:raceId/snapshots', async (req, reply) => {
     const p = await onEvent(req, 'startlists', raceParams);
-    return reply.status(201).send(await startLists.snapshot(p.id, p.raceId));
+    return reply.status(201).send(await startLists.snapshot(p.id, p.raceId, null));
   });
 
   app.post('/api/events/:id/start-lists/:raceId/lock', async (req, reply) => {

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { bibScopeKey, bibSettingsSchema, bibBatchExclusion, type BibBatch, type BibPlan, type PaymentState, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
+import { bibScopeKey, bibSettingsSchema, bibBatchExclusion, changedBibAssignments, type BibChange, type BibReassignment, type BibReassignmentPlan, type BibReassignmentResult, type BibBatch, type BibPlan, type PaymentState, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
 import { categoryBibRange } from '../shared/categoryExtras';
 import { checkSelection, needsGuardian, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { evaluateCategory } from '../shared/eligibility';
@@ -7,6 +7,7 @@ import { newId } from '../shared/factory';
 import { sortCategories } from '../shared/format';
 import type { EventConfig } from '../shared/schema';
 import type { Db } from './db';
+import type { StartLists } from './startlists';
 import type { Identity } from './identity';
 import { groupByOrder, isLiveOrder, type Orders, type OrderView } from './orders';
 import { eventLock, HttpError, type Repo } from './repo';
@@ -16,7 +17,7 @@ import { eventLock, HttpError, type Repo } from './repo';
  * check-in needs: name, team, entries, readiness, and bib. No email, guardian
  * contact, payment amounts, or emergency details leave this module.
  */
-export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => Date, identity: Identity) {
+export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => Date, identity: Identity, startLists: StartLists) {
   const nowIso = () => clock().toISOString();
 
   /**
@@ -54,14 +55,14 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     };
   }
 
-  type BibRow = { order_id: string; bib: number; assigned_at: string; released_at: string | null; release_reason: string | null };
+  type BibRow = { id: string; order_id: string; bib: number; assigned_at: string; released_at: string | null; release_reason: string | null };
   type UndoRow = { order_id: string; checked_in_at: string; undone_at: string; bib: number | null; bib_released: boolean; reason: string };
 
   /** Check-ins, bibs, and undone check-ins for one event, day, and bib scope, read once for every rider card. */
   async function dayState(eventId: string, dayId: string, scope: string) {
     const checkIns = await db.all<{ order_id: string; checked_in_at: string }>(`SELECT order_id, checked_in_at FROM check_ins WHERE event_id = $1 AND day_id = $2`, [eventId, dayId]);
     const bibs = await db.all<BibRow>(
-      `SELECT order_id, bib, assigned_at, released_at, release_reason FROM bib_assignments WHERE event_id = $1 AND scope = $2 ORDER BY assigned_at, seq`,
+      `SELECT id, order_id, bib, assigned_at, released_at, release_reason FROM bib_assignments WHERE event_id = $1 AND scope = $2 ORDER BY assigned_at, seq`,
       [eventId, scope],
     );
     const undos = await db.all<UndoRow>(
@@ -137,18 +138,37 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     return riderCard(mergeRider(group.length ? group : [o], key), dayId, await dayState(eventId, dayId, bibScopeKey(s, dayId)));
   }
 
-  /** The category bib range for the rider's races that day (earliest start first), if any category sets one. */
-  async function categoryRange(eventId: string, orderId: string, dayId: string) {
-    const cfg = await config(eventId);
-    const card = await cardFor(eventId, orderId, dayId);
-    return categoryBibRange(card.entries.map((e) => ({ id: e.categoryId, bibRange: cfg.categories.find((c) => c.id === e.categoryId)?.bibRange ?? null, startTime: e.startTime })));
+  function requireBatchScope(cfg: EventConfig, { dayId, raceId, categoryId }: Pick<BibBatch, 'dayId' | 'raceId' | 'categoryId'>) {
+    const day = requireDay(cfg, dayId);
+    if (raceId && !cfg.races.some((r) => r.id === raceId && r.dayId === dayId)) throw new HttpError(422, 'The selected race is not on this day.');
+    if (categoryId && !cfg.categories.some((c) => c.id === categoryId && (!raceId || c.raceId === raceId) && cfg.races.some((r) => r.id === c.raceId && r.dayId === dayId))) throw new HttpError(422, 'The selected category is not in this race day and scope.');
+    return day;
+  }
+
+  async function requireRiderSelection(eventId: string, orderIds: string[]) {
+    if (new Set(orderIds).size !== orderIds.length) throw new HttpError(422, 'Select each rider only once.');
+    const key = await identity.keyOf(eventId);
+    if (orderIds.some((id) => key(id) !== id)) throw new HttpError(422, 'Select the rider shown on the check-in list, not a linked order.');
+  }
+
+  function requireRiderScope(cfg: EventConfig, card: ReturnType<typeof riderCard>, { raceId, categoryId }: Pick<BibBatch, 'raceId' | 'categoryId'>) {
+    if (categoryId && !card.entries.some((e) => e.categoryId === categoryId)) throw new HttpError(409, 'A selected rider is not entered in the chosen category.');
+    if (raceId && !card.entries.some((e) => cfg.categories.some((c) => c.id === e.categoryId && c.raceId === raceId))) throw new HttpError(409, 'A selected rider is not entered in the chosen race.');
+  }
+
+  function requireBibInRange(bib: number, range: { first: number; last: number }) {
+    if (bib < range.first || bib > range.last) throw new HttpError(422, `Bib ${bib} is outside the range ${range.first}–${range.last}.`);
+  }
+
+  function cardRange(cfg: EventConfig, card: ReturnType<typeof riderCard>, s: BibSettings, dayId: string) {
+    const range = categoryBibRange(card.entries.map((e) => ({ id: e.categoryId, bibRange: cfg.categories.find((c) => c.id === e.categoryId)?.bibRange ?? null, startTime: e.startTime }))) ?? rangeFor(s, dayId);
+    return range ? { scope: bibScopeKey(s, dayId), first: range.first, last: range.last } : null;
   }
 
   /** Assign a bib inside the configured range without colliding with an active one. */
   async function assign(eventId: string, orderId: string, dayId: string, s: BibSettings, requested: number | null): Promise<number> {
     const scope = bibScopeKey(s, dayId);
-    const catRange = await categoryRange(eventId, orderId, dayId);
-    const range = catRange ? { scope, ...catRange } : rangeFor(s, dayId);
+    const range = cardRange(await config(eventId), await cardFor(eventId, orderId, dayId), s, dayId);
     if (!range) throw new HttpError(409, 'No bib range is set for this day. Set bib ranges before checking riders in.');
     const taken = await takenBibs(eventId, scope);
     let bib: number | null = requested;
@@ -156,7 +176,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       bib = nextFreeBib(range, taken);
       if (bib === null) throw new HttpError(409, `Every bib from ${range.first} to ${range.last} is in use. Extend the bib range.`);
     } else {
-      if (bib < range.first || bib > range.last) throw new HttpError(422, `Bib ${bib} is outside the range ${range.first}–${range.last}.`);
+      requireBibInRange(bib, range);
       if (taken.has(bib)) throw new HttpError(409, `Bib ${bib} is already issued to another rider.`);
     }
     await db.run(`INSERT INTO bib_assignments (id, event_id, scope, order_id, bib, assigned_at) VALUES ($1, $2, $3, $4, $5, $6)`, [newId('bib'), eventId, scope, orderId, bib, nowIso()]);
@@ -164,31 +184,25 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   }
 
   /** Preview uses the same event lock and allocation rules as apply. No bib changes here. */
-  async function bibPlan(eventId: string, batch: BibBatch): Promise<BibPlan> {
+  async function bibPlan(eventId: string, batch: BibBatch, allocation: 'unassigned' | 'reassign'): Promise<BibPlan> {
     const { dayId, orderIds, raceId, categoryId } = batch;
     const sort = batch.sort ?? 'name';
     const cfg = await config(eventId);
-    requireDay(cfg, dayId);
-    if (raceId && !cfg.races.some((r) => r.id === raceId && r.dayId === dayId)) throw new HttpError(422, 'The selected race is not on this day.');
-    if (categoryId && !cfg.categories.some((c) => c.id === categoryId && (!raceId || c.raceId === raceId) && cfg.races.some((r) => r.id === c.raceId && r.dayId === dayId))) throw new HttpError(422, 'The selected category is not in this race day and scope.');
+    requireBatchScope(cfg, batch);
     const s = await settings(eventId);
     const scope = bibScopeKey(s, dayId);
-    const requested = new Set(orderIds);
-    if (requested.size !== orderIds.length) throw new HttpError(422, 'Select each rider only once.');
+    await requireRiderSelection(eventId, orderIds);
     const all = await riders(eventId);
     const byId = new Map(all.map((o) => [o.id, o]));
-    const key = await identity.keyOf(eventId);
-    if (orderIds.some((id) => key(id) !== id)) throw new HttpError(422, 'Select the rider shown on the check-in list, not a linked order.');
     const state = await dayState(eventId, dayId, scope);
     const taken = await takenBibs(eventId, scope);
     const sorted = orderIds.map((id) => {
       const o = byId.get(id);
       if (!o) throw new HttpError(404, 'A selected rider was not found.');
       const card = riderCard(o, dayId, state);
-      const exclusion = bibBatchExclusion(card);
-      if (exclusion) throw new HttpError(409, exclusion + '. Select confirmed, unassigned riders entered on this day.');
-      if (categoryId && !card.entries.some((e) => e.categoryId === categoryId)) throw new HttpError(409, 'A selected rider is not entered in the chosen category.');
-      if (raceId && !card.entries.some((e) => cfg.categories.some((c) => c.id === e.categoryId && c.raceId === raceId))) throw new HttpError(409, 'A selected rider is not entered in the chosen race.');
+      const exclusion = bibBatchExclusion(card, allocation);
+      if (exclusion) throw new HttpError(409, exclusion);
+      requireRiderScope(cfg, card, batch);
       return { o, card };
     }).sort((a, b) => {
       const byName = () => a.o.rider.lastName.localeCompare(b.o.rider.lastName) || a.o.rider.firstName.localeCompare(b.o.rider.firstName);
@@ -201,17 +215,17 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const primary = sort === 'registration' ? a.o.createdAt.localeCompare(b.o.createdAt) : sort === 'start' ? byStart() : byName();
       return primary || a.o.id.localeCompare(b.o.id);
     });
+    if (allocation === 'reassign') for (const { card } of sorted) taken.delete(card.bib!);
     const assignments = [];
     for (const { o, card } of sorted) {
-      const catRange = categoryBibRange(card.entries.map((e) => ({ id: e.categoryId, bibRange: cfg.categories.find((c) => c.id === e.categoryId)?.bibRange ?? null, startTime: e.startTime })));
-      const range = catRange ? { scope, ...catRange } : rangeFor(s, dayId);
+      const range = cardRange(cfg, card, s, dayId);
       if (!range) throw new HttpError(409, 'Set a bib range before allocating.');
       const bib = nextFreeBib(range, taken);
       if (bib === null) throw new HttpError(409, `Not enough free bibs in ${range.first}–${range.last}; no assignments were made.`);
       taken.add(bib);
       assignments.push({ orderId: o.id, name: card.name, bib, range: { first: range.first, last: range.last } });
     }
-    const fingerprint = createHash('sha256').update(JSON.stringify({ eventId, dayId, raceId, categoryId, sort, scope, settings: s, assigned: [...state.bibs.values()].flat().filter((b) => b.released_at === null).map((b) => [b.order_id, b.bib]).sort(), assignments })).digest('hex');
+    const fingerprint = createHash('sha256').update(JSON.stringify({ eventId, dayId, raceId, categoryId, sort, allocation, scope, settings: s, assigned: [...state.bibs.values()].flat().filter((b) => b.released_at === null).map((b) => [b.order_id, b.bib]).sort(), assignments })).digest('hex');
     return { dayId, raceId: raceId ?? null, categoryId: categoryId ?? null, sort, scope, assignments, fingerprint };
   }
 
@@ -224,7 +238,81 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     );
   }
 
+  async function reassignmentPlan(eventId: string, input: BibReassignment): Promise<BibReassignmentPlan> {
+    const { config: cfg, version } = await repo.getPublished(eventId);
+    const day = requireBatchScope(cfg, input);
+    const s = await settings(eventId);
+    const scope = bibScopeKey(s, day.id);
+    const days = cfg.days.filter((d) => bibScopeKey(s, d.id) === scope);
+    const proposed = input.mode === 'manual' ? input.assignments : (await bibPlan(eventId, input, 'reassign')).assignments;
+    const ids = new Set(proposed.map((a) => a.orderId));
+    await requireRiderSelection(eventId, proposed.map((a) => a.orderId));
+    if (new Set(proposed.map((a) => a.bib)).size !== proposed.length) throw new HttpError(409, 'Two selected riders cannot receive the same bib.');
+    const all = new Map((await riders(eventId)).map((r) => [r.id, r]));
+    const state = await dayState(eventId, day.id, scope);
+    const activeBibs = [...state.bibs.values()].flat().filter((b) => b.released_at === null);
+    const outside = new Set(activeBibs.filter((b) => !ids.has(b.order_id)).map((b) => b.bib));
+    const checks = await db.all<{ order_id: string; day_id: string; checked_in_at: string }>(`SELECT order_id, day_id, checked_in_at FROM check_ins WHERE event_id = $1 AND day_id = ANY($2::text[]) AND order_id = ANY($3::text[]) ORDER BY order_id, day_id`, [eventId, days.map((d) => d.id), [...ids]]);
+    const raceIds = new Set<string>();
+    const assignments = proposed.map((a) => {
+      const rider = all.get(a.orderId);
+      if (!rider) throw new HttpError(404, 'A selected rider was not found.');
+      const card = riderCard(rider, day.id, state);
+      const exclusion = bibBatchExclusion(card, 'reassign');
+      if (exclusion) throw new HttpError(409, exclusion);
+      requireRiderScope(cfg, card, input);
+      const range = cardRange(cfg, card, s, day.id);
+      if (!range) throw new HttpError(409, 'Set a bib range before changing numbers.');
+      requireBibInRange(a.bib, range);
+      if (outside.has(a.bib)) throw new HttpError(409, `Bib ${a.bib} belongs to a rider outside this batch.`);
+      if (a.bib !== card.bib) for (const entry of rider.entries.filter((e) => e.status === 'confirmed')) {
+        const race = cfg.races.find((r) => r.id === cfg.categories.find((c) => c.id === entry.categoryId)?.raceId);
+        if (race && days.some((d) => d.id === race.dayId)) raceIds.add(race.id);
+      }
+      const previous = activeBibs.find((b) => b.order_id === rider.id)!;
+      return { orderId: rider.id, name: card.name, currentBib: card.bib!, bib: a.bib, previousAssignmentId: previous.id, range: { first: range.first, last: range.last }, checkedInDays: days.filter((d) => checks.some((c) => c.order_id === rider.id && c.day_id === d.id)).map((d) => d.label) };
+    });
+    if (!input.acknowledgeCheckedIn && assignments.some((a) => a.currentBib !== a.bib && a.checkedInDays.length)) throw new HttpError(409, 'Acknowledge changes to checked-in riders before previewing.');
+    const races = cfg.races.filter((r) => raceIds.has(r.id)).map((r) => ({ id: r.id, name: r.name }));
+    const fingerprint = createHash('sha256').update(JSON.stringify({ eventId, input, version, scope, settings: s, checks, assignments, races })).digest('hex');
+    return { dayId: day.id, scope, scopeLabel: s.scope === 'weekend' ? 'Whole event' : day.label, reason: input.reason, publishedVersion: version, races, assignments, fingerprint };
+  }
+
+  async function commitReassignment(eventId: string, input: BibReassignment, fingerprint: string, actorId: string): Promise<BibReassignmentResult> {
+    const plan = await reassignmentPlan(eventId, input);
+    if (plan.fingerprint !== fingerprint) throw new HttpError(409, 'Bib preview changed. Review a new preview before applying.');
+    const changes = changedBibAssignments(plan);
+    if (!changes.length) return { ...plan, id: null, applied: 0, snapshots: [] };
+    const id = newId('bibchange');
+    const at = nowIso();
+    const rows = changes.map((a) => ({ orderId: a.orderId, previousAssignmentId: a.previousAssignmentId, previousBib: a.currentBib, bib: a.bib, assignmentId: newId('bib') }));
+    await db.run(`INSERT INTO bib_reassignments (id, event_id, day_id, scope, published_version, requested_by, reason, assignments_json, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, [id, eventId, plan.dayId, plan.scope, plan.publishedVersion, actorId, plan.reason, JSON.stringify(rows), at]);
+    await db.run(`UPDATE bib_assignments SET released_at = $1, release_reason = $2 WHERE event_id = $3 AND id = ANY($4::text[]) AND released_at IS NULL`, [at, plan.reason, eventId, rows.map((r) => r.previousAssignmentId)]);
+    await db.run(`INSERT INTO bib_assignments (id, event_id, scope, order_id, bib, assigned_at, reassignment_id)
+      SELECT id, $1, $2, order_id, bib, $3::timestamptz, $7 FROM unnest($4::text[], $5::text[], $6::int[]) AS batch(id, order_id, bib)`,
+      [eventId, plan.scope, at, rows.map((r) => r.assignmentId), rows.map((r) => r.orderId), rows.map((r) => r.bib), id]);
+    const snapshots = [];
+    for (const race of plan.races) {
+      const snapshot = await startLists.snapshot(eventId, race.id, id);
+      snapshots.push({ raceId: race.id, version: snapshot.version });
+    }
+    return { ...plan, id, applied: changes.length, snapshots };
+  }
+
   return {
+    async previewReassignments(eventId: string, input: BibReassignment) {
+      return db.transaction(async () => { await db.lock(eventLock(eventId)); return reassignmentPlan(eventId, input); });
+    },
+    async applyReassignments(eventId: string, input: BibReassignment, fingerprint: string, actorId: string) {
+      return db.transaction(async () => { await db.lock(eventLock(eventId)); return commitReassignment(eventId, input, fingerprint, actorId); });
+    },
+    async previewBibChange(eventId: string, orderId: string, input: BibChange) {
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        const key = (await identity.keyOf(eventId))(orderId);
+        return reassignmentPlan(eventId, { mode: 'manual', dayId: input.dayId, reason: input.reason, acknowledgeCheckedIn: input.acknowledgeCheckedIn, assignments: [{ orderId: key, bib: input.bib }] });
+      });
+    },
     /** Called by the post-close job under its event lock and transaction. */
     async assignUnassignedBibs(eventId: string, sort: NonNullable<BibBatch['sort']>, automaticJobId: string) {
       const cfg = await config(eventId);
@@ -233,9 +321,9 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       let assigned = 0;
       for (const day of [...cfg.days].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))) {
         const state = await dayState(eventId, day.id, bibScopeKey(s, day.id));
-        const ids = all.filter((r) => !bibBatchExclusion(riderCard(r, day.id, state))).map((r) => r.id);
+        const ids = all.filter((r) => !bibBatchExclusion(riderCard(r, day.id, state), 'unassigned')).map((r) => r.id);
         if (!ids.length) continue;
-        const plan = await bibPlan(eventId, { dayId: day.id, orderIds: ids, sort });
+        const plan = await bibPlan(eventId, { dayId: day.id, orderIds: ids, sort }, 'unassigned');
         await saveBibPlan(eventId, plan, automaticJobId);
         assigned += plan.assignments.length;
       }
@@ -244,13 +332,13 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     async previewBibs(eventId: string, batch: BibBatch) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
-        return bibPlan(eventId, batch);
+        return bibPlan(eventId, batch, 'unassigned');
       });
     },
     async applyBibs(eventId: string, batch: BibBatch, fingerprint: string) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
-        const plan = await bibPlan(eventId, batch);
+        const plan = await bibPlan(eventId, batch, 'unassigned');
         if (plan.fingerprint !== fingerprint) throw new HttpError(409, 'Bib preview changed. Review a new preview before applying.');
         await saveBibPlan(eventId, plan, null);
         return { ...plan, applied: plan.assignments.length };
@@ -261,6 +349,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const day = dayId ? requireDay(cfg, dayId) : cfg.days[0];
       const s = await settings(eventId);
       const state = await dayState(eventId, day.id, bibScopeKey(s, day.id));
+      const checkedInScope = new Set((await db.all<{ order_id: string }>(`SELECT DISTINCT order_id FROM check_ins WHERE event_id = $1 AND day_id = ANY($2::text[])`, [eventId, cfg.days.filter((d) => bibScopeKey(s, d.id) === bibScopeKey(s, day.id)).map((d) => d.id)])).map((r) => r.order_id));
       const all = (await riders(eventId)).map((o) => riderCard(o, day.id, state)).sort((a, b) => a.name.localeCompare(b.name));
       const enteredToday = all.filter((c) => c.entries.length > 0);
       // A search also finds riders with no entry today, so the volunteer sees why; the plain list shows only today's riders.
@@ -287,6 +376,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         categories: cfg.categories.filter((c) => cfg.races.some((r) => r.id === c.raceId && r.dayId === day.id)).map((c) => ({ id: c.id, name: c.name, raceId: c.raceId })),
         settings: s,
         summary,
+        checkedInScope: [...checkedInScope],
         riders: q.trim() ? cards.slice(0, 50) : cards,
       };
     },
@@ -371,26 +461,13 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       });
     },
 
-    /** Swap a rider's bib. The old one stays in the history with the reason. */
-    async changeBib(eventId: string, orderId: string, dayId: string, bib: number, reason: string) {
-      requireDay(await config(eventId), dayId);
-      orderId = (await identity.keyOf(eventId))(orderId);
+    /** Apply the previewed individual correction using the same historical change as bulk edits. */
+    async changeBib(eventId: string, orderId: string, input: BibChange, fingerprint: string, actorId: string) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
-        const card = await cardFor(eventId, orderId, dayId);
-        if (card.bib === null) throw new HttpError(409, 'This rider has no bib yet. Check them in first.');
-        if (card.bib === bib) return card;
-        const s = await settings(eventId);
-        const scope = bibScopeKey(s, dayId);
-        await db.run(`UPDATE bib_assignments SET released_at = $1, release_reason = $2 WHERE event_id = $3 AND scope = $4 AND order_id = $5 AND released_at IS NULL`, [
-          nowIso(),
-          reason,
-          eventId,
-          scope,
-          orderId,
-        ]);
-        await assign(eventId, orderId, dayId, s, bib);
-        return cardFor(eventId, orderId, dayId);
+        const key = (await identity.keyOf(eventId))(orderId);
+        await commitReassignment(eventId, { mode: 'manual', dayId: input.dayId, reason: input.reason, acknowledgeCheckedIn: input.acknowledgeCheckedIn, assignments: [{ orderId: key, bib: input.bib }] }, fingerprint, actorId);
+        return cardFor(eventId, key, input.dayId);
       });
     },
 

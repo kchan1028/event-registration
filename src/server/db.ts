@@ -510,6 +510,22 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX email_messages_by_org_ref ON email_messages(organization_id, ref, created_at);
   `,
   `
+  CREATE TABLE bib_reassignments (
+    id text PRIMARY KEY,
+    event_id text NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    day_id text NOT NULL,
+    scope text NOT NULL,
+    published_version integer NOT NULL,
+    requested_by text NOT NULL REFERENCES accounts(id),
+    reason text NOT NULL,
+    assignments_json jsonb NOT NULL,
+    created_at timestamptz NOT NULL,
+    FOREIGN KEY (event_id, published_version) REFERENCES event_versions(event_id, version)
+  );
+  ALTER TABLE bib_assignments ADD COLUMN reassignment_id text REFERENCES bib_reassignments(id);
+  ALTER TABLE start_list_snapshots ADD COLUMN reassignment_id text REFERENCES bib_reassignments(id);
+  `,
+  `
   -- Guardian access to juniors (owner decision 2026-11-15). One profile per guardian account and
   -- junior name, created the first time that guardian registers the junior; one guardian per junior.
   -- viewer_email: the junior's own login, which may view the junior's registrations read-only.

@@ -94,6 +94,7 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
       await db.run(`DELETE FROM orders WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM coupons WHERE event_id IN (${ids})`, eventIds); // after orders: orders.coupon_id references coupons
       await db.run(`DELETE FROM test_entries WHERE event_id IN (${ids})`, eventIds);
+      await db.run(`DELETE FROM bib_reassignments WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM event_versions WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM events WHERE id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM organizations WHERE id = $1`, [CASE_STUDY_ORG_ID]);
