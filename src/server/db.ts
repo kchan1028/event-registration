@@ -12,7 +12,7 @@ import pg from 'pg';
  * the driver returns parsed values.
  */
 
-export type Param = string | number | boolean | null | readonly string[] | readonly number[];
+type Param =string | number | boolean | null | readonly string[] | readonly number[];
 
 export interface Db {
   all<T>(sql: string, params?: readonly Param[]): Promise<T[]>;
@@ -32,7 +32,7 @@ export interface Db {
   close(): Promise<void>;
 }
 
-// seq columns keep insertion order for ties on a timestamp (SQLite used rowid).
+// seq columns keep insertion order for ties on a timestamp.
 export const MIGRATIONS: string[] = [
   `
   CREATE TABLE organizations (
@@ -407,6 +407,31 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE payment_attempts ADD COLUMN provider text NOT NULL DEFAULT 'simulated';
   ALTER TABLE payment_attempts ADD COLUMN provider_ref text;
   ALTER TABLE payment_attempts ADD COLUMN amount_cents integer;
+  `,
+  `
+  -- Refunds (ADR 0002, Phase 2). Each refund returns money from one payment, optionally for one
+  -- entry. A row is written before Stripe is called, so its amount is reserved against the cap and
+  -- a retry reuses the same idempotency key (the refund ID). Entry and payment states are separate:
+  -- a refund never withdraws an entry, and a withdrawal never refunds.
+  CREATE TABLE refunds (
+    id text PRIMARY KEY,
+    order_id text NOT NULL REFERENCES orders(id),
+    entry_id text REFERENCES order_entries(id),
+    provider text NOT NULL,
+    payment_ref text,
+    amount_cents integer NOT NULL CHECK (amount_cents > 0),
+    reason text NOT NULL,
+    status text NOT NULL CHECK (status IN ('requested', 'pending', 'succeeded', 'failed', 'canceled')),
+    provider_refund_id text UNIQUE,
+    failure_reason text,
+    requested_by text REFERENCES accounts(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL
+  );
+  CREATE INDEX refunds_by_order ON refunds(order_id, created_at);
+  -- The payment a notification was about, so a duplicate charge can be found and refunded.
+  ALTER TABLE provider_events ADD COLUMN payment_ref text;
+  ALTER TABLE provider_events ADD COLUMN amount_cents integer;
   `,
 ];
 

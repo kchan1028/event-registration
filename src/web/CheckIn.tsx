@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import type { BibSettings } from '../shared/checkin';
+import { BIB_SCOPES, rangeFor, type BibSettings } from '../shared/checkin';
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
 import { href } from './App';
@@ -135,7 +135,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
 
       {data?.isDemo && (
         <p className="demo-banner">
-          <strong>Example data.</strong> Fictional riders, simulated payments, and simulated license reviews. Nothing here is a real entry or a real license check.
+          <strong>Example data.</strong> Fictional riders, test payments, and simulated license reviews. Nothing here is a real entry or a real license check.
         </p>
       )}
 
@@ -171,7 +171,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
             </div>
           </dl>
 
-          {!rangeSet(data) && (
+          {!rangeFor(data.settings, data.dayId) && (
             <p className="ci__notice" role="status">
               <Icon name="warn" /> No bib range is set for {data.settings.scope === 'weekend' ? 'this event' : (day?.label ?? 'this day')}. Set one under <strong>Bib ranges</strong> before checking riders in.
             </p>
@@ -255,11 +255,6 @@ export function CheckIn({ eventId }: { eventId: string }) {
       )}
     </div>
   );
-}
-
-function rangeSet(d: CheckInList): boolean {
-  const key = d.settings.scope === 'weekend' ? 'weekend' : d.dayId;
-  return d.settings.ranges.some((r) => r.scope === key);
 }
 
 function CheckInBar({ eventId, eventName, children }: { eventId: string; eventName: string; children?: ReactNode }) {
@@ -410,7 +405,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
         <ul className="ci-reqs">
           <li className={rider.payment === 'confirmed' ? 'is-done' : 'is-missing'}>
             <Icon name={rider.payment === 'confirmed' ? 'check' : 'error'} size={14} />
-            {rider.payment === 'confirmed' ? 'Paid (simulated payment)' : 'Payment not complete'}
+            {rider.payment === 'confirmed' ? 'Paid' : 'Payment not complete'}
           </li>
           {rider.readiness.map((item) => (
             <li key={item.key} className={item.state === 'done' ? 'is-done' : item.state === 'needs_review' ? 'is-review' : 'is-missing'}>
@@ -602,7 +597,7 @@ function BibSettingsPanel({ data, onSaved, onClose }: { data: CheckInList; onSav
       <fieldset>
         <legend>Bib numbers</legend>
         <div className="segmented" role="radiogroup" aria-label="Bib scope">
-          {(['weekend', 'day'] as const).map((s) => (
+          {BIB_SCOPES.map((s) => (
             <label key={s} className={`segmented__opt ${draft.scope === s ? 'is-on' : ''}`}>
               <input type="radio" name="bib-scope" checked={draft.scope === s} onChange={() => setDraft((d) => ({ ...d, scope: s }))} />
               {s === 'weekend' ? 'One bib all weekend' : 'New bib each day'}

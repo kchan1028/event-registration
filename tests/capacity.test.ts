@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canAdmit, limitsForCategory, remainingForCategory, usageForCategory } from '../src/shared/capacity';
 import { configFromTemplate, newCategory } from '../src/shared/factory';
-import type { Category, EventConfig, TestEntry } from '../src/shared/schema';
+import type { Category, EventConfig, CapacityEntry } from '../src/shared/schema';
 
 /** Two categories with caps of 40 each and a combined pool of 60 (product.md acceptance criterion). */
 function sharedCapScenario() {
@@ -21,7 +21,7 @@ function sharedCapScenario() {
   return { config: next, a, b };
 }
 
-function entries(categoryId: string, n: number, prefix = 'r'): TestEntry[] {
+function entries(categoryId: string, n: number, prefix = 'r'): CapacityEntry[] {
   return Array.from({ length: n }, (_, i) => ({ id: `${prefix}${categoryId}${i}`, categoryId, riderRef: `${prefix}-${categoryId}-${i}` }));
 }
 
@@ -50,7 +50,7 @@ describe('capacity: category caps, start groups, and shared pools', () => {
 
   it('counts a rider once toward a shared limit', () => {
     const { config, a, b } = sharedCapScenario();
-    const list: TestEntry[] = [...entries(a.id, 30), ...entries(b.id, 29), { id: 'x', categoryId: a.id, riderRef: 'dual-rider' }];
+    const list: CapacityEntry[] = [...entries(a.id, 30), ...entries(b.id, 29), { id: 'x', categoryId: a.id, riderRef: 'dual-rider' }];
     // 60 distinct riders: the pool is full for new riders...
     expect(canAdmit(config, list, b.id, 'someone-new').ok).toBe(false);
     // ...but the rider already counted in the pool can take a second (dual-scored) entry without a second place.

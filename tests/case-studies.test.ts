@@ -3,6 +3,7 @@ import { buildCaseStudyScenarios, CASE_STUDY_ORG_ID, CASE_STUDY_REFERENCE_NOW } 
 import { canAdmit } from '../src/shared/capacity';
 import { checkSelection, findConflicts, profileOf } from '../src/shared/checkout';
 import { categoryPrice, quote } from '../src/shared/pricing';
+import type { EventConfig } from '../src/shared/schema';
 import { testApp } from './support/db';
 
 describe('generated race case studies', () => {
@@ -84,6 +85,37 @@ describe('generated race case studies', () => {
     const confirmed = orders.filter((order) => order.status === 'confirmed');
     expect(confirmed.some((order) => order.entries[0].readiness.some((item) => item.key === 'license' && item.state === 'done'))).toBe(true);
     expect(confirmed.some((order) => order.entries[0].readiness.some((item) => item.key === 'license' && item.state === 'needs_review'))).toBe(true);
+    await app.close();
+  });
+
+  it('resets an event that has a coupon order, a rider correction, and a refund', async () => {
+    const { app } = await testApp({ now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+    const eventId = 'evt_demo_case_omnium';
+    expect((await app.inject({ method: 'POST', url: '/api/demo/case-studies/omnium' })).statusCode).toBe(201);
+    const { config } = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
+    const category = config.categories.find((row) => row.name.includes('Masters 35+'))!;
+    const ok = async (res: { statusCode: number; body: string }, status = 200) => expect(res.statusCode, res.body).toBe(status);
+
+    await ok(await app.inject({ method: 'POST', url: `/api/events/${eventId}/coupons`, payload: { kind: 'percent', code: 'RESET10', percent: 10, categoryIds: [], validFrom: null, validUntil: null, maxRedemptions: null } }), 201);
+    const rider = {
+      firstName: 'Avery', lastName: 'Example', email: 'avery@example.test', phone: '', team: 'Fictional Wheel Club', racingAge: 40, licenseCategory: '3', licenseType: 'annual',
+      licenseNumber: 'DEMO-CASE-002', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Riley Example', phone: '202-555-0176' },
+    };
+    const waiver = { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Avery Example', signerRole: 'rider' };
+    const placed = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: 'case-reset-0001', categoryIds: [category.id], rider, waiver, couponCode: 'RESET10' } });
+    await ok(placed, 201);
+    const order = placed.json() as { id: string; couponCode: string | null };
+    expect(order.couponCode).toBe('RESET10');
+    await ok(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/payment`, payload: { attemptId: 'case-reset-attempt-1', outcome: 'success' } }));
+    await ok(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/rider-corrections`, payload: { changes: { team: 'Corrected Wheel Club' }, reason: 'Team name typed wrong' } }));
+    await ok(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/refunds`, payload: { amountCents: 100, reason: 'Goodwill refund' } }));
+
+    const reset = await app.inject({ method: 'DELETE', url: '/api/demo/case-studies' });
+    await ok(reset);
+    expect((reset.json() as { removedEvents: number }).removedEvents).toBe(1);
+    // Nothing is left behind: the same scenario loads again from scratch.
+    await ok(await app.inject({ method: 'POST', url: '/api/demo/case-studies/omnium' }), 201);
+    expect(((await app.inject({ method: 'GET', url: `/api/events/${eventId}/coupons` })).json() as unknown[]).length).toBe(0);
     await app.close();
   });
 });

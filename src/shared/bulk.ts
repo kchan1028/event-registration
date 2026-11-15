@@ -1,4 +1,4 @@
-import { newId } from './factory';
+import { cloneCategory, codesInUse, newId } from './factory';
 import { formatCents } from './format';
 import type { Category, EventConfig } from './schema';
 
@@ -10,9 +10,9 @@ import type { Category, EventConfig } from './schema';
 
 /**
  * Copy every race on one day, with its start groups and categories, to another day.
- * Everything gets new IDs. Copied categories are flagged for review, timing codes get a
- * "-COPY" suffix so they never collide, and shared capacity pool links are not copied:
- * a pool across two days must be set up deliberately.
+ * Everything gets new IDs. Copied categories are flagged for review, timing and classification
+ * codes get a "-COPY" suffix (then "-COPY2", and so on) so they never collide, and shared capacity
+ * pool links and bib ranges are not copied: a pool across two days must be set up deliberately.
  */
 export function copyDay(config: EventConfig, fromDayId: string, toDayId: string): { config: EventConfig; races: number; categories: number } {
   const from = config.days.find((d) => d.id === fromDayId);
@@ -22,25 +22,20 @@ export function copyDay(config: EventConfig, fromDayId: string, toDayId: string)
   const races = config.races.filter((r) => r.dayId === from.id);
   const raceMap = new Map(races.map((r) => [r.id, newId('race')]));
   const sgMap = new Map(config.startGroups.filter((g) => raceMap.has(g.raceId)).map((g) => [g.id, newId('sg')]));
-  const reason = `Copied from ${from.label} (${from.date}) to ${to.label}. Check the start time, price, registration window, eligibility, timing code, and capacity before publishing. Shared capacity pools were not copied.`;
+  const reason = `Copied from ${from.label} (${from.date}) to ${to.label}. Check the start time, price, registration window, eligibility, timing code, bib range, and capacity before publishing. Shared capacity pools were not copied.`;
+  const takenCodes = codesInUse(config);
 
   const newRaces = races.map((r) => ({ ...r, id: raceMap.get(r.id)!, dayId: to.id, name: `${r.name} (copy)`.slice(0, 120) }));
   const newGroups = config.startGroups.filter((g) => sgMap.has(g.id)).map((g) => ({ ...g, id: sgMap.get(g.id)!, raceId: raceMap.get(g.raceId)! }));
   const newCats: Category[] = config.categories
     .filter((c) => raceMap.has(c.raceId) && c.status !== 'archived')
-    .map((c) => {
-      const copy: Category = structuredClone(c);
-      copy.id = newId('cat');
-      copy.raceId = raceMap.get(c.raceId)!;
-      copy.startGroupId = c.startGroupId ? (sgMap.get(c.startGroupId) ?? null) : null;
-      copy.timingCode = c.timingCode ? `${c.timingCode}-COPY` : '';
-      copy.classifications = c.classifications.map((k) => ({ code: k.code ? `${k.code}-COPY` : '', label: k.label }));
-      copy.eligibility.paths = copy.eligibility.paths.map((p) => ({ ...p, id: newId('path') }));
-      copy.status = 'active';
-      copy.needsReview = true;
-      copy.reviewReason = reason;
-      return copy;
-    });
+    .map((c) =>
+      cloneCategory(c, takenCodes, {
+        raceId: raceMap.get(c.raceId)!,
+        startGroupId: c.startGroupId ? (sgMap.get(c.startGroupId) ?? null) : null,
+        reviewReason: reason,
+      }),
+    );
   return {
     config: { ...config, races: [...config.races, ...newRaces], startGroups: [...config.startGroups, ...newGroups], categories: [...config.categories, ...newCats] },
     races: newRaces.length,
@@ -56,7 +51,7 @@ export type BulkChange =
   | { field: 'opensAt' | 'closesAt'; at: string | null }
   | { field: 'status'; status: 'active' | 'closed' };
 
-export interface BulkPreviewRow {
+interface BulkPreviewRow {
   categoryId: string;
   name: string;
   before: string;

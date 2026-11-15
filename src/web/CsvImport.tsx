@@ -1,17 +1,11 @@
 import { useMemo, useState } from 'react';
 import { applyImport, autoMap, CSV_FIELDS, exportCategoriesCsv, issuesAfterImport, planImport, templateCsv } from '../shared/categoryCsv';
 import { parseCsv } from '../shared/csv';
+import { saveBlob } from './api';
 import type { Draft } from './Builder';
 import { Field, Icon } from './ui';
 
-function download(name: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+const download = (name: string, text: string) => saveBlob(name, new Blob([text], { type: 'text/csv;charset=utf-8' }));
 
 /** Import categories from a CSV into the draft, with column mapping and per-row errors; export the schedule. */
 export function CsvImport({ draft }: { draft: Draft }) {

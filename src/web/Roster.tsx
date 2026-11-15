@@ -3,6 +3,7 @@ import { formatDate, formatTime } from '../shared/format';
 import { buildRoster, type RosterRow } from '../shared/roster';
 import { api, ApiError, type CheckInList } from './api';
 import { href } from './App';
+import { formatDateTime } from './format';
 import { Icon } from './ui';
 
 /**
@@ -32,7 +33,7 @@ export function Roster({ eventId }: { eventId: string }) {
     };
   }, [eventId]);
 
-  const stamp = printedAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  const stamp = formatDateTime(printedAt);
 
   return (
     <div className="roster">

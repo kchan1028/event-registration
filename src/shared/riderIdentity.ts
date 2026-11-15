@@ -6,6 +6,8 @@
  * are never combined by mistake (product.md: flag duplicates without preventing entries).
  */
 
+import { normalizeText } from './lookup';
+
 export interface IdentityOrder {
   id: string;
   createdAt: string;
@@ -21,7 +23,6 @@ export interface MatchSuggestion {
   reasons: string[];
 }
 
-const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
 const normLicense = (s: string) => s.trim().toUpperCase().replace(/[\s-]/g, '');
 
 /** Stable key for a pair of orders, independent of order. */
@@ -44,8 +45,8 @@ export function suggestMatches(orders: readonly IdentityOrder[], keyOf: (orderId
       const reasons: string[] = [];
       const la = normLicense(a.licenseNumber);
       if (la && la === normLicense(b.licenseNumber)) reasons.push('Same license number');
-      const sameName = norm(a.firstName) === norm(b.firstName) && norm(a.lastName) === norm(b.lastName);
-      if (sameName && norm(a.email) && norm(a.email) === norm(b.email)) reasons.push('Same name and email');
+      const sameName = normalizeText(a.firstName) === normalizeText(b.firstName) && normalizeText(a.lastName) === normalizeText(b.lastName);
+      if (sameName && normalizeText(a.email) && normalizeText(a.email) === normalizeText(b.email)) reasons.push('Same name and email');
       if (reasons.length > 0) out.push({ a: a.id, b: b.id, reasons });
     }
   }

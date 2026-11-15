@@ -204,7 +204,7 @@ The theme follows the system setting until the user picks one with the header to
 ### Named Rules
 **The Day Hue Rule.** A day hue appears only on things that belong to that day: rail swatch, race header rule, clip bar, tally segments, rider preview day rule and group labels. It is never used as a general accent or for buttons.
 
-**The Paired Status Rule.** Status color is always a dark text tone on its matching pale ground (inverted in the dark theme: light tone on deep ground). Never place status text on canvas alone or a status fill behind white text, except the error count badge and the explicitly defined high-contrast check-in result below.
+**The Paired Status Rule.** Status color is always a dark text tone on its matching pale ground (inverted in the dark theme: light tone on deep ground). Never place status text on canvas alone or a status fill behind white text, except the explicitly defined high-contrast check-in result below.
 
 ## Typography
 

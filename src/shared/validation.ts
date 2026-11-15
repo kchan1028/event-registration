@@ -1,5 +1,5 @@
 import { distinctRiders, poolCategoryIds, startGroupCategoryIds } from './capacity';
-import type { EventConfig, TestEntry } from './schema';
+import type { EventConfig, CapacityEntry } from './schema';
 
 export type IssueLevel = 'error' | 'warning';
 export type IssueTarget =
@@ -21,7 +21,7 @@ export interface Issue {
  * acknowledged. The same function runs in the browser preview and on the
  * server, so the organizer and the API never disagree.
  */
-export function validateConfig(config: EventConfig, entries: readonly TestEntry[] = []): Issue[] {
+export function validateConfig(config: EventConfig, entries: readonly CapacityEntry[] = []): Issue[] {
   const issues: Issue[] = [];
   const add = (level: IssueLevel, key: string, message: string, target: IssueTarget) => issues.push({ key, level, message, target });
 
@@ -178,7 +178,7 @@ export function validateConfig(config: EventConfig, entries: readonly TestEntry[
     if (!b.name.trim()) add('error', `bundle.${b.id}.name`, 'A bundle needs a name.', t);
     if (new Set(b.raceIds).size < 2) add('error', `bundle.${b.id}.races`, `${label} must include at least two different races.`, t);
     if (b.raceIds.some((id) => !raceById.has(id))) add('error', `bundle.${b.id}.race-missing`, `${label} includes a race that no longer exists.`, t);
-    if (b.discountCents === 0) add('warning', `bundle.${b.id}.zero`, `${label} has no discount, so riders gain nothing from it.`, t);
+    if (b.priceCents === null && b.discountCents === 0) add('warning', `bundle.${b.id}.zero`, `${label} has no discount, so riders gain nothing from it.`, t);
   }
   if (!config.registration.waiverText.trim()) add('warning', 'event.waiver', 'No waiver text is set, so riders will see an empty waiver step.', { kind: 'event' });
   if (!config.registration.refundPolicy.trim()) add('warning', 'event.refund', 'No refund policy is set. Riders should see it before they pay.', { kind: 'event' });

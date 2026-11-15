@@ -1,10 +1,9 @@
 import { canAdmit, entryCountsByCategory, type LimitUsage } from '../shared/capacity';
+import { bibSettingsSchema, DEFAULT_BIB_SETTINGS, type BibSettings } from '../shared/checkin';
 import { newId } from '../shared/factory';
-import { eventConfigSchema, type EventConfig, type TestEntry } from '../shared/schema';
+import { eventConfigSchema, type EventConfig, type CapacityEntry } from '../shared/schema';
 import { countIssues, validateConfig, type Issue } from '../shared/validation';
 import type { Db } from './db';
-
-const now = () => new Date().toISOString();
 
 export class HttpError extends Error {
   constructor(
@@ -16,7 +15,7 @@ export class HttpError extends Error {
   }
 }
 
-export interface EventRecord {
+interface EventRecord {
   id: string;
   organizationId: string;
   organizationName: string;
@@ -41,21 +40,36 @@ interface EventRow {
 /** The per-event lock key: every write that can change capacity, holds, bibs, or the ledger takes it first. */
 export const eventLock = (eventId: string) => `event:${eventId}`;
 
-export function createRepo(db: Db, clock: () => Date = () => new Date()) {
+/**
+ * SQL for "this order entry holds a place": confirmed, or held while its order's hold has not run out.
+ * Expects the aliases `oe` (order_entries) and `o` (orders); `at` is the placeholder for the current time.
+ */
+export const liveEntrySql = (at: string) => `(oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > ${at}))`;
+
+/**
+ * SQL for "this unpaid order still reserves what it holds" (a coupon redemption, for example):
+ * held or payment failed, with time left on the hold. Expects the alias `o` (orders).
+ */
+export const reservedOrderSql = (at: string) => `(o.status IN ('held', 'payment_failed') AND o.hold_expires_at > ${at})`;
+
+export function createRepo(db: Db, clock: () => Date) {
+  const now = () => clock().toISOString();
   const getRowSql = `SELECT e.*, o.name AS organization_name FROM events e JOIN organizations o ON o.id = e.organization_id WHERE e.id = $1`;
-  // Places taken: simulated test entries, confirmed registrations, and unexpired checkout holds.
   // Places in use: test entries, confirmed and unexpired held order entries, and live waitlist
   // offers (an offer reserves its place until it expires or its rider's order holds the place instead).
+  // Orders the organizer linked as one rider (rider_links) share the rider key's reference, so the
+  // rider counts once toward a shared limit, as on start lists and at check-in.
   const entriesSql = `SELECT id, category_id, rider_ref FROM test_entries WHERE event_id = $1
      UNION ALL
-     SELECT oe.id, oe.category_id, oe.rider_ref FROM order_entries oe JOIN orders o ON o.id = oe.order_id
-     WHERE oe.event_id = $1 AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > $2))
+     SELECT oe.id, oe.category_id, COALESCE('rider-' || rl.rider_key, oe.rider_ref) FROM order_entries oe JOIN orders o ON o.id = oe.order_id
+     LEFT JOIN rider_links rl ON rl.order_id = oe.order_id
+     WHERE oe.event_id = $1 AND ${liveEntrySql('$2')}
      UNION ALL
      SELECT w.id, w.category_id, 'waitlist-' || w.id FROM waitlist_entries w
      WHERE w.event_id = $1 AND w.status = 'offered' AND w.offer_expires_at > $2
        AND NOT EXISTS (
          SELECT 1 FROM order_entries oe JOIN orders o ON o.id = oe.order_id
-         WHERE o.id = w.order_id AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > $2))
+         WHERE o.id = w.order_id AND ${liveEntrySql('$2')}
        )`;
 
   function toRecord(row: EventRow): EventRecord {
@@ -77,14 +91,13 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
     return toRecord(row);
   }
 
-  async function entries(eventId: string): Promise<TestEntry[]> {
-    const t = clock().toISOString();
-    const rows = await db.all<{ id: string; category_id: string; rider_ref: string }>(entriesSql, [eventId, t]);
+  async function entries(eventId: string): Promise<CapacityEntry[]> {
+    const rows = await db.all<{ id: string; category_id: string; rider_ref: string }>(entriesSql, [eventId, now()]);
     return rows.map((r) => ({ id: r.id, categoryId: r.category_id, riderRef: r.rider_ref }));
   }
 
   /** Rules that protect existing entries; enforced on every save. */
-  function assertSafeForEntries(config: EventConfig, current: TestEntry[]): void {
+  function assertSafeForEntries(config: EventConfig, current: CapacityEntry[]): void {
     const counts = entryCountsByCategory(current);
     for (const [categoryId, count] of Object.entries(counts)) {
       const cat = config.categories.find((c) => c.id === categoryId);
@@ -95,10 +108,15 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
   }
 
   return {
-    async listOrganizations() {
-      const orgs = await db.all<{ id: string; name: string; created_at: string }>(`SELECT id, name, created_at FROM organizations ORDER BY created_at, seq`);
+    /** The given organizations with a summary of each event's draft, oldest first. */
+    async listOrganizations(organizationIds: readonly string[]) {
+      if (organizationIds.length === 0) return [];
+      const orgs = await db.all<{ id: string; name: string }>(`SELECT id, name FROM organizations WHERE id = ANY($1) ORDER BY created_at, seq`, [organizationIds]);
       const events = (
-        await db.all<EventRow>(`SELECT e.*, o.name AS organization_name FROM events e JOIN organizations o ON o.id = e.organization_id ORDER BY e.created_at, e.seq`)
+        await db.all<EventRow>(
+          `SELECT e.*, o.name AS organization_name FROM events e JOIN organizations o ON o.id = e.organization_id WHERE e.organization_id = ANY($1) ORDER BY e.created_at, e.seq`,
+          [organizationIds],
+        )
       ).map(toRecord);
       return orgs.map((o) => ({
         id: o.id,
@@ -116,6 +134,25 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
             hasUnpublishedChanges: e.publishedRevision !== e.revision,
           })),
       }));
+    },
+
+    /** The oldest organization with this exact name and its event IDs, or null. Used by the demo seeders. */
+    async findOrganizationByName(name: string): Promise<{ id: string; eventIds: string[] } | null> {
+      const org = await db.get<{ id: string }>(`SELECT id FROM organizations WHERE name = $1 ORDER BY created_at, seq LIMIT 1`, [name]);
+      if (!org) return null;
+      const events = await db.all<{ id: string }>(`SELECT id FROM events WHERE organization_id = $1 ORDER BY created_at, seq`, [org.id]);
+      return { id: org.id, eventIds: events.map((e) => e.id) };
+    },
+
+    /** Every published event with its latest published configuration, in the order organizations and events were created. */
+    async listPublished(): Promise<{ id: string; organizationName: string; config: EventConfig }[]> {
+      const rows = await db.all<{ id: string; organization_name: string; config_json: unknown }>(
+        `SELECT e.id, o.name AS organization_name, v.config_json FROM events e
+         JOIN organizations o ON o.id = e.organization_id
+         JOIN event_versions v ON v.event_id = e.id AND v.version = e.published_version
+         ORDER BY o.created_at, o.seq, e.created_at, e.seq`,
+      );
+      return rows.map((r) => ({ id: r.id, organizationName: r.organization_name, config: eventConfigSchema.parse(r.config_json) }));
     },
 
     async createOrganization(name: string, requestedId?: string) {
@@ -142,6 +179,41 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
 
     getEvent: requireEvent,
     entries,
+
+    /**
+     * The latest published configuration, which is what riders, start lists, and waitlists use.
+     * Refuses with 409 when the event has never been published; `message` replaces the default wording.
+     */
+    async getPublished(
+      eventId: string,
+      message = 'Registration is not open: this event has no published version yet.',
+    ): Promise<{ config: EventConfig; version: number; organizationName: string }> {
+      const row = await db.get<{ organization_name: string; published_version: number | null; config_json: unknown }>(
+        `SELECT o.name AS organization_name, e.published_version, v.config_json FROM events e
+         JOIN organizations o ON o.id = e.organization_id
+         LEFT JOIN event_versions v ON v.event_id = e.id AND v.version = e.published_version
+         WHERE e.id = $1`,
+        [eventId],
+      );
+      if (!row) throw new HttpError(404, 'Event not found.');
+      if (!row.published_version) throw new HttpError(409, message);
+      return { config: eventConfigSchema.parse(row.config_json), version: row.published_version, organizationName: row.organization_name };
+    },
+
+    /**
+     * The capacity reference of an order's rider: the rider key's when the organizer linked the
+     * order to others (see `entriesSql`), otherwise the order's own.
+     */
+    async riderRef(orderId: string): Promise<string> {
+      const link = await db.get<{ rider_key: string }>(`SELECT rider_key FROM rider_links WHERE order_id = $1`, [orderId]);
+      return `rider-${link?.rider_key ?? orderId}`;
+    },
+
+    /** Bib scope and ranges for check-in and start lists; the defaults until the organizer saves some. */
+    async bibSettings(eventId: string): Promise<BibSettings> {
+      const row = await db.get<{ settings_json: unknown }>(`SELECT settings_json FROM bib_settings WHERE event_id = $1`, [eventId]);
+      return row ? bibSettingsSchema.parse(row.settings_json) : DEFAULT_BIB_SETTINGS;
+    },
 
     /**
      * Save the draft with optimistic concurrency. Holds the event lock so a cap
@@ -235,8 +307,11 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
     },
 
     async clearTestEntries(eventId: string) {
-      await requireEvent(eventId);
-      return db.run(`DELETE FROM test_entries WHERE event_id = $1`, [eventId]);
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        await requireEvent(eventId);
+        return db.run(`DELETE FROM test_entries WHERE event_id = $1`, [eventId]);
+      });
     },
   };
 }

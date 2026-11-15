@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 const apiPort = Number(process.env.API_PORT ?? 3001);
@@ -23,4 +23,4 @@ export default defineConfig({
     globalSetup: ['tests/support/global-setup.ts'],
     testTimeout: 20_000,
   },
-} as never);
+});

@@ -8,7 +8,7 @@ const ROLE_HELP: Record<Role, string> = {
   registration_manager: 'Event setup, publishing, registrations, check-in, start lists',
   check_in_volunteer: 'Race-day check-in and bibs only',
   timer_export: 'Start lists and the entries export',
-  finance: 'Registrations and the ledger export',
+  finance: 'Registrations, refunds, and the ledger export',
 };
 
 /**

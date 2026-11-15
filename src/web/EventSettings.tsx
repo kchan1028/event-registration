@@ -4,9 +4,8 @@ import { addDays, newId } from '../shared/factory';
 import type { EventConfig } from '../shared/schema';
 import { ApiError } from './api';
 import type { Draft } from './Builder';
+import { TIME_ZONES } from './format';
 import { dayHue, Field, Icon, IntInput, MoneyInput } from './ui';
-
-const TIME_ZONES = ['America/Los_Angeles', 'America/Denver', 'America/Phoenix', 'America/Chicago', 'America/New_York', 'America/Anchorage', 'Pacific/Honolulu'];
 
 export function EventSettings({ draft }: { draft: Draft }) {
   const { config, update } = draft;
@@ -146,7 +145,7 @@ export function EventSettings({ draft }: { draft: Draft }) {
                   {(id, d) => <MoneyInput id={id} describedBy={d} cents={b.discountCents} onCommit={(v) => patch({ discountCents: v })} />}
                 </Field>
                 <Field label="Or a fixed bundle price" hint="Leave blank to use the discount">
-                  {(id, d) => <IntInput id={id} describedBy={d} value={b.priceCents === null ? null : b.priceCents / 100} min={0} max={10000} onCommit={(v) => patch({ priceCents: v === null ? null : v * 100 })} />}
+                  {(id, d) => <MoneyInput id={id} describedBy={d} cents={b.priceCents} onCommit={(v) => patch({ priceCents: v })} onClear={() => patch({ priceCents: null })} />}
                 </Field>
               </div>
               <div className="chips" role="group" aria-label={`Races in ${b.name}`}>
@@ -293,8 +292,8 @@ export function EventSettings({ draft }: { draft: Draft }) {
       <section className="settings__section">
         <h3>Test entries</h3>
         <p className="muted">
-          {draft.data.entries.length} simulated {draft.data.entries.length === 1 ? 'entry' : 'entries'} in this event. They hold places so you can check limits. They contain no rider data
-          and no payment.
+          {draft.data.entries.length} {draft.data.entries.length === 1 ? 'place is' : 'places are'} taken in this event, counting test entries, registrations, held places, and waitlist offers.
+          Test entries hold places so you can check limits. They contain no rider data and no payment.
         </p>
         <button
           className="btn btn--secondary btn--small"
@@ -308,8 +307,9 @@ export function EventSettings({ draft }: { draft: Draft }) {
             }
           }}
         >
-          Remove all test entries
+          Remove test entries only
         </button>
+        <p className="muted small">This removes test entries only. Registrations, held places, and waitlist offers stay.</p>
         {clearMsg && (
           <p className="note" role="status">
             {clearMsg}

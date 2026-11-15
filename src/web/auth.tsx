@@ -19,7 +19,6 @@ export interface Session {
   email: string | null;
   signIn: () => void;
   signOut: () => void;
-  mode: 'clerk' | 'test' | 'none';
 }
 
 const SessionContext = createContext<Session | null>(null);
@@ -30,9 +29,10 @@ export function useSession(): Session {
   return s;
 }
 
-const env = import.meta.env as Record<string, string | undefined>;
-const CLERK_KEY = env.VITE_CLERK_PUBLISHABLE_KEY?.trim();
-const TEST_MODE = env.VITE_AUTH_MODE === 'test';
+// Read import.meta.env.* directly: the bundler replaces these exact expressions at build time, which lets a
+// production build drop the test sign-in page. An alias of import.meta.env can defeat that.
+const CLERK_KEY = (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined)?.trim();
+const TEST_MODE = import.meta.env.VITE_AUTH_MODE === 'test';
 
 export function AuthRoot({ children }: { children: ReactNode }) {
   if (TEST_MODE) return <TestSession>{children}</TestSession>;
@@ -42,7 +42,7 @@ export function AuthRoot({ children }: { children: ReactNode }) {
         <ClerkSession>{children}</ClerkSession>
       </ClerkProvider>
     );
-  const none: Session = { status: 'unconfigured', email: null, signIn: () => undefined, signOut: () => undefined, mode: 'none' };
+  const none: Session = { status: 'unconfigured', email: null, signIn: () => undefined, signOut: () => undefined };
   return <SessionContext.Provider value={none}>{children}</SessionContext.Provider>;
 }
 
@@ -57,7 +57,6 @@ function ClerkSession({ children }: { children: ReactNode }) {
     email: user?.primaryEmailAddress?.emailAddress ?? null,
     signIn: () => clerk.openSignIn(),
     signOut: () => void signOut(),
-    mode: 'clerk',
   };
   return <SessionContext.Provider value={session}>{children}</SessionContext.Provider>;
 }
@@ -88,7 +87,6 @@ function TestSession({ children }: { children: ReactNode }) {
       }
       setEmail(null);
     },
-    mode: 'test',
   };
   const done = (value: string) => {
     try {

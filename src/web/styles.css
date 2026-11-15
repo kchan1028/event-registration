@@ -353,25 +353,6 @@ a {
   cursor: pointer;
 }
 
-.count-badge {
-  display: inline-grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 10px;
-  font: 600 12px/1 var(--font-num);
-  font-variant-numeric: tabular-nums;
-}
-.count-badge--error {
-  background: var(--error);
-  color: var(--on-ink);
-}
-.count-badge--warn {
-  background: var(--count-warn);
-  color: var(--count-warn-ink);
-}
-
 .tag {
   display: inline-flex;
   align-items: center;
@@ -1086,9 +1067,6 @@ fieldset {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
-.rail__item .count-badge {
-  margin-left: auto;
-}
 .rail__pending {
   margin-top: auto;
   padding: var(--s-3) var(--s-2) 0;
@@ -1650,7 +1628,6 @@ button.issue {
 .issue--error svg {
   color: var(--error);
 }
-.issue--warn svg,
 .issue--warning svg {
   color: var(--warn-icon);
 }
@@ -2670,6 +2647,9 @@ button.issue {
 }
 .receipt h2 {
   font-size: 17px;
+}
+.receipt__refunded {
+  margin-left: 8px;
 }
 .receipt__lines {
   list-style: none;

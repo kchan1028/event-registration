@@ -2,7 +2,7 @@ import { newId } from '../shared/factory';
 import type { ChangeImpact } from '../shared/impact';
 import type { Db } from './db';
 import type { Orders } from './orders';
-import { HttpError } from './repo';
+import { eventLock, HttpError } from './repo';
 
 /**
  * Resolution workflow for paid entries affected by a published change (product.md "Changes after
@@ -11,7 +11,7 @@ import { HttpError } from './repo';
  * (kept, transferred, or withdrawn), confirms the rider was told, and adds a note.
  */
 
-export type ResolutionOutcome = 'kept' | 'transferred' | 'withdrawn';
+type ResolutionOutcome ='kept' | 'transferred' | 'withdrawn';
 
 interface Row {
   id: string;
@@ -32,9 +32,10 @@ export function createResolutions(db: Db, orders: Orders, clock: () => Date) {
 
   async function list(eventId: string) {
     const rows = await db.all<Row>(`SELECT * FROM entry_resolutions WHERE event_id = $1 ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, created_at, seq`, [eventId]);
+    const byId = await orders.getOrders(rows.map((r) => r.order_id));
     const out = [];
     for (const r of rows) {
-      const o = await orders.getOrder(r.order_id);
+      const o = byId.get(r.order_id)!; // entry_resolutions.order_id references orders
       const entry = o.entries.find((e) => e.id === r.entry_id);
       out.push({
         id: r.id,
@@ -95,21 +96,23 @@ export function createResolutions(db: Db, orders: Orders, clock: () => Date) {
      * match the entry: "withdrawn" needs a withdrawn entry, "transferred" a transfer logged after the item opened.
      */
     async resolve(eventId: string, id: string, outcome: ResolutionOutcome, riderNotified: boolean, note: string) {
-      const row = await db.get<Row>(`SELECT * FROM entry_resolutions WHERE id = $1 AND event_id = $2`, [id, eventId]);
-      if (!row) throw new HttpError(404, 'That item was not found.');
-      if (row.status !== 'open') throw new HttpError(409, 'This item is already resolved.');
-      if (!riderNotified) throw new HttpError(422, 'Confirm that the rider was told about the change.');
-      const entry = await db.get<{ status: string }>(`SELECT status FROM order_entries WHERE id = $1`, [row.entry_id]);
-      if (outcome === 'withdrawn' && entry?.status !== 'withdrawn') throw new HttpError(409, 'Withdraw the entry first (Withdraw on the order below), then record it here.');
-      if (outcome === 'transferred') {
-        const moved = await db.get<{ n: number }>(`SELECT COUNT(*)::int AS n FROM entry_changes WHERE entry_id = $1 AND kind = 'transfer' AND created_at >= $2`, [row.entry_id, row.created_at]);
-        if (!moved?.n) throw new HttpError(409, 'Transfer the entry first (Transfer on the order below), then record it here.');
-      }
-      if (outcome === 'kept' && entry?.status !== 'confirmed') throw new HttpError(409, 'This entry is no longer active, so it cannot be kept as it is.');
-      await db.run(`UPDATE entry_resolutions SET status = $1, rider_notified = true, note = $2, resolved_at = $3 WHERE id = $4`, [outcome, note, nowIso(), id]);
-      return list(eventId);
+      return db.transaction(async () => {
+        // The event lock: the entry cannot be transferred or withdrawn between the checks and the update.
+        await db.lock(eventLock(eventId));
+        const row = await db.get<Row>(`SELECT * FROM entry_resolutions WHERE id = $1 AND event_id = $2`, [id, eventId]);
+        if (!row) throw new HttpError(404, 'That item was not found.');
+        if (row.status !== 'open') throw new HttpError(409, 'This item is already resolved.');
+        if (!riderNotified) throw new HttpError(422, 'Confirm that the rider was told about the change.');
+        const entry = await db.get<{ status: string }>(`SELECT status FROM order_entries WHERE id = $1`, [row.entry_id]);
+        if (outcome === 'withdrawn' && entry?.status !== 'withdrawn') throw new HttpError(409, 'Withdraw the entry first (Withdraw on the order below), then record it here.');
+        if (outcome === 'transferred') {
+          const moved = await db.get<{ n: number }>(`SELECT COUNT(*)::int AS n FROM entry_changes WHERE entry_id = $1 AND kind = 'transfer' AND created_at >= $2`, [row.entry_id, row.created_at]);
+          if (!moved?.n) throw new HttpError(409, 'Transfer the entry first (Transfer on the order below), then record it here.');
+        }
+        if (outcome === 'kept' && entry?.status !== 'confirmed') throw new HttpError(409, 'This entry is no longer active, so it cannot be kept as it is.');
+        await db.run(`UPDATE entry_resolutions SET status = $1, rider_notified = true, note = $2, resolved_at = $3 WHERE id = $4`, [outcome, note, nowIso(), id]);
+        return list(eventId);
+      });
     },
   };
 }
-
-export type Resolutions = ReturnType<typeof createResolutions>;

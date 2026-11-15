@@ -55,7 +55,8 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Start lists per race, numbered snapshots with changes since the last one, a start-list lock with revisions since the lock, and a sample timer CSV (format not yet agreed with a timer) | Implemented; automated tests in CI |
 | Change-impact preview on Review and publish (affected categories, riders, orders; paid prices kept) | Implemented; resolution workflow for affected entries still Planned |
 | Organizer-managed waitlists: per-category setting, waitlist first, 24-hour offer links | Implemented; automated promotion and email delivery Planned |
-| Organizer transfers and withdrawals of paid entries, with price differences logged | Implemented; real refunds Planned |
+| Organizer transfers and withdrawals of paid entries, with price differences logged | Implemented; automated tests in CI |
+| Organizer refunds of an entry or an order, for simulated and Stripe test-mode payments (no real money moves) | Implemented; automated tests in CI. Not yet checked against a real Stripe sandbox account |
 | Category builder: copy a day's races to another day, bulk edit with before/after preview | Implemented; automated tests in CI |
 | Same-rider suggestions across orders, linked only when the organizer confirms | Implemented; automated tests in CI |
 | Organizer CSV exports: entries and a simulated ledger, without contact details | Implemented; automated tests in CI |
@@ -64,7 +65,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Per-category rider questions, waiver addenda, and bib ranges | Implemented; automated tests in CI |
 | QR check-in code on the rider confirmation; camera scanning at check-in in Chrome and Edge | Implemented; live camera scan not yet checked |
 | Change resolution workflow for paid entries affected by a published change | Implemented; automated tests in CI |
-| Real payments and refunds, an agreed timer format | Planned |
+| Live payments and refunds with real money, an agreed timer format | Planned |
 
 <details>
 <summary>More screens: category editor, rider preview, publishing, rider checkout, registrations, phone layouts</summary>

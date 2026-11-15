@@ -35,23 +35,21 @@ export type Permission =
   | 'startlists'
   /** Entries CSV (no contact or emergency details). */
   | 'export.entries'
-  /** Simulated ledger CSV. */
+  /** Ledger CSV (payments, discounts, fees, refunds). */
   | 'export.ledger'
+  /** Refund money to a rider: part or all of an entry, or a payment that confirmed no place. */
+  | 'payments.refund'
   /** Add and remove people and roles in the organization. */
   | 'members.manage';
 
 const GRANTS: Record<Role, readonly Permission[]> = {
-  owner: ['event.view', 'event.edit', 'orders.view', 'entries.manage', 'checkin', 'checkin.settings', 'startlists', 'export.entries', 'export.ledger', 'members.manage'],
+  owner: ['event.view', 'event.edit', 'orders.view', 'entries.manage', 'checkin', 'checkin.settings', 'startlists', 'export.entries', 'export.ledger', 'members.manage', 'payments.refund'],
   registration_manager: ['event.view', 'event.edit', 'orders.view', 'entries.manage', 'checkin', 'checkin.settings', 'startlists', 'export.entries'],
   check_in_volunteer: ['event.view', 'checkin'],
   timer_export: ['event.view', 'startlists', 'export.entries'],
-  finance: ['event.view', 'orders.view', 'export.ledger'],
+  finance: ['event.view', 'orders.view', 'export.ledger', 'payments.refund'],
 };
 
 export function can(roles: readonly Role[], permission: Permission): boolean {
   return roles.some((r) => GRANTS[r].includes(permission));
-}
-
-export function isRole(value: unknown): value is Role {
-  return typeof value === 'string' && (ROLES as readonly string[]).includes(value);
 }

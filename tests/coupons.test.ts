@@ -95,11 +95,11 @@ async function setup() {
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
   let n = 0;
   const order = (categoryIds: string[], couponCode: string | null) =>
-    app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `cpn-${++n}-xxxxxxxx`, categoryIds, rider: RIDER, waiver, couponCode } });
+    app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `cpn-${++n}-xxxxxxxx`, categoryIds, rider: RIDER, waiver, couponCode } });
   const pay = (orderId: string) => app.inject({ method: 'POST', url: `/api/orders/${orderId}/payment`, payload: { attemptId: `att-${Math.random().toString(36).slice(2)}`, outcome: 'success' } });
   const createCoupon = (body: Record<string, unknown>) =>
     app.inject({ method: 'POST', url: `/api/events/${eventId}/coupons`, payload: { kind: 'percent', percent: 20, categoryIds: [], validFrom: null, validUntil: null, maxRedemptions: null, ...body } });
-  const check = (c: string) => app.inject({ method: 'POST', url: `/api/public/events/${eventId}/coupons/check`, payload: { code: c } });
+  const check = (c: string) => app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/coupons/check`, payload: { code: c } });
   const list = async () => (await app.inject({ method: 'GET', url: `/api/events/${eventId}/coupons` })).json() as { id: string; code: string; active: boolean; redemptions: { confirmed: number; reserved: number } }[];
   return { app, url, eventId, code, waiver, order, pay, createCoupon, check, list, clock };
 }
@@ -126,6 +126,17 @@ describe('coupons API', () => {
     expect((await s.check('NOPE')).statusCode).toBe(404);
     expect((await s.check('LATER')).json().error).toMatch(/starts working/);
     expect((await s.check('PAST')).json().error).toMatch(/expired/);
+  });
+
+  it('checks a code against the published time zone, not an unpublished draft edit', async () => {
+    const s = await setup(); // 2027-03-01 10:00 in Los Angeles, the published time zone
+    await s.createCoupon({ code: 'NOON', validUntil: '2027-03-01T12:00' });
+    const event = (await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}` })).json() as { config: EventConfig; revision: number };
+    // A draft that moves the event to Kiritimati (already 2027-03-02 there) is not published.
+    const config = { ...event.config, event: { ...event.config.event, timeZone: 'Pacific/Kiritimati' } };
+    expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/config`, payload: { revision: event.revision, config } })).statusCode).toBe(200);
+    expect((await s.check('NOON')).statusCode).toBe(200);
+    expect((await s.order([s.code('RR-M35-34')], 'NOON')).statusCode).toBe(201); // checkout agrees with the check
   });
 
   it('an order keeps the accepted discount; turning the code off later never reprices it; exports and ledger show it', async () => {
@@ -208,8 +219,8 @@ describe('coupons API', () => {
     const { app: b } = await testApp({ databaseUrl: s.url, now: () => new Date('2027-03-01T18:00:00Z'), holdMinutes: 10 });
     const body = (clientRequestId: string, cat: string) => ({ clientRequestId, categoryIds: [s.code(cat)], rider: RIDER, waiver: s.waiver, couponCode: 'LAST' });
     const race = await Promise.all([
-      s.app.inject({ method: 'POST', url: `/api/public/events/${s.eventId}/orders`, payload: body('race-a-12345678', 'RR-M35-34') }),
-      b.inject({ method: 'POST', url: `/api/public/events/${s.eventId}/orders`, payload: body('race-b-12345678', 'RR-D23') }),
+      s.app.inject({ method: 'POST', url: `/api/rider/events/${s.eventId}/orders`, payload: body('race-a-12345678', 'RR-M35-34') }),
+      b.inject({ method: 'POST', url: `/api/rider/events/${s.eventId}/orders`, payload: body('race-b-12345678', 'RR-D23') }),
     ]);
     expect(race.map((r) => r.statusCode).sort()).toEqual([201, 409]);
     expect((await s.list())[0].redemptions).toEqual({ confirmed: 0, reserved: 1 });

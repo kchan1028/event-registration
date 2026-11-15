@@ -26,6 +26,7 @@ async function setup(opts: { holdMinutes?: number } = {}) {
     n++;
     return { id: `cs_test_${n}`, url: `https://checkout.stripe.test/pay/${n}`, expires_at: params.expires_at!, amount_total: params.line_items![0].price_data!.unit_amount! } as Stripe.Checkout.Session;
   }) as never);
+  vi.spyOn(client.refunds, 'create').mockImplementation((async () => ({ id: 're_test_1', status: 'pending', failure_reason: null }) as unknown as Stripe.Refund) as never);
   const payments = stripePayments({ secretKey: 'sk_test_fictional', webhookSecret: WEBHOOK_SECRET, client, now: () => now });
   const databaseUrl = await testDatabaseUrl();
   const { app } = await testApp({ databaseUrl, now: () => now, holdMinutes: opts.holdMinutes ?? 10, payments, appUrl: 'http://app.test' });
@@ -36,7 +37,7 @@ async function setup(opts: { holdMinutes?: number } = {}) {
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
   let r = 0;
   const order = async (codes: string[]) =>
-    (await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `req-${++r}-xxxxxxxx`, categoryIds: codes.map(code), rider: RIDER, waiver } })).json() as Order;
+    (await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `req-${++r}-xxxxxxxx`, categoryIds: codes.map(code), rider: RIDER, waiver } })).json() as Order;
   const checkout = (orderId: string, headers: Record<string, string> = {}) => app.inject({ method: 'POST', url: `/api/orders/${orderId}/checkout-session`, headers });
   const get = async (orderId: string) => (await app.inject({ method: 'GET', url: `/api/orders/${orderId}` })).json() as Order;
 
@@ -205,6 +206,19 @@ describe('Stripe hosted Checkout (test mode)', () => {
     expect((await webhook('evt_test_first', 'checkout.session.completed', paidSession(o, 'cs_test_1'))).json()).toMatchObject({ result: 'confirmed' });
     expect((await webhook('evt_test_second', 'checkout.session.completed', paidSession(o, 'cs_test_2'))).json()).toMatchObject({ result: 'duplicate_charge' });
     expect((await get(o.id)).status).toBe('confirmed');
+  });
+
+  it('marks a refund of the duplicate charge, so it is not read as a refund of the order', async () => {
+    const { app, order, checkout, webhook, paidSession, clock, get } = await setup({ holdMinutes: 60 });
+    const o = await order(['RR-M35-34']);
+    await checkout(o.id);
+    clock.advance(33);
+    await checkout(o.id);
+    await webhook('evt_test_first', 'checkout.session.completed', paidSession(o, 'cs_test_1'));
+    await webhook('evt_test_second', 'checkout.session.completed', paidSession(o, 'cs_test_2', { payment_intent: 'pi_test_2' }));
+    const refunded = await app.inject({ method: 'POST', url: `/api/orders/${o.id}/refunds`, payload: { amountCents: o.totalCents, reason: 'Charged twice', paymentRef: 'pi_test_2' } });
+    expect(refunded.statusCode).toBe(200);
+    expect(((await get(o.id)) as unknown as { refunds: { duplicateCharge: boolean }[] }).refunds).toMatchObject([{ duplicateCharge: true }]);
   });
 
   it('an expired session is recorded and leaves the order alone', async () => {

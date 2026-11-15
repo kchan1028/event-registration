@@ -83,6 +83,58 @@ export function newCategory(config: EventConfig, raceId: string): Category {
   };
 }
 
+/** Longest timing or classification code the schema accepts. */
+const CODE_MAX_LENGTH = 24;
+
+/**
+ * A code for a copy: the original plus -COPY, then -COPY2, -COPY3, and so on until it is not in `taken`.
+ * The original is shortened when needed so the result fits the schema. The new code is added to `taken`.
+ * An empty code stays empty.
+ */
+export function copyCode(code: string, taken: Set<string>): string {
+  if (!code) return '';
+  for (let n = 1; ; n++) {
+    const suffix = n === 1 ? '-COPY' : `-COPY${n}`;
+    const candidate = code.slice(0, CODE_MAX_LENGTH - suffix.length) + suffix;
+    if (!taken.has(candidate.toUpperCase())) {
+      taken.add(candidate.toUpperCase());
+      return candidate;
+    }
+  }
+}
+
+/** Codes already used, upper case. Timing codes and classification codes are separate lists: a category often uses one value for both. */
+export interface CodesInUse {
+  timing: Set<string>;
+  classification: Set<string>;
+}
+
+export function codesInUse(config: EventConfig): CodesInUse {
+  const upper = (codes: string[]) => new Set(codes.filter(Boolean).map((code) => code.toUpperCase()));
+  return {
+    timing: upper(config.categories.map((c) => c.timingCode)),
+    classification: upper(config.categories.flatMap((c) => c.classifications.map((k) => k.code))),
+  };
+}
+
+/**
+ * A copy of a category with new IDs for itself and its eligibility paths, codes that are not in
+ * `takenCodes` (see `copyCode`), status active, and a review flag. The bib range is not copied: two
+ * categories with one range share a pool of numbers, which the organizer should choose on purpose.
+ * `overrides` sets what differs per caller (name, race, start group, sort order, review reason).
+ */
+export function cloneCategory(src: Category, takenCodes: CodesInUse, overrides: Partial<Category> = {}): Category {
+  const copy: Category = structuredClone(src);
+  copy.id = newId('cat');
+  copy.timingCode = copyCode(src.timingCode, takenCodes.timing);
+  copy.classifications = src.classifications.map((k) => ({ code: copyCode(k.code, takenCodes.classification), label: k.label }));
+  copy.eligibility.paths = copy.eligibility.paths.map((p) => ({ ...p, id: newId('path') }));
+  copy.status = 'active';
+  copy.needsReview = true;
+  if (copy.bibRange) copy.bibRange = null;
+  return { ...copy, ...overrides };
+}
+
 /**
  * Duplicate a category with a new ID. Inherited times, prices, rules, and
  * capacity links are flagged for review (product.md, Setup workflow).
@@ -90,16 +142,11 @@ export function newCategory(config: EventConfig, raceId: string): Category {
 export function duplicateCategory(config: EventConfig, categoryId: string): EventConfig {
   const src = config.categories.find((c) => c.id === categoryId);
   if (!src) return config;
-  const copy: Category = structuredClone(src);
-  copy.id = newId('cat');
-  copy.name = `${src.name} (copy)`;
-  copy.timingCode = src.timingCode ? `${src.timingCode}-COPY` : '';
-  copy.classifications = src.classifications.map((k) => ({ code: k.code ? `${k.code}-COPY` : '', label: k.label }));
-  copy.eligibility.paths = copy.eligibility.paths.map((p) => ({ ...p, id: newId('path') }));
-  copy.status = 'active';
-  copy.needsReview = true;
-  copy.reviewReason = `Copied from "${src.name}". Check the name, timing code, eligibility, price, start group, and capacity before publishing.`;
-  copy.sortOrder = src.sortOrder + 1;
+  const copy = cloneCategory(src, codesInUse(config), {
+    name: `${src.name} (copy)`.slice(0, 120),
+    reviewReason: `Copied from "${src.name}". Check the name, timing code, eligibility, price, start group, bib range, and capacity before publishing.`.slice(0, 300),
+    sortOrder: src.sortOrder + 1,
+  });
   const categories = config.categories.map((c) =>
     c.raceId === src.raceId && c.sortOrder > src.sortOrder ? { ...c, sortOrder: c.sortOrder + 1 } : c,
   );

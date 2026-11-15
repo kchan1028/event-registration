@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
-import { blocksPublicSale, effectiveWaitlistStatus } from '../src/shared/waitlist';
+import { blocksPublicSale, effectiveWaitlistStatus, waitlistJoinSchema } from '../src/shared/waitlist';
 
 /* Organizer-managed waitlists: waitlist first, 24-hour offers, organizer turns it on per category. */
 
@@ -42,9 +42,9 @@ async function setup() {
   const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
   let n = 0;
   const order = (extra: Record<string, unknown> = {}) =>
-    app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `req-${++n}-xxxxxxxx`, categoryIds: [cat.id], rider: RIDER, waiver, ...extra } });
+    app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `req-${++n}-xxxxxxxx`, categoryIds: [cat.id], rider: RIDER, waiver, ...extra } });
   const pay = (orderId: string) => app.inject({ method: 'POST', url: `/api/orders/${orderId}/payment`, payload: { attemptId: `att-${Math.random().toString(36).slice(2)}`, outcome: 'success' } });
-  const join = (body: Record<string, unknown>) => app.inject({ method: 'POST', url: `/api/public/events/${eventId}/waitlist`, payload: { categoryId: cat.id, ...body } });
+  const join = (body: Record<string, unknown>) => app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/waitlist`, payload: { categoryId: cat.id, ...body } });
   const list = async () => ((await app.inject({ method: 'GET', url: `/api/events/${eventId}/waitlist` })).json() as { entries: Entry[] }).entries;
   const offer = (id: string) => app.inject({ method: 'POST', url: `/api/events/${eventId}/waitlist/${id}/offer` });
   const remove = (id: string) => app.inject({ method: 'POST', url: `/api/events/${eventId}/waitlist/${id}/remove` });
@@ -58,6 +58,19 @@ describe('waitlist rules', () => {
     expect(effectiveWaitlistStatus('offered', '2027-03-02T18:00:00.000Z', '2027-03-02T17:59:59.000Z')).toBe('offered');
     expect(effectiveWaitlistStatus('offered', '2027-03-02T18:00:00.000Z', '2027-03-02T18:00:00.000Z')).toBe('expired');
     expect(['waiting', 'offered', 'expired', 'accepted', 'removed'].filter((s) => blocksPublicSale(s as never))).toEqual(['waiting', 'offered']);
+  });
+
+  it('refuses an email without an @ or a domain, in plain words', () => {
+    const join = (email: string) => waitlistJoinSchema.safeParse({ categoryId: 'cat_1', ...joiner(1), email });
+    expect(join('wait1@example.test').success).toBe(true);
+    for (const bad of ['abc', 'wait1@example', 'wait 1@example.test']) {
+      const r = join(bad);
+      expect(r.success).toBe(false);
+      if (!r.success) expect(r.error.issues[0].message).toBe('This email address is missing an @ or a domain. Check it and try again.');
+    }
+    const empty = join('  ');
+    expect(empty.success).toBe(false);
+    if (!empty.success) expect(empty.error.issues[0].message).toBe('Enter an email so the organizer can offer you a place.');
   });
 });
 
@@ -103,7 +116,7 @@ describe('organizer-managed waitlist API', () => {
     expect((await s.offer(b.id)).statusCode).toBe(409);
 
     // The offer link lets that rider register and pay for the reserved place.
-    const lookup = (await s.app.inject({ method: 'GET', url: `/api/public/offers/${offered.offerToken}` })).json() as { status: string; categoryId: string };
+    const lookup = (await s.app.inject({ method: 'GET', url: `/api/rider/offers/${offered.offerToken}` })).json() as { status: string; categoryId: string };
     expect(lookup).toMatchObject({ status: 'offered', categoryId: s.cat.id });
     const o = await s.order({ offerToken: offered.offerToken });
     expect(o.statusCode).toBe(201);

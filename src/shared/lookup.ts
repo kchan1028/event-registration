@@ -20,6 +20,15 @@ export function normalizeText(s: string): string {
 /** Letters and digits only, upper case: `demo-ab12` and `AB12` compare equal to the stored forms. */
 const compact = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
+/** Order numbers start with one of these: DEMO- for demo events, CR- for real ones. */
+export const ORDER_NUMBER_PREFIXES = ['DEMO-', 'CR-'] as const;
+
+/** A typed code or stored order number without its prefix, so the prefix alone never matches every order. */
+function withoutOrderPrefix(compacted: string): string {
+  const prefix = ORDER_NUMBER_PREFIXES.map(compact).find((p) => compacted.startsWith(p));
+  return prefix ? compacted.slice(prefix.length) : compacted;
+}
+
 export interface Searchable {
   orderNumber: string;
   checkInCode: string | null;
@@ -28,7 +37,7 @@ export interface Searchable {
 
 /**
  * True when the query finds this registration by rider name (every word, any order),
- * email, team, order number (with or without the DEMO- prefix), or check-in code
+ * email, team, order number (with or without its DEMO- or CR- prefix), or check-in code
  * (hyphens and case ignored). An empty query matches everything.
  */
 export function matchesRegistration(o: Searchable, query: string): boolean {
@@ -39,12 +48,12 @@ export function matchesRegistration(o: Searchable, query: string): boolean {
   if (q.split(' ').every((word) => name.includes(word))) return true;
   if (normalizeText(r.email).includes(q) || (r.guardian?.email && normalizeText(r.guardian.email).includes(q))) return true;
   if (r.team && normalizeText(r.team).includes(q)) return true;
-  // Codes: the shared DEMO- prefix is dropped from both sides, so "demo" alone does not match every order.
-  const code = compact(q).replace(/^DEMO/, '');
-  if (code.length >= 4) {
-    if (compact(o.orderNumber).replace(/^DEMO/, '').includes(code)) return true;
-    if (o.checkInCode && compact(o.checkInCode).includes(code)) return true;
-  }
+  // Codes: the order-number prefix is dropped from both sides, so "demo" alone does not match every order.
+  // A check-in code has no prefix, so it is compared with everything the organizer typed.
+  const typed = compact(q);
+  const code = withoutOrderPrefix(typed);
+  if (code.length >= 4 && withoutOrderPrefix(compact(o.orderNumber)).includes(code)) return true;
+  if (typed.length >= 4 && o.checkInCode && compact(o.checkInCode).includes(typed)) return true;
   return false;
 }
 

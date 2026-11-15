@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyImport, autoMap, CSV_FIELDS, exportCategoriesCsv, planImport, templateCsv } from '../src/shared/categoryCsv';
-import { parseCsv, writeCsv } from '../src/shared/csv';
+import { csvField, parseCsv, stripFormulaGuard, writeCsv } from '../src/shared/csv';
 import { buildDemoEvent } from '../src/shared/demo';
 import { configFromTemplate } from '../src/shared/factory';
 import { validateConfig } from '../src/shared/validation';
@@ -23,6 +23,17 @@ describe('CSV reading and writing', () => {
   it('writes values that read back unchanged', () => {
     const rows = [['plain', 'comma, here', 'quote "q"', ' padded ', 'line\nbreak', '']];
     expect(parseCsv(writeCsv(rows))).toEqual(rows);
+  });
+
+  it('guards text a spreadsheet would run as a formula, and leaves numbers alone', () => {
+    expect(csvField('=SUM(A1)')).toBe("'=SUM(A1)");
+    expect(csvField('-12.50')).toBe("'-12.50");
+    expect(csvField('+35 Men')).toBe("'+35 Men");
+    expect(csvField(-12.5)).toBe('-12.5');
+    expect(csvField(' padded ')).toBe('" padded "');
+    expect(writeCsv([['refund', -33.33, '@cmd']])).toBe("refund,-33.33,'@cmd\r\n");
+    expect(stripFormulaGuard("'+35 Men")).toBe('+35 Men');
+    expect(stripFormulaGuard("'Tis fine")).toBe("'Tis fine");
   });
 
   it('matches columns by key or by label, ignoring case and punctuation', () => {
@@ -124,5 +135,17 @@ describe('export and re-import', () => {
     expect(sortByCode(imported.categories.map((c) => key(c, imported)))).toEqual(sortByCode(demo.categories.map((c) => key(c, demo))));
     // Capacity pools and scheduled price changes are not in the CSV format; validation still passes structurally.
     expect(validateConfig(imported).filter((i) => i.level === 'error')).toEqual([]);
+  });
+
+  it('re-imports a category whose name starts with a character the export guards', () => {
+    const source = weekend();
+    const first = planImport(source, [header, row({ category: '+35 Men', timing_code: 'M35' })], autoMap(header));
+    expect(first.errorCount).toBe(0);
+    const csv = exportCategoriesCsv(applyImport(source, first).config);
+    expect(csv).toContain("'+35 Men");
+    const table = parseCsv(csv);
+    const plan = planImport(weekend(), table, autoMap(table[0]));
+    expect(plan.errorCount).toBe(0);
+    expect(plan.rows[0].category!.name).toBe('+35 Men');
   });
 });

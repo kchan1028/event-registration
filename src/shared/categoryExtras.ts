@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NO_START_TIME_SORT_KEY } from './format';
 import type { Category, EventConfig } from './schema';
 
 /**
@@ -65,6 +66,6 @@ export function describeAnswers(config: EventConfig, extras: OrderExtras): { cat
  * has one, otherwise null (the event or day range applies).
  */
 export function categoryBibRange(categories: readonly (Pick<Category, 'id' | 'bibRange'> & { startTime: string | null })[]): { first: number; last: number } | null {
-  const withRange = categories.filter((c) => c.bibRange).sort((a, b) => (a.startTime ?? '99:99').localeCompare(b.startTime ?? '99:99'));
+  const withRange = categories.filter((c) => c.bibRange).sort((a, b) => (a.startTime ?? NO_START_TIME_SORT_KEY).localeCompare(b.startTime ?? NO_START_TIME_SORT_KEY));
   return withRange[0]?.bibRange ?? null;
 }

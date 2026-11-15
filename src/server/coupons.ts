@@ -2,7 +2,7 @@ import { localNow } from '../shared/checkout';
 import { couponInputSchema, couponUnavailableReason, normalizeCouponCode, termsOf, type CouponTerms } from '../shared/coupons';
 import { newId } from '../shared/factory';
 import type { Db } from './db';
-import { eventLock, HttpError, type Repo } from './repo';
+import { eventLock, HttpError, reservedOrderSql, type Repo } from './repo';
 
 /**
  * Coupon codes per event (product.md: Promotions). A redemption is an order carrying the
@@ -26,7 +26,7 @@ interface CouponRow {
   created_at: string;
 }
 
-export type StoredCoupon = CouponTerms & {
+type StoredCoupon =CouponTerms & {
   id: string;
   validFrom: string | null;
   validUntil: string | null;
@@ -43,13 +43,14 @@ function fromRow(r: CouponRow): StoredCoupon {
 export function createCoupons(db: Db, repo: Repo, clock: () => Date) {
   const nowIso = () => clock().toISOString();
 
+  /** One row for the coupon `ref` names: its paid orders (confirmed) and its live holds (reserved) at time $2. */
+  const redemptionsSql = (ref: string) =>
+    `SELECT count(*) FILTER (WHERE o.status = 'confirmed')::int AS confirmed, count(*) FILTER (WHERE ${reservedOrderSql('$2')})::int AS reserved FROM orders o WHERE o.coupon_id = ${ref}`;
+
   /** Redemptions that count against the cap: paid orders and live holds. Call inside the event lock when the answer decides a write. */
   async function usedCount(couponId: string): Promise<number> {
-    const row = await db.get<{ n: number }>(
-      `SELECT count(*)::int AS n FROM orders WHERE coupon_id = $1 AND (status = 'confirmed' OR (status IN ('held', 'payment_failed') AND hold_expires_at > $2))`,
-      [couponId, nowIso()],
-    );
-    return row?.n ?? 0;
+    const row = await db.get<{ confirmed: number; reserved: number }>(redemptionsSql('$1'), [couponId, nowIso()]);
+    return (row?.confirmed ?? 0) + (row?.reserved ?? 0);
   }
 
   async function byCode(eventId: string, code: string) {
@@ -60,10 +61,7 @@ export function createCoupons(db: Db, repo: Repo, clock: () => Date) {
   async function list(eventId: string) {
     await repo.getEvent(eventId);
     const rows = await db.all<CouponRow & { confirmed: number; reserved: number }>(
-      `SELECT c.*,
-         (SELECT count(*)::int FROM orders o WHERE o.coupon_id = c.id AND o.status = 'confirmed') AS confirmed,
-         (SELECT count(*)::int FROM orders o WHERE o.coupon_id = c.id AND o.status IN ('held', 'payment_failed') AND o.hold_expires_at > $2) AS reserved
-       FROM coupons c WHERE c.event_id = $1 ORDER BY c.created_at, c.seq`,
+      `SELECT c.*, r.confirmed, r.reserved FROM coupons c CROSS JOIN LATERAL (${redemptionsSql('c.id')}) r WHERE c.event_id = $1 ORDER BY c.created_at, c.seq`,
       [eventId, nowIso()],
     );
     return rows.map((r) => ({ ...fromRow(r), redemptions: { confirmed: r.confirmed, reserved: r.reserved } }));
@@ -126,9 +124,9 @@ export function createCoupons(db: Db, repo: Repo, clock: () => Date) {
 
     /** What a rider's browser needs to price the code with the shared rule. Redemption counts are not revealed. */
     async check(eventId: string, code: string) {
-      const record = await repo.getEvent(eventId);
-      if (!record.publishedVersion) throw new HttpError(409, 'Registration is not open: this event has no published version yet.');
-      return termsOf(await redeemable(eventId, code, record.config.event.timeZone));
+      // The published time zone, as checkout uses: a draft edit must not move the code's valid dates.
+      const { config } = await repo.getPublished(eventId);
+      return termsOf(await redeemable(eventId, code, config.event.timeZone));
     },
   };
 }

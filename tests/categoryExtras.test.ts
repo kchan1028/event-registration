@@ -64,7 +64,7 @@ describe('category extras API', () => {
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
     const waiver = { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Demo', signerRole: 'rider' };
     const order = (extras: Record<string, unknown>, n: number) =>
-      app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `extras-${n}-xxxxxx`, categoryIds: [cat.id], rider: RIDER, waiver, extras } });
+      app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `extras-${n}-xxxxxx`, categoryIds: [cat.id], rider: RIDER, waiver, extras } });
 
     const missing = await order({ answers: {}, addenda: [] }, 1);
     expect(missing.statusCode).toBe(422);

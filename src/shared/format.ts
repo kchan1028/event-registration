@@ -25,6 +25,9 @@ function trimNumber(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
+/** Sort key that puts a missing start time after every real 24-hour time. */
+export const NO_START_TIME_SORT_KEY = '99:99';
+
 /** 24-hour "08:05" to "8:05 AM". */
 export function formatTime(t: string | null): string {
   if (!t) return 'No start time';

@@ -1,4 +1,4 @@
-import { bibScopeKey, bibSettingsSchema, DEFAULT_BIB_SETTINGS, type BibSettings } from '../shared/checkin';
+import { bibScopeKey } from '../shared/checkin';
 import { newId } from '../shared/factory';
 import { formatLength } from '../shared/format';
 import type { EventConfig } from '../shared/schema';
@@ -8,6 +8,11 @@ import type { Identity } from './identity';
 import type { Orders } from './orders';
 import { eventLock, HttpError, type Repo } from './repo';
 
+/** A name as a lowercase file-name part: letters and digits joined by hyphens, at most 40 characters. */
+export function slug(name: string, fallback: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || fallback;
+}
+
 /**
  * Start lists per race from confirmed entries, with timestamped snapshots and a
  * sample CSV for the timer. Test entries are never exported (product.md 1a):
@@ -15,17 +20,7 @@ import { eventLock, HttpError, type Repo } from './repo';
  */
 export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () => Date, identity: Identity) {
   const nowIso = () => clock().toISOString();
-
-  async function published(eventId: string): Promise<{ config: EventConfig; version: number }> {
-    const record = await repo.getEvent(eventId);
-    if (!record.publishedVersion) throw new HttpError(409, 'Publish the event first. Start lists come from the published schedule.');
-    return { config: await repo.getVersion(eventId, record.publishedVersion), version: record.publishedVersion };
-  }
-
-  async function bibSettings(eventId: string): Promise<BibSettings> {
-    const row = await db.get<{ settings_json: unknown }>(`SELECT settings_json FROM bib_settings WHERE event_id = $1`, [eventId]);
-    return row ? bibSettingsSchema.parse(row.settings_json) : DEFAULT_BIB_SETTINGS;
-  }
+  const NOT_PUBLISHED = 'Publish the event first. Start lists come from the published schedule.';
 
   function requireRace(config: EventConfig, raceId: string) {
     const race = config.races.find((r) => r.id === raceId);
@@ -33,22 +28,27 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
     return race;
   }
 
+  /** Everything the rows of any race need, read once per request: the published schedule, bib settings, confirmed orders, bibs, and check-ins. */
+  async function load(eventId: string) {
+    const { config, version } = await repo.getPublished(eventId, NOT_PUBLISHED);
+    const settings = await repo.bibSettings(eventId);
+    const bibs = await db.all<{ order_id: string; bib: number; scope: string }>(`SELECT order_id, bib, scope FROM bib_assignments WHERE event_id = $1 AND released_at IS NULL`, [eventId]);
+    const checkIns = await db.all<{ order_id: string; day_id: string }>(`SELECT order_id, day_id FROM check_ins WHERE event_id = $1`, [eventId]);
+    const confirmed = (await orders.listOrders(eventId)).filter((o) => o.status === 'confirmed');
+    const riderKey = await identity.keyOf(eventId); // linked orders are one rider: same rider ID, bib, and check-in
+    return { config, version, settings, bibs, checkIns, confirmed, riderKey };
+  }
+  type Loaded = Awaited<ReturnType<typeof load>>;
+
   /** Current rows for one race: confirmed orders only; released or cancelled entries drop out. */
-  async function currentRows(eventId: string, raceId: string): Promise<StartListRow[]> {
-    const { config } = await published(eventId);
+  function currentRows({ config, settings, bibs, checkIns, confirmed, riderKey }: Loaded, raceId: string): StartListRow[] {
     const race = requireRace(config, raceId);
     const day = config.days.find((d) => d.id === race.dayId);
-    const scope = bibScopeKey(await bibSettings(eventId), race.dayId);
-    const activeBibs = new Map(
-      (await db.all<{ order_id: string; bib: number }>(`SELECT order_id, bib FROM bib_assignments WHERE event_id = $1 AND scope = $2 AND released_at IS NULL`, [eventId, scope])).map((r) => [r.order_id, r.bib]),
-    );
-    const checkedInIds = new Set(
-      (await db.all<{ order_id: string }>(`SELECT order_id FROM check_ins WHERE event_id = $1 AND day_id = $2`, [eventId, race.dayId])).map((r) => r.order_id),
-    );
+    const scope = bibScopeKey(settings, race.dayId);
+    const activeBibs = new Map(bibs.filter((r) => r.scope === scope).map((r) => [r.order_id, r.bib]));
+    const checkedInIds = new Set(checkIns.filter((r) => r.day_id === race.dayId).map((r) => r.order_id));
     const rows: StartListRow[] = [];
-    const riderKey = await identity.keyOf(eventId); // linked orders are one rider: same rider ID, bib, and check-in
-    for (const o of await orders.listOrders(eventId)) {
-      if (o.status !== 'confirmed') continue;
+    for (const o of confirmed) {
       for (const e of o.entries) {
         if (e.status !== 'confirmed') continue;
         const cat = config.categories.find((c) => c.id === e.categoryId);
@@ -101,17 +101,14 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
     return row ? { snapshotVersion: row.snapshot_version, lockedAt: row.locked_at } : null;
   }
 
-  function slug(s: string) {
-    return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'race';
-  }
-
   return {
     /** Every race with its current rows, the latest snapshot, and what changed since it. */
     async overview(eventId: string) {
-      const { config, version } = await published(eventId);
+      const loaded = await load(eventId);
+      const { config, version } = loaded;
       const races = [];
       for (const race of config.races) {
-        const rows = await currentRows(eventId, race.id);
+        const rows = currentRows(loaded, race.id);
         const snaps = await snapRows(eventId, race.id);
         const last = snaps.at(-1);
         const lock = await currentLock(eventId, race.id);
@@ -149,11 +146,11 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
     },
 
     async snapshot(eventId: string, raceId: string) {
-      const { config, version } = await published(eventId);
-      requireRace(config, raceId);
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
-        const rows = await currentRows(eventId, raceId);
+        const loaded = await load(eventId);
+        const { version } = loaded;
+        const rows = currentRows(loaded, raceId);
         const max = await db.get<{ v: number | null }>(`SELECT MAX(version) AS v FROM start_list_snapshots WHERE event_id = $1 AND race_id = $2`, [eventId, raceId]);
         const next = (max?.v ?? 0) + 1;
         await db.run(`INSERT INTO start_list_snapshots (id, event_id, race_id, version, published_version, rows_json, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`, [
@@ -171,24 +168,20 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
 
     /** CSV for one race, current or a saved snapshot. All races in one file when raceId is "all". */
     async csv(eventId: string, raceId: string, snapshotVersion: number | null): Promise<{ filename: string; body: string }> {
-      const { config } = await published(eventId);
-      if (raceId === 'all') {
-        if (snapshotVersion !== null) throw new HttpError(400, 'Snapshots are saved per race. Download a race to get a snapshot.');
-        const rows: StartListRow[] = [];
-        for (const r of config.races) rows.push(...(await currentRows(eventId, r.id)));
-        return { filename: `${slug(config.event.name)}-all-races-SAMPLE.csv`, body: toCsv(rows) };
-      }
-      const race = requireRace(config, raceId);
-      let rows: StartListRow[];
-      let suffix = 'current';
-      if (snapshotVersion === null) rows = await currentRows(eventId, raceId);
-      else {
+      if (snapshotVersion !== null) {
+        if (raceId === 'all') throw new HttpError(400, 'Snapshots are saved per race. Download a race to get a snapshot.');
+        const race = requireRace((await repo.getPublished(eventId, NOT_PUBLISHED)).config, raceId);
         const snap = (await snapRows(eventId, raceId)).find((s) => s.version === snapshotVersion);
         if (!snap) throw new HttpError(404, 'That snapshot does not exist.');
-        rows = snap.rows_json;
-        suffix = `v${snapshotVersion}`;
+        return { filename: `${slug(race.name, 'race')}-v${snapshotVersion}-SAMPLE.csv`, body: toCsv(snap.rows_json) };
       }
-      return { filename: `${slug(race.name)}-${suffix}-SAMPLE.csv`, body: toCsv(rows) };
+      const loaded = await load(eventId);
+      if (raceId === 'all') {
+        const rows = loaded.config.races.flatMap((r) => currentRows(loaded, r.id));
+        return { filename: `${slug(loaded.config.event.name, 'race')}-all-races-SAMPLE.csv`, body: toCsv(rows) };
+      }
+      const race = requireRace(loaded.config, raceId);
+      return { filename: `${slug(race.name, 'race')}-current-SAMPLE.csv`, body: toCsv(currentRows(loaded, raceId)) };
     },
   };
 }

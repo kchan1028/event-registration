@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
-import { csvField, diffRows, sortRows, toCsv, type StartListRow } from '../src/shared/startlist';
+import { csvField } from '../src/shared/csv';
+import { diffRows, sortRows, toCsv, type StartListRow } from '../src/shared/startlist';
 
 const row = (o: Partial<StartListRow>): StartListRow => ({
   entryId: 'e1',

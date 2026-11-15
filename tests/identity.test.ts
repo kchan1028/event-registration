@@ -18,6 +18,11 @@ describe('same-rider suggestions', () => {
     expect(s.map((x) => [x.a, x.b])).toEqual([['o1', 'o2']]);
   });
 
+  it('matches names with and without accents', () => {
+    const s = suggestMatches([o('o1', { firstName: 'José' }), o('o2', { firstName: 'Jose' })], (id) => id, new Set());
+    expect(s).toEqual([{ a: 'o1', b: 'o2', reasons: ['Same name and email'] }]);
+  });
+
   it('skips pairs already linked or dismissed', () => {
     const orders = [o('o1'), o('o2'), o('o3')];
     const s = suggestMatches(orders, (id) => (id === 'o2' ? 'o1' : id), new Set([pairKey('o3', 'o1')]));
@@ -41,7 +46,7 @@ async function setup() {
   const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Demo', signerRole: 'rider' };
   let n = 0;
   const buy = async (c: string) => {
-    const created = await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `ident-${++n}-xxxxxx`, categoryIds: [code(c)], rider: RIDER, waiver } });
+    const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `ident-${++n}-xxxxxx`, categoryIds: [code(c)], rider: RIDER, waiver } });
     expect(created.statusCode).toBe(201);
     const id = (created.json() as { id: string }).id;
     const paid = await app.inject({ method: 'POST', url: `/api/orders/${id}/payment`, payload: { attemptId: `attempt-${n}-xxxx`, outcome: 'success' } });
@@ -121,5 +126,47 @@ describe('rider identity API', () => {
     const o = await s.overview();
     expect(o.groups).toEqual([]);
     expect(o.suggestions).toHaveLength(1); // suggested again, since it was never dismissed
+  });
+});
+
+describe('linked riders and shared limits', () => {
+  it('counts two linked orders in one start group as one rider toward its field limit', async () => {
+    const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z'), holdMinutes: 10 });
+    const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
+    const ev = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
+    // Collegiate men A and Domestic men Cat 2/3 start together; give that start group room for two riders.
+    const [collegiate, domestic] = ['RR-CMA', 'RR-D23'].map((c) => ev.config.categories.find((x) => x.timingCode === c)!);
+    expect(collegiate.startGroupId).toBe(domestic.startGroupId);
+    const config = { ...ev.config, startGroups: ev.config.startGroups.map((g) => (g.id === domestic.startGroupId ? { ...g, fieldLimit: 2 } : g)) };
+    expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: ev.revision, config } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+
+    let n = 0;
+    const order = (categoryId: string, rider: Record<string, unknown>) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/rider/events/${eventId}/orders`,
+        payload: { clientRequestId: `shared-${++n}-xxxxxx`, categoryIds: [categoryId], rider, waiver: { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: `${rider.firstName} ${rider.lastName}`, signerRole: 'rider' } },
+      });
+    const remaining = async () => ((await app.inject({ method: 'GET', url: `/api/public/events/${eventId}` })).json() as { remaining: Record<string, number | null> }).remaining[domestic.id];
+    const pat = { ...RIDER, racingAge: 21, collegiateDivision: 'A' };
+    const lee = { ...RIDER, firstName: 'Lee', email: 'lee.demo@example.test', licenseNumber: 'DEMO-901' };
+    const sam = { ...RIDER, firstName: 'Sam', email: 'sam.demo@example.test', licenseNumber: 'DEMO-902' };
+
+    // Pat enters both categories on two orders: two unlinked orders take both places.
+    const a = await order(collegiate.id, pat);
+    const b = await order(domestic.id, pat);
+    expect([a.statusCode, b.statusCode]).toEqual([201, 201]);
+    expect(await remaining()).toBe(0);
+    const full = await order(domestic.id, lee);
+    expect(full.statusCode).toBe(409);
+    expect((full.json() as { error: string }).error).toMatch(/is full .*2 of 2/);
+
+    // Linked, the two orders are one rider, so one place is free again. Only one more rider fits.
+    const ids = [a, b].map((r) => (r.json() as { id: string }).id);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/rider-identity/link`, payload: { orderIds: ids } })).statusCode).toBe(200);
+    expect(await remaining()).toBe(1);
+    expect((await order(domestic.id, lee)).statusCode).toBe(201);
+    expect((await order(domestic.id, sam)).statusCode).toBe(409);
   });
 });

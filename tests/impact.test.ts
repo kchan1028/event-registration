@@ -83,7 +83,7 @@ describe('change impact API', () => {
     const cat = event.config.categories.find((c) => c.timingCode === 'RR-M35-34')!;
     const rider = { firstName: 'Test', lastName: 'Rider', email: 'test.rider@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Test Contact', phone: '555-555-0199' } };
     const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
-    const order = await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: 'impact-req-1234', categoryIds: [cat.id], rider, waiver } });
+    const order = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: 'impact-req-1234', categoryIds: [cat.id], rider, waiver } });
     expect(order.statusCode).toBe(201);
 
     const unchanged = (await app.inject({ method: 'GET', url: `/api/events/${eventId}/impact` })).json() as { impact: ChangeImpact };

@@ -1,14 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { bibScopeKey, bibSettingsSchema, checkInResult, checkInTiming, DEFAULT_BIB_SETTINGS, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
+import { bibScopeKey, bibSettingsSchema, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
 import { categoryBibRange } from '../shared/categoryExtras';
-import { checkSelection, mayBeMinor, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
+import { checkSelection, needsGuardian, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { evaluateCategory } from '../shared/eligibility';
 import { newId } from '../shared/factory';
 import { sortCategories } from '../shared/format';
 import type { EventConfig } from '../shared/schema';
 import type { Db } from './db';
 import type { Identity } from './identity';
-import type { Orders, OrderView } from './orders';
+import { groupByOrder, isLiveOrder, type Orders, type OrderView } from './orders';
 import { eventLock, HttpError, type Repo } from './repo';
 
 /**
@@ -19,15 +19,18 @@ import { eventLock, HttpError, type Repo } from './repo';
 export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => Date, identity: Identity) {
   const nowIso = () => clock().toISOString();
 
-  async function config(eventId: string): Promise<EventConfig> {
+  /**
+   * The schedule check-in works from: the published version, or the draft while the event has
+   * never been published. The draft fallback is deliberate, so this does not use repo.getPublished:
+   * the check-in screen opens before the first publish (it shows "not published yet") and bib
+   * ranges can be saved early. No rider can be checked in then, because orders need a published version.
+   */
+  async function schedule(eventId: string): Promise<{ config: EventConfig; published: boolean }> {
     const record = await repo.getEvent(eventId);
-    return record.publishedVersion ? repo.getVersion(eventId, record.publishedVersion) : record.config;
+    return record.publishedVersion ? { config: await repo.getVersion(eventId, record.publishedVersion), published: true } : { config: record.config, published: false };
   }
-
-  async function settings(eventId: string): Promise<BibSettings> {
-    const row = await db.get<{ settings_json: unknown }>(`SELECT settings_json FROM bib_settings WHERE event_id = $1`, [eventId]);
-    return row ? bibSettingsSchema.parse(row.settings_json) : DEFAULT_BIB_SETTINGS;
-  }
+  const config = async (eventId: string) => (await schedule(eventId)).config;
+  const settings = repo.bibSettings;
 
   async function takenBibs(eventId: string, scope: string): Promise<Set<number>> {
     const rows = await db.all<{ bib: number }>(`SELECT bib FROM bib_assignments WHERE event_id = $1 AND scope = $2 AND released_at IS NULL`, [eventId, scope]);
@@ -64,16 +67,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       `SELECT order_id, checked_in_at, undone_at, bib, bib_released, reason FROM check_in_undos WHERE event_id = $1 AND day_id = $2 ORDER BY undone_at, seq`,
       [eventId, dayId],
     );
-    const by = <T extends { order_id: string }>(rows: T[]) => {
-      const m = new Map<string, T[]>();
-      for (const r of rows) {
-        const list = m.get(r.order_id);
-        if (list) list.push(r);
-        else m.set(r.order_id, [r]);
-      }
-      return m;
-    };
-    return { checkedInAt: new Map(checkIns.map((c) => [c.order_id, c.checked_in_at])), bibs: by(bibs), undos: by(undos) };
+    return { checkedInAt: new Map(checkIns.map((c) => [c.order_id, c.checked_in_at])), bibs: groupByOrder(bibs), undos: groupByOrder(undos) };
   }
   type DayState = Awaited<ReturnType<typeof dayState>>;
 
@@ -108,7 +102,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     const key = await identity.keyOf(eventId);
     const groups = new Map<string, OrderView[]>();
     for (const o of await orders.listOrders(eventId)) {
-      if (o.status === 'cancelled' || o.status === 'expired') continue;
+      if (!isLiveOrder(o)) continue;
       const k = key(o.id);
       groups.set(k, [...(groups.get(k) ?? []), o]);
     }
@@ -135,16 +129,13 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     const o = await orders.getOrder(orderId);
     if (o.eventId !== eventId) throw new HttpError(404, 'Rider not found for this event.');
     const key = (await identity.keyOf(eventId))(orderId);
-    const group: OrderView[] = [];
-    for (const id of await identity.groupOf(eventId, key)) {
-      const x = await orders.getOrder(id);
-      if (x.status !== 'cancelled' && x.status !== 'expired') group.push(x);
-    }
+    const ids = await identity.groupOf(eventId, key);
+    const byId = await orders.getOrders(ids);
+    const group = ids.map((id) => byId.get(id)).filter((x): x is OrderView => !!x && isLiveOrder(x));
     const s = await settings(eventId);
     return riderCard(mergeRider(group.length ? group : [o]), dayId, await dayState(eventId, dayId, bibScopeKey(s, dayId)));
   }
 
-  /** Assign a bib inside the configured range without colliding with an active one. */
   /** The category bib range for the rider's races that day (earliest start first), if any category sets one. */
   async function categoryRange(eventId: string, orderId: string, dayId: string) {
     const cfg = await config(eventId);
@@ -152,6 +143,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     return categoryBibRange(card.entries.map((e) => ({ id: e.categoryId, bibRange: cfg.categories.find((c) => c.id === e.categoryId)?.bibRange ?? null, startTime: e.startTime })));
   }
 
+  /** Assign a bib inside the configured range without colliding with an active one. */
   async function assign(eventId: string, orderId: string, dayId: string, s: BibSettings, requested: number | null): Promise<number> {
     const scope = bibScopeKey(s, dayId);
     const catRange = await categoryRange(eventId, orderId, dayId);
@@ -224,7 +216,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       });
     },
     async list(eventId: string, dayId: string | undefined, q: string) {
-      const cfg = await config(eventId);
+      const { config: cfg, published } = await schedule(eventId);
       const day = dayId ? requireDay(cfg, dayId) : cfg.days[0];
       const s = await settings(eventId);
       const state = await dayState(eventId, day.id, bibScopeKey(s, day.id));
@@ -247,7 +239,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         eventId,
         eventName: cfg.event.name,
         isDemo: cfg.event.isDemo,
-        published: (await repo.getEvent(eventId)).publishedVersion !== null,
+        published,
         days: cfg.days.map((d) => ({ id: d.id, label: d.label, date: d.date })),
         dayId: day.id,
         settings: s,
@@ -361,11 +353,9 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
      * of reviewed and unreviewed licenses, and one unpaid hold.
      */
     async addDemoRiders(eventId: string) {
-      const record = await repo.getEvent(eventId);
-      if (!record.publishedVersion) throw new HttpError(409, 'Publish the event first. Check-in uses the published schedule.');
-      const cfg = await repo.getVersion(eventId, record.publishedVersion);
+      const { config: cfg } = await repo.getPublished(eventId, 'Publish the event first. Check-in uses the published schedule.');
       const created: string[] = [];
-      for (const p of DEMO_RIDERS) {
+      for (const p of CHECK_IN_DEMO_RIDERS) {
         const full = (guardian: RiderDetails['guardian']): RiderDetails => ({
           ...p.rider,
           phone: '',
@@ -376,21 +366,17 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         });
         const categoryIds = pickEntries(cfg, full(null));
         if (categoryIds.length === 0) continue;
-        const needsGuardian = mayBeMinor(p.rider.racingAge) || categoryIds.some((id) => cfg.categories.find((c) => c.id === id)?.eligibility.guardianRequired);
-        const rider = full(needsGuardian ? { name: 'Jordan Demo', relationship: 'Parent', email: 'jordan.demo@example.com', phone: '' } : null);
+        const guardianSigns = needsGuardian(cfg, categoryIds, p.rider.racingAge);
+        const rider = full(guardianSigns ? { name: 'Jordan Demo', relationship: 'Parent', email: 'jordan.demo@example.com', phone: '' } : null);
         const waiver: WaiverAcceptance = {
           version: cfg.registration.waiverVersion,
           read: true,
           agreed: true,
-          signerRole: needsGuardian ? 'guardian' : 'rider',
-          signatureName: needsGuardian ? (rider.guardian?.name ?? '') : `${rider.firstName} ${rider.lastName}`,
+          signerRole: guardianSigns ? 'guardian' : 'rider',
+          signatureName: guardianSigns ? (rider.guardian?.name ?? '') : `${rider.firstName} ${rider.lastName}`,
         };
-        const order = await orders.createOrder(eventId, {
-          clientRequestId: `demo-checkin-${randomUUID()}`,
-          categoryIds,
-          rider,
-          waiver,
-        });
+        // No account: these are fictional riders placed by the organizer's demo button.
+        const order = await orders.createOrder(eventId, { clientRequestId: `demo-checkin-${randomUUID()}`, categoryIds, rider, waiver }, null);
         if (p.paid) await orders.pay(order.id, `demo-${randomUUID()}`, 'success');
         if (p.licenseReviewed) for (const e of order.entries) await orders.reviewLicense(e.id, 'Demo: license card shown at the desk (simulated).');
         created.push(order.id);
@@ -412,10 +398,15 @@ function pickEntries(cfg: EventConfig, rider: RiderDetails): string[] {
   return picks;
 }
 
-type DemoRider = { rider: Omit<RiderDetails, 'guardian' | 'phone' | 'licenseNumber' | 'demoRiderId' | 'emergencyContact'>; paid: boolean; licenseReviewed: boolean };
+/**
+ * Fictional riders for the check-in demo button. Not the checkout fixtures (DEMO_RIDERS in
+ * src/shared/fixtures.ts): these say whether each rider is paid and license-reviewed, so the
+ * desk shows ready and blocked cases.
+ */
+type CheckInDemoRider = { rider: Omit<RiderDetails, 'guardian' | 'phone' | 'licenseNumber' | 'demoRiderId' | 'emergencyContact'>; paid: boolean; licenseReviewed: boolean };
 
 const base = { collegiateDivision: null, licenseType: 'annual' as const };
-const DEMO_RIDERS: DemoRider[] = [
+const CHECK_IN_DEMO_RIDERS: CheckInDemoRider[] = [
   { rider: { ...base, firstName: 'Alex', lastName: 'Demo', email: 'alex.demo@example.com', team: 'Demo Wheelers', racingAge: 29, licenseCategory: '4', competitionClass: 'men' }, paid: true, licenseReviewed: true },
   { rider: { ...base, firstName: 'Blake', lastName: 'Demo', email: 'blake.demo@example.com', team: 'Sample Velo', racingAge: 38, licenseCategory: '3', competitionClass: 'women' }, paid: true, licenseReviewed: true },
   { rider: { ...base, firstName: 'Casey', lastName: 'Demo', email: 'jordan.demo@example.com', team: '', racingAge: 13, licenseCategory: '5', competitionClass: 'men' }, paid: true, licenseReviewed: true },

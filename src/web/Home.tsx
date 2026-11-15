@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { formatDate } from '../shared/format';
 import type { Template } from '../shared/schema';
-import { api, ApiError, type OrganizationSummary } from './api';
+import { api, ApiError } from './api';
 import { href, navigate } from './App';
+import { TIME_ZONES } from './format';
+import { useLoad } from './useLoad';
 import { Field, Icon, Pending, ThemeToggle } from './ui';
 import { AccountMenu } from './auth';
 import { TeamPanel } from './Team';
@@ -14,20 +16,9 @@ const TEMPLATE_LABELS: Record<Template, { title: string; detail: string }> = {
   criterium: { title: 'Criterium', detail: 'One race day, minutes plus laps' },
 };
 
-const TIME_ZONES = ['America/Los_Angeles', 'America/Denver', 'America/Phoenix', 'America/Chicago', 'America/New_York', 'America/Anchorage', 'Pacific/Honolulu'];
-
 export function Home() {
-  const [orgs, setOrgs] = useState<OrganizationSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data: orgs, error, setError, reload: load } = useLoad(() => api.organizations(), []);
   const [busy, setBusy] = useState(false);
-
-  const load = useCallback(() => {
-    api
-      .organizations()
-      .then(setOrgs)
-      .catch((e: ApiError) => setError(e.message));
-  }, []);
-  useEffect(load, [load]);
 
   async function loadDemo(which: 'omnium' | 'example') {
     setBusy(true);
@@ -71,7 +62,7 @@ export function Home() {
               <Pending>USA Cycling license checks: not connected</Pending>
             </li>
             <li>
-              <Pending>Payments: simulated only, no money is charged</Pending>
+              <Pending>Payments: simulated or Stripe test mode only, no real money moves</Pending>
             </li>
             <li>
               <Pending>Sign-in: emailed code or link only. Multi-factor sign-in for organizers is not built yet, so use fictional data only</Pending>
@@ -157,7 +148,7 @@ export function Home() {
             </div>
             <div className="demo-callout">
               <h2>Try the rider demo</h2>
-              <p>Click through registration as a rider, from choosing an event to a simulated payment, using the fictional events, riders, and fees in docs/fixtures.</p>
+              <p>Click through registration as a rider, from choosing an event to a test payment, using the fictional events, riders, and fees in docs/fixtures.</p>
               <button className="btn btn--secondary" onClick={loadRiderDemo} disabled={busy}>
                 Open the rider demo
               </button>

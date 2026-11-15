@@ -1,4 +1,5 @@
 import type { Blocker, CheckInResult } from './checkin';
+import { NO_START_TIME_SORT_KEY } from './format';
 
 /**
  * Printable race-day fallback roster (product.md section 5). Used when check-in
@@ -50,7 +51,7 @@ export function buildRoster(riders: readonly RosterRiderInput[]): Roster {
       name: r.name,
       team: r.team,
       racingAge: r.racingAge,
-      entries: [...r.entries].sort((a, b) => (a.startTime ?? '99:99').localeCompare(b.startTime ?? '99:99')),
+      entries: [...r.entries].sort((a, b) => (a.startTime ?? NO_START_TIME_SORT_KEY).localeCompare(b.startTime ?? NO_START_TIME_SORT_KEY)),
       bib: r.bib,
       // A blocked rider is listed as blocked even if a check-in exists; paper must never show them as cleared.
       status: (!r.result.ready ? 'blocked' : r.checkedInAt ? 'checked_in' : 'ready') as RosterStatus,

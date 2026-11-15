@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import type { RefundStatus } from '../shared/refunds';
 import type { Db } from './db';
 import type { Orders } from './orders';
 import { HttpError } from './repo';
@@ -11,9 +12,9 @@ import { HttpError } from './repo';
  * Card details never reach this server: the rider pays on Stripe's page.
  */
 
-export type PaymentMode = 'simulated' | 'stripe_test';
+type PaymentMode = 'simulated' | 'stripe_test';
 
-export interface CheckoutRequest {
+interface CheckoutRequest {
   orderId: string;
   amountCents: number;
   description: string;
@@ -24,7 +25,7 @@ export interface CheckoutRequest {
   idempotencyKey: string;
 }
 
-export interface CheckoutSession {
+interface CheckoutSession {
   id: string;
   url: string;
   /** ISO 8601. */
@@ -36,23 +37,36 @@ export interface ProviderEvent {
   id: string;
   /** The provider's own event type, kept for the record. */
   type: string;
-  /** paid: money arrived. pending: completed but a delayed method has not settled. failed: a delayed method failed. expired: the session closed unpaid. */
-  outcome: 'paid' | 'pending' | 'failed' | 'expired' | 'ignored';
+  /** paid: money arrived. pending: completed but a delayed method has not settled. failed: a delayed method failed. expired: the session closed unpaid. refund: a refund changed. */
+  outcome: 'paid' | 'pending' | 'failed' | 'expired' | 'refund' | 'ignored';
   sessionId: string | null;
   orderId: string | null;
   amountCents: number | null;
   currency: string | null;
   paymentRef: string | null;
+  /** Set for refund events. */
+  refund?: ProviderRefund;
+}
+
+export interface ProviderRefund {
+  /** Stripe's refund ID (re_...). */
+  providerId: string;
+  /** CycleReg's refund ID, sent to Stripe as metadata. */
+  refundId: string | null;
+  status: Exclude<RefundStatus, 'requested'>;
+  failureReason: string | null;
 }
 
 export interface PaymentProvider {
   mode: PaymentMode;
   createCheckout(req: CheckoutRequest): Promise<CheckoutSession>;
+  /** Refunds part or all of a payment. The refund ID is the idempotency key, so a retry never refunds twice. */
+  refund(req: { paymentRef: string; amountCents: number; refundId: string; orderId: string }): Promise<ProviderRefund>;
   /** Verifies the signature on the raw body and returns the event. Throws 400 when it does not verify. */
   parseWebhook(rawBody: string, signature: string | undefined): ProviderEvent;
 }
 
-export const simulatedPayments: PaymentProvider = {
+const simulatedPayments: PaymentProvider = {
   mode: 'simulated',
   createCheckout() {
     throw new HttpError(409, 'Payments are simulated for this build. Use the simulated payment.');
@@ -60,7 +74,16 @@ export const simulatedPayments: PaymentProvider = {
   parseWebhook() {
     throw new HttpError(404, 'No payment provider is connected.');
   },
+  refund() {
+    throw new HttpError(409, 'Stripe is not connected, so a Stripe payment cannot be refunded from this build.');
+  },
 };
+
+/** Stripe's refund status, as one of ours. requires_action waits like pending. */
+function refundStatus(status: string | null | undefined): ProviderRefund['status'] {
+  if (status === 'succeeded' || status === 'failed' || status === 'canceled') return status;
+  return 'pending';
+}
 
 /** Stripe Checkout requires a session to stay open at least 30 minutes; a late payment is handled by the order's hold rules. */
 const SESSION_MINUTES = 30;
@@ -91,6 +114,13 @@ export function stripePayments(opts: { secretKey: string; webhookSecret: string;
       if (!session.url) throw new HttpError(502, 'Stripe did not return a payment page.');
       return { id: session.id, url: session.url, expiresAt: new Date(session.expires_at * 1000).toISOString() };
     },
+    async refund(req) {
+      const r = await stripe.refunds.create(
+        { payment_intent: req.paymentRef, amount: req.amountCents, metadata: { refund_id: req.refundId, order_id: req.orderId } },
+        { idempotencyKey: `refund-${req.refundId}` },
+      );
+      return { providerId: r.id, refundId: req.refundId, status: refundStatus(r.status), failureReason: r.failure_reason ?? null };
+    },
     parseWebhook(rawBody, signature) {
       if (!signature) throw new HttpError(400, 'Missing Stripe signature.');
       let event: Stripe.Event;
@@ -108,6 +138,18 @@ export function stripePayments(opts: { secretKey: string; webhookSecret: string;
 
 function toProviderEvent(event: Stripe.Event): ProviderEvent {
   const base = { id: event.id, type: event.type, sessionId: null, orderId: null, amountCents: null, currency: null, paymentRef: null };
+  if (event.type === 'refund.created' || event.type === 'refund.updated' || event.type === 'refund.failed') {
+    const r = event.data.object as Stripe.Refund;
+    return {
+      ...base,
+      outcome: 'refund',
+      orderId: r.metadata?.order_id ?? null,
+      amountCents: r.amount,
+      currency: r.currency,
+      paymentRef: typeof r.payment_intent === 'string' ? r.payment_intent : (r.payment_intent?.id ?? null),
+      refund: { providerId: r.id, refundId: r.metadata?.refund_id ?? null, status: event.type === 'refund.failed' ? 'failed' : refundStatus(r.status), failureReason: r.failure_reason ?? null },
+    };
+  }
   if (!event.type.startsWith('checkout.session.')) return { ...base, outcome: 'ignored' };
   const s = event.data.object as Stripe.Checkout.Session;
   const fields = {
@@ -165,7 +207,15 @@ interface SessionRow {
  * each attempt once, re-admits an expired hold all-or-nothing, and sends late money to the
  * organizer's exception queue.
  */
-export function createPayments(db: Db, orders: Orders, provider: PaymentProvider, clock: () => Date, appUrl: string) {
+export function createPayments(
+  db: Db,
+  orders: Orders,
+  provider: PaymentProvider,
+  clock: () => Date,
+  appUrl: string,
+  /** Applies a verified refund event; returns what it did. */
+  onRefundEvent: (ev: ProviderEvent & { refund: ProviderRefund }) => Promise<{ result: string; orderId: string | null }>,
+) {
   const nowIso = () => clock().toISOString();
 
   return {
@@ -174,11 +224,16 @@ export function createPayments(db: Db, orders: Orders, provider: PaymentProvider
     /**
      * Opens (or reuses) the Stripe Checkout Session for a held order and returns where to send the rider.
      * A zero-total order is confirmed directly: there is nothing to charge.
+     *
+     * Three steps, so no database connection waits on Stripe: decide in one transaction, call
+     * Stripe with no transaction open, record the session in a second transaction. Two requests
+     * at once read the same session count, so they send Stripe the same idempotency key, get the
+     * same session back, and the second insert is a no-op: still one open session per order.
      */
     async startCheckout(orderId: string): Promise<{ kind: 'redirect'; url: string } | { kind: 'confirmed' }> {
       if (provider.mode === 'simulated') throw new HttpError(409, 'Payments are simulated for this build. Use the simulated payment.');
-      return db.transaction(async () => {
-        // Per-order lock, not the event lock: the call to Stripe must not hold up other riders' checkouts.
+      const next = await db.transaction(async () => {
+        // Per-order lock, not the event lock: other riders' checkouts are not held up.
         await db.lock(`checkout:${orderId}`);
         const order = await orders.getOrder(orderId);
         if (order.status === 'confirmed') throw new HttpError(409, 'This order is already paid.');
@@ -194,24 +249,35 @@ export function createPayments(db: Db, orders: Orders, provider: PaymentProvider
           `SELECT * FROM payment_sessions WHERE order_id = $1 AND status = 'open' AND expires_at > $2 ORDER BY created_at DESC LIMIT 1`,
           [orderId, new Date(clock().getTime() + 60_000).toISOString()],
         );
-        if (open && open.amount_cents === order.totalCents) return { kind: 'redirect' as const, url: open.url };
+        // An order's total never changes after it is placed, so an open session is always for the right amount.
+        if (open) return { kind: 'redirect' as const, url: open.url };
 
         const count = await db.get<{ n: string }>(`SELECT count(*) AS n FROM payment_sessions WHERE order_id = $1`, [orderId]);
-        const session = await provider.createCheckout({
-          orderId,
-          amountCents: order.totalCents,
-          description: `${order.eventName}: order ${order.orderNumber}`,
-          customerEmail: order.rider.email || order.rider.guardian?.email || null,
-          successUrl: `${appUrl}/?checkout=returned#/orders/${orderId}`,
-          cancelUrl: `${appUrl}/#/register/${order.eventId}`,
-          idempotencyKey: `checkout-${orderId}-${Number(count?.n ?? 0) + 1}`,
-        });
+        return {
+          kind: 'create' as const,
+          request: {
+            orderId,
+            amountCents: order.totalCents,
+            description: `${order.eventName}: order ${order.orderNumber}`,
+            customerEmail: order.rider.email || order.rider.guardian?.email || null,
+            successUrl: `${appUrl}/?checkout=returned#/orders/${orderId}`,
+            cancelUrl: `${appUrl}/#/register/${order.eventId}`,
+            idempotencyKey: `checkout-${orderId}-${Number(count?.n ?? 0) + 1}`,
+          },
+        };
+      });
+      if (next.kind !== 'create') return next;
+
+      const session = await provider.createCheckout(next.request);
+      // Recorded even if the order changed meanwhile: the session exists at Stripe, and a payment on it must be recognized.
+      await db.transaction(async () => {
+        await db.lock(`checkout:${orderId}`);
         await db.run(
           `INSERT INTO payment_sessions (id, order_id, provider, url, amount_cents, status, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, 'open', $6, $7) ON CONFLICT (id) DO NOTHING`,
-          [session.id, orderId, provider.mode, session.url, order.totalCents, session.expiresAt, nowIso()],
+          [session.id, orderId, provider.mode, session.url, next.request.amountCents, session.expiresAt, nowIso()],
         );
-        return { kind: 'redirect' as const, url: session.url };
       });
+      return { kind: 'redirect' as const, url: session.url };
     },
 
     /**
@@ -227,10 +293,12 @@ export function createPayments(db: Db, orders: Orders, provider: PaymentProvider
         if (seen) return { result: seen.result, duplicate: true };
 
         const session = ev.sessionId ? await db.get<SessionRow>(`SELECT * FROM payment_sessions WHERE id = $1`, [ev.sessionId]) : undefined;
-        const orderId = session?.order_id ?? null;
+        let orderId = session?.order_id ?? null;
         let result: string;
 
-        if (ev.outcome === 'ignored') {
+        if (ev.outcome === 'refund' && ev.refund) {
+          ({ result, orderId } = await onRefundEvent({ ...ev, refund: ev.refund }));
+        } else if (ev.outcome === 'ignored') {
           result = 'ignored';
         } else if (!session || (ev.orderId && ev.orderId !== session.order_id)) {
           result = 'unknown_session';
@@ -259,8 +327,8 @@ export function createPayments(db: Db, orders: Orders, provider: PaymentProvider
         }
 
         await db.run(
-          `INSERT INTO provider_events (id, provider, type, session_id, order_id, outcome, result, received_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-          [ev.id, provider.mode, ev.type, ev.sessionId, orderId, ev.outcome, result, nowIso()],
+          `INSERT INTO provider_events (id, provider, type, session_id, order_id, outcome, result, received_at, payment_ref, amount_cents) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [ev.id, provider.mode, ev.type, ev.sessionId, orderId, ev.outcome, result, nowIso(), ev.paymentRef, ev.amountCents],
         );
         return { result, duplicate: false };
       });

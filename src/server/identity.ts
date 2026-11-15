@@ -1,6 +1,6 @@
 import { pairKey, suggestMatches, type MatchSuggestion } from '../shared/riderIdentity';
 import type { Db } from './db';
-import type { Orders, OrderView } from './orders';
+import { isLiveOrder, type Orders, type OrderView } from './orders';
 import { eventLock, HttpError } from './repo';
 
 /**
@@ -40,7 +40,7 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
   }
 
   async function liveOrders(eventId: string): Promise<OrderView[]> {
-    return (await orders.listOrders(eventId)).filter((o) => o.status !== 'cancelled' && o.status !== 'expired');
+    return (await orders.listOrders(eventId)).filter(isLiveOrder);
   }
 
   function label(o: OrderView) {
@@ -109,9 +109,12 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
 
     /** Split a linked rider back into separate orders. Any bib or check-in stays with the earliest order. */
     async unlink(eventId: string, orderId: string) {
-      const key = (await keyOf(eventId))(orderId);
-      await db.run(`DELETE FROM rider_links WHERE event_id = $1 AND rider_key = $2`, [eventId, key]);
-      return overview(eventId);
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        const key = (await keyOf(eventId))(orderId);
+        await db.run(`DELETE FROM rider_links WHERE event_id = $1 AND rider_key = $2`, [eventId, key]);
+        return overview(eventId);
+      });
     },
 
     /** The organizer says a suggested pair are different riders; don't suggest it again. */

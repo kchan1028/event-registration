@@ -33,10 +33,6 @@ describe('eligibility: structured rules from the product.md fixtures', () => {
     expect(r.reasons).toContain('license category unknown');
   });
 
-  it('always reports license verification as pending', () => {
-    expect(evaluateCategory(byCode('RR-M35-34'), rider({ racingAge: 45, licenseCategory: '3' })).licenseVerification).toBe('pending');
-  });
-
   it("women's combined criterium keeps explicit class and category per registration category", () => {
     const w123 = byCode('CR-W123');
     const w45 = byCode('CR-W45');

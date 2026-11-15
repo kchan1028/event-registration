@@ -6,9 +6,12 @@ async function openEvent(page: Page, name: string): Promise<string> {
   await page.goto('/');
   await page.getByRole('button', { name: 'Open the rider demo' }).click();
   await expect(page.getByRole('heading', { name: 'Choose an event' })).toBeVisible();
-  await expect(page.locator('.demo-badge')).toHaveText('Demo');
+  // The event list covers demo and real events, so each demo event carries its own label.
+  await expect(page.getByRole('link', { name: new RegExp(name) }).locator('.tag--demo')).toHaveText('Demo data');
   await page.getByRole('link', { name: new RegExp(name) }).click();
   await expect(page.getByRole('heading', { name: 'About you' })).toBeVisible();
+  // Inside a demo event the header says so.
+  await expect(page.locator('.demo-badge')).toHaveText('Demo');
   return new URL(page.url()).hash.split('/')[2];
 }
 

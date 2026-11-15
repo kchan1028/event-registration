@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 export type Theme = 'light' | 'dark';
 
 // Keep in sync with the inline script in index.html, which applies the theme before first paint.
-export const THEME_KEY = 'cyclereg-theme';
+const THEME_KEY = 'cyclereg-theme';
 
 function storedTheme(): Theme | null {
   try {

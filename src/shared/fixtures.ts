@@ -5,7 +5,7 @@ import type { Category, EligibilityPath, EventConfig, LicenseCategory, Registrat
  * The clickable demo purchase flow fixtures (product.md 2a), transcribed from
  * docs/fixtures/demo-purchase-flow.yaml and docs/fixtures/sample-waiver.md.
  * FAKE DATA ONLY: fictional events, riders, prices, and fees.
- * tests/fixtures.test.ts checks this file against the YAML and the worked
+ * tests/pricing.test.ts checks this file against the YAML and the worked
  * order totals in docs/fixtures/README.md.
  */
 

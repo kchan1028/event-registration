@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildDemoEvent } from '../src/shared/demo';
-import { configFromTemplate, duplicateCategory, moveCategory } from '../src/shared/factory';
+import { cloneCategory, codesInUse, configFromTemplate, copyCode, duplicateCategory, moveCategory } from '../src/shared/factory';
 import { formatLength } from '../src/shared/format';
 import { eventConfigSchema, type EventConfig } from '../src/shared/schema';
 import { countIssues, validateConfig } from '../src/shared/validation';
@@ -39,6 +39,50 @@ describe('validation before publishing', () => {
     expect(copy.needsReview).toBe(true);
     expect(next.capacityPools[0].memberCategoryIds).toContain(copy.id);
     expect(keys(next)).toContain(`error:cat.${copy.id}.review`);
+  });
+
+  it('gives each copy of a category a code no other category has', () => {
+    const c = demo();
+    const src = code(c, 'RR-M50');
+    const once = duplicateCategory(c, src.id);
+    const twice = duplicateCategory(once, src.id);
+    const timingCodes = twice.categories.map((x) => x.timingCode);
+    expect(timingCodes).toEqual(expect.arrayContaining(['RR-M50', 'RR-M50-COPY', 'RR-M50-COPY2']));
+    expect(new Set(timingCodes).size).toBe(timingCodes.length);
+    const copies = twice.categories.filter((x) => x.name.includes('(copy)'));
+    expect(copies.map((x) => x.classifications[0].code).sort()).toEqual(['RR-M50-COPY', 'RR-M50-COPY2']);
+    expect(keys(twice).filter((k) => k.includes('.code-dupe') || k.includes('.class.'))).toEqual([]);
+  });
+
+  it('shortens a long code so the copy still fits the schema, and leaves an empty code empty', () => {
+    const long = 'X'.repeat(24);
+    const taken = new Set([long]);
+    const first = copyCode(long, taken);
+    const second = copyCode(long, taken);
+    expect(first).toBe(`${'X'.repeat(19)}-COPY`);
+    expect(second).toBe(`${'X'.repeat(18)}-COPY2`);
+    expect(copyCode('', taken)).toBe('');
+
+    const c = demo();
+    const src = { ...code(c, 'RR-M50'), timingCode: long, classifications: [{ code: long, label: 'Masters 50+' }], bibRange: { first: 100, last: 199 } };
+    const copy = cloneCategory(src, codesInUse(c), { name: 'Copy' });
+    expect(copy.name).toBe('Copy');
+    expect(copy.timingCode).toBe(`${'X'.repeat(19)}-COPY`);
+    expect(copy.classifications[0].code).toBe(`${'X'.repeat(19)}-COPY`);
+    expect(copy.bibRange).toBeNull();
+    expect(eventConfigSchema.shape.categories.element.safeParse(copy).success).toBe(true);
+  });
+
+  it('warns about a bundle with no discount, but not about a fixed-price bundle', () => {
+    const c = demo();
+    const raceIds = c.races.slice(0, 2).map((r) => r.id);
+    c.registration.bundles = [
+      { id: 'b-none', name: 'No saving', raceIds, discountCents: 0, priceCents: null },
+      { id: 'b-fixed', name: 'Weekend pass', raceIds, discountCents: 0, priceCents: 6000 },
+    ];
+    const k = keys(c);
+    expect(k).toContain('warning:bundle.b-none.zero');
+    expect(k).not.toContain('warning:bundle.b-fixed.zero');
   });
 
   it('rejects two categories in one start group sharing a classification code', () => {

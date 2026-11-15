@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { formatLocalDateTime } from '../shared/checkout';
 import { formatCents, sortCategories } from '../shared/format';
 import type { Category } from '../shared/schema';
 import { api, ApiError, type CouponView } from './api';
 import { Field, IntInput, MoneyInput } from './ui';
+import { useLoad } from './useLoad';
 
 /**
  * Organizer coupon codes for one event (product.md: Promotions). A code works only inside its
@@ -32,20 +33,11 @@ function windowText(c: CouponView): string {
 }
 
 export function Coupons({ eventId, categories, races }: { eventId: string; categories: Category[]; races: { id: string; name: string }[] }) {
-  const [list, setList] = useState<CouponView[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data: list, setData: setList, error, setError, reload: load } = useLoad(() => api.coupons(eventId), [eventId]);
   const [form, setForm] = useState<Form>(EMPTY);
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
-
-  const load = useCallback(() => {
-    api
-      .coupons(eventId)
-      .then(setList)
-      .catch((e: ApiError) => setError(e.message));
-  }, [eventId]);
-  useEffect(load, [load]);
 
   const name = (id: string) => {
     const c = categories.find((x) => x.id === id);
@@ -59,15 +51,8 @@ export function Coupons({ eventId, categories, races }: { eventId: string; categ
     setBusy(true);
     setFormError(null);
     try {
-      await api.createCoupon(eventId, {
-        code: form.code,
-        kind: form.kind,
-        ...(form.kind === 'fixed' ? { amountCents: form.amountCents } : { percent: form.percent }),
-        validFrom: form.validFrom || null,
-        validUntil: form.validUntil || null,
-        maxRedemptions: form.maxRedemptions,
-        categoryIds: form.categoryIds,
-      });
+      const shared = { code: form.code, validFrom: form.validFrom || null, validUntil: form.validUntil || null, maxRedemptions: form.maxRedemptions, categoryIds: form.categoryIds };
+      await api.createCoupon(eventId, form.kind === 'fixed' ? { ...shared, kind: 'fixed', amountCents: form.amountCents } : { ...shared, kind: 'percent', percent: form.percent ?? 0 });
       setForm(EMPTY);
       setAdding(false);
       load();

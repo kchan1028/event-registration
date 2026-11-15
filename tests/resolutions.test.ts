@@ -17,7 +17,7 @@ async function setup() {
   const ev = await get();
   const code = (c: string) => ev.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Demo', signerRole: 'rider' };
-  const created = await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: 'resolve-1-xxxxxx', categoryIds: [code('RR-M35-34')], rider: RIDER, waiver } });
+  const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: 'resolve-1-xxxxxx', categoryIds: [code('RR-M35-34')], rider: RIDER, waiver } });
   expect(created.statusCode).toBe(201);
   const order = created.json() as { id: string; entries: { id: string }[] };
   expect((await app.inject({ method: 'POST', url: `/api/orders/${order.id}/payment`, payload: { attemptId: 'attempt-resolve-1', outcome: 'success' } })).statusCode).toBe(200);

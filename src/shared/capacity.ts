@@ -1,4 +1,4 @@
-import type { EventConfig, TestEntry } from './schema';
+import type { EventConfig, CapacityEntry } from './schema';
 
 /**
  * Capacity rules (product.md, Capacity and entry integrity; coding guide,
@@ -55,24 +55,24 @@ export function limitsForCategory(config: EventConfig, categoryId: string): Appl
 }
 
 /** Distinct riders with an entry in any of the given categories. */
-export function distinctRiders(entries: readonly TestEntry[], categoryIds: readonly string[]): Set<string> {
+export function distinctRiders(entries: readonly CapacityEntry[], categoryIds: readonly string[]): Set<string> {
   const set = new Set(categoryIds);
   const riders = new Set<string>();
   for (const e of entries) if (set.has(e.categoryId)) riders.add(e.riderRef);
   return riders;
 }
 
-export function usageForLimit(limit: AppliedLimit, entries: readonly TestEntry[]): LimitUsage {
+export function usageForLimit(limit: AppliedLimit, entries: readonly CapacityEntry[]): LimitUsage {
   const used = distinctRiders(entries, limit.categoryIds).size;
   return { ...limit, used, remaining: Math.max(0, limit.limit - used) };
 }
 
-export function usageForCategory(config: EventConfig, entries: readonly TestEntry[], categoryId: string): LimitUsage[] {
+export function usageForCategory(config: EventConfig, entries: readonly CapacityEntry[], categoryId: string): LimitUsage[] {
   return limitsForCategory(config, categoryId).map((l) => usageForLimit(l, entries));
 }
 
 /** Places left for a new rider in this category; null means no limit applies. */
-export function remainingForCategory(config: EventConfig, entries: readonly TestEntry[], categoryId: string): number | null {
+export function remainingForCategory(config: EventConfig, entries: readonly CapacityEntry[], categoryId: string): number | null {
   const usage = usageForCategory(config, entries, categoryId);
   if (usage.length === 0) return null;
   return Math.min(...usage.map((u) => u.remaining));
@@ -85,7 +85,7 @@ export type AdmitResult = { ok: true } | { ok: false; reason: 'full'; blockedBy:
  * limit does not consume a second place in it. Callers must run this inside the
  * same transaction that inserts the entry.
  */
-export function canAdmit(config: EventConfig, entries: readonly TestEntry[], categoryId: string, riderRef: string): AdmitResult {
+export function canAdmit(config: EventConfig, entries: readonly CapacityEntry[], categoryId: string, riderRef: string): AdmitResult {
   const cat = config.categories.find((c) => c.id === categoryId);
   if (!cat) return { ok: false, reason: 'unknown_category' };
   if (cat.status !== 'active') return { ok: false, reason: 'closed' };
@@ -97,7 +97,7 @@ export function canAdmit(config: EventConfig, entries: readonly TestEntry[], cat
   return { ok: true };
 }
 
-export function entryCountsByCategory(entries: readonly TestEntry[]): Record<string, number> {
+export function entryCountsByCategory(entries: readonly CapacityEntry[]): Record<string, number> {
   const out: Record<string, number> = {};
   for (const e of entries) out[e.categoryId] = (out[e.categoryId] ?? 0) + 1;
   return out;
