@@ -24,7 +24,8 @@ test('riders browse events signed out and sign in before entering details', asyn
   expect([200, 201]).toContain(seeded.status());
 
   await page.goto('/#/register');
-  await page.getByRole('link', { name: /Demo Valley Criterium/ }).click();
+  // .first(): parallel first loads of the shared fixture can create it twice (unlocked demo loader).
+  await page.getByRole('link', { name: /Demo Valley Criterium/ }).first().click();
   await expect(page.getByRole('heading', { name: 'About you' })).toBeVisible();
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
   await page.getByRole('checkbox', { name: /DVC-M45/ }).click();

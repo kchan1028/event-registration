@@ -112,6 +112,8 @@ describe('organizations are isolated from each other', () => {
       ['rider identity', 'GET', `/api/events/${eventId}/rider-identity`],
       ['resolutions', 'GET', `/api/events/${eventId}/resolutions`],
       ['change impact', 'GET', `/api/events/${eventId}/impact`],
+      ['coupons', 'GET', `/api/events/${eventId}/coupons`],
+      ['create coupon', 'POST', `/api/events/${eventId}/coupons`, { code: 'TAKEOVER', kind: 'percent', percent: 100 }],
       ['new event in their org', 'POST', `/api/organizations/${valley}/events`, { name: 'Takeover', template: 'weekend', startDate: '2027-04-24', timeZone: 'America/Los_Angeles' }],
       ['members', 'GET', `/api/organizations/${valley}/members`],
       ['grant themselves a role', 'POST', `/api/organizations/${valley}/members`, { email: OTHER_OWNER, role: 'owner' }],
