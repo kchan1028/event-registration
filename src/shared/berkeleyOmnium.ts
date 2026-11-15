@@ -238,6 +238,7 @@ export function buildBerkeleyOmniumEvent(): { config: EventConfig; entryPlan: { 
       processingFeeBasisPoints: 0,
       processingFeeLabel: 'Processing fee',
       recoveryMinutes: 15,
+      refundRules: null,
       refundPolicy: '',
       waiverText: SAMPLE_WAIVER,
       waiverVersion: 'sample-2027.1',

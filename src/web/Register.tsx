@@ -16,6 +16,7 @@ import { formatDateTime, refundedCents } from './format';
 import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
 import { AccountMenu, SignInPrompt, useSession } from './auth';
 import { useLoad } from './useLoad';
+import { refundPolicyLines } from '../shared/refundPolicy';
 
 /*
  * Rider purchase flow (product.md 2a). No real money moves: payment is either the simulated
@@ -613,10 +614,10 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           <button className="btn btn--primary tray__cta" onClick={next}>
             Continue to racer details
           </button>
-          {config.registration.refundPolicy && (
+          {refundPolicyLines(config).length > 0 && (
             <details className="tray__policy">
               <summary>Refund policy</summary>
-              <p>{config.registration.refundPolicy}</p>
+              <RefundLines lines={refundPolicyLines(config)} />
             </details>
           )}
         </div>
@@ -738,6 +739,17 @@ function WindowBanner({ ev }: { ev: PublicEvent }) {
           : 'Registration is closed for every category.'
         : `${outside.length} of ${cats.length} categories are outside their registration window right now.`}
     </p>
+  );
+}
+
+/** The event's refund rules and notes, one sentence per line. */
+function RefundLines({ lines }: { lines: string[] }) {
+  return (
+    <ul className="tray__policy-lines">
+      {lines.map((l) => (
+        <li key={l}>{l}</li>
+      ))}
+    </ul>
   );
 }
 
@@ -1249,10 +1261,10 @@ function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; even
         {order.rider.team ? ` · ${order.rider.team}` : ''} · racing age {order.rider.racingAge} · waiver signed by {order.waiver.signatureName}
       </p>
       <QuoteTable q={order.quote} raceName={orderRaceName(order)} />
-      {order.refundPolicy && (
+      {order.refundPolicy.length > 0 && (
         <details className="tray__policy" open>
           <summary>Refund policy</summary>
-          <p>{order.refundPolicy}</p>
+          <RefundLines lines={order.refundPolicy} />
         </details>
       )}
       {order.status === 'payment_failed' && !expired && (

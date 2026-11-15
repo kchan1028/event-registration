@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { copyDay } from '../shared/bulk';
 import { addDays, newId } from '../shared/factory';
-import type { EventConfig } from '../shared/schema';
+import { refundPolicyLines, REFUND_TEMPLATES, type RefundTemplate } from '../shared/refundPolicy';
+import type { EventConfig, RefundRules } from '../shared/schema';
 import { ApiError } from './api';
 import type { Draft } from './Builder';
 import { TIME_ZONES } from './format';
@@ -233,8 +234,19 @@ export function EventSettings({ draft }: { draft: Draft }) {
             Demo event: let testers register outside the registration windows (real events always enforce them)
           </label>
         )}
-        <Field label="Refund policy shown before payment">
-          {(id) => <textarea id={id} className="input" rows={3} value={config.registration.refundPolicy} onChange={(e) => update((c) => ({ ...c, registration: { ...c.registration, refundPolicy: e.target.value } }))} maxLength={1000} />}
+        <RefundRulesEditor config={config} update={update} />
+        <Field label="Other refund notes shown before payment (optional)" hint="Shown after the rules, for anything they do not cover.">
+          {(id, d) => (
+            <textarea
+              id={id}
+              aria-describedby={d}
+              className="input"
+              rows={3}
+              value={config.registration.refundPolicy}
+              onChange={(e) => update((c) => ({ ...c, registration: { ...c.registration, refundPolicy: e.target.value } }))}
+              maxLength={1000}
+            />
+          )}
         </Field>
         <div className="form-row">
           <Field label="Waiver version" hint="Change it whenever the text changes">
@@ -355,5 +367,93 @@ function CopyDay({ draft, fromDayId }: { draft: Draft; fromDayId: string }) {
         </span>
       )}
     </span>
+  );
+}
+
+const CANCELLATION_OPTIONS: Record<RefundRules['organizerCancellation'], string> = {
+  full_refund: 'Full refund',
+  credit: 'Credit toward a later event',
+  rider_choice: "Rider's choice of refund or credit",
+};
+
+/**
+ * Refund and credit rules (owner decision, November 15, 2026): the organizer sets them, starting
+ * from a template. Riders see the preview text before paying; each order keeps the published version's rules.
+ */
+function RefundRulesEditor({ config, update }: { config: EventConfig; update: Draft['update'] }) {
+  const rules = config.registration.refundRules;
+  const setRules = (next: RefundRules | null) => update((c) => ({ ...c, registration: { ...c.registration, refundRules: next } }));
+  const patch = (p: Partial<RefundRules>) => rules && setRules({ ...rules, ...p });
+  const setTier = (i: number, p: Partial<RefundRules['tiers'][number]>) => rules && patch({ tiers: rules.tiers.map((t, j) => (j === i ? { ...t, ...p } : t)) });
+  return (
+    <fieldset className="subfields refund-rules">
+      <legend>Refund and credit rules</legend>
+      <p className="muted small">Start from a template, then change any number. Fees are never returned. Paid riders keep the rules of the version they bought under.</p>
+      <div className="row-actions" role="group" aria-label="Start from a template">
+        {(Object.keys(REFUND_TEMPLATES) as RefundTemplate[]).map((key) => (
+          <button key={key} type="button" className="btn btn--ghost btn--small" onClick={() => setRules(structuredClone(REFUND_TEMPLATES[key].rules))}>
+            {REFUND_TEMPLATES[key].label}
+          </button>
+        ))}
+        {rules && (
+          <button type="button" className="link-btn" onClick={() => setRules(null)}>
+            Remove rules
+          </button>
+        )}
+      </div>
+      {rules && (
+        <>
+          {rules.tiers.map((t, i) => (
+            <div key={i} className="refund-rules__tier">
+              <Field label="Withdraw up to (days before the first race day)">
+                {(id) => <IntInput id={id} value={t.daysBefore} min={0} max={365} allowEmpty={false} onCommit={(v) => setTier(i, { daysBefore: v ?? 0 })} />}
+              </Field>
+              <Field label="Percent of the entry amount back">
+                {(id) => <IntInput id={id} value={t.percent} min={0} max={100} allowEmpty={false} onCommit={(v) => setTier(i, { percent: v ?? 0 })} />}
+              </Field>
+              <button type="button" className="link-btn" onClick={() => patch({ tiers: rules.tiers.filter((_, j) => j !== i) })}>
+                Remove step<span className="sr-only"> {i + 1}</span>
+              </button>
+            </div>
+          ))}
+          {rules.tiers.length < 5 && rules.tiers.every((x) => x.daysBefore > 0) && (
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              onClick={() => patch({ tiers: [...rules.tiers, { daysBefore: Math.max(0, Math.min(...rules.tiers.map((x) => x.daysBefore), 1) - 1), percent: 0 }] })}
+            >
+              Add a step
+            </button>
+          )}
+          <div className="form-row">
+            <Field label="Withdrawals are paid back as">
+              {(id) => (
+                <select id={id} className="input" value={rules.returnAs} onChange={(e) => patch({ returnAs: e.target.value as RefundRules['returnAs'] })}>
+                  <option value="cash">A refund</option>
+                  <option value="credit">Credit toward a later event</option>
+                </select>
+              )}
+            </Field>
+            <Field label="If you cancel a race, riders get">
+              {(id) => (
+                <select id={id} className="input" value={rules.organizerCancellation} onChange={(e) => patch({ organizerCancellation: e.target.value as RefundRules['organizerCancellation'] })}>
+                  {(Object.keys(CANCELLATION_OPTIONS) as RefundRules['organizerCancellation'][]).map((k) => (
+                    <option key={k} value={k}>
+                      {CANCELLATION_OPTIONS[k]}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+          </div>
+          <p className="small">What riders will see:</p>
+          <ul className="refund-rules__preview">
+            {refundPolicyLines({ ...config, registration: { ...config.registration, refundPolicy: '' } }).map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        </>
+      )}
+    </fieldset>
   );
 }

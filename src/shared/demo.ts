@@ -147,8 +147,9 @@ export function buildDemoEvent(): { config: EventConfig; entryPlan: { categoryId
       processingFeeLabel: 'Processing fee',
       demoIgnoreWindows: true,
       recoveryMinutes: 15,
-      refundPolicy:
-        'Example policy: full refund less a $5 processing fee until 7 days before the race; no refunds after that. Category transfers are free until registration closes.',
+      // Example rules: full refund (fees kept) until 7 days before the first race day.
+      refundRules: { tiers: [{ daysBefore: 7, percent: 100 }], returnAs: 'cash', organizerCancellation: 'full_refund' },
+      refundPolicy: 'Example policy. Category transfers are free until registration closes.',
       waiverText: SAMPLE_WAIVER,
       waiverVersion: 'sample-2027.1',
     },

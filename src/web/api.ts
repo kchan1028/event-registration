@@ -152,7 +152,7 @@ export interface OrderView {
   checkInCode: string | null;
   createdAt: string;
   confirmedAt: string | null;
-  refundPolicy: string;
+  refundPolicy: string[];
   entries: {
     id: string;
     categoryId: string;

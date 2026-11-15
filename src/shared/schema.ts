@@ -89,6 +89,23 @@ export const categorySchema = z.object({
   reviewReason: z.string().max(300),
 });
 
+/** Refund and credit rules (product.md "Event and race cancellation"); described for riders by src/shared/refundPolicy.ts. A step returns `percent` of the entry amount when a rider withdraws on or before `daysBefore` days ahead of the first race day. */
+export const refundTierSchema = z.object({
+  daysBefore: z.number().int().min(0).max(365),
+  percent: z.number().int().min(0).max(100),
+});
+
+export const refundRulesSchema = z.object({
+  /** Steps; two with the same `daysBefore` block publishing (validation), so an autosave in between is never refused. */
+  tiers: z.array(refundTierSchema).max(5),
+  /** How a rider withdrawal is paid back. */
+  returnAs: z.enum(['cash', 'credit']),
+  /** What a rider gets when the organizer cancels their race, day, or event. Separate from withdrawals. */
+  organizerCancellation: z.enum(['full_refund', 'credit', 'rider_choice']),
+});
+
+export type RefundRules = z.infer<typeof refundRulesSchema>;
+
 export const registrationSettingsSchema = z.object({
   bundles: z
     .array(
@@ -120,6 +137,9 @@ export const registrationSettingsSchema = z.object({
    */
   demoIgnoreWindows: z.boolean().default(true),
   recoveryMinutes: z.number().int().min(0).max(180),
+  /** Structured refund and credit rules. Null: none set (events saved before rules existed). */
+  refundRules: refundRulesSchema.nullable().default(null),
+  /** Extra notes shown with the rules before payment. */
   refundPolicy: z.string().max(1000),
   waiverText: z.string().max(4000),
   waiverVersion: z.string().max(40),
@@ -136,6 +156,7 @@ export const DEFAULT_REGISTRATION_SETTINGS: z.infer<typeof registrationSettingsS
   processingFeeLabel: 'Processing fee',
   demoIgnoreWindows: true,
   recoveryMinutes: 15,
+  refundRules: null,
   refundPolicy: '',
   waiverText: '',
   waiverVersion: '',
