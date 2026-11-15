@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MAX_BIB_BATCH_SIZE, bibBatchExclusion, type BibBatch, type BibPlan, type CheckInList } from '../shared/checkin';
+import { BIB_SORT_LABELS, MAX_BIB_BATCH_SIZE, bibBatchExclusion, type BibBatch, type BibPlan, type CheckInList } from '../shared/checkin';
 import { api, type ApiError } from './api';
 
 /** Number allocation is a separate task from race-morning readiness and bib handoff. */
@@ -105,9 +105,7 @@ export function BibBatchPanel({ eventId, dayId, onChanged, onClose }: { eventId:
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select></label>
           <label>Assign in order<select className="input" value={sort} onChange={(e) => { setSort(e.target.value as typeof sort); invalidate(); }}>
-            <option value="name">Surname, then given name</option>
-            <option value="registration">Registration time</option>
-            <option value="start">Category / start order</option>
+            {Object.entries(BIB_SORT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>
         </fieldset>
         <p className="muted small">Ranges follow each rider’s earliest category with a range on this day, then the event/day range. Narrowing the selection does not override that range.</p>

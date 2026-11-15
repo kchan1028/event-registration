@@ -38,15 +38,16 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   }
 
   /**
-   * One rider made from linked orders (rider identity): the earliest order's details and ID, every
+   * One rider made from linked orders (rider identity): the earliest live order's details and the persisted rider key, every
    * order's entries, and paid only when every linked order is paid. An unlinked order is unchanged.
    */
   type Rider = OrderView & { checkInCodes: string[] };
-  function mergeRider(group: OrderView[]): Rider {
+  function mergeRider(group: OrderView[], riderKey: string): Rider {
     const sorted = [...group].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
     const first = sorted[0];
     return {
       ...first,
+      id: riderKey,
       status: sorted.every((o) => o.status === 'confirmed') ? 'confirmed' : sorted.find((o) => o.status !== 'confirmed')!.status,
       entries: sorted.flatMap((o) => o.entries),
       checkInCodes: sorted.map((o) => o.checkInCode).filter((c): c is string => !!c),
@@ -106,7 +107,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const k = key(o.id);
       groups.set(k, [...(groups.get(k) ?? []), o]);
     }
-    return [...groups.values()].map(mergeRider);
+    return [...groups].map(([id, group]) => mergeRider(group, id));
   }
 
   function matches(card: ReturnType<typeof riderCard>, q: string): boolean {
@@ -133,7 +134,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     const byId = await orders.getOrders(ids);
     const group = ids.map((id) => byId.get(id)).filter((x): x is OrderView => !!x && isLiveOrder(x));
     const s = await settings(eventId);
-    return riderCard(mergeRider(group.length ? group : [o]), dayId, await dayState(eventId, dayId, bibScopeKey(s, dayId)));
+    return riderCard(mergeRider(group.length ? group : [o], key), dayId, await dayState(eventId, dayId, bibScopeKey(s, dayId)));
   }
 
   /** The category bib range for the rider's races that day (earliest start first), if any category sets one. */
@@ -214,7 +215,32 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     return { dayId, raceId: raceId ?? null, categoryId: categoryId ?? null, sort, scope, assignments, fingerprint };
   }
 
+  async function saveBibPlan(eventId: string, plan: BibPlan, automaticJobId: string | null) {
+    await db.run(
+      `INSERT INTO bib_assignments (id, event_id, scope, order_id, bib, assigned_at, automatic_job_id)
+       SELECT id, $1, $2, order_id, bib, $3::timestamptz, $7
+       FROM unnest($4::text[], $5::text[], $6::int[]) AS batch(id, order_id, bib)`,
+      [eventId, plan.scope, nowIso(), plan.assignments.map(() => newId('bib')), plan.assignments.map((a) => a.orderId), plan.assignments.map((a) => a.bib), automaticJobId],
+    );
+  }
+
   return {
+    /** Called by the post-close job under its event lock and transaction. */
+    async assignUnassignedBibs(eventId: string, sort: NonNullable<BibBatch['sort']>, automaticJobId: string) {
+      const cfg = await config(eventId);
+      const s = await settings(eventId);
+      const all = await riders(eventId);
+      let assigned = 0;
+      for (const day of [...cfg.days].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))) {
+        const state = await dayState(eventId, day.id, bibScopeKey(s, day.id));
+        const ids = all.filter((r) => !bibBatchExclusion(riderCard(r, day.id, state))).map((r) => r.id);
+        if (!ids.length) continue;
+        const plan = await bibPlan(eventId, { dayId: day.id, orderIds: ids, sort });
+        await saveBibPlan(eventId, plan, automaticJobId);
+        assigned += plan.assignments.length;
+      }
+      return assigned;
+    },
     async previewBibs(eventId: string, batch: BibBatch) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
@@ -226,9 +252,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         await db.lock(eventLock(eventId));
         const plan = await bibPlan(eventId, batch);
         if (plan.fingerprint !== fingerprint) throw new HttpError(409, 'Bib preview changed. Review a new preview before applying.');
-        for (const item of plan.assignments) {
-          await db.run(`INSERT INTO bib_assignments (id, event_id, scope, order_id, bib, assigned_at) VALUES ($1, $2, $3, $4, $5, $6)`, [newId('bib'), eventId, plan.scope, item.orderId, item.bib, nowIso()]);
-        }
+        await saveBibPlan(eventId, plan, null);
         return { ...plan, applied: plan.assignments.length };
       });
     },
@@ -246,7 +270,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         riders: enteredToday.length,
         checkedIn: enteredToday.filter((c) => c.checkedInAt).length,
         blocked: enteredToday.filter((c) => !c.result.ready).length,
-        bibsIssued: (await takenBibs(eventId, scope)).size,
+        bibsAssigned: (await takenBibs(eventId, scope)).size,
         /** Measured standard check-ins for this day (product.md target: median under 30 s, 95th percentile under 90 s). */
         timing: checkInTiming(
           (await db.all<{ duration_ms: number }>(`SELECT duration_ms FROM check_ins WHERE event_id = $1 AND day_id = $2 AND duration_ms IS NOT NULL`, [eventId, day.id])).map((r) => r.duration_ms),
@@ -268,16 +292,19 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     },
 
     async saveSettings(eventId: string, input: unknown) {
-      const cfg = await config(eventId);
-      const s = bibSettingsSchema.parse(input);
-      const validScopes = s.scope === 'weekend' ? ['weekend'] : cfg.days.map((d) => d.id);
-      for (const r of s.ranges) if (!validScopes.includes(r.scope)) throw new HttpError(422, 'A bib range does not match the chosen bib scope.');
-      if (new Set(s.ranges.map((r) => r.scope)).size !== s.ranges.length) throw new HttpError(422, 'Each day can have only one bib range.');
-      await db.run(
-        `INSERT INTO bib_settings (event_id, settings_json, updated_at) VALUES ($1, $2, $3) ON CONFLICT (event_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at`,
-        [eventId, JSON.stringify(s), nowIso()],
-      );
-      return s;
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        const cfg = await config(eventId);
+        const s = bibSettingsSchema.parse(input);
+        const validScopes = s.scope === 'weekend' ? ['weekend'] : cfg.days.map((d) => d.id);
+        for (const r of s.ranges) if (!validScopes.includes(r.scope)) throw new HttpError(422, 'A bib range does not match the chosen bib scope.');
+        if (new Set(s.ranges.map((r) => r.scope)).size !== s.ranges.length) throw new HttpError(422, 'Each day can have only one bib range.');
+        await db.run(
+          `INSERT INTO bib_settings (event_id, settings_json, updated_at) VALUES ($1, $2, $3) ON CONFLICT (event_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at`,
+          [eventId, JSON.stringify(s), nowIso()],
+        );
+        return s;
+      });
     },
 
     /**

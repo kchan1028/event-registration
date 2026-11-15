@@ -44,6 +44,10 @@ The browser and the server import the same rules module (`src/shared`), so the p
 | Orders, holds, simulated payment, license review | `src/server/orders.ts` |
 | Interface | `src/web/` (rider checkout in `Register.tsx`, exception queue in `Registrations.tsx`) |
 
+### Post-close bib allocation
+
+Opt-in automatic bib allocation runs inside each listening API process, once on startup and then once a minute. Durable jobs and assignment links are stored in PostgreSQL ([DATA_MODEL.md](../DATA_MODEL.md#automatic_bib_jobs)). Multiple API instances may poll the same job; the event lock and completion check permit one allocation. The job rechecks published closing windows, outstanding checkout holds, and the enabling organizer's current permission. All days and job completion commit together, with failed allocations rolled back for retry. Shutdown drains the running job before closing the database. No external scheduler or cloud resource is provisioned; a stopped API resumes pending work when restarted.
+
 ## Document maintenance rule (mandatory)
 
 Every change must review both [product.md](../product.md) and [roadmap.md](../roadmap.md) for impact.
