@@ -2,7 +2,7 @@
 
 This describes the database the local prototype uses today. It covers tables, relationships, important fields, constraints, and what happens when data is removed. The intended product data model, including entities that are not built yet, is in [product.md](product.md#data-model) and [product.md](product.md#data-storage).
 
-**Status:** Implemented (local prototype). Describes schema version 8 (eight migrations) as of November 14, 2026.
+**Status:** Implemented (local prototype). Describes schema version 9 (nine migrations) as of November 14, 2026.
 
 **Source of truth:** the migrations in [src/server/db.ts](src/server/db.ts) and the event configuration schema in [src/shared/schema.ts](src/shared/schema.ts). If this file disagrees with them, the code wins; fix this file in the same change.
 
@@ -198,6 +198,7 @@ Two partial unique indexes apply only to active rows (`released_at IS NULL`): a 
 | `order_id` | References `orders` |
 | `day_id` | Race day ID inside the event configuration |
 | `checked_in_at` | |
+| `duration_ms` | Measured check-in time (migration 9): from the volunteer's first keystroke or scan into an empty search to the successful check-in. Null when the rider was opened without a search, or the time was over 10 minutes (treated as interrupted) |
 
 Unique on (`event_id`, `order_id`, `day_id`): one check-in per rider per day. A repeat check-in is ignored and the first one is kept.
 
