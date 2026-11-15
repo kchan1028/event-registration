@@ -43,7 +43,7 @@ export function CategoryTable({ draft, raceId, selectedId, onSelect }: { draft: 
           </p>
         </div>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap" role="region" aria-label="Category schedule" tabIndex={0}>
           <table className="cat-table">
             <thead>
               <tr>

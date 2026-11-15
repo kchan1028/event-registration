@@ -47,6 +47,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Registration open and close times enforced in the event's time zone (demo events can let testers register early, labeled "Demo mode") | Implemented and tested |
 | Race-day check-in: search by name, team, bib, or check-in code; ready/blocked result; bib ranges per event or day; bib history; repeat-safe check-in | Implemented; automated tests in CI; usability test with volunteers still open |
 | Light and dark themes, following the system setting, with a header toggle | Implemented; contrast checked manually, no automated test yet |
+| Automated accessibility checks (WCAG 2.2 A and AA, axe-core) on the main screens in both themes | Implemented; run in CI. Keyboard, screen-reader, and real-phone passes not done |
 | CSV import and export of category schedules, with column matching and per-row errors ([format](docs/csv-category-format.md)) | Implemented and tested |
 | Start lists per race, numbered snapshots with changes since the last one, and a sample timer CSV (format not yet agreed with a timer) | Implemented; automated tests in CI |
 | Change-impact preview, real payments and refunds, QR scanning, an agreed timer format | Planned |
