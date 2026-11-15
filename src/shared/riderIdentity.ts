@@ -8,13 +8,17 @@
 
 import { normalizeText } from './lookup';
 
-export interface IdentityOrder {
-  id: string;
-  createdAt: string;
+/** The rider details the same-rider rule compares. */
+export interface IdentityRider {
   firstName: string;
   lastName: string;
   email: string;
   licenseNumber: string;
+}
+
+export interface IdentityOrder extends IdentityRider {
+  id: string;
+  createdAt: string;
 }
 
 export interface MatchSuggestion {
@@ -30,8 +34,18 @@ export function pairKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
+/** Why two sets of rider details look like the same rider: same license number, or same full name and email. Empty when they do not. */
+export function sameRiderReasons(a: IdentityRider, b: IdentityRider): string[] {
+  const reasons: string[] = [];
+  const la = normLicense(a.licenseNumber);
+  if (la && la === normLicense(b.licenseNumber)) reasons.push('Same license number');
+  const sameName = normalizeText(a.firstName) === normalizeText(b.firstName) && normalizeText(a.lastName) === normalizeText(b.lastName);
+  if (sameName && normalizeText(a.email) && normalizeText(a.email) === normalizeText(b.email)) reasons.push('Same name and email');
+  return reasons;
+}
+
 /**
- * Likely same-rider pairs: same license number, or same full name and email.
+ * Likely same-rider pairs (see `sameRiderReasons`).
  * Pairs already in one rider (same key) or dismissed by the organizer are skipped.
  */
 export function suggestMatches(orders: readonly IdentityOrder[], keyOf: (orderId: string) => string, dismissed: ReadonlySet<string>): MatchSuggestion[] {
@@ -42,11 +56,7 @@ export function suggestMatches(orders: readonly IdentityOrder[], keyOf: (orderId
       const a = sorted[i];
       const b = sorted[j];
       if (keyOf(a.id) === keyOf(b.id) || dismissed.has(pairKey(a.id, b.id))) continue;
-      const reasons: string[] = [];
-      const la = normLicense(a.licenseNumber);
-      if (la && la === normLicense(b.licenseNumber)) reasons.push('Same license number');
-      const sameName = normalizeText(a.firstName) === normalizeText(b.firstName) && normalizeText(a.lastName) === normalizeText(b.lastName);
-      if (sameName && normalizeText(a.email) && normalizeText(a.email) === normalizeText(b.email)) reasons.push('Same name and email');
+      const reasons = sameRiderReasons(a, b);
       if (reasons.length > 0) out.push({ a: a.id, b: b.id, reasons });
     }
   }

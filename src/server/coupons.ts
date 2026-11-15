@@ -1,6 +1,7 @@
 import { localNow } from '../shared/checkout';
 import { couponInputSchema, couponUnavailableReason, normalizeCouponCode, termsOf, type CouponTerms } from '../shared/coupons';
 import { newId } from '../shared/factory';
+import { sameRiderReasons, type IdentityRider } from '../shared/riderIdentity';
 import type { Db } from './db';
 import { eventLock, HttpError, reservedOrderSql, type Repo } from './repo';
 
@@ -22,6 +23,7 @@ interface CouponRow {
   valid_from: string | null;
   valid_until: string | null;
   max_redemptions: number | null;
+  max_per_rider: number | null;
   active: boolean;
   created_at: string;
 }
@@ -31,12 +33,13 @@ type StoredCoupon =CouponTerms & {
   validFrom: string | null;
   validUntil: string | null;
   maxRedemptions: number | null;
+  maxPerRider: number | null;
   active: boolean;
   createdAt: string;
 };
 
 function fromRow(r: CouponRow): StoredCoupon {
-  const base = { id: r.id, code: r.code, categoryIds: r.category_ids, validFrom: r.valid_from, validUntil: r.valid_until, maxRedemptions: r.max_redemptions, active: r.active, createdAt: r.created_at };
+  const base = { id: r.id, code: r.code, categoryIds: r.category_ids, validFrom: r.valid_from, validUntil: r.valid_until, maxRedemptions: r.max_redemptions, maxPerRider: r.max_per_rider, active: r.active, createdAt: r.created_at };
   return r.kind === 'percent' ? { ...base, kind: 'percent', percent: r.percent! } : { ...base, kind: 'fixed', amountCents: r.amount_cents! };
 }
 
@@ -51,6 +54,18 @@ export function createCoupons(db: Db, repo: Repo, clock: () => Date) {
   async function usedCount(couponId: string): Promise<number> {
     const row = await db.get<{ confirmed: number; reserved: number }>(redemptionsSql('$1'), [couponId, nowIso()]);
     return (row?.confirmed ?? 0) + (row?.reserved ?? 0);
+  }
+
+  /**
+   * This rider's redemptions of the coupon that count (paid orders and live holds), matched by the
+   * same-rider rule. `exceptOrderId`: leave out that order, when re-checking an order that already exists.
+   */
+  async function riderUsedCount(couponId: string, rider: IdentityRider, exceptOrderId: string | null): Promise<number> {
+    const rows = await db.all<{ rider_json: IdentityRider }>(
+      `SELECT o.rider_json FROM orders o WHERE o.coupon_id = $1 AND (o.status = 'confirmed' OR ${reservedOrderSql('$2')}) AND o.id IS DISTINCT FROM $3`,
+      [couponId, nowIso(), exceptOrderId],
+    );
+    return rows.filter((r) => sameRiderReasons(r.rider_json, rider).length > 0).length;
   }
 
   async function byCode(eventId: string, code: string) {
@@ -69,19 +84,23 @@ export function createCoupons(db: Db, repo: Repo, clock: () => Date) {
 
   /**
    * The coupon a rider can use now, or an HttpError that says why not.
-   * Unknown codes and codes from other events read the same.
+   * Unknown codes and codes from other events read the same. `rider`: null before the rider's
+   * details are known (checking a code); the per-rider limit is then checked when the order is placed.
    */
-  async function redeemable(eventId: string, code: string, timeZone: string): Promise<StoredCoupon> {
+  async function redeemable(eventId: string, code: string, timeZone: string, rider: IdentityRider | null): Promise<StoredCoupon> {
     const c = await byCode(eventId, code);
     if (!c) throw new HttpError(404, `${normalizeCouponCode(code)} is not a code for this event.`);
     const used = await usedCount(c.id);
-    const reason = couponUnavailableReason(c, localNow(timeZone, clock()), used);
-    if (reason) throw new HttpError(c.maxRedemptions !== null && used >= c.maxRedemptions && c.active ? 409 : 422, reason);
+    const riderUsed = rider && c.maxPerRider !== null ? await riderUsedCount(c.id, rider, null) : 0;
+    const reason = couponUnavailableReason(c, localNow(timeZone, clock()), used, riderUsed);
+    const full = (c.maxRedemptions !== null && used >= c.maxRedemptions) || (c.maxPerRider !== null && riderUsed >= c.maxPerRider);
+    if (reason) throw new HttpError(full && c.active ? 409 : 422, reason);
     return c;
   }
 
   return {
     usedCount,
+    riderUsedCount,
     redeemable,
     list,
 
@@ -95,8 +114,8 @@ export function createCoupons(db: Db, repo: Repo, clock: () => Date) {
         const id = newId('cpn');
         const t = nowIso();
         await db.run(
-          `INSERT INTO coupons (id, event_id, code, kind, amount_cents, percent, category_ids, valid_from, valid_until, max_redemptions, active, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11, $11)`,
+          `INSERT INTO coupons (id, event_id, code, kind, amount_cents, percent, category_ids, valid_from, valid_until, max_redemptions, max_per_rider, active, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $12)`,
           [
             id,
             eventId,
@@ -108,6 +127,7 @@ export function createCoupons(db: Db, repo: Repo, clock: () => Date) {
             input.validFrom,
             input.validUntil,
             input.maxRedemptions,
+            input.maxPerRider,
             t,
           ],
         );
@@ -126,7 +146,7 @@ export function createCoupons(db: Db, repo: Repo, clock: () => Date) {
     async check(eventId: string, code: string) {
       // The published time zone, as checkout uses: a draft edit must not move the code's valid dates.
       const { config } = await repo.getPublished(eventId);
-      return termsOf(await redeemable(eventId, code, config.event.timeZone));
+      return termsOf(await redeemable(eventId, code, config.event.timeZone, null));
     },
   };
 }

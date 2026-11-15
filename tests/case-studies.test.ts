@@ -96,7 +96,7 @@ describe('generated race case studies', () => {
     const category = config.categories.find((row) => row.name.includes('Masters 35+'))!;
     const ok = async (res: { statusCode: number; body: string }, status = 200) => expect(res.statusCode, res.body).toBe(status);
 
-    await ok(await app.inject({ method: 'POST', url: `/api/events/${eventId}/coupons`, payload: { kind: 'percent', code: 'RESET10', percent: 10, categoryIds: [], validFrom: null, validUntil: null, maxRedemptions: null } }), 201);
+    await ok(await app.inject({ method: 'POST', url: `/api/events/${eventId}/coupons`, payload: { kind: 'percent', code: 'RESET10', percent: 10, categoryIds: [], validFrom: null, validUntil: null, maxRedemptions: null, maxPerRider: null } }), 201);
     const rider = {
       firstName: 'Avery', lastName: 'Example', email: 'avery@example.test', phone: '', team: 'Fictional Wheel Club', racingAge: 40, licenseCategory: '3', licenseType: 'annual',
       licenseNumber: 'DEMO-CASE-002', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Riley Example', phone: '202-555-0176' },

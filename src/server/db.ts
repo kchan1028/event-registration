@@ -463,6 +463,11 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE membership_changes ADD CONSTRAINT membership_changes_action_check
     CHECK (action IN ('granted', 'invited', 'invitation_renewed', 'invitation_accepted', 'invitation_expired', 'removed', 'invitation_cancelled', 'ownership_transferred'));
   `,
+  `
+  -- How many times one rider may use a coupon. Null: no per-rider limit. A rider is matched across
+  -- orders by the same rule as same-rider suggestions (same license number, or same name and email).
+  ALTER TABLE coupons ADD COLUMN max_per_rider integer CHECK (max_per_rider > 0);
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
