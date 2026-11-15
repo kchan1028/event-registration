@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { formatCents } from '../shared/format';
+import { applyCorrection, CORRECTABLE_FIELDS, correctableValue, matchesRegistration, type CorrectableField, type RiderCorrection } from '../shared/lookup';
 import type { Category } from '../shared/schema';
 import { api, ApiError, type OrderStatus, type OrderView, type ResolutionItem, type RiderIdentityOverview, type WaitlistEntryView } from './api';
 import { href } from './App';
 import type { Draft } from './Builder';
 import { Coupons } from './Coupons';
-import { Icon, Pending } from './ui';
+import { Field, Icon, Pending } from './ui';
 
 type Filter = 'all' | 'review' | 'attention' | 'unpaid';
 
@@ -37,6 +38,7 @@ export function Registrations({ draft }: { draft: Draft }) {
   const [orders, setOrders] = useState<OrderView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
+  const [query, setQuery] = useState('');
 
   const load = useCallback(() => {
     api
@@ -46,13 +48,15 @@ export function Registrations({ draft }: { draft: Draft }) {
   }, [eventId]);
   useEffect(load, [load]);
 
+  // Search narrows the list first; the filter chips and their counts apply to what it found.
+  const found = (orders ?? []).filter((o) => matchesRegistration(o, query));
   const counts = {
-    all: orders?.length ?? 0,
-    review: orders?.filter(needsLicenseReview).length ?? 0,
-    attention: orders?.filter((o) => o.status === 'needs_attention').length ?? 0,
-    unpaid: orders?.filter((o) => o.status === 'held' || o.status === 'payment_failed').length ?? 0,
+    all: found.length,
+    review: found.filter(needsLicenseReview).length,
+    attention: found.filter((o) => o.status === 'needs_attention').length,
+    unpaid: found.filter((o) => o.status === 'held' || o.status === 'payment_failed').length,
   };
-  const shown = (orders ?? []).filter((o) =>
+  const shown = found.filter((o) =>
     filter === 'review' ? needsLicenseReview(o) : filter === 'attention' ? o.status === 'needs_attention' : filter === 'unpaid' ? o.status === 'held' || o.status === 'payment_failed' : true,
   );
   const published = draft.data.publishedVersion !== null;
@@ -82,6 +86,25 @@ export function Registrations({ draft }: { draft: Draft }) {
         <p className="note">Riders can register once the event is published. Publish from Review and publish.</p>
       )}
 
+      <form role="search" className="reg-search" onSubmit={(e) => e.preventDefault()}>
+        <label htmlFor="reg-search">Find a registration</label>
+        <input
+          id="reg-search"
+          className="input"
+          type="search"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="Rider name, email, team, order number, or check-in code"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {orders && query.trim() && (
+          <p className="small muted" role="status">
+            {found.length === 1 ? '1 registration matches' : `${found.length} registrations match`} “{query.trim()}”.
+          </p>
+        )}
+      </form>
+
       <div className="filters" role="group" aria-label="Show registrations">
         {(
           [
@@ -101,7 +124,13 @@ export function Registrations({ draft }: { draft: Draft }) {
       {orders === null && !error && <div className="skeleton" aria-label="Loading registrations" />}
       {orders && shown.length === 0 && (
         <div className="empty">
-          <p>{orders.length === 0 ? 'No registrations yet.' : 'Nothing here. Every registration in this view is handled.'}</p>
+          <p>
+            {orders.length === 0
+              ? 'No registrations yet.'
+              : found.length === 0
+                ? `No registration matches “${query.trim()}”. Try the rider’s email, last name, or the order number.`
+                : 'Nothing here. Every registration in this view is handled.'}
+          </p>
         </div>
       )}
       <ChangesToResolve eventId={eventId} refreshKey={orders} />
@@ -112,7 +141,7 @@ export function Registrations({ draft }: { draft: Draft }) {
 
       <Coupons eventId={eventId} categories={draft.config.categories} races={draft.config.races} />
 
-      <ul className="orders">
+      <ul className="orders" aria-label="Registrations">
         {shown.map((o) => (
           <OrderRow key={o.id} order={o} categories={draft.config.categories} onChange={(next) => setOrders((list) => (list ?? []).map((x) => (x.id === next.id ? next : x)))} />
         ))}
@@ -154,6 +183,7 @@ function OrderRow({ order, categories, onChange }: { order: OrderView; categorie
           ))}
         </ul>
       )}
+      <RiderCorrections order={order} onChange={onChange} />
       {order.status === 'needs_attention' && (
         <p className="note note--error">Payment arrived after the hold ended and a place had filled. Nothing was confirmed. Contact the rider about a refund or another race.</p>
       )}
@@ -236,6 +266,105 @@ function EntryLine({ entry, confirmed, onChange, children }: { entry: OrderView[
 }
 
 type EntryView = OrderView['entries'][number];
+
+const FIELDS = Object.keys(CORRECTABLE_FIELDS) as CorrectableField[];
+
+/**
+ * Correct a rider's contact and identity details with a reason. Prices, entries, eligibility
+ * answers, and the waiver signature are not editable here. Every correction is listed below the form.
+ */
+function RiderCorrections({ order, onChange }: { order: OrderView; onChange: (o: OrderView) => void }) {
+  const initial = () => Object.fromEntries(FIELDS.map((f) => [f, correctableValue(order.rider, f)])) as Record<CorrectableField, string>;
+  const [open, setOpen] = useState(false);
+  const [values, setValues] = useState(initial);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const name = `${order.rider.firstName} ${order.rider.lastName}`;
+  const close = () => {
+    setOpen(false);
+    setErr(null);
+    setReason('');
+  };
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    const patch: RiderCorrection = {};
+    for (const f of FIELDS) if (values[f].trim() !== correctableValue(order.rider, f)) patch[f] = values[f].trim();
+    if (applyCorrection(order.rider, patch).changes.length === 0) return setErr('Nothing changed. Edit a field before saving.');
+    if (reason.trim().length < 3) return setErr('Write why the details are being corrected.');
+    setBusy(true);
+    setErr(null);
+    try {
+      onChange(await api.correctRider(order.id, patch, reason.trim()));
+      close();
+    } catch (e2) {
+      setErr((e2 as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      {open ? (
+        <form className="correction" onSubmit={save} noValidate aria-label={`Correct details for ${name}`}>
+          <p className="small muted">
+            Contact and identity details only. Racing age, license category, and race choices decide eligibility, so change those with a transfer or a new registration. The waiver signature and the price paid are never changed.
+          </p>
+          <div className="form-row">
+            {FIELDS.map((f) => (
+              <Field key={f} label={CORRECTABLE_FIELDS[f]}>
+                {(id) => <input id={id} className="input" autoComplete="off" value={values[f]} onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))} />}
+              </Field>
+            ))}
+          </div>
+          <Field label="Reason for the correction (required)" hint="For example: rider emailed to fix a misspelled name.">
+            {(id, d) => <input id={id} aria-describedby={d} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />}
+          </Field>
+          {err && (
+            <p className="text-error small" role="alert">
+              {err}
+            </p>
+          )}
+          <div className="form-actions">
+            <button className="btn btn--primary btn--small" type="submit" disabled={busy}>
+              {busy ? 'Saving…' : 'Save correction'}
+            </button>
+            <button className="btn btn--ghost btn--small" type="button" onClick={close}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        <p className="row-actions">
+          <button
+            className="btn btn--ghost btn--small"
+            aria-label={`Correct details for ${name}`}
+            onClick={() => {
+              setValues(initial());
+              setOpen(true);
+            }}
+          >
+            Correct details
+          </button>
+        </p>
+      )}
+      {order.corrections.length > 0 && (
+        <ul className="order__entries" aria-label={`Corrections to ${name}`}>
+          {order.corrections.map((c, i) => (
+            <li key={i} className="order__entry order__change">
+              <span className="small">
+                <strong>Details corrected</strong> · {new Date(c.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · Reason: {c.reason}
+                <br />
+                {c.changes.map((x) => `${x.label}: “${x.before || 'blank'}” to “${x.after || 'blank'}”`).join('; ')}.
+                {c.licenseReviewsCleared > 0 && ' The license number changed, so the earlier license review was cleared and the license needs review again.'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
 
 /** One logged transfer or withdrawal, with the money difference stated plainly. */
 function ChangeLine({ change: c }: { change: EntryView['changes'][number] }) {

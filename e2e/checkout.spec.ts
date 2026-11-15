@@ -205,3 +205,35 @@ test('organizer creates a coupon code; the rider applies it at checkout and the 
   await page.goto(`/#/events/${eventId}/registrations`);
   await expect(page.getByRole('row', { name: /E2E10/ })).toContainText('1 paid of 1');
 });
+
+test('organizer finds a registration by order number and corrects the rider’s name with a reason', async ({ page }) => {
+  const eventId = await openEvent(page, 'Demo Valley Criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-O45E/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await signAndReview(page, 'Alex Demo');
+  await page.getByRole('button', { name: /Complete simulated payment/ }).click();
+  await expect(page.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
+  const orderNumber = ((await page.locator('.reg__meta').textContent()) ?? '').match(/DEMO-[A-Z0-9]+/)![0];
+
+  await page.goto(`/#/events/${eventId}/registrations`);
+  await page.getByRole('searchbox', { name: 'Find a registration' }).fill(orderNumber.toLowerCase());
+  await expect(page.getByRole('status').filter({ hasText: 'registration matches' })).toHaveText(/^1 registration matches/);
+  const list = page.getByRole('list', { name: 'Registrations', exact: true });
+  await expect(list.locator(':scope > .order')).toHaveCount(1);
+  const order = list.locator('.order', { hasText: orderNumber });
+
+  await order.getByRole('button', { name: 'Correct details for Alex Demo' }).click();
+  await order.getByLabel('Last name').fill('Demos');
+  await order.getByRole('button', { name: 'Save correction' }).click();
+  await expect(order.getByRole('alert')).toHaveText('Write why the details are being corrected.');
+  await order.getByLabel('Reason for the correction (required)').fill('Rider emailed: surname misspelled');
+  await order.getByRole('button', { name: 'Save correction' }).click();
+  await expect(order.locator('.order__name')).toContainText('Alex Demos');
+  await expect(order.getByRole('list', { name: 'Corrections to Alex Demos' })).toContainText('Last name: “Demo” to “Demos”');
+  await expect(order.getByRole('list', { name: 'Corrections to Alex Demos' })).toContainText('Rider emailed: surname misspelled');
+
+  await page.getByRole('searchbox', { name: 'Find a registration' }).fill('no such rider');
+  await expect(page.locator('.empty')).toContainText('No registration matches “no such rider”');
+});
