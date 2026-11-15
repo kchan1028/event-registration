@@ -1,4 +1,5 @@
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
+import { fromIni } from '@aws-sdk/credential-provider-ini';
 import { newId } from '../shared/factory';
 import type { Db } from './db';
 
@@ -38,11 +39,11 @@ export function localEmail(): EmailSender {
 }
 
 /**
- * SES with credentials from a named AWS profile. The profile is required so the SDK never falls
- * back to whatever AWS_PROFILE the shell happens to have.
+ * SES with credentials from a named AWS profile and nowhere else: no fallback to the shell's
+ * AWS_PROFILE, environment keys, or instance roles. A profile that cannot be read fails the send.
  */
 function sesEmail(opts: { region: string; from: string; profile: string; configurationSet?: string }): EmailSender {
-  const client = new SESv2Client({ region: opts.region, profile: opts.profile });
+  const client = new SESv2Client({ region: opts.region, credentials: fromIni({ profile: opts.profile }) });
   return {
     mode: 'ses',
     async send(m) {
