@@ -185,11 +185,17 @@ for (const mobile of [false, true]) {
     await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
     await page.goto(`/#/events/${eventId}/check-in`);
     await page.getByRole('button', { name: 'Bib ranges', exact: true }).click();
+    const ranges = page.getByRole('form', { name: 'Bib ranges', exact: true });
+    await ranges.getByRole('textbox', { name: 'First', exact: true }).fill('100');
+    await ranges.getByRole('textbox', { name: 'Last', exact: true }).fill('199');
+    await ranges.getByRole('button', { name: 'Save bib ranges', exact: true }).click();
+    await expect(ranges.getByText('Saved', { exact: true })).toBeVisible();
     const panel = page.getByRole('region', { name: 'Automatic bib assignment', exact: true });
     await expect(panel.getByText('Automatic assignment is off.', { exact: true })).toBeVisible();
     await panel.getByRole('combobox', { name: 'Sort riders' }).selectOption('registration');
     await panel.getByRole('button', { name: 'Enable after-close assignment', exact: true }).click();
     await expect(panel.getByRole('button', { name: 'Cancel automatic assignment', exact: true })).toBeEnabled();
+    await expect(panel.getByText('Enabled: waiting for allocation to complete.', { exact: true })).toBeFocused();
     const jobs = await (await api.get(`/api/events/${eventId}/automatic-bibs`)).json();
     expect(jobs).toHaveLength(1);
     expect(jobs[0]).toMatchObject({ sort: 'registration', completedAt: null, cancelledAt: null });
@@ -203,6 +209,7 @@ for (const mobile of [false, true]) {
     }
     await panel.getByRole('button', { name: 'Cancel automatic assignment', exact: true }).click();
     await expect(panel.getByText('Automatic assignment is off.', { exact: true })).toBeVisible();
+    await expect(panel.getByText('Automatic assignment is off.', { exact: true })).toBeFocused();
     const cancelled = await (await api.get(`/api/events/${eventId}/automatic-bibs`)).json();
     expect(cancelled[0].cancelledAt).not.toBeNull();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

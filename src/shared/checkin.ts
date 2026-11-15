@@ -120,7 +120,7 @@ export interface CheckInList {
   roles: Role[];
   races: { id: string; name: string }[];
   categories: { id: string; name: string; raceId: string }[];
-  summary: { riders: number; checkedIn: number; blocked: number; bibsIssued: number; timing: ReturnType<typeof checkInTiming> };
+  summary: { riders: number; checkedIn: number; blocked: number; bibsAssigned: number; timing: ReturnType<typeof checkInTiming> };
   riders: CheckInRider[];
 }
 

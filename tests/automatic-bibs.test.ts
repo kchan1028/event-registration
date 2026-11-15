@@ -87,6 +87,21 @@ describe('post-close automatic bib allocation', () => {
     expect((await jobs())[0].completedAt).toBeNull();
   });
 
+  it('keeps a linked rider’s canonical identity when the anchor hold expires', async () => {
+    const { app, eventId, advance, enable, jobs, run, list } = await setup();
+    const before = await list();
+    const root = before.riders.find((r) => r.name.startsWith('Frankie'))!;
+    const alex = before.riders.find((r) => r.name.startsWith('Alex'))!;
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/rider-identity/link`, payload: { orderIds: [root.orderId, alex.orderId] } })).statusCode).toBe(200);
+    await enable();
+    advance('2027-03-01T18:11:00Z');
+    await run();
+    expect((await jobs())[0].completedAt).not.toBeNull();
+    const after = await list();
+    expect(after.riders.find((r) => r.orderId === root.orderId)).toMatchObject({ name: alex.name, bib: expect.any(Number) });
+    expect(after.riders.some((r) => r.orderId === alex.orderId)).toBe(false);
+  });
+
   it('rolls back every day on exhaustion and retries after ranges are corrected', async () => {
     const { app, eventId, advance, enable, run, jobs, list } = await setup();
     const days = (await list()).days;
@@ -126,7 +141,7 @@ describe('post-close automatic bib allocation', () => {
     await app.inject({ method: 'POST', url: `/api/organizations/${organizationId}/members/remove`, payload: { email: manager, role: 'registration_manager' } });
     advance('2027-03-01T18:11:00Z');
     await run();
-    expect((await jobs())[0]).toMatchObject({ completedAt: null, message: expect.any(String) });
+    expect((await jobs())[0]).toMatchObject({ completedAt: null, message: expect.stringContaining('no longer has bib-settings permission') });
     await enable();
     await run();
     expect((await jobs()).some((j) => j.completedAt !== null)).toBe(true);

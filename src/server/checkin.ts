@@ -38,7 +38,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   }
 
   /**
-   * One rider made from linked orders (rider identity): the earliest order's details and ID, every
+   * One rider made from linked orders (rider identity): the earliest live order's details and the persisted rider key, every
    * order's entries, and paid only when every linked order is paid. An unlinked order is unchanged.
    */
   type Rider = OrderView & { checkInCodes: string[] };
@@ -106,7 +106,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const k = key(o.id);
       groups.set(k, [...(groups.get(k) ?? []), o]);
     }
-    return [...groups.values()].map(mergeRider);
+    return [...groups].map(([id, group]) => ({ ...mergeRider(group), id }));
   }
 
   function matches(card: ReturnType<typeof riderCard>, q: string): boolean {
@@ -215,9 +215,12 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   }
 
   async function saveBibPlan(eventId: string, plan: BibPlan, automaticJobId: string | null) {
-    for (const item of plan.assignments) {
-      await db.run(`INSERT INTO bib_assignments (id, event_id, scope, order_id, bib, assigned_at, automatic_job_id) VALUES ($1, $2, $3, $4, $5, $6, $7)`, [newId('bib'), eventId, plan.scope, item.orderId, item.bib, nowIso(), automaticJobId]);
-    }
+    await db.run(
+      `INSERT INTO bib_assignments (id, event_id, scope, order_id, bib, assigned_at, automatic_job_id)
+       SELECT id, $1, $2, order_id, bib, $3::timestamptz, $7
+       FROM unnest($4::text[], $5::text[], $6::int[]) AS batch(id, order_id, bib)`,
+      [eventId, plan.scope, nowIso(), plan.assignments.map(() => newId('bib')), plan.assignments.map((a) => a.orderId), plan.assignments.map((a) => a.bib), automaticJobId],
+    );
   }
 
   return {
@@ -266,7 +269,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         riders: enteredToday.length,
         checkedIn: enteredToday.filter((c) => c.checkedInAt).length,
         blocked: enteredToday.filter((c) => !c.result.ready).length,
-        bibsIssued: (await takenBibs(eventId, scope)).size,
+        bibsAssigned: (await takenBibs(eventId, scope)).size,
         /** Measured standard check-ins for this day (product.md target: median under 30 s, 95th percentile under 90 s). */
         timing: checkInTiming(
           (await db.all<{ duration_ms: number }>(`SELECT duration_ms FROM check_ins WHERE event_id = $1 AND day_id = $2 AND duration_ms IS NOT NULL`, [eventId, day.id])).map((r) => r.duration_ms),

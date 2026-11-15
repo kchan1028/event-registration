@@ -16,7 +16,7 @@ import { riderCorrectionSchema } from '../shared/lookup';
 import { changeImpact, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
 import { openDb } from './db';
-import { createAutomaticBibs, type AutomaticBibs } from './automaticBibs';
+import { createAutomaticBibs, automaticBibError, type AutomaticBibs } from './automaticBibs';
 import { createCheckIn } from './checkin';
 import { createCaseStudyFixtures } from './caseStudies';
 import { createIdentity } from './identity';
@@ -98,8 +98,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   let bibTimer: ReturnType<typeof setTimeout> | undefined;
   let bibWork: Promise<void> = Promise.resolve();
   function pollAutomaticBibs() {
-    bibWork = automaticBibs.runDue().catch(() => {
-      app.log.error('Automatic bib worker failed; inspect automatic-bib job status and database availability.');
+    bibWork = automaticBibs.runDue().catch((error: unknown) => {
+      app.log.error({ failures: error instanceof AggregateError ? error.errors : [automaticBibError(error)] }, 'Automatic bib worker failed; inspect job status and database availability.');
     }).finally(() => {
       if (!stoppingBibWorker) bibTimer = setTimeout(pollAutomaticBibs, 60_000);
     });

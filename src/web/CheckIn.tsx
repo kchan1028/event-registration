@@ -170,8 +170,8 @@ export function CheckIn({ eventId }: { eventId: string }) {
               <dd>{data.summary.blocked}</dd>
             </div>
             <div>
-              <dt>Bibs issued</dt>
-              <dd>{data.summary.bibsIssued}</dd>
+              <dt>Bibs assigned</dt>
+              <dd>{data.summary.bibsAssigned}</dd>
             </div>
             <div>
               <dt>Median check-in</dt>

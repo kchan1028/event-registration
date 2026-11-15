@@ -6,6 +6,16 @@ import type { CheckIn } from './checkin';
 import type { Db } from './db';
 import { eventLock, HttpError, reservedOrderSql, type Repo } from './repo';
 
+/** Keep diagnostic frames and database codes without exception messages or row details. */
+export function automaticBibError(error: unknown) {
+  const value = error instanceof Error ? error : new Error('Unknown automatic bib error');
+  return {
+    name: value.name,
+    code: typeof (value as { code?: unknown }).code === 'string' ? (value as Error & { code: string }).code : null,
+    frames: value.stack?.split('\n').slice(1).filter((line) => /^\s+at /.test(line)) ?? [],
+  };
+}
+
 /** Durable opt-in jobs. The event lock also serializes manual bibs, checkout, and publication. */
 export function createAutomaticBibs(db: Db, repo: Repo, checkIn: CheckIn, access: Access, clock: () => Date) {
   const columns = `id, sort, configured_by AS "configuredBy", created_at AS "createdAt",
@@ -16,14 +26,21 @@ export function createAutomaticBibs(db: Db, repo: Repo, checkIn: CheckIn, access
     return db.transaction(async () => {
       await db.lock(eventLock(eventId));
       const job = await db.get<AutomaticBibJob>(`SELECT ${columns} FROM automatic_bib_jobs WHERE id = $1 AND completed_at IS NULL AND cancelled_at IS NULL`, [id]);
-      if (!job) return false;
+      if (!job) return null;
       const at = clock().toISOString();
       try {
         // A savepoint rolls back all days if any range fails, leaving a retryable job with its reason.
         await db.transaction(async () => {
           const actor = await db.get<Account>(`SELECT id, email FROM accounts WHERE id = $1`, [job.configuredBy]);
           if (!actor) throw new HttpError(409, 'The organizer who enabled automatic assignment is unavailable.');
-          await access.requireEvent(actor, eventId, 'checkin.settings');
+          try {
+            await access.requireEvent(actor, eventId, 'checkin.settings');
+          } catch (error) {
+            if (error instanceof HttpError && (error.status === 403 || error.status === 404)) {
+              throw new HttpError(409, 'The organizer who enabled this job no longer has bib-settings permission. An owner or registration manager must cancel and re-enable automatic assignment.');
+            }
+            throw error;
+          }
           const { config } = await repo.getPublished(eventId);
           const categories = config.categories.filter((c) => c.status !== 'archived');
           if (!categories.length) throw new HttpError(409, 'No published registration categories are configured.');
@@ -42,9 +59,9 @@ export function createAutomaticBibs(db: Db, repo: Repo, checkIn: CheckIn, access
         // Domain messages contain configuration/range details, never rider identity or database errors.
         const message = error instanceof HttpError ? error.message : 'Automatic assignment failed. Check server monitoring and retry.';
         await db.run(`UPDATE automatic_bib_jobs SET last_attempt_at = $1, message = $2 WHERE id = $3`, [at, message, id]);
-        return !(error instanceof HttpError);
+        return error instanceof HttpError ? null : automaticBibError(error);
       }
-      return false;
+      return null;
     });
   }
 
@@ -71,9 +88,16 @@ export function createAutomaticBibs(db: Db, repo: Repo, checkIn: CheckIn, access
     },
     async runDue() {
       const pending = await db.all<{ id: string; event_id: string }>(`SELECT id, event_id FROM automatic_bib_jobs WHERE completed_at IS NULL AND cancelled_at IS NULL ORDER BY created_at, id`);
-      let failed = false;
-      for (const job of pending) if (await runJob(job.id, job.event_id)) failed = true;
-      if (failed) throw new Error('Automatic bib assignment failed for one or more events; inspect their job status.');
+      const failures: ReturnType<typeof automaticBibError>[] = [];
+      for (const job of pending) {
+        try {
+          const failure = await runJob(job.id, job.event_id);
+          if (failure) failures.push(failure);
+        } catch (error) {
+          failures.push(automaticBibError(error));
+        }
+      }
+      if (failures.length) throw new AggregateError(failures, 'Automatic bib assignment failed; inspect job status.');
     },
   };
 }

@@ -1,8 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AutomaticBibInput, AutomaticBibJob } from '../shared/checkin';
 import { api, type ApiError } from './api';
 
 export function AutomaticBibs({ eventId }: { eventId: string }) {
+  const statusRef = useRef<HTMLParagraphElement>(null);
   const [jobs, setJobs] = useState<AutomaticBibJob[] | null>(null);
   const [sort, setSort] = useState<AutomaticBibInput['sort']>('name');
   const [busy, setBusy] = useState(false);
@@ -36,6 +37,7 @@ export function AutomaticBibs({ eventId }: { eventId: string }) {
       await api.enableAutomaticBibs(eventId, { sort });
       setJobs(null);
       setMessage('After-close automatic assignment enabled.');
+      statusRef.current?.focus();
     } catch (err) {
       setError((err as ApiError).message);
       setBusy(false);
@@ -52,6 +54,7 @@ export function AutomaticBibs({ eventId }: { eventId: string }) {
       await api.disableAutomaticBibs(eventId);
       setJobs(null);
       setMessage('Pending automatic assignment cancelled. Existing bibs are unchanged.');
+      statusRef.current?.focus();
     } catch (err) {
       setError((err as ApiError).message);
       setBusy(false);
@@ -62,12 +65,11 @@ export function AutomaticBibs({ eventId }: { eventId: string }) {
 
   const active = jobs?.find((j) => !j.completedAt && !j.cancelledAt);
   const latest = jobs?.[0];
-  return <section className="ci-bibs" aria-label="Automatic bib assignment">
+  return <section className="ci-bibs ci-automatic" aria-label="Automatic bib assignment">
     <h2>Assign automatically after registration closes</h2>
     <p>Opt in to a single allocation of confirmed, unassigned riders after every published category closes and outstanding checkout holds settle or expire. Existing bibs and checked-in riders stay unchanged. This does not clear readiness or hand over a bib.</p>
-    {!jobs && !error && !message && <p role="status">Loading automatic assignment status…</p>}
+    <p ref={statusRef} tabIndex={-1} role="status">{!jobs ? error ? 'Automatic assignment status is unavailable.' : 'Loading automatic assignment status…' : active ? 'Enabled: waiting for allocation to complete.' : latest?.completedAt ? `Completed: ${latest.assigned} numbers assigned. Later walk-ups use normal check-in assignment.` : 'Automatic assignment is off.'}</p>
     {jobs && <>
-      <p role="status">{active ? 'Enabled: waiting for the worker to complete allocation.' : latest?.completedAt ? `Completed: ${latest.assigned} numbers assigned. Later walk-ups use normal check-in assignment.` : 'Automatic assignment is off.'}</p>
       {active?.message && <p className="ci__notice" role="status">{active.message}</p>}
       <form onSubmit={save}>
         <fieldset disabled={busy}>
