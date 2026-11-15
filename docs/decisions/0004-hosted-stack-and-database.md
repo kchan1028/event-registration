@@ -1,8 +1,8 @@
 # 0004. Hosted application stack and database
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-14
-Deciders: Project owner; technical lead
+Deciders: Project owner (accepted 2026-11-14)
 Related: [ADR 0001](0001-stack-for-category-builder-milestone.md), [architecture.md](../architecture.md), [operations.md](../operations.md), [Phase 2](../../roadmap.md#phase-2--build-the-registration-core), [decision backlog](README.md#decision-backlog)
 
 ## Context
@@ -32,7 +32,7 @@ ADR 0001 chose TypeScript, Node.js, React, and SQLite for the local prototype on
 
 Blocks every hosted Phase 2 outcome. Not viable past Phase 1.
 
-## Decision (proposed)
+## Decision
 
 Recommend **Option A**: keep the TypeScript, Node.js, and React application and its tests; move persistence to a **managed PostgreSQL** database with transactions and row-level locking for capacity, holds, and the ledger; deploy the app as a container on a **managed application platform** with at least two instances during registration openings. Requirements for the providers chosen:
 
@@ -81,7 +81,7 @@ Caveats:
 
 Sources: render.com/pricing; render.com/docs/scaling; render.com/docs/postgresql-backups; docs.fly.io/about/pricing; docs.fly.io/mpg/overview; community.fly.io (DPA thread); fly.io/changelog/managed-postgres-point-in-time-restore; railway.com/pricing; docs.railway.com/reference/backups; railway.com/legal/dpa; cloud.google.com/run/pricing; aws.amazon.com/apprunner; AWS RDS automated backups guide; aws.amazon.com/rds/postgresql/pricing; digitalocean.com/pricing/app-platform; DigitalOcean App Platform limits; DigitalOcean PostgreSQL features; digitalocean.com/pricing/managed-databases; digitalocean.com/legal/data-processing-agreement; neon.com/pricing; neon.com/docs/introduction/branching; neon.com/dpa; supabase.com/pricing; supabase.com/docs/guides/platform/backups; supabase.com/legal/dpa; docs.crunchybridge.com plans and backups pages.
 
-Before acceptance: the treasurer approves the monthly cost, and legal review covers minors' data.
+Accepted by the project owner on 2026-11-14: Render app and Render Postgres on the Pro plan. Follow-ups before production use: the treasurer approves the monthly cost, and legal review covers minors' data. Accepting this ADR does not create accounts or resources; that happens when deployment work starts.
 
 ## Consequences
 

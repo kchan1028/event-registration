@@ -1,8 +1,8 @@
 # 0003. Sign-in with required multi-factor authentication
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-14
-Deciders: Project owner; technical lead
+Deciders: Project owner (accepted 2026-11-14)
 Related: [Sign-in and account security](../../product.md#sign-in-and-account-security), [Phase 2](../../roadmap.md#phase-2--build-the-registration-core), [decision backlog](README.md#decision-backlog)
 
 ## Context
@@ -34,7 +34,7 @@ A hosted identity provider handles sign-in, MFA enrollment, passkeys, step-up, a
 - Pros: no work.
 - Cons: blocks hosting, real registrations, and every Phase 2 feature. Not a real option beyond Phase 1.
 
-## Decision (proposed)
+## Decision
 
 Recommend **Option B, a managed identity service**, because it can enforce the product.md MFA rules with the least security-critical code for a volunteer team. Whichever provider is selected must meet all of these:
 
@@ -76,7 +76,7 @@ Key caveats:
 
 Sources: clerk.com/pricing; clerk.com/docs/guides/secure/reverification; clerk.com/changelog/2026-02-20-require-mfa; clerk.com/changelog/2026-10-29-passkey-second-factor; clerk.com/docs/guides/secure/user-lockout; clerk.com/docs/guides/dashboard/logs/application-logs; auth0.com/pricing; auth0.com/docs/secure/multi-factor-authentication/step-up-authentication; auth0.com/docs/secure/multi-factor-authentication/configure-recovery-codes-for-mfa; auth0.com/docs/api/management/v2/jobs/post-users-exports; stytch.com/pricing; stytch.com/docs/guides/mfa/overview; workos.com/pricing; workos.com/docs/authkit/mfa; supabase.com/pricing; supabase.com/docs/guides/auth/auth-mfa; supabase.com/docs/guides/auth/passkeys; firebase.google.com/docs/auth/web/multi-factor; firebase.google.com/pricing; better-auth.com/docs/plugins/2fa; keycloak.org/docs/latest/server_admin. The Identity Platform pricing page did not load, so its price above the free tier is not confirmed.
 
-Before acceptance: the owner confirms the Clerk choice and cost, and a short spike confirms on a test account that "require MFA" blocks all pages for a magic-link sign-up and that SMS can be fully disabled.
+Accepted by the project owner on 2026-11-14: Clerk Pro with SMS off. Follow-up before production use: a short spike on a test account confirms that "require MFA" blocks all pages for a magic-link sign-up and that SMS can be fully disabled. If it fails, revisit this ADR (Better Auth fallback).
 
 ## Consequences
 

@@ -76,7 +76,7 @@ These come from [product.md](../product.md) and apply whatever stack is chosen.
 
 ## Proposed logical components
 
-This is the target shape for the hosted product. Only the registration core rules and the organizer workspace exist today, running locally on one computer.
+This is the target shape for the hosted product. Only the registration core rules and the organizer workspace exist today, running locally on one computer. Accepted for the hosted product: sign-in through Clerk with required MFA and SMS off ([ADR 0003](decisions/0003-sign-in-and-mfa.md)), and the existing TypeScript app on Render with Render Postgres ([ADR 0004](decisions/0004-hosted-stack-and-database.md)).
 
 ```mermaid
 flowchart LR
