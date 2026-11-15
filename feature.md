@@ -108,7 +108,7 @@ These are not available in the app. Phase order and dependencies remain in [road
 | Participant workspace, reusable rider identity, saved filtered views, history, and safe bulk actions | Planned beyond event-level lookup | [Participant management](product.md#participant-management) |
 | Automatic confirmed-entry bib assignment and previewed bulk allocation | Planned beyond check-in-time assignment | [Automatic and bulk bib assignment](product.md#automatic-and-bulk-bib-assignment) |
 | Reusable credits, partial redemption, and policy-controlled deferrals | Planned; same-organization first | [Credits and deferrals](product.md#reusable-credits-and-deferrals) |
-| Operational/finance dashboards, role-scoped exports, and cross-event history | Planned beyond start-list, entries, and ledger exports | [Reporting](product.md#reporting) |
+| Operational/finance dashboards, role-scoped exports, and cross-event history | Event summary on Registrations Implemented (counts for registration roles, money for ledger roles); the rest Planned beyond start-list, entries, and ledger exports | [Reporting](product.md#reporting) |
 | Walk-up/mobile/kiosk race-day registration | Planned beyond check-in | [Race-day registration](product.md#race-day-registration) |
 | Dedicated omnium/stage-race setup, TT, pricing, and overall participation | Planned beyond existing package pricing | [Competition setup](product.md#omnium-and-stage-race-setup) |
 | Multi-event, multi-organization bundles / season passes | Planned | [Season passes](product.md#cross-organization-bundles-and-season-passes) |
