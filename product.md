@@ -582,7 +582,7 @@ Do not replace Berkeley Omnium's registration merely because the software is ava
 
 ## Open decisions
 
-Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/README.md); none has an answer yet. Interview [D01](docs/discovery/interviews/D01.md) (November 14, 2026) gives early, estimate-only input to decisions 1 and 2: reconciliation (reports, refund matching, merchandise) and bib assignment across multiple fields are the largest named costs, and whether they come from software limits is not yet known. The current tool is BikeReg; discounts there need generated codes. D01 also said riders may not find or trust an unfamiliar platform; this and merchandise reconciliation are recorded as discovery evidence, not yet requirements.
+Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/README.md); none has an answer yet. Interview [D01](docs/discovery/interviews/D01.md) (November 14, 2026) gives early, estimate-only input to decisions 1 and 2: reconciliation (reports, refund matching, merchandise) and bib assignment across multiple fields are the largest named costs, and whether they come from software limits is not yet known. The current tool is BikeReg; discounts there need generated codes, and shared-field limits are enforced by a person. D01 reports no license issues or duplicate entries per event. D01 also said riders may not find or trust an unfamiliar platform; this and merchandise reconciliation are recorded as discovery evidence, not yet requirements.
 
 1. What specific tasks consume the most volunteer time today, and which are limitations of software rather than staffing?
 2. How are both days, multiple entries, shared fields, discounts, and bibs currently configured?

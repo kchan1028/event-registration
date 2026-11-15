@@ -45,9 +45,9 @@ Count from the exception list, emails, and the race director's notes.
 | Error type | Count | Found when (before race day, race morning, after) | Time to fix (total) |
 |---|---|---|---|
 | Rider in wrong category | | | |
-| License could not be confirmed | Not given (named as a common problem by D01; the rider cannot register) | Before race day | |
+| License could not be confirmed | 0 (D01; a rider with an unconfirmed license cannot register) | Before race day | |
 | Missing junior waiver or guardian | | | |
-| Duplicate entry or charge | Not given (named as a common problem by D01) | | |
+| Duplicate entry or charge | 0 (D01) | | |
 | Field oversold | | | |
 | Wrong or missing rider on the start list | | | |
 | Bib error | None reported; assigning bibs across multiple fields takes about 1 hour (D01) | | |
