@@ -206,6 +206,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
         categoryIds: z.array(z.string().min(1).max(64)).min(1).max(10),
         rider: z.unknown(),
         waiver: z.unknown(),
+        extras: z.unknown().optional(),
         offerToken: z.string().min(10).max(64).nullable().optional(),
       })
       .parse(req.body);

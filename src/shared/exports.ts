@@ -9,6 +9,7 @@ import { csvField } from './startlist';
  */
 
 export interface ExportEntry {
+  categoryId: string;
   code: string;
   categoryName: string;
   raceName: string;
@@ -29,6 +30,8 @@ export interface ExportOrder {
   quote: Quote;
   totalCents: number;
   entries: ExportEntry[];
+  /** Answers to per-category questions; exported on that category's entry row. */
+  answers?: { categoryId: string; label: string; answer: string }[];
 }
 
 /** A CSV cell: numbers stay numbers (so negative amounts work); text is guarded against spreadsheet formulas. */
@@ -42,7 +45,7 @@ function toCsv(header: string[], rows: unknown[][]): string {
 
 const money = (cents: number) => Math.round(cents) / 100;
 
-export const ENTRY_COLUMNS = ['order_number', 'rider_id', 'last_name', 'first_name', 'team', 'racing_age', 'license_category', 'category_code', 'category', 'race', 'entry_status', 'order_status', 'amount_paid', 'license_reviewed', 'waiver_signed_by'];
+export const ENTRY_COLUMNS = ['order_number', 'rider_id', 'last_name', 'first_name', 'team', 'racing_age', 'license_category', 'category_code', 'category', 'race', 'entry_status', 'order_status', 'amount_paid', 'license_reviewed', 'waiver_signed_by', 'category_answers'];
 
 /** One row per entry. Sorted by rider, then race. */
 export function entriesCsv(orders: readonly ExportOrder[], riderKey: (orderId: string) => string): string {
@@ -65,6 +68,10 @@ export function entriesCsv(orders: readonly ExportOrder[], riderKey: (orderId: s
         money(e.amountPaidCents),
         e.licenseReviewed ? 'Y' : 'N',
         o.waiver.signatureName,
+        (o.answers ?? [])
+          .filter((a) => a.categoryId === e.categoryId)
+          .map((a) => `${a.label}: ${a.answer}`)
+          .join('; '),
       ]);
     }
   }

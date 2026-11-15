@@ -215,6 +215,10 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (event_id, order_a, order_b)
   );
   `,
+  `
+  -- Answers to per-category questions and accepted category waiver addenda, per order.
+  ALTER TABLE orders ADD COLUMN extras_json TEXT;
+  `,
 ];
 
 export function openDb(path: string): Db {

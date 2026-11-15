@@ -5,6 +5,7 @@ import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNo
 import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { categoryPrice, quote, todayIn, type Quote } from '../shared/pricing';
+import { checkExtras, describeAnswers, EMPTY_EXTRAS, orderExtrasSchema, pruneExtras, type OrderExtras } from '../shared/categoryExtras';
 import type { EventConfig } from '../shared/schema';
 import { blocksPublicSale, effectiveWaitlistStatus, type StoredWaitlistStatus } from '../shared/waitlist';
 import type { Db } from './db';
@@ -31,6 +32,7 @@ interface OrderRow {
   check_in_code: string | null;
   created_at: string;
   confirmed_at: string | null;
+  extras_json: string | null;
 }
 
 interface EntryRow {
@@ -88,6 +90,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     const rider = JSON.parse(row.rider_json) as RiderDetails;
     const waiver = JSON.parse(row.waiver_json) as WaiverAcceptance;
     const q = JSON.parse(row.quote_json) as Quote;
+    const extras: OrderExtras = row.extras_json ? (JSON.parse(row.extras_json) as OrderExtras) : EMPTY_EXTRAS;
     const status = effectiveStatus(row);
     const guardianRequired = entryRows.all(id).some((e) => config.categories.find((c) => c.id === e.category_id)?.eligibility.guardianRequired);
     const entries = entryRows.all(id).map((e) => {
@@ -150,6 +153,10 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       createdAt: row.created_at,
       confirmedAt: row.confirmed_at,
       refundPolicy: config.registration.refundPolicy,
+      /** Answers to per-category questions and accepted category waiver addenda. */
+      extras,
+      answers: describeAnswers(latest, extras),
+      addenda: extras.addenda.map((id) => ({ categoryId: id, title: findCat(id)?.addendum?.title ?? 'Category waiver addendum' })),
       entries,
     };
   }
@@ -227,7 +234,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
      * Either all entries are held or none are. A repeated request with the
      * same client request ID returns the first order instead of a duplicate.
      */
-    createOrder(eventId: string, input: { clientRequestId: string; categoryIds: string[]; rider?: unknown; waiver?: unknown; offerToken?: string | null }) {
+    createOrder(eventId: string, input: { clientRequestId: string; categoryIds: string[]; rider?: unknown; waiver?: unknown; extras?: unknown; offerToken?: string | null }) {
       return db
         .transaction(() => {
           const existing = db.prepare<[string, string], { id: string }>(`SELECT id FROM orders WHERE event_id = ? AND client_request_id = ?`).get(eventId, input.clientRequestId);
@@ -244,6 +251,10 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           if (check.needsGuardian && !rider.guardian) throw new HttpError(422, 'Riders under 18 need a parent or guardian. Enter their name.');
           const signatureProblem = checkSignature(rider, waiver, check.needsGuardian);
           if (signatureProblem) throw new HttpError(422, signatureProblem);
+          // Per-category questions and waiver addenda (product.md 1a).
+          const extras = pruneExtras(config, input.categoryIds, orderExtrasSchema.parse(input.extras ?? {}));
+          const extraProblems = checkExtras(config, input.categoryIds, extras);
+          if (extraProblems.length > 0) throw new HttpError(422, extraProblems[0].message, extraProblems);
 
           // A waitlist offer lets its rider take the reserved place in that one category.
           let offer: { id: string; category_id: string } | null = null;
@@ -279,9 +290,9 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           const t = nowIso();
           const expires = new Date(clock().getTime() + holdMinutes * 60_000).toISOString();
           db.prepare(
-            `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at)
-             VALUES (?, ?, ?, ?, 'held', ?, ?, ?, ?, ?, ?, ?)`,
-          ).run(id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t);
+            `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json)
+             VALUES (?, ?, ?, ?, 'held', ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ).run(id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras));
           // Demo riders on demo events carry a simulated license result from the fixtures; everyone else needs review.
           const fixture = config.event.isDemo ? demoRider(rider.demoRiderId) : undefined;
           const simulatedValid = !!fixture && fixture.licenseCheck === 'simulated_valid' && fixture.licenseNumber === rider.licenseNumber;

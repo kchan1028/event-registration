@@ -137,6 +137,18 @@ function OrderRow({ order, categories, onChange }: { order: OrderView; categorie
           <a href={href({ page: 'order', orderId: order.id })}>Rider confirmation</a>
         </p>
       )}
+      {(order.answers.length > 0 || order.addenda.length > 0) && (
+        <ul className="small order__answers">
+          {order.answers.map((a) => (
+            <li key={`${a.categoryId}-${a.label}`}>
+              {a.category}: {a.label}: <strong>{a.answer}</strong>
+            </li>
+          ))}
+          {order.addenda.map((a) => (
+            <li key={`add-${a.categoryId}`}>Accepted: {a.title}</li>
+          ))}
+        </ul>
+      )}
       {order.status === 'needs_attention' && (
         <p className="note note--error">Payment arrived after the hold ended and a place had filled. Nothing was confirmed. Contact the rider about a refund or another race.</p>
       )}
