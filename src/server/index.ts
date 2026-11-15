@@ -1,10 +1,17 @@
 import { buildApp } from './app';
-import { DEFAULT_DATABASE_URL } from './db';
+import { DEFAULT_DATABASE_URL, ensureLocalDatabase } from './db';
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001);
 // Bind to localhost only: the app has no sign-in yet and must not be exposed.
 const host = '127.0.0.1';
 const databaseUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
+
+try {
+  if (await ensureLocalDatabase(databaseUrl)) console.log(`Created local database ${new URL(databaseUrl).pathname.slice(1)}.`);
+} catch (err) {
+  console.error(`Cannot reach PostgreSQL at ${new URL(databaseUrl).host}. See docs/runbooks/troubleshooting.md. ${(err as Error).message}`);
+  process.exit(1);
+}
 
 const { app } = buildApp({ databaseUrl, serveWeb: process.env.NODE_ENV === 'production', logger: true });
 

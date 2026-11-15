@@ -1,6 +1,6 @@
 import pg from 'pg';
-import { describe, expect, it } from 'vitest';
-import { MIGRATIONS, openDb } from '../src/server/db';
+import { describe, expect, inject, it } from 'vitest';
+import { ensureLocalDatabase, MIGRATIONS, openDb } from '../src/server/db';
 import { testApp, testDatabaseUrl } from './support/db';
 
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -43,5 +43,37 @@ describe('migration 13: timestamps become timestamptz', () => {
     await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
     const versions = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { versions: { publishedAt: string }[] };
     expect(versions.versions[0].publishedAt).toMatch(ISO);
+  });
+});
+
+describe('local database auto-create', () => {
+  const { serverUrl, runId } = inject('testDb');
+  const urlFor = (name: string) => {
+    const url = new URL(serverUrl);
+    url.pathname = `/${name}`;
+    return url.toString();
+  };
+
+  it('creates a missing local database once, then leaves it alone', async () => {
+    // The run prefix means global teardown drops it.
+    const url = urlFor(`cyclereg_test_${runId}_ensure_${process.pid}`);
+    expect(await ensureLocalDatabase(url)).toBe(true);
+    expect(await ensureLocalDatabase(url)).toBe(false);
+    const db = openDb(url);
+    try {
+      await db.migrate();
+      expect(await db.get<{ ok: number }>('SELECT 1 AS ok')).toEqual({ ok: 1 });
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('never creates a database on another host', async () => {
+    // Returns before any connection attempt, so no server is needed at this address.
+    expect(await ensureLocalDatabase('postgres://user:pass@db.example.com:5432/cyclereg')).toBe(false);
+  });
+
+  it('refuses an unsafe database name', async () => {
+    await expect(ensureLocalDatabase(urlFor('Bad-Name'))).rejects.toThrow(/lowercase letters/);
   });
 });

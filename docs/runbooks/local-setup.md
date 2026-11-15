@@ -110,17 +110,13 @@ SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts
 
 ## Start over
 
-To empty your local data, drop and recreate the database:
+To empty your local data, drop the database:
 
 ```bash
 docker exec cyclereg-postgres dropdb -U cyclereg --force cyclereg
 ```
 
-```bash
-docker exec cyclereg-postgres createdb -U cyclereg cyclereg
-```
-
-The next `npm run dev` recreates the tables. Data from the earlier SQLite file (`data/cyclereg.sqlite`) is not imported; reseed with `npm run seed:omnium` or `npm run seed:demo`.
+The next `npm run dev` (or `npm run seed:*`) creates the database again, empty, and its tables. The app creates a missing database only on a local host (`localhost`, `127.0.0.1`, or `::1`), so a separate demo database such as `cyclereg_berkeley` needs no setup step either. Data from the earlier SQLite file (`data/cyclereg.sqlite`) is not imported; reseed with `npm run seed:omnium` or `npm run seed:demo`.
 
 ## Common problems
 

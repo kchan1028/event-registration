@@ -1,8 +1,9 @@
 import { buildApp } from './app';
-import { DEFAULT_DATABASE_URL } from './db';
+import { DEFAULT_DATABASE_URL, ensureLocalDatabase } from './db';
 
 // Local PostgreSQL (DATABASE_URL). Berkeley standalone events are published for the rider demo.
 const databaseUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
+await ensureLocalDatabase(databaseUrl);
 const { app } = buildApp({ databaseUrl });
 const dbName = new URL(databaseUrl).pathname.slice(1);
 const url = process.argv.includes('--berkeley') ? '/api/demo/berkeley-events'

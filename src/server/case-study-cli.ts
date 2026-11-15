@@ -1,6 +1,8 @@
 import { buildApp } from './app';
+import { DEFAULT_DATABASE_URL, ensureLocalDatabase } from './db';
 
-const databaseUrl = process.env.DATABASE_URL ?? 'postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg';
+const databaseUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
+await ensureLocalDatabase(databaseUrl);
 const { app } = buildApp({ databaseUrl });
 const args = process.argv.slice(2);
 

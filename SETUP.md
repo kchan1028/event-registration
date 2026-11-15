@@ -4,10 +4,9 @@ Status: Implemented local demo. Commands checked November 15, 2026.
 
 ## Generated case-study collection
 
-For broader race, pricing, capacity, checkout-recovery, and organizer-operation cases, create a separate local PostgreSQL database and load the collection:
+For broader race, pricing, capacity, checkout-recovery, and organizer-operation cases, load the collection into a separate local PostgreSQL database (created automatically on first use):
 
 ```bash
-docker exec cyclereg-postgres createdb -U cyclereg cyclereg_cases
 DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_cases npm run seed:cases
 DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_cases npm run dev
 ```
@@ -30,11 +29,7 @@ From the repository root, install dependencies if you have not already done so:
 npm ci
 ```
 
-Create a dedicated demo database, then seed it:
-
-```bash
-docker exec cyclereg-postgres createdb -U cyclereg cyclereg_berkeley
-```
+Seed a dedicated demo database. The seed creates the `cyclereg_berkeley` database on your local PostgreSQL if it does not exist yet:
 
 ```bash
 DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_berkeley npm run seed:berkeley
