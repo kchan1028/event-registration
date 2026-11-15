@@ -6,7 +6,7 @@ import { z, ZodError } from 'zod';
 import { BERKELEY_DEMO_ORG, buildBerkeleyEvents } from '../shared/berkeleyEvents';
 import { buildBerkeleyOmniumEvent, OMNIUM_ORG_NAME } from '../shared/berkeleyOmnium';
 import { buildDemoEvent } from '../shared/demo';
-import { buildCaseStudyScenarios, CASE_STUDY_REFERENCE_NOW } from '../shared/caseStudies';
+import { buildCaseStudyScenarios, CASE_STUDY_ORG_ID, CASE_STUDY_REFERENCE_NOW } from '../shared/caseStudies';
 import { configFromTemplate } from '../shared/factory';
 import { buildFixtureEvents, FIXTURE_ORG_NAME } from '../shared/fixtures';
 import { createEventInputSchema, eventConfigSchema } from '../shared/schema';
@@ -24,6 +24,19 @@ import { createCoupons } from './coupons';
 import { createOrders, type Orders } from './orders';
 import { createWaitlist } from './waitlist';
 import { createRepo, HttpError, type Repo } from './repo';
+import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
+import { ROLES, type Permission } from '../shared/roles';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    /** The signed-in account. Set for every route that is not marked public. */
+    account?: Account;
+  }
+  interface FastifyContextConfig {
+    /** Routes open without sign-in: health, the public event list, and rider event pages. */
+    public?: boolean;
+  }
+}
 
 export interface AppOptions {
   /** PostgreSQL connection string (ADR 0004). */
@@ -34,9 +47,11 @@ export interface AppOptions {
   now?: () => Date;
   /** How long checkout holds places before payment. */
   holdMinutes?: number;
+  /** Who is calling (ADR 0003). Defaults to Clerk, or the local test provider, from the environment. */
+  auth?: AuthProvider;
 }
 
-export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; orders: Orders } {
+export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; orders: Orders; access: Access } {
   const db = openDb(opts.databaseUrl, (err) => app.log.error(err));
   const clock = opts.now ?? (() => new Date());
   const repo = createRepo(db, clock);
@@ -48,11 +63,34 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const startLists = createStartLists(db, repo, orders, clock, identity);
   const waitlist = createWaitlist(db, repo, clock);
   const caseStudies = createCaseStudyFixtures(db, repo, orders);
+  const provider = opts.auth ?? authProviderFromEnv();
+  const access = createAccess(db, provider, clock);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
   // Migrations run once before the server accepts requests (listen, or the first inject in tests).
   app.addHook('onReady', async () => db.migrate());
+  const idParam = z.object({ id: z.string().min(1).max(64) });
   app.addHook('onClose', async () => db.close());
+
+  // Sign-in is required for every API route unless the route is marked public. Default deny:
+  // a new route is protected even if its author forgets to think about sign-in.
+  app.addHook('preHandler', async (req) => {
+    if (!req.url.startsWith('/api/') || req.routeOptions.config?.public) return;
+    const signedIn = await provider.verify(req);
+    if (!signedIn) throw new HttpError(401, 'Sign in to continue.');
+    req.account = await access.accountFor(signedIn);
+  });
+
+  /** The signed-in caller (set by the preHandler hook above). */
+  function me(req: { account?: Account }): Account {
+    if (!req.account) throw new HttpError(401, 'Sign in to continue.');
+    return req.account;
+  }
+  const onEvent = (req: { account?: Account; params: unknown }, permission: Permission) => {
+    const { id } = idParam.parse(req.params);
+    return access.requireEvent(me(req), id, permission);
+  };
+  const isPublic = { config: { public: true } };
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof HttpError) return reply.status(err.status).send({ error: err.message, details: err.details });
@@ -63,8 +101,6 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     if (status >= 500) app.log.error(err);
     return reply.status(status).send({ error: status >= 500 ? 'Something went wrong on the server.' : (err as Error).message });
   });
-
-  const idParam = z.object({ id: z.string().min(1).max(64) });
 
   async function eventPayload(id: string) {
     const record = await repo.getEvent(id);
@@ -77,13 +113,13 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       pending: {
         licenseVerification: 'USA Cycling license and category checks are not connected. Every license is unverified and needs review.',
         payments: 'Payments are not connected. Checkout uses a simulated payment and takes no money.',
-        signIn: 'Sign-in and required multi-factor authentication are not built yet. Until they are, run the app only on your own computer.',
+        signIn: 'Sign-in is by emailed link or code only. Multi-factor sign-in for organizers is not built yet (Phase 3), so use fictional data only.',
       },
     };
   }
 
   // Health check for a load balancer or platform: answers 503 while the database cannot be reached.
-  app.get('/api/health', async (_req, reply) => {
+  app.get('/api/health', isPublic, async (_req, reply) => {
     try {
       await db.get('SELECT 1');
       return { ok: true };
@@ -93,23 +129,64 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     }
   });
 
-  app.get('/api/organizations', async () => repo.listOrganizations());
+  // The signed-in account and the organizations it belongs to.
+  app.get('/api/me', async (req) => {
+    const account = me(req);
+    return { account: { id: account.id, email: account.email }, memberships: await access.memberships(account.id) };
+  });
 
+  // Only the organizations the caller belongs to, with the caller's roles in each.
+  app.get('/api/organizations', async (req) => {
+    const mine = new Map((await access.memberships(me(req).id)).map((m) => [m.organizationId, m.roles]));
+    return (await repo.listOrganizations()).filter((o) => mine.has(o.id)).map((o) => ({ ...o, roles: mine.get(o.id)! }));
+  });
+
+  // Anyone signed in can start an organization and becomes its owner.
   app.post('/api/organizations', async (req, reply) => {
     const body = z.object({ name: z.string().trim().min(1, 'Enter an organization name.').max(120) }).parse(req.body);
-    return reply.status(201).send(await repo.createOrganization(body.name));
+    const org = await db.transaction(async () => {
+      const created = await repo.createOrganization(body.name);
+      await access.grant(created.id, me(req).id, 'owner', me(req).id);
+      return created;
+    });
+    return reply.status(201).send(org);
+  });
+
+  // People and roles. Owners only.
+  const memberBody = z.object({ email: z.string().trim().email('Enter an email address.').max(254), role: z.enum(ROLES) });
+  app.get('/api/organizations/:id/members', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrg(me(req), id, 'members.manage');
+    return access.listMembers(id);
+  });
+  app.post('/api/organizations/:id/members', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrg(me(req), id, 'members.manage');
+    const body = memberBody.parse(req.body);
+    return access.addMember(id, body.email, body.role, me(req));
+  });
+  app.post('/api/organizations/:id/members/remove', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrg(me(req), id, 'members.manage');
+    const body = memberBody.parse(req.body);
+    return access.removeMember(id, body.email, body.role);
   });
 
   app.post('/api/organizations/:id/events', async (req, reply) => {
     const { id } = idParam.parse(req.params);
+    await access.requireOrg(me(req), id, 'event.edit');
     const input = createEventInputSchema.parse(req.body);
     const record = await repo.createEvent(id, configFromTemplate(input));
     return reply.status(201).send(await eventPayload(record.id));
   });
 
-  app.get('/api/events/:id', async (req) => eventPayload(idParam.parse(req.params).id));
+  app.get('/api/events/:id', async (req) => {
+    const roles = await onEvent(req, 'event.view');
+    return { ...(await eventPayload(idParam.parse(req.params).id)), roles };
+  });
 
   app.put('/api/events/:id/config', async (req) => {
+    await onEvent(req, 'event.edit');
     const { id } = idParam.parse(req.params);
     const body = z.object({ revision: z.number().int(), config: eventConfigSchema }).parse(req.body);
     await repo.saveDraft(id, body.revision, body.config);
@@ -117,6 +194,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.post('/api/events/:id/publish', async (req) => {
+    await onEvent(req, 'event.edit');
     const { id } = idParam.parse(req.params);
     const body = z.object({ acknowledgeWarnings: z.boolean().default(false), acknowledgeImpact: z.boolean().default(false) }).parse(req.body ?? {});
     // A change that touches riders who already entered must be reviewed, like warnings.
@@ -131,8 +209,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return { ...(await eventPayload(id)), publishedVersion: result.version };
   });
 
-  app.get('/api/events/:id/resolutions', async (req) => resolutions.list(idParam.parse(req.params).id));
+  app.get('/api/events/:id/resolutions', async (req) => {
+    await onEvent(req, 'entries.manage');
+    return resolutions.list(idParam.parse(req.params).id);
+  });
   app.post('/api/events/:id/resolutions/:rid', async (req) => {
+    await onEvent(req, 'entries.manage');
     const p = z.object({ id: z.string().min(1).max(64), rid: z.string().min(1).max(64) }).parse(req.params);
     const body = z
       .object({ outcome: z.enum(['kept', 'transferred', 'withdrawn']), riderNotified: z.boolean(), note: z.string().trim().min(3, 'Write what was agreed with the rider.').max(300) })
@@ -165,14 +247,19 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return { publishedVersion: record.publishedVersion, impact: changeImpact(published, record.config, entries) };
   }
 
-  app.get('/api/events/:id/impact', async (req) => impactFor(idParam.parse(req.params).id));
+  app.get('/api/events/:id/impact', async (req) => {
+    await onEvent(req, 'event.edit');
+    return impactFor(idParam.parse(req.params).id);
+  });
 
   app.get('/api/events/:id/versions/:version', async (req) => {
+    await onEvent(req, 'event.view');
     const p = z.object({ id: z.string(), version: z.coerce.number().int().min(1) }).parse(req.params);
     return { version: p.version, config: await repo.getVersion(p.id, p.version) };
   });
 
   app.post('/api/events/:id/test-entries', async (req) => {
+    await onEvent(req, 'event.edit');
     const { id } = idParam.parse(req.params);
     const body = z
       .object({
@@ -186,13 +273,14 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.delete('/api/events/:id/test-entries', async (req) => {
+    await onEvent(req, 'event.edit');
     const { id } = idParam.parse(req.params);
     const removed = await repo.clearTestEntries(id);
     return { removed, event: await eventPayload(id) };
   });
 
   // Rider checkout. Uses the latest published version only.
-  app.get('/api/public/events', async () => {
+  app.get('/api/public/events', isPublic, async () => {
     const published = (await repo.listOrganizations()).flatMap((o) => o.events.filter((e) => e.publishedVersion !== null).map((e) => ({ id: e.id, organizationName: o.name })));
     const out = [];
     for (const { id, organizationName } of published) {
@@ -212,9 +300,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   /** Loads the clickable demo purchase flow fixtures (docs/fixtures) once, published. */
-  app.post('/api/demo/purchase-flow', async (_req, reply) => {
+  app.post('/api/demo/purchase-flow', async (req, reply) => {
     const existing = (await repo.listOrganizations()).find((o) => o.name === FIXTURE_ORG_NAME);
-    if (existing && existing.events.length > 0) return reply.status(200).send({ organizationId: existing.id, eventIds: existing.events.map((e) => e.id) });
+    if (existing && existing.events.length > 0) {
+      await joinDemo(req, existing.id);
+      return reply.status(200).send({ organizationId: existing.id, eventIds: existing.events.map((e) => e.id) });
+    }
     const org = existing ?? (await repo.createOrganization(FIXTURE_ORG_NAME));
     const eventIds: string[] = [];
     for (const { config, entryPlan } of buildFixtureEvents()) {
@@ -223,6 +314,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       await repo.publish(record.id, true);
       eventIds.push(record.id);
     }
+    await joinDemo(req, org.id);
     return reply.status(201).send({ organizationId: org.id, eventIds });
   });
 
@@ -231,21 +323,28 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     scenarios: buildCaseStudyScenarios().map(({ key, eventId, title, purpose, publish }) => ({ key, eventId, title, purpose, publish })),
   }));
 
-  app.post('/api/demo/case-studies', async (_req, reply) => {
+  app.post('/api/demo/case-studies', async (req, reply) => {
     const result = await caseStudies.loadAll();
+    await joinDemo(req, CASE_STUDY_ORG_ID);
     return reply.status(result.results.some((row) => row.created) ? 201 : 200).send(result);
   });
 
   app.post('/api/demo/case-studies/:key', async (req, reply) => {
     const { key } = z.object({ key: z.enum(['criterium', 'road-shared-field', 'omnium', 'empty-event', 'large-event']) }).parse(req.params);
     const result = await caseStudies.load(key);
+    await joinDemo(req, CASE_STUDY_ORG_ID);
     return reply.status(result.created ? 201 : 200).send(result);
   });
 
-  app.delete('/api/demo/case-studies', async () => caseStudies.reset());
+  // Reset removes the case-study organization, so only its owners may run it.
+  app.delete('/api/demo/case-studies', async (req) => {
+    if (await db.get(`SELECT 1 FROM organizations WHERE id = $1`, [CASE_STUDY_ORG_ID])) await access.requireOrg(me(req), CASE_STUDY_ORG_ID, 'members.manage');
+    return caseStudies.reset();
+  });
 
-  app.get('/api/public/events/:id', async (req) => orders.publicEvent(idParam.parse(req.params).id));
+  app.get('/api/public/events/:id', isPublic, async (req) => orders.publicEvent(idParam.parse(req.params).id));
 
+  // Riders sign in before checkout; the order belongs to their account.
   app.post('/api/public/events/:id/orders', async (req, reply) => {
     const { id } = idParam.parse(req.params);
     const body = z
@@ -259,7 +358,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
         couponCode: z.string().trim().min(1).max(32).nullable().optional(),
       })
       .parse(req.body);
-    return reply.status(201).send(await orders.createOrder(id, body));
+    return reply.status(201).send(await orders.createOrder(id, body, me(req).id));
   });
 
   // Coupons (src/server/coupons.ts). Riders check a code; the order re-checks and counts it under the event lock.
@@ -268,39 +367,64 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { code } = z.object({ code: z.string().trim().min(1).max(32) }).parse(req.body);
     return coupons.check(id, code);
   });
-  app.get('/api/events/:id/coupons', async (req) => coupons.list(idParam.parse(req.params).id));
-  app.post('/api/events/:id/coupons', async (req, reply) => reply.status(201).send(await coupons.create(idParam.parse(req.params).id, req.body)));
+  app.get('/api/events/:id/coupons', async (req) => {
+    await onEvent(req, 'event.edit');
+    return coupons.list(idParam.parse(req.params).id);
+  });
+  app.post('/api/events/:id/coupons', async (req, reply) => {
+    await onEvent(req, 'event.edit');
+    return reply.status(201).send(await coupons.create(idParam.parse(req.params).id, req.body));
+  });
   app.post('/api/events/:id/coupons/:couponId/active', async (req) => {
+    await onEvent(req, 'event.edit');
     const p = z.object({ id: z.string().min(1).max(64), couponId: z.string().min(1).max(64) }).parse(req.params);
     const { active } = z.object({ active: z.boolean() }).parse(req.body);
     return coupons.setActive(p.id, p.couponId, active);
   });
 
   // Organizer-managed waitlists (src/server/waitlist.ts).
-  app.post('/api/public/events/:id/waitlist', async (req, reply) => reply.status(201).send(await waitlist.join(idParam.parse(req.params).id, req.body)));
+  app.post('/api/public/events/:id/waitlist', async (req, reply) => reply.status(201).send(await waitlist.join(idParam.parse(req.params).id, req.body, me(req).id)));
+  // The offer link is private to the rider it was sent to; opening it still needs sign-in.
   app.get('/api/public/offers/:token', async (req) => waitlist.offerByToken(z.object({ token: z.string().min(10).max(64) }).parse(req.params).token));
-  app.get('/api/events/:id/waitlist', async (req) => waitlist.list(idParam.parse(req.params).id));
+  app.get('/api/events/:id/waitlist', async (req) => {
+    await onEvent(req, 'entries.manage');
+    return waitlist.list(idParam.parse(req.params).id);
+  });
   const waitlistParams = z.object({ id: z.string().min(1).max(64), entryId: z.string().min(1).max(64) });
   app.post('/api/events/:id/waitlist/:entryId/offer', async (req) => {
+    await onEvent(req, 'entries.manage');
     const p = waitlistParams.parse(req.params);
     return waitlist.offer(p.id, p.entryId);
   });
   app.post('/api/events/:id/waitlist/:entryId/remove', async (req) => {
+    await onEvent(req, 'entries.manage');
     const p = waitlistParams.parse(req.params);
     return waitlist.remove(p.id, p.entryId);
   });
 
-  app.get('/api/orders/:id', async (req) => orders.getOrder(idParam.parse(req.params).id));
+  // A rider sees their own orders; organizers who may see orders see their events' orders.
+  app.get('/api/orders/:id', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrder(me(req), id);
+    return orders.getOrder(id);
+  });
 
+  // Only the rider who placed an order pays for or cancels it.
   app.post('/api/orders/:id/payment', async (req) => {
     const { id } = idParam.parse(req.params);
+    await access.requireOrder(me(req), id, true);
     const body = z.object({ attemptId: z.string().min(8).max(64), outcome: z.enum(['success', 'failure']) }).parse(req.body);
     return orders.pay(id, body.attemptId, body.outcome);
   });
 
-  app.post('/api/orders/:id/cancel', async (req) => orders.cancel(idParam.parse(req.params).id));
+  app.post('/api/orders/:id/cancel', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrder(me(req), id, true);
+    return orders.cancel(id);
+  });
 
   app.get('/api/events/:id/orders', async (req) => {
+    await onEvent(req, 'orders.view');
     const { q } = z.object({ q: z.string().max(120).optional() }).parse(req.query);
     return orders.listOrders(idParam.parse(req.params).id, q ?? '');
   });
@@ -308,6 +432,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   // Organizer corrections to rider details. A reason is required and every correction is kept.
   app.post('/api/orders/:id/rider-corrections', async (req) => {
     const { id } = idParam.parse(req.params);
+    await access.requireOrderOrganizer(me(req), id, 'entries.manage');
     const body = z.object({ changes: riderCorrectionSchema, reason: z.string().trim().min(3, 'Write why the details are being corrected.').max(300) }).parse(req.body);
     return orders.correctRider(id, body.changes, body.reason);
   });
@@ -315,31 +440,39 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   // Organizer transfers and withdrawals of paid entries. A reason is required and logged.
   app.post('/api/order-entries/:id/transfer', async (req) => {
     const { id } = idParam.parse(req.params);
+    await access.requireOrderEntry(me(req), id, 'entries.manage');
     const body = z.object({ toCategoryId: z.string().min(1).max(64), reason: z.string().trim().min(3, 'Write why the entry is moving.').max(300) }).parse(req.body);
     return orders.transferEntry(id, body.toCategoryId, body.reason);
   });
   app.post('/api/order-entries/:id/withdraw', async (req) => {
     const { id } = idParam.parse(req.params);
+    await access.requireOrderEntry(me(req), id, 'entries.manage');
     const body = z.object({ reason: z.string().trim().min(3, 'Write why the entry is withdrawn.').max(300) }).parse(req.body);
     return orders.withdrawEntry(id, body.reason);
   });
 
   app.post('/api/order-entries/:id/license-review', async (req) => {
     const { id } = idParam.parse(req.params);
+    await access.requireOrderEntry(me(req), id, 'entries.manage');
     const body = z.object({ note: z.string().trim().min(3, 'Say how the license was checked.').max(300) }).parse(req.body);
     return orders.reviewLicense(id, body.note);
   });
 
   // Race-day check-in. Volunteers see readiness and bib only.
   app.get('/api/events/:id/check-in', async (req) => {
+    await onEvent(req, 'checkin');
     const { id } = idParam.parse(req.params);
     const q = z.object({ day: z.string().max(64).optional(), q: z.string().max(80).default('') }).parse(req.query);
     return checkIn.list(id, q.day, q.q);
   });
 
-  app.put('/api/events/:id/bib-settings', async (req) => checkIn.saveSettings(idParam.parse(req.params).id, req.body));
+  app.put('/api/events/:id/bib-settings', async (req) => {
+    await onEvent(req, 'checkin.settings');
+    return checkIn.saveSettings(idParam.parse(req.params).id, req.body);
+  });
 
   app.post('/api/events/:id/check-in/:orderId', async (req) => {
+    await onEvent(req, 'checkin');
     const p = z.object({ id: z.string().min(1).max(64), orderId: z.string().min(1).max(64) }).parse(req.params);
     const body = z
       .object({ dayId: z.string().min(1).max(64), bib: z.number().int().min(1).max(99999).nullable().default(null), durationMs: z.number().int().min(0).max(86_400_000).nullable().default(null) })
@@ -348,6 +481,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.post('/api/events/:id/check-in/:orderId/bib', async (req) => {
+    await onEvent(req, 'checkin');
     const p = z.object({ id: z.string().min(1).max(64), orderId: z.string().min(1).max(64) }).parse(req.params);
     const body = z
       .object({ dayId: z.string().min(1).max(64), bib: z.number().int().min(1).max(99999), reason: z.string().trim().min(3, 'Say why the bib changed.').max(200) })
@@ -356,38 +490,53 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.post('/api/events/:id/check-in/:orderId/undo', async (req) => {
+    await onEvent(req, 'checkin');
     const p = z.object({ id: z.string().min(1).max(64), orderId: z.string().min(1).max(64) }).parse(req.params);
     const body = z.object({ dayId: z.string().min(1).max(64), reason: z.string().trim().min(3, 'Say why the check-in is being undone.').max(200) }).parse(req.body);
     return checkIn.undoCheckIn(p.id, p.orderId, body.dayId, body.reason);
   });
 
   // Rider identity across orders: suggestions and organizer-confirmed links (src/server/identity.ts).
-  app.get('/api/events/:id/rider-identity', async (req) => identity.overview(idParam.parse(req.params).id));
+  app.get('/api/events/:id/rider-identity', async (req) => {
+    await onEvent(req, 'entries.manage');
+    return identity.overview(idParam.parse(req.params).id);
+  });
   const pairBody = z.object({ orderIds: z.tuple([z.string().min(1).max(64), z.string().min(1).max(64)]) });
   app.post('/api/events/:id/rider-identity/link', async (req) => {
+    await onEvent(req, 'entries.manage');
     const { orderIds } = pairBody.parse(req.body);
     return identity.link(idParam.parse(req.params).id, orderIds[0], orderIds[1]);
   });
   app.post('/api/events/:id/rider-identity/dismiss', async (req) => {
+    await onEvent(req, 'entries.manage');
     const { orderIds } = pairBody.parse(req.body);
     return identity.dismiss(idParam.parse(req.params).id, orderIds[0], orderIds[1]);
   });
   app.post('/api/events/:id/rider-identity/unlink', async (req) => {
+    await onEvent(req, 'entries.manage');
     const { orderId } = z.object({ orderId: z.string().min(1).max(64) }).parse(req.body);
     return identity.unlink(idParam.parse(req.params).id, orderId);
   });
 
-  app.post('/api/events/:id/check-in-demo-riders', async (req, reply) => reply.status(201).send(await checkIn.addDemoRiders(idParam.parse(req.params).id)));
+  app.post('/api/events/:id/check-in-demo-riders', async (req, reply) => {
+    await onEvent(req, 'event.edit');
+    return reply.status(201).send(await checkIn.addDemoRiders(idParam.parse(req.params).id));
+  });
 
   // Start lists and the sample timer export. No contact or payment data.
-  app.get('/api/events/:id/start-lists', async (req) => startLists.overview(idParam.parse(req.params).id));
+  app.get('/api/events/:id/start-lists', async (req) => {
+    await onEvent(req, 'startlists');
+    return startLists.overview(idParam.parse(req.params).id);
+  });
 
   app.post('/api/events/:id/start-lists/:raceId/snapshots', async (req, reply) => {
+    await onEvent(req, 'startlists');
     const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
     return reply.status(201).send(await startLists.snapshot(p.id, p.raceId));
   });
 
   app.post('/api/events/:id/start-lists/:raceId/lock', async (req, reply) => {
+    await onEvent(req, 'startlists');
     const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
     return reply.status(201).send(await startLists.lock(p.id, p.raceId));
   });
@@ -395,6 +544,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   // Organizer exports from the database: entries and a (simulated) ledger. No contact or emergency details.
   app.get('/api/events/:id/exports/:kind', async (req, reply) => {
     const p = z.object({ id: z.string().min(1).max(64), kind: z.enum(['entries.csv', 'ledger.csv']) }).parse(req.params);
+    await onEvent(req, p.kind === 'entries.csv' ? 'export.entries' : 'export.ledger');
     const record = await repo.getEvent(p.id);
     const list = (await orders.listOrders(p.id)).filter((o) => o.status !== 'cancelled' && o.status !== 'expired');
     const slugName = record.config.event.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'event';
@@ -408,6 +558,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.get('/api/events/:id/start-lists/:raceId/csv', async (req, reply) => {
+    await onEvent(req, 'startlists');
     const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
     const q = z.object({ snapshot: z.coerce.number().int().min(1).optional() }).parse(req.query);
     const file = await startLists.csv(p.id, p.raceId, q.snapshot ?? null);
@@ -418,15 +569,24 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       .send(file.body);
   });
 
-  async function seed(orgName: string, { config, entryPlan }: ReturnType<typeof buildDemoEvent>) {
+  /**
+   * Demonstration organizations hold fictional data only. Whoever loads one becomes an owner of
+   * it, so each person who loads the shared demos can open them.
+   */
+  async function joinDemo(req: { account?: Account }, organizationId: string) {
+    await access.grant(organizationId, me(req).id, 'owner', null);
+  }
+
+  async function seed(req: { account?: Account }, orgName: string, { config, entryPlan }: ReturnType<typeof buildDemoEvent>) {
     const org = await repo.createOrganization(orgName);
+    await joinDemo(req, org.id);
     const record = await repo.createEvent(org.id, config);
     for (const p of entryPlan) await repo.addTestEntries(record.id, p.categoryId, p.count);
     return { organizationId: org.id, eventId: record.id };
   }
 
   /** Seeds two published standalone events once, without touching other local data. */
-  app.post('/api/demo/berkeley-events', async (_req, reply) => {
+  app.post('/api/demo/berkeley-events', async (req, reply) => {
     const result = await db.transaction(async () => {
       await db.lock('demo:berkeley-events'); // two seed requests at once create the organization once
       const existing = (await repo.listOrganizations()).find((o) => o.name === BERKELEY_DEMO_ORG);
@@ -440,14 +600,15 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       }
       return { created: true, organizationId: org.id, eventIds };
     });
+    await joinDemo(req, result.organizationId);
     return reply.status(result.created ? 201 : 200).send(result);
   });
 
   /** Creates the labeled fictional demonstration organization and event. */
-  app.post('/api/demo', async (_req, reply) => reply.status(201).send(await seed('Example Cycling Club (demonstration)', buildDemoEvent())));
+  app.post('/api/demo', async (req, reply) => reply.status(201).send(await seed(req, 'Example Cycling Club (demonstration)', buildDemoEvent())));
 
   /** Creates the Berkeley Omnium working copy (2026 fields, 2027 dates, placeholder fees, simulated entries). */
-  app.post('/api/demo/berkeley-omnium', async (_req, reply) => reply.status(201).send(await seed(OMNIUM_ORG_NAME, buildBerkeleyOmniumEvent())));
+  app.post('/api/demo/berkeley-omnium', async (req, reply) => reply.status(201).send(await seed(req, OMNIUM_ORG_NAME, buildBerkeleyOmniumEvent())));
 
   const webRoot = resolve(process.cwd(), 'dist/web');
   if (opts.serveWeb && existsSync(webRoot)) {
@@ -458,5 +619,5 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     });
   }
 
-  return { app, repo, orders };
+  return { app, repo, orders, access };
 }

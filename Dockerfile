@@ -11,10 +11,13 @@ RUN npm ci --no-audit --no-fund
 
 COPY tsconfig.json vite.config.ts ./
 COPY src ./src
+# Clerk's publishable key is public and is built into the web app; the secret key is a runtime variable only.
+ARG VITE_CLERK_PUBLISHABLE_KEY
 RUN npm run build
 
 ENV NODE_ENV=production
-# Render's default port; Render also sets PORT itself. HOST stays 127.0.0.1 unless set; see src/server/listen.ts.
+# Render's default port; Render also sets PORT itself. HOST stays 127.0.0.1 unless set (render.yaml sets 0.0.0.0).
+# The server will not start without CLERK_SECRET_KEY (src/server/auth.ts).
 ENV PORT=10000
 EXPOSE 10000
 USER node

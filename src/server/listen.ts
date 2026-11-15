@@ -1,19 +1,9 @@
 /**
- * The address the server listens on. Defaults to 127.0.0.1 (this computer only).
- *
- * Sign-in (ADR 0003) is not built, so the app must not be reachable
- * from a network (AGENTS.md boundaries, SECURITY.md). Until it is, any non-loopback
- * HOST is refused, so a deploy made too early fails at start-up instead of exposing
- * the app. Remove this guard in the change that ships sign-in.
+ * The address the server listens on. Defaults to 127.0.0.1 (this computer only); a platform
+ * sets HOST=0.0.0.0. Every API route except health and the public event pages requires
+ * sign-in (ADR 0003), so a network address is allowed. Until MFA ships (Phase 3) the app holds
+ * fictional data only; see SECURITY.md.
  */
-const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1']);
-
 export function listenHost(env: Record<string, string | undefined> = process.env): string {
-  const host = env.HOST?.trim() || '127.0.0.1';
-  if (!LOOPBACK.has(host)) {
-    throw new Error(
-      `Refusing to listen on ${host}: sign-in (ADR 0003) is not built yet, so the app must stay on 127.0.0.1. See SECURITY.md and docs/runbooks/deploy-render.md.`,
-    );
-  }
-  return host;
+  return env.HOST?.trim() || '127.0.0.1';
 }

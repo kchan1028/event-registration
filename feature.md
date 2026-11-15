@@ -2,7 +2,7 @@
 
 Status: Local build, not live. Updated November 15, 2026.
 
-CycleReg helps organizers configure road races and criteriums, lets riders try registration with simulated payment, and supports local check-in and sample start lists. It is not ready for live registration: sign-in, real payments, and federation connections are not built.
+CycleReg helps organizers configure road races and criteriums, lets riders try registration with simulated payment, and supports local check-in and sample start lists. It is not ready for live registration: multi-factor sign-in, real payments, and federation connections are not built. Passwordless email sign-in with organizations and organizer roles is built (Phase 2).
 
 This is a feature summary, not a second requirements document or roadmap. [product.md](product.md) defines requirements and acceptance criteria. [roadmap.md](roadmap.md) owns delivery status, priorities, dependencies, and verification evidence. “Implemented” below means available in the local build; it does not mean approved for a live event or verified with users.
 
@@ -64,7 +64,7 @@ Details: [check-in status](roadmap.md#check-in) and [start-list status](roadmap.
 - The separate Berkeley Omnium fixture includes a $130 two-race package and a podium nomination requiring organizer review. Award approval tools, points, and podium calculation are not built.
 - Light and dark themes are implemented, with system preference, a visible toggle, and a saved device preference.
 - Automated accessibility checks cover main screens in both themes. Manual keyboard, screen-reader, and real-phone passes remain open. See [ACCESSIBILITY.md](ACCESSIBILITY.md).
-- Data is stored in a local PostgreSQL database (a Docker container on the developer's computer, per [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md)). Nothing is hosted. There is no sign-in, so the app must stay on localhost and use fictional rider details. See [DATA_MODEL.md](DATA_MODEL.md).
+- Data is stored in a local PostgreSQL database (a Docker container on the developer's computer, per [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md)). Nothing is hosted. Every organizer page and checkout requires passwordless email sign-in (Clerk), and roles limit each person to their organization's tools. MFA is not built, so use fictional rider details only. See [DATA_MODEL.md](DATA_MODEL.md).
 
 ## Package and bundle terminology
 

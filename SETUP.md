@@ -7,11 +7,11 @@ Status: Implemented local demo. Commands checked November 15, 2026.
 For broader race, pricing, capacity, checkout-recovery, and organizer-operation cases, load the collection into a separate local PostgreSQL database (created automatically on first use):
 
 ```bash
-DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_cases npm run seed:cases
+DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_cases npm run seed:cases -- --owner you@example.com
 DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_cases npm run dev
 ```
 
-The collection contains a multi-category criterium, shared-field road race, two-day omnium, empty draft, and large event. It also contains clearly labeled simulated payment states. List or load one case with `npm run seed:cases -- --list` and `npm run seed:cases -- --scenario omnium`. Remove only generated collection data with `npm run seed:cases -- --reset`. Keep the same `DATABASE_URL` for every command. Full rules and expected outcomes are in [fixture documentation](docs/fixtures/README.md#generated-race-case-studies).
+The collection contains a multi-category criterium, shared-field road race, two-day omnium, empty draft, and large event. It also contains clearly labeled simulated payment states. List or load one case with `npm run seed:cases -- --list` and `npm run seed:cases -- --scenario omnium`. Remove only generated collection data with `npm run seed:cases -- --reset`. Keep the same `DATABASE_URL` for every command. `--owner` names the email you sign in with ([sign-in keys](docs/runbooks/local-setup.md#sign-in-keys)); without it the collection loads but your account cannot see it. Full rules and expected outcomes are in [fixture documentation](docs/fixtures/README.md#generated-race-case-studies).
 
 ## Berkeley standalone events
 
@@ -32,10 +32,10 @@ npm ci
 Seed a dedicated demo database. The seed creates the `cyclereg_berkeley` database on your local PostgreSQL if it does not exist yet:
 
 ```bash
-DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_berkeley npm run seed:berkeley
+DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_berkeley npm run seed:berkeley -- --owner you@example.com
 ```
 
-Expected result: `Demonstration events created in database cyclereg_berkeley`, followed by the organization and event IDs. The seed publishes both events so they appear in the rider event list. It creates no rider registrations, orders, or simulated capacity entries. Running it again reports `already exist` and preserves the existing event IDs, organizer edits, and published versions.
+Use the email you sign in with ([sign-in keys](docs/runbooks/local-setup.md#sign-in-keys)). Expected result: `Owner: you@example.com.`, then `Demonstration events created in database cyclereg_berkeley`, followed by the organization and event IDs. The seed publishes both events so they appear in the rider event list. It creates no rider registrations, orders, or simulated capacity entries. Running it again reports `already exist` and preserves the existing event IDs, organizer edits, and published versions.
 
 The database lives in your local PostgreSQL container and the credentials are local-only test values. Existing databases are not cleared or migrated to this fixture. Use this dedicated database for a catalog containing only the two events; seeding into a database with other events keeps those events.
 
@@ -51,7 +51,7 @@ Keep `DATABASE_URL` identical when seeding and starting the app. The home page's
 
 Choose an event, select an eligible category, and use made-up rider information or a fictional demo rider. A single road-race entry totals $80; a single criterium entry totals $60. Demo mode allows testing outside the registration windows. Complete the sample waiver and simulated payment. Payment moves no money, and an unreviewed license remains in review.
 
-The app has no sign-in. Keep it on this computer at `127.0.0.1`; do not deploy it or expose it to a network. Stop the servers with Ctrl+C.
+Sign in with your email to open the organizer workspace ([sign-in keys](docs/runbooks/local-setup.md#sign-in-keys)); the rider event list is open without sign-in. MFA is not built, so use fictional details only, and keep the app on this computer at `127.0.0.1`. Stop the servers with Ctrl+C.
 
 For a single-process built demo:
 

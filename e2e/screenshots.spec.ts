@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 // Regenerates docs/screenshots from the demonstration event.
 // Run with: SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts

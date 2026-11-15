@@ -8,6 +8,7 @@ import type { FieldChange, RiderCorrection } from '../shared/lookup';
 import type { BibSettings, CheckInResult, PaymentState } from '../shared/checkin';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
+import type { Role } from '../shared/roles';
 
 export interface PublicEvent {
   eventId: string;
@@ -164,11 +165,15 @@ export interface EventPayload {
   versions: { version: number; publishedAt: string; draftRevision: number; warningsAcknowledged: number }[];
   issues: Issue[];
   pending: { licenseVerification: string; payments: string; signIn: string };
+  /** The caller's roles in the event's organization (sent by GET /api/events/:id). */
+  roles?: Role[];
 }
 
 export interface OrganizationSummary {
   id: string;
   name: string;
+  /** The caller's roles in this organization. */
+  roles: Role[];
   events: {
     id: string;
     name: string;
@@ -198,12 +203,23 @@ export class ApiError extends Error {
   }
 }
 
+/** Supplies the signed-in session token (src/web/auth.tsx); every API call sends it. */
+let tokenGetter: () => Promise<string | null> = async () => null;
+export function setTokenGetter(fn: () => Promise<string | null>): void {
+  tokenGetter = fn;
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await tokenGetter().catch(() => null);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
     res = await fetch(url, {
       method,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers: { ...(await authHeaders()), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -212,6 +228,40 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, data?.error ?? `Request failed (${res.status}).`, data?.details);
   return data as T;
+}
+
+/**
+ * Downloads a file from a signed-in route. A plain link cannot send the session token, so the
+ * file is fetched with it and saved under the name the server gives.
+ */
+export async function downloadFile(url: string): Promise<void> {
+  const res = await fetch(url, { headers: await authHeaders() }).catch(() => {
+    throw new ApiError(0, 'Cannot reach the CycleReg server. Check that it is running, then try again.');
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(res.status, data?.error ?? `Download failed (${res.status}).`);
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? 'download.csv';
+  const href = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 1000);
+}
+
+export interface Membership {
+  organizationId: string;
+  name: string;
+  roles: Role[];
+}
+
+export interface MemberList {
+  members: { accountId: string; email: string; role: Role }[];
+  invitations: { email: string; role: Role }[];
 }
 
 export interface CheckInRider {
@@ -262,6 +312,10 @@ export interface StartListOverview {
 }
 
 export const api = {
+  me: () => request<{ account: { id: string; email: string }; memberships: Membership[] }>('GET', '/api/me'),
+  members: (orgId: string) => request<MemberList>('GET', `/api/organizations/${orgId}/members`),
+  addMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role }),
+  removeMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members/remove`, { email, role }),
   organizations: () => request<OrganizationSummary[]>('GET', '/api/organizations'),
   createOrganization: (name: string) => request<{ id: string; name: string }>('POST', '/api/organizations', { name }),
   createEvent: (orgId: string, input: CreateEventInput) => request<EventPayload>('POST', `/api/organizations/${orgId}/events`, input),

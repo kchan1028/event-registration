@@ -1,10 +1,17 @@
+import { existsSync } from 'node:fs';
+import { CASE_STUDY_ORG_ID } from '../shared/caseStudies';
 import { buildApp } from './app';
+import { scriptAuth, seedOwner } from './auth';
 import { DEFAULT_DATABASE_URL, ensureLocalDatabase } from './db';
 
+if (existsSync('.env')) process.loadEnvFile('.env');
 const databaseUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
 await ensureLocalDatabase(databaseUrl);
-const { app } = buildApp({ databaseUrl });
+// Runs as the local seed-script account. `--owner you@example.com` (or SEED_OWNER_EMAIL) makes that
+// email an owner of the case-study organization, so it appears after you sign in with it.
+const { app, access } = buildApp({ databaseUrl, auth: scriptAuth() });
 const args = process.argv.slice(2);
+const owner = seedOwner(args);
 
 try {
   if (args.includes('--list')) {
@@ -22,6 +29,8 @@ try {
     const url = key ? `/api/demo/case-studies/${key}` : '/api/demo/case-studies';
     const response = await app.inject({ method: 'POST', url });
     if (response.statusCode !== 200 && response.statusCode !== 201) throw new Error(response.body);
+    if (owner) await access.addMember(CASE_STUDY_ORG_ID, owner, 'owner', null);
+    else console.log('Tip: pass --owner <your sign-in email> to see these events after you sign in.');
     console.log(`Case-study data ${response.statusCode === 201 ? 'created' : 'already exists'}: ${response.body}`);
   }
 } catch (error) {

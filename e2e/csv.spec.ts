@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const CSV = [
   'race,category,timing_code,display_group,start_group,start_time,license_categories,min_age,competition_class,length_type,distance,laps,minutes,plus_laps,price,cap',

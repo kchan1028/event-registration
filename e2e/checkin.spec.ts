@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 /*
  * Race-day check-in search. A barcode scanner types the check-in code and presses Enter at once,

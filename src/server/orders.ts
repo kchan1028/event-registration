@@ -316,10 +316,19 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
      * Either all entries are held or none are. A repeated request with the
      * same client request ID returns the first order instead of a duplicate.
      */
-    async createOrder(eventId: string, input: { clientRequestId: string; categoryIds: string[]; rider?: unknown; waiver?: unknown; extras?: unknown; offerToken?: string | null; couponCode?: string | null }) {
+    async createOrder(
+      eventId: string,
+      input: { clientRequestId: string; categoryIds: string[]; rider?: unknown; waiver?: unknown; extras?: unknown; offerToken?: string | null; couponCode?: string | null },
+      accountId: string | null = null,
+    ) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
-        const existing = await db.get<{ id: string }>(`SELECT id FROM orders WHERE event_id = $1 AND client_request_id = $2`, [eventId, input.clientRequestId]);
+        const existing = await db.get<{ id: string; account_id: string | null }>(`SELECT id, account_id FROM orders WHERE event_id = $1 AND client_request_id = $2`, [
+          eventId,
+          input.clientRequestId,
+        ]);
+        // A retried request returns its first order, but never another account's order.
+        if (existing && existing.account_id !== accountId) throw new HttpError(409, 'This checkout request was already used. Start checkout again.');
         if (existing) return view(existing.id);
 
         const { config, version } = await publishedConfig(eventId);
@@ -379,9 +388,9 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const t = nowIso();
         const expires = new Date(clock().getTime() + holdMinutes * 60_000).toISOString();
         await db.run(
-          `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json, coupon_id)
-           VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-          [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null],
+          `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json, coupon_id, account_id)
+           VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+          [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null, accountId],
         );
         // Demo riders on demo events carry a simulated license result from the fixtures; everyone else needs review.
         const fixture = config.event.isDemo ? demoRider(rider.demoRiderId) : undefined;

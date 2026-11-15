@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { useTheme } from './theme';
+import { downloadFile, type ApiError } from './api';
 
 /** Labeled field wrapper. The label is always visible (coding guide, Accessibility). */
 export function Field({ label, hint, error, children, className, id: fixedId }: { label: string; hint?: string; error?: string; children: (id: string, describedBy?: string) => ReactNode; className?: string; id?: string }) {
@@ -155,4 +156,34 @@ export function ThemeToggle() {
 
 export function dayHue(index: number): string {
   return ['var(--day-1)', 'var(--day-2)', 'var(--day-3)', 'var(--day-4)'][index % 4];
+}
+
+/**
+ * A download link for a signed-in route. It stays a real link (keyboard, screen readers,
+ * copy address), but the click fetches the file with the session token, which a plain
+ * link cannot send.
+ */
+export function DownloadLink({ href, className, children }: { href: string; className?: string; children: ReactNode }) {
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <>
+      <a
+        className={className}
+        href={href}
+        download
+        onClick={(e) => {
+          e.preventDefault();
+          setError(null);
+          downloadFile(href).catch((err: ApiError) => setError(err.message));
+        }}
+      >
+        {children}
+      </a>
+      {error && (
+        <span className="field__error" role="alert">
+          {error}
+        </span>
+      )}
+    </>
+  );
 }

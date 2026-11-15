@@ -2,8 +2,11 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { formatDate } from '../shared/format';
 import type { Template } from '../shared/schema';
 import { api, ApiError, type OrganizationSummary } from './api';
-import { navigate } from './App';
+import { href, navigate } from './App';
 import { Field, Icon, Pending, ThemeToggle } from './ui';
+import { AccountMenu } from './auth';
+import { TeamPanel } from './Team';
+import { can, ROLE_LABELS, type Role } from '../shared/roles';
 
 const TEMPLATE_LABELS: Record<Template, { title: string; detail: string }> = {
   weekend: { title: 'Two-day weekend', detail: 'Saturday road race and Sunday criterium' },
@@ -52,15 +55,16 @@ export function Home() {
     <div className="home">
       <header className="home__bar">
         <span className="brand">CycleReg</span>
-        <span className="home__bar-note">Organizer workspace · local build</span>
+        <span className="home__bar-note">Organizer workspace</span>
         <ThemeToggle />
+        <AccountMenu />
       </header>
       <main className="home__main">
         <section className="home__intro">
           <h1>Build a race schedule riders can enter correctly</h1>
           <p>
             Set up road race and criterium categories, combine them into start groups, set shared field limits, and check the rider-facing schedule before you
-            publish. Everything is saved on this computer.
+            publish. Your organization's owner decides who on the team can change what.
           </p>
           <ul className="pending-list" aria-label="Not connected yet">
             <li>
@@ -70,7 +74,7 @@ export function Home() {
               <Pending>Payments: simulated only, no money is charged</Pending>
             </li>
             <li>
-              <Pending>Sign-in with MFA: not built, local use only</Pending>
+              <Pending>Sign-in: emailed code or link only. Multi-factor sign-in for organizers is not built yet, so use fictional data only</Pending>
             </li>
           </ul>
         </section>
@@ -88,21 +92,30 @@ export function Home() {
             {orgs?.length === 0 && (
               <div className="empty">
                 <p>
-                  <strong>No organizations yet.</strong> Create your club on the right, or load the Berkeley Omnium to see a full elite, masters, women's, junior,
-                  and collegiate schedule.
+                  <strong>You are not on any organization's team yet.</strong> Create your club on the right, or load the Berkeley Omnium to see a full elite,
+                  masters, women's, junior, and collegiate schedule. If a club added you, sign in with the email they used.
                 </p>
               </div>
             )}
             {orgs?.map((org) => (
               <article className="org" key={org.id}>
-                <h3>{org.name}</h3>
+                <div className="org__head">
+                  <h3>{org.name}</h3>
+                  <span className="org__roles">
+                    {org.roles.map((r) => (
+                      <span className="tag" key={r}>
+                        {ROLE_LABELS[r]}
+                      </span>
+                    ))}
+                  </span>
+                </div>
                 {org.events.length === 0 ? (
                   <p className="muted">No events yet.</p>
                 ) : (
                   <ul className="event-list">
                     {org.events.map((ev) => (
                       <li key={ev.id}>
-                        <a className="event-link" href={`#/events/${ev.id}`}>
+                        <a className="event-link" href={eventHref(ev.id, org.roles)}>
                           <span className="event-link__name">
                             {ev.name}
                             {ev.isDemo && <span className="tag tag--demo">Example data</span>}
@@ -117,7 +130,8 @@ export function Home() {
                     ))}
                   </ul>
                 )}
-                <CreateEvent orgId={org.id} onError={setError} />
+                {can(org.roles, 'event.edit') && <CreateEvent orgId={org.id} onError={setError} />}
+                {can(org.roles, 'members.manage') && <TeamPanel orgId={org.id} orgName={org.name} />}
               </article>
             ))}
           </div>
@@ -153,6 +167,15 @@ export function Home() {
       </main>
     </div>
   );
+}
+
+/** Opens each event where the person's role does its work: the builder, check-in, or start lists. */
+function eventHref(eventId: string, roles: Role[]): string {
+  if (can(roles, 'event.edit')) return href({ page: 'event', eventId, view: 'race', raceId: null });
+  if (can(roles, 'orders.view')) return href({ page: 'event', eventId, view: 'registrations' });
+  if (can(roles, 'checkin')) return href({ page: 'checkin', eventId });
+  if (can(roles, 'startlists')) return href({ page: 'event', eventId, view: 'startlists' });
+  return href({ page: 'event', eventId, view: 'race', raceId: null });
 }
 
 function CreateOrganization({ onCreated, onError }: { onCreated: () => void; onError: (m: string) => void }) {

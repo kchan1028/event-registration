@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 /* Clickable demo purchase flow (product.md 2a) using the docs/fixtures data. */
 

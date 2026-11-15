@@ -6,7 +6,7 @@ import { api, ApiError, type OrderStatus, type OrderView, type ResolutionItem, t
 import { href } from './App';
 import type { Draft } from './Builder';
 import { Coupons } from './Coupons';
-import { Field, Icon, Pending } from './ui';
+import { DownloadLink, Field, Icon, Pending } from './ui';
 
 type Filter = 'all' | 'review' | 'attention' | 'unpaid';
 
@@ -68,19 +68,19 @@ export function Registrations({ draft }: { draft: Draft }) {
         Every order from the rider registration page, with what still needs a person. Payment state and readiness are separate: a paid entry still needs its license reviewed.
       </p>
       <div className="pending-stack">
-        <Pending>Payments are simulated. Sign-in and role-based access are not built, so anyone using this computer can see these registrations.</Pending>
+        <Pending>Payments are simulated. Only people with a registration manager, finance, or owner role in this organization can see these registrations.</Pending>
       </div>
       {published ? (
         <p className="row-actions">
           <a className="btn btn--secondary btn--small" href={href({ page: 'register', eventId })}>
             Open rider registration (version {draft.data.publishedVersion})
           </a>
-          <a className="btn btn--ghost btn--small" href={`/api/events/${eventId}/exports/entries.csv`} download>
+          <DownloadLink className="btn btn--ghost btn--small" href={`/api/events/${eventId}/exports/entries.csv`}>
             Download entries (CSV)
-          </a>
-          <a className="btn btn--ghost btn--small" href={`/api/events/${eventId}/exports/ledger.csv`} download>
+          </DownloadLink>
+          <DownloadLink className="btn btn--ghost btn--small" href={`/api/events/${eventId}/exports/ledger.csv`}>
             Download ledger (CSV)
-          </a>
+          </DownloadLink>
         </p>
       ) : (
         <p className="note">Riders can register once the event is published. Publish from Review and publish.</p>

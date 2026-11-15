@@ -2,7 +2,7 @@
 
 CycleReg (working name; availability not checked) is a proposed registration and race-day platform for volunteer-run U.S. bike races. Its first release targets road races, criteriums, and two-day road race plus criterium weekends. The goal is measurable: less volunteer time spent on setup, registration exceptions, check-in, and handing the event to next year's organizer.
 
-> **Status: local build of the organizer category builder, rider checkout, registration tools, and race-day check-in.** You can build a road race and criterium weekend, publish it, register as a rider for one day or both (bundle pricing, held places, and a **simulated** payment), manage entries, check riders in, and download start lists and CSV exports, all on your own computer. Real payments, USA Cycling license and waiver checks, and sign-in with MFA are **not built** and are shown as pending in the app. Do not host or share the app. Phase 0 discovery tools are written. One discovery interview has been run; no measurements have been done.
+> **Status: local build of the organizer category builder, rider checkout, registration tools, and race-day check-in.** You can build a road race and criterium weekend, publish it, register as a rider for one day or both (bundle pricing, held places, and a **simulated** payment), manage entries, check riders in, and download start lists and CSV exports, all on your own computer. Every organizer page and checkout requires passwordless email sign-in (Clerk), and each person's role in an organization (owner, registration manager, check-in volunteer, timer/export, finance) limits what they can see and change. Real payments, USA Cycling license and waiver checks, and multi-factor authentication (MFA) for organizer roles are **not built** and are shown as pending in the app. Until organizer MFA ships, use fictional data only; the app is not deployed. Phase 0 discovery tools are written. One discovery interview has been run; no measurements have been done.
 
 ## Who it serves and the problem it solves
 
@@ -108,15 +108,17 @@ docker run -d --name cyclereg-postgres -e POSTGRES_USER=cyclereg -e POSTGRES_PAS
 npm ci
 ```
 
+Sign-in needs a Clerk development instance: put `CLERK_SECRET_KEY` and `VITE_CLERK_PUBLISHABLE_KEY` in a local `.env` ([sign-in keys](docs/runbooks/local-setup.md#sign-in-keys)). The tests do not need them.
+
 ```bash
 npm run dev
 ```
 
-For two standalone Berkeley events ($80 road race, $60 criterium), follow [demo setup](SETUP.md) and run `npm run seed:berkeley` with the documented separate database.
+For two standalone Berkeley events ($80 road race, $60 criterium), follow [demo setup](SETUP.md) and run `npm run seed:berkeley -- --owner you@example.com` with the documented separate database.
 
-For deterministic road, criterium, omnium, empty, and large-event cases, run `npm run seed:cases`. Use `-- --list`, `-- --scenario <key>`, or `-- --reset` to inspect, load one case, or remove only the generated collection. See the [case-study fixture guide](docs/fixtures/README.md#generated-race-case-studies).
+For deterministic road, criterium, omnium, empty, and large-event cases, run `npm run seed:cases -- --owner you@example.com`. Use `-- --list`, `-- --scenario <key>`, or `-- --reset` to inspect, load one case, or remove only the generated collection. See the [case-study fixture guide](docs/fixtures/README.md#generated-race-case-studies).
 
-Open `http://127.0.0.1:5273/` and select **Load Berkeley Omnium** (the 2026 fields and times, dated for 2027, with organizer-set $80 road race and $60 criterium fees and a $130 two-race package including a podium nomination subject to organizer review), or create your own organization. To try the rider demo, select **Open the rider demo** on the home page; it loads the fictional events, riders, and fees from `docs/fixtures`. Any event you publish also appears in the rider event list. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
+Open `http://127.0.0.1:5273/`, sign in with your email, and select **Load Berkeley Omnium** (the 2026 fields and times, dated for 2027, with organizer-set $80 road race and $60 criterium fees and a $130 two-race package including a podium nomination subject to organizer review), or create your own organization. To try the rider demo, select **Open the rider demo** on the home page; it loads the fictional events, riders, and fees from `docs/fixtures`. Any event you publish also appears in the rider event list. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
 
 ## How it is meant to work
 
@@ -249,7 +251,8 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | Phase 1 usability test kit | Implemented November 14, 2026; no sessions run yet. See [docs/usability/](docs/usability/README.md) |
 | Phase 0 discovery kit | Implemented November 14, 2026. One interview done ([D01](docs/discovery/interviews/D01.md)); no measurements yet; USAC questions sent November 15, 2026, no answer yet. See [docs/discovery/](docs/discovery/README.md) |
 | Stack | Chosen for the current local build only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
-| Real payments, USA Cycling checks, sign-in with MFA, hosting | Not built |
+| Email sign-in, organizations, and organizer roles | Implemented (Phase 2, Clerk free plan); MFA is Phase 3 |
+| Real payments, USA Cycling checks, MFA, hosting | Not built |
 
 **Next milestone: Phase 0 exit gate, plus the rest of Phase 1.** Phase 0 shows whether a recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup; if not, the roadmap says to stop the build. Every Phase 1 deliverable is built. What remains for the Phase 1 exit gate is running the usability tests with the [test kit](docs/usability/README.md) and getting the timer to accept the sample export format. The first actions are in [roadmap.md](roadmap.md#next-actions).
 

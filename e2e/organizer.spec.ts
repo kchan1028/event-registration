@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 const saved = (page: Page) => expect(page.locator('.save')).toContainText('All changes saved', { timeout: 10_000 });
 
