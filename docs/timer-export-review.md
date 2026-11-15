@@ -75,6 +75,23 @@ Record each answer and who gave it. "Not needed" is a useful answer.
 | 9 | Can the same file feed both your timing software and the road-results.com upload, or do they need different files? | | | |
 | 10 | After results are posted, who makes corrections, and does anything need to flow back to registration? | | | |
 
+## What public sources already say
+
+Checked November 15, 2026 from public pages only (no login, no contact). Preliminary: the timer's answers above win over anything here.
+
+| Topic | Finding | Confidence | Source |
+|---|---|---|---|
+| Who uploads to road-results.com | Anyone with an email-based road-results.com account, normally the promoter or timer. Upload, review the output, click "Save Results", and share the link. | High | [road-results.com upload page](https://www.road-results.com/upload) (read directly) |
+| road-results.com file format | CSV with all categories on one sheet. Required: "First Name" and "Last Name", or "Full Name", or "Name". Optional: "Team", "Time", "Place", "License". Column labels on the first row; a row with exactly one filled cell starts a new category. | High | [road-results.com upload page](https://www.road-results.com/upload) |
+| Reusing the USA Cycling file | road-results.com says a file just uploaded to USA Cycling can be uploaded as is. | High | [road-results.com upload page](https://www.road-results.com/upload) |
+| USA Cycling results upload | CSV only, uploaded by the organizer in the USA Cycling event portal under Results Submission. The attached 2024 template has the columns `Race Date`, `Race discipline`, `Race Category`, `Race Gender`, `Race Class`, `Race Age Group`, `Rider License`, `Rider First Name`, `Rider Last Name`, `Rider Place`. Place codes: DNS 9996, DQ 9997, DNP 9998, DNF 9999. | High | [USA Cycling help: upload results to an event sanction](https://usacyclinghelp.zendesk.com/hc/en-us/articles/42343840919195-How-to-upload-results-to-an-event-sanction) (article updated about October 2025; template read directly) |
+| Rider matching | USA Cycling says its results program associates results by name. road-results.com's help points missing results to name spelling. A license number helps but is not required by either. | Medium | USA Cycling help article "Why is my license number not associated to my results" (May 2023, seen in search results); road-results.com racer help thread |
+| Automatic import or API | None found for either site. No public statement that road-results.com imports USA Cycling results on its own. | Medium | Search of both sites |
+| Corrections | Not found publicly for road-results.com. Riders are directed to email road-results.com about missing results. | Low | road-results.com racer help thread |
+| Points | road-results.com upgrade points depend on the category label in the uploaded results. | Medium | road-results.com racer pages (seen in search results) |
+
+What this means for the export: one CSV in USA Cycling's format can feed both uploads. The current sample already has race date, category, license number, and names. A results file would also need discipline, gender, class, and age group, which belong in the category setup, and place, which comes from timing. Whether the timer's software produces this file is still question 9 above.
+
 ## After the review
 
 1. Fill in the answers above and note the date in the status line.
