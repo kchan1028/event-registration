@@ -318,6 +318,8 @@ Status: Research needed. Results publishing stays out of scope; the question is 
 
 What is known (road-results.com upload page, reviewed November 14, 2026): results are added by an account holder uploading a CSV. All categories go on one sheet with labeled category and column headers, and a name column is the minimum. A file already prepared for USAC results upload can be reused. Timing software such as CrossMgr can produce the upload file directly. No public API was found.
 
+The questions below, with a sample export, are packaged for the timer in [docs/timer-export-review.md](docs/timer-export-review.md).
+
 To research before Phase 3:
 
 1. Who uploads for our events today (timer, promoter, or road-results staff), and whether road-results ingests sanctioned results from USAC on its own.

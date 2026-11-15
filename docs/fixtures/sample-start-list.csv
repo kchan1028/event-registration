@@ -1,0 +1,7 @@
+race_date,race,start_time,start_group,category_code,category,race_length,bib,last_name,first_name,team,license_number,racing_age,competition_class,license_status,checked_in,entry_id,rider_id
+2027-04-17,Demo Valley Criterium,09:00,Men Cat 4/5,DVC-M45,Men Cat 4/5,35 min + 2 laps,101,Demo,Alex,Demo Wheelers,DEMO-100001,29,men,reviewed,Y,oe_2ca41be52185,ord_343502c91430
+2027-04-17,Demo Valley Criterium,09:50,Women Cat 3/4/5,DVC-W345,Women Cat 3/4/5,30 min + 2 laps,,Demo,Sam,,DEMO-100004,31,women,needs_review,N,oe_c699bda5b963,ord_2eab3fa51255
+2027-04-17,Demo Valley Criterium,11:40,Juniors 10-14,DVC-J1014,Juniors 10-14,20 min + 1 lap,102,Demo,Casey,,DEMO-100003,13,men,reviewed,Y,oe_8476aa9d8898,ord_cafc38038803
+2027-04-17,Demo Valley Criterium,17:30,Open Cat 4/5 Evening,DVC-O45E,Open Cat 4/5 Evening,30 min + 2 laps,101,Demo,Alex,Demo Wheelers,DEMO-100001,29,men,reviewed,Y,oe_e40b572168cb,ord_343502c91430
+2027-05-15,Saturday road race,08:30,Masters 35+ Cat 3/4 Road Race,DRW-RR-M35,Masters 35+ Cat 3/4 Road Race,64 km · 4 laps,101,Demo,Blake,Sample Velo,DEMO-100002,38,women,reviewed,Y,oe_22b88086cf1e,ord_00778a425d90
+2027-05-16,Sunday criterium,09:00,Masters 35+ Cat 3/4 Criterium,DRW-CR-M35,Masters 35+ Cat 3/4 Criterium,40 min + 3 laps,101,Demo,Blake,Sample Velo,DEMO-100002,38,women,reviewed,N,oe_1255214bd5ab,ord_00778a425d90
