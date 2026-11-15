@@ -141,9 +141,8 @@ At the payment step, ask the participant to choose **Simulate a declined payment
 
 1. On the home page select **fictional example weekend** to load the example event, then open it and publish it from **Review and publish** (acknowledge the warnings).
 2. Open **Race-day check-in** from the left-hand menu, select **Add fictional demo riders**, then open **Bib ranges**, keep **One bib all weekend**, set 100 to 299, and save.
-3. Open the rider registration for the same event (from **Registrations**, **Open rider registration**), register a made-up rider named **Robin Sample** in Cat 4/5 on Saturday, and complete the simulated payment. Write down or print the check-in code shown on the confirmation. This is the code for V2.
-4. In **Registrations**, use **Review license** to mark Robin's license as checked, so Robin is ready to race.
-5. Return to **Race-day check-in**, choose **Saturday**, and leave the search box empty.
+3. Open **Registrations** for the same event, find **Harper Demo**, and write down or print the check-in code shown under the order. This is the code for V2.
+4. Return to **Race-day check-in**, choose **Saturday**, and leave the search box empty.
 
 The demo riders include ready riders (Alex, Blake, Casey, Emery, Harper), riders whose license still needs review (Dana, Gray), and one unpaid rider (Frankie).
 
@@ -159,11 +158,11 @@ The demo riders include ready riders (Alex, Blake, Casey, Emery, Harper), riders
 
 ### V2. Use a check-in code (core)
 
-Hand the participant the code for Robin Sample from setup, written or printed.
+Hand the participant Harper Demo's check-in code from setup, written or printed.
 
 **Scenario:** "This rider shows you their check-in code. Check them in."
 
-**Success:** Finds Robin Sample from the code and checks them in with a bib.
+**Success:** Finds Harper Demo from the code and checks Harper in with a bib.
 
 **Watch for:** typing the code with or without the dash; whether pressing Enter opening the rider is discovered or missed.
 

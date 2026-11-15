@@ -67,7 +67,7 @@ export function Home() {
               <Pending>USA Cycling license checks: not connected</Pending>
             </li>
             <li>
-              <Pending>Payments: not connected, no checkout</Pending>
+              <Pending>Payments: simulated only, no money is charged</Pending>
             </li>
             <li>
               <Pending>Sign-in with MFA: not built, local use only</Pending>

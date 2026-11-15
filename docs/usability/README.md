@@ -80,8 +80,3 @@ Also time the standard check-in task (V1). [product.md](../../product.md#success
 1. Fill in the results summary at the end of [observation-sheet.md](observation-sheet.md#results-summary) from the session sheets.
 2. Write each finding as: what happened, how many participants, severity (critical, serious, minor), and the proposed change. Turn serious and critical findings into issues or roadmap items.
 3. Link the summary from the Phase 1 row in [roadmap.md](../../roadmap.md#delivery-status). Mark Phase 1 Verified only when the gate is met, the timer has accepted the sample format, and no critical blocker is open.
-
-## Known gaps to fix or work around before sessions
-
-- **Check-in codes appear only on the rider's confirmation page.** Organizers cannot look one up in Registrations. For the code-entry task, the facilitator registers one rider in advance and keeps the confirmation open or printed (see [tasks.md](tasks.md#check-in-volunteer-tasks)).
-- **The home page still says "Payments: not connected, no checkout"**, although the rider demo has a simulated checkout. Fix the wording before sessions so organizers are not misled, or tell participants that checkout is simulated.
