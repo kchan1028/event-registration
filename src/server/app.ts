@@ -66,7 +66,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       pending: {
         licenseVerification: 'USA Cycling license and category checks are not connected. Every license is unverified and needs review.',
         payments: 'Payments are not connected. Checkout uses a simulated payment and takes no money.',
-        signIn: 'Sign-in and required multi-factor authentication are not built yet. Until it is, run the app only on your own computer.',
+        signIn: 'Sign-in and required multi-factor authentication are not built yet. Until they are, run the app only on your own computer.',
       },
     };
   }
