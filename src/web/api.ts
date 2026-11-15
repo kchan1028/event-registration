@@ -200,6 +200,8 @@ export interface StartListRace {
   rows: StartListRow[];
   snapshots: { version: number; createdAt: string; publishedVersion: number; riders: number; changesFromPrevious: StartListDiff | null }[];
   changesSinceLastSnapshot: StartListDiff | null;
+  lock: { snapshotVersion: number; lockedAt: string } | null;
+  changesSinceLock: StartListDiff | null;
 }
 
 export interface StartListOverview {
@@ -250,5 +252,6 @@ export const api = {
   startLists: (eventId: string) => request<StartListOverview>('GET', `/api/events/${eventId}/start-lists`),
   snapshotStartList: (eventId: string, raceId: string) => request<{ version: number; riders: number }>('POST', `/api/events/${eventId}/start-lists/${raceId}/snapshots`),
   changeImpact: (eventId: string) => request<{ publishedVersion: number | null; impact: ChangeImpact | null }>('GET', `/api/events/${eventId}/impact`),
+  lockStartList: (eventId: string, raceId: string) => request<{ version: number; riders: number; lockedAt: string }>('POST', `/api/events/${eventId}/start-lists/${raceId}/lock`),
   startListCsvUrl: (eventId: string, raceId: string, snapshot?: number) => `/api/events/${eventId}/start-lists/${raceId}/csv${snapshot ? `?snapshot=${snapshot}` : ''}`,
 };

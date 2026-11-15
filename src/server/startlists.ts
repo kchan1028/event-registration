@@ -87,6 +87,16 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
     });
   }
 
+  /** The race's current lock: the most recent one, pointing at the snapshot that was sent. */
+  function currentLock(eventId: string, raceId: string): { snapshotVersion: number; lockedAt: string } | null {
+    const row = db
+      .prepare<[string, string], { snapshot_version: number; locked_at: string }>(
+        `SELECT snapshot_version, locked_at FROM start_list_locks WHERE event_id = ? AND race_id = ? ORDER BY locked_at DESC, rowid DESC LIMIT 1`,
+      )
+      .get(eventId, raceId);
+    return row ? { snapshotVersion: row.snapshot_version, lockedAt: row.locked_at } : null;
+  }
+
   function slug(s: string) {
     return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'race';
   }
@@ -102,8 +112,14 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
         publishedVersion: version,
         races: config.races.map((race) => {
           const rows = currentRows(eventId, race.id);
-          const last = snapRows(eventId, race.id).at(-1);
+          const snaps = snapRows(eventId, race.id);
+          const last = snaps.at(-1);
+          const lock = currentLock(eventId, race.id);
+          const lockedSnap = lock ? snaps.find((s) => s.version === lock.snapshotVersion) : undefined;
           return {
+            /** Locked list sent to the timer; later changes are revisions against it, never blocked. */
+            lock,
+            changesSinceLock: lockedSnap ? diffRows(JSON.parse(lockedSnap.rows_json) as StartListRow[], rows) : null,
             raceId: race.id,
             raceName: race.name,
             date: config.days.find((d) => d.id === race.dayId)?.date ?? '',
@@ -113,6 +129,18 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
           };
         }),
       };
+    },
+
+    /** Lock a race's start list: save a snapshot of the current list and record the lock against it. */
+    lock(eventId: string, raceId: string) {
+      return db
+        .transaction(() => {
+          const snap = this.snapshot(eventId, raceId);
+          const t = nowIso();
+          db.prepare(`INSERT INTO start_list_locks (id, event_id, race_id, snapshot_version, locked_at) VALUES (?, ?, ?, ?, ?)`).run(newId('lock'), eventId, raceId, snap.version, t);
+          return { ...snap, lockedAt: t };
+        })
+        .immediate();
     },
 
     snapshot(eventId: string, raceId: string) {

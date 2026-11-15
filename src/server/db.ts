@@ -165,6 +165,18 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX entry_changes_by_order ON entry_changes(order_id, created_at);
   `,
+  `
+  -- Start-list locks. The organizer locks a race's list when sending it to the timer; it points at a snapshot.
+  -- Changes after the lock are still allowed and are shown as revisions against the locked snapshot.
+  CREATE TABLE start_list_locks (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES events(id),
+    race_id TEXT NOT NULL,
+    snapshot_version INTEGER NOT NULL,
+    locked_at TEXT NOT NULL
+  );
+  CREATE INDEX start_list_locks_by_race ON start_list_locks(event_id, race_id, locked_at);
+  `,
 ];
 
 export function openDb(path: string): Db {
