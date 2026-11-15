@@ -303,6 +303,8 @@ The local prototype stores data in a SQLite file on the developer's computer ([A
 | Existing registrations | Confirm export rights and mappings; never assume signatures or payment tokens transfer |
 | Results sites (road-results.com) | Research how results are updated and which registration fields (name, license number, team, category) a timer needs to build the upload file. See [Results site updates](#results-site-updates-research) |
 
+The questions to ask are packaged in [docs/usac-questions.md](docs/usac-questions.md) and [docs/payment-model-questions.md](docs/payment-model-questions.md); record the answers there.
+
 Until USAC integration is approved, prototypes may use clearly labeled simulated checks or an agreed manual-review process. A sanctioned-event pilot requires explicit acceptance of the chosen process by the relevant parties.
 
 ### Future USA Cycling waiver and license integration
@@ -406,6 +408,8 @@ A transparent per-paid-entry platform fee, with the organizer choosing whether t
 Do not replace Berkeley Omnium's registration merely because the software is available. Require validated federation and payment workflows, correct timer exports, successful event-day rehearsal, measurable workload benefit, and a named support owner. Category setup must pass every configuration fixture and acceptance criterion above using an organizer-approved road race and criterium schedule. Start with a lower-risk cycling event. Berkeley Omnium remains on its existing system until those gates pass.
 
 ## Open decisions
+
+Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/README.md); none has an answer yet.
 
 1. What specific tasks consume the most volunteer time today, and which are limitations of software rather than staffing?
 2. How are both days, multiple entries, shared fields, discounts, and bibs currently configured?

@@ -2,7 +2,7 @@
 
 CycleReg is meant to work for every rider, parent, and volunteer, including people who use a screen reader, a keyboard, zoom, or voice control. Riders register on phones and volunteers check riders in on tablets outdoors, so accessibility is a requirement, not a polish step.
 
-> **Status: local prototype, not audited.** The organizer workspace prototype exists and runs only on a local computer ([setup](docs/runbooks/local-setup.md)). It is built to the rules below and has automated checks for keyboard focus in the phone editor drawer, but no WCAG audit or screen-reader test has been done. Treat everything below as a Planned commitment, not a claim of conformance.
+> **Status: local prototype, not audited.** The prototype runs only on a local computer ([setup](docs/runbooks/local-setup.md)). It passes automated WCAG 2.2 A and AA checks on its main screens (see [Results](#results)) and has a keyboard-focus test for the phone editor drawer, but no manual keyboard pass, screen-reader test, real-phone test, or full WCAG audit has been done. Automated checks find only part of the barriers, so treat everything below as a commitment, not a claim of conformance.
 
 ## Target
 
@@ -29,11 +29,21 @@ A flow is not Verified until it passes:
 
 Checkout and check-in are checked first because riders and volunteers cannot work around a barrier there. See the testing table in [docs/coding-guide.md](docs/coding-guide.md#what-must-be-tested).
 
-Results will be recorded here, with the date, the tools and assistive technology used, and any known gaps, once there is an interface to test.
+## Results
+
+| Check | Date | Scope | Tool | Result |
+|---|---|---|---|---|
+| Automated | November 14, 2026 | Organizer home, schedule, category editor, event setup, capacity pools, import, registrations, start lists, publish, rider preview; check-in list, ready rider, blocked rider, bib ranges; rider registration from choosing an event through every step, error summaries, and confirmation. Light and dark themes, desktop width | axe-core 4.10 through `@axe-core/playwright`, WCAG 2.0, 2.1, and 2.2 A and AA rules, in `e2e/accessibility.spec.ts` (runs in CI) | Two issues found and fixed: wide tables could not be scrolled with a keyboard (now focusable regions), and the category move buttons were 22 px tall (now 24 px). No violations remain on the scanned screens |
+| Keyboard-only | Not done | Checkout and check-in first | | |
+| Screen reader | Not done | Checkout and check-in first | | |
+| Real phone | Not done | Rider registration | | Blocked: the prototype listens only on `127.0.0.1`; see [the usability kit](docs/usability/README.md#phone-sized-sessions) |
+
+Not yet covered by the automated checks: phone-width layouts, 200% zoom, and states reached only by keyboard. The usability sessions in [docs/usability/](docs/usability/README.md) should include at least one participant who uses a keyboard or assistive technology.
 
 ## Known limitations
 
-None recorded. There is no interface yet.
+- No manual keyboard, screen-reader, or real-phone pass yet (see [Results](#results)).
+- Real phones cannot reach the local prototype.
 
 ## Report a barrier
 
