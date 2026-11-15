@@ -24,13 +24,13 @@ No database server, cloud account, or API key is needed. Nothing connects to USA
 
    Expected result: npm finishes without errors. `better-sqlite3` downloads a prebuilt native module for your platform.
 
-3. Optional: load the demonstration weekend into your local database:
+3. Optional: load the Berkeley Omnium into your local database:
 
    ```bash
-   npm run seed:demo
+   npm run seed:omnium
    ```
 
-   Expected result: a line starting `Demonstration event created in data/cyclereg.sqlite`. You can also load it from the home page.
+   Expected result: a line starting `Demonstration event created in data/cyclereg.sqlite`. You can also load it from the home page. `npm run seed:demo` loads the fictional example weekend instead.
 
 4. Start the development servers:
 
@@ -40,7 +40,7 @@ No database server, cloud account, or API key is needed. Nothing connects to USA
 
    Expected result: the API logs `Server listening at http://127.0.0.1:3001` and Vite prints `Local: http://127.0.0.1:5273/`.
 
-5. Open `http://127.0.0.1:5273/` in a browser. Create an organization, or select **Load demonstration event**.
+5. Open `http://127.0.0.1:5273/` in a browser. Create an organization, or select **Load Berkeley Omnium**.
 
 To run the built app from one process instead (as the end-to-end test does):
 

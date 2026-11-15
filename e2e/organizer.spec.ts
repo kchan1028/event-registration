@@ -63,7 +63,7 @@ test('organizer builds, saves, reloads, and previews a category', async ({ page 
 
 test('demonstration weekend enforces a shared cap and publishes a version', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Load demonstration event' }).click();
+  await page.getByRole('button', { name: 'fictional example weekend' }).click();
   await expect(page.getByRole('heading', { name: 'Saturday road race', level: 2 })).toBeVisible();
   await expect(page.locator('.demo-banner')).toContainText('not an approved race schedule');
 
@@ -89,7 +89,7 @@ test('demonstration weekend enforces a shared cap and publishes a version', asyn
 test('on a phone, the category editor opens as a drawer that takes and returns focus', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Load demonstration event' }).click();
+  await page.getByRole('button', { name: 'fictional example weekend' }).click();
   const name = page.locator('.cat-row__name', { hasText: 'Masters 60+' });
   await name.click();
   await expect(page.locator('.inspector.is-open')).toBeVisible();
