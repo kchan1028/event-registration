@@ -202,7 +202,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const firstStart = (card: typeof a.card) => card.entries
         .filter((e) => !categoryId || e.categoryId === categoryId)
         .filter((e) => !raceId || cfg.categories.some((c) => c.id === e.categoryId && c.raceId === raceId))
-        .map((e) => `${e.startTime ?? ''}\u0000${e.code}`)
+        .map((e) => `${e.startTime ?? '99:99'}\u0000${e.code}`)
         .sort()[0] ?? '';
       const byStart = () => firstStart(a.card).localeCompare(firstStart(b.card)) || byName();
       const primary = sort === 'registration' ? a.o.createdAt.localeCompare(b.o.createdAt) : sort === 'start' ? byStart() : byName();
