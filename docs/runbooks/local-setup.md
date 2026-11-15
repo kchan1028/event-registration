@@ -117,6 +117,9 @@ SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts
 | `SERVE_WEB=1` | Serves the built web app without production mode (used by the end-to-end test) | unset | No |
 | `AUTH_MODE=test`, `VITE_AUTH_MODE=test` | Local-only test sign-in for the end-to-end test. Refused in production and on network addresses | unset | No |
 | `HOLD_MINUTES` | How long rider checkout holds places before payment | `10` | No |
+| `STRIPE_SECRET_KEY` | Stripe test-mode secret key (`sk_test_...` or `rk_test_...`). Set it to use Stripe hosted Checkout instead of the simulated payment. Live keys are refused | unset (simulated payment) | **Yes.** Only in `.env` or the platform's secret store |
+| `STRIPE_WEBHOOK_SECRET` | Webhook signing secret (`whsec_...`). Required when `STRIPE_SECRET_KEY` is set | none | **Yes** |
+| `PUBLIC_APP_URL` | Origin Stripe sends riders back to after paying. Required in production when Stripe is on | `http://127.0.0.1:5273` outside production | No |
 
 ## Sign-in keys
 
@@ -133,6 +136,19 @@ Sign-in uses a Clerk development instance on the free plan. The project owner cr
 3. Restart `npm run dev`. The API and Vite read `.env` when they start. Real environment variables win over `.env`.
 
 Never commit `.env`, and never paste the secret key into an issue, chat, log, or screenshot. If it leaks, roll it in the Clerk Dashboard.
+
+## Stripe test mode (optional)
+
+Without Stripe keys, checkout uses the simulated payment. To try Stripe hosted Checkout in test mode, the project owner uses their own Stripe account's sandbox; agents never create accounts or use live keys.
+
+1. In the Stripe Dashboard, switch to test mode (sandbox) and copy the secret key (`sk_test_...`) into `.env` as `STRIPE_SECRET_KEY`.
+2. Forward webhooks to the local API with the Stripe CLI and copy the `whsec_...` secret it prints into `.env` as `STRIPE_WEBHOOK_SECRET`:
+
+   ```bash
+   stripe listen --forward-to 127.0.0.1:3001/api/payments/stripe/webhook --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired
+   ```
+
+3. Restart `npm run dev`. The review step now shows **Pay on Stripe (test mode)**. Pay with a Stripe test card such as `4242 4242 4242 4242`; the order confirms when the webhook arrives.
 
 Each person signs in with their own email (one account per email). Organizations created before sign-in existed have no owner; give yourself one by reseeding with `--owner`, or start over below.
 

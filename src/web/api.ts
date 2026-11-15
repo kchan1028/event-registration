@@ -20,6 +20,8 @@ export interface PublicEvent {
   nowLocal: string;
   enforceWindows: boolean;
   holdMinutes: number;
+  /** simulated: the labeled demo button. stripe_test: Stripe hosted Checkout in test mode. */
+  paymentMode: 'simulated' | 'stripe_test';
   /** Categories with a waitlist turned on, and how many riders are in line. */
   waitlist: Record<string, { waiting: number }>;
 }
@@ -92,6 +94,8 @@ export interface PublicEventSummary {
 }
 
 export interface OrderView {
+  /** How the order was paid: the simulated button or Stripe test mode. Null until paid. */
+  paidWith: 'simulated' | 'stripe_test' | null;
   answers: { categoryId: string; category: string; label: string; answer: string }[];
   addenda: { categoryId: string; title: string }[];
   id: string;
@@ -351,6 +355,7 @@ export const api = {
   setCouponActive: (eventId: string, couponId: string, active: boolean) => request<CouponView>('POST', `/api/events/${eventId}/coupons/${couponId}/active`, { active }),
   order: (id: string) => request<OrderView>('GET', `/api/orders/${id}`),
   pay: (id: string, attemptId: string, outcome: 'success' | 'failure') => request<OrderView>('POST', `/api/orders/${id}/payment`, { attemptId, outcome }),
+  startCheckout: (id: string) => request<{ kind: 'redirect'; url: string } | { kind: 'confirmed' }>('POST', `/api/orders/${id}/checkout-session`),
   cancelOrder: (id: string) => request<OrderView>('POST', `/api/orders/${id}/cancel`),
   orders: (eventId: string) => request<OrderView[]>('GET', `/api/events/${eventId}/orders`),
   transferEntry: (entryId: string, toCategoryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/transfer`, { toCategoryId, reason }),
