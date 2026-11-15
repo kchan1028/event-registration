@@ -124,9 +124,11 @@ export interface CheckInList {
   riders: CheckInRider[];
 }
 
+export const MAX_BIB_BATCH_SIZE = 1000;
+
 export const bibBatchSchema = z.object({
   dayId: z.string().min(1).max(64),
-  orderIds: z.array(z.string().min(1).max(64)).min(1).max(1000),
+  orderIds: z.array(z.string().min(1).max(64)).min(1).max(MAX_BIB_BATCH_SIZE),
   raceId: z.string().min(1).max(64).optional(),
   categoryId: z.string().min(1).max(64).optional(),
   sort: z.enum(['name', 'registration', 'start']).optional(),

@@ -85,6 +85,17 @@ describe('check-in API', () => {
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload: { ...payload, orderIds: [rider('Blake').orderId, rider('Dana').orderId] } })).statusCode).toBe(409);
   });
 
+  it('preserves checked-in riders after the bib scope changes', async () => {
+    const { app, eventId, first, rider, setBibs, checkIn } = await setup();
+    await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
+    const alex = rider('Alex').orderId;
+    expect((await checkIn(alex, 100)).statusCode).toBe(200);
+    expect((await setBibs({ scope: 'day', ranges: [{ scope: first.dayId, first: 200, last: 299 }] })).statusCode).toBe(200);
+    const preview = await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload: { dayId: first.dayId, orderIds: [alex] } });
+    expect(preview.statusCode).toBe(409);
+    expect(preview.json()).toMatchObject({ error: expect.stringContaining('Already checked in') });
+  });
+
   it('binds race/category and sort choices to the preview', async () => {
     const { app, eventId, first, rider, setBibs } = await setup();
     await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });

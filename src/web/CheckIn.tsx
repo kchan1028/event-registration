@@ -48,6 +48,9 @@ export function CheckIn({ eventId }: { eventId: string }) {
     return () => clearTimeout(t);
   }, [q, dayId, load]);
 
+  const refreshAfterBatch = useRef(() => {});
+  refreshAfterBatch.current = () => { void load(q, dayId); };
+
   const riders = data?.riders ?? [];
   const selected = riders.find((r) => r.orderId === selectedId) ?? null;
   const day = data?.days.find((d) => d.id === data.dayId);
@@ -143,7 +146,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
         </p>
       )}
 
-      {data && showBatch && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId} eventId={eventId} dayId={data.dayId} onApplied={() => void load(q, dayId)} onClose={() => setShowBatch(false)} />}
+      {data && showBatch && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId} eventId={eventId} dayId={data.dayId} onChanged={() => refreshAfterBatch.current()} onClose={() => setShowBatch(false)} />}
 
       {data && showBibs && <BibSettingsPanel data={data} onSaved={() => void load(q, dayId)} onClose={() => setShowBibs(false)} />}
 

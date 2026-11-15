@@ -66,6 +66,7 @@ test('fallback roster lists every rider and puts blocked riders on the exception
 
 for (const mobile of [false, true]) {
   test(`bulk bib preview and apply preserves blocked readiness (${mobile ? 'mobile' : 'desktop'})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     if (mobile) await page.setViewportSize({ width: 390, height: 844 });
     const api = page.request;
     const { eventId } = await (await api.post('/api/demo')).json();
@@ -87,17 +88,17 @@ for (const mobile of [false, true]) {
     await panel.getByLabel('Assign in order').selectOption('start');
     await expect(preview).toHaveCount(0);
     await panel.getByRole('button', { name: 'Preview bib assignments', exact: true }).click();
-    await panel.getByLabel('Category', { exact: true }).selectOption(blocked.entries[0].categoryId);
+    await panel.getByRole('combobox', { name: 'Category', exact: true }).selectOption(blocked.entries[0].categoryId);
     await expect(preview).toHaveCount(0);
     await expect(panel.getByText('0 selected · maximum 1,000 per batch')).toBeVisible();
     await panel.getByRole('checkbox', { name: blocked.name }).check();
     await panel.getByRole('button', { name: 'Preview bib assignments', exact: true }).click();
     if (mobile) {
-      await page.screenshot({ path: 'test-results/bib-batch-mobile-light.png', fullPage: true });
+      await page.screenshot({ path: 'test-results/bib-batch-mobile-light.png', fullPage: true, animations: 'disabled' });
       await page.getByRole('button', { name: /Switch to dark/ }).click();
-      await page.screenshot({ path: 'test-results/bib-batch-mobile-dark.png', fullPage: true });
+      await page.screenshot({ path: 'test-results/bib-batch-mobile-dark.png', fullPage: true, animations: 'disabled' });
     } else {
-      await page.screenshot({ path: 'test-results/bib-batch-desktop.png', fullPage: true });
+      await page.screenshot({ path: 'test-results/bib-batch-desktop.png', fullPage: true, animations: 'disabled' });
     }
     expect((await new AxeBuilder({ page }).include('.ci-batch').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
     await panel.getByRole('button', { name: 'Apply 1 bib assignment', exact: true }).click();
@@ -131,18 +132,46 @@ test('a stale batch preview is refused and requires a new preview', async ({ pag
   await expect(panel.getByRole('region', { name: 'Proposed bib assignments' })).toHaveCount(0);
   await panel.getByRole('button', { name: 'Preview bib assignments', exact: true }).click();
   await expect(panel.getByRole('region', { name: 'Proposed bib assignments' }).getByRole('cell', { name: '101', exact: true })).toBeVisible();
+  expect((await api.post(`/api/events/${eventId}/check-in/${alex.orderId}`, { data: { dayId: list.dayId, bib: 101 } })).ok()).toBe(true);
+  await panel.getByRole('button', { name: 'Apply 1 bib assignment', exact: true }).click();
+  await expect(panel.getByRole('alert')).toContainText('Already has a bib');
+  await expect(panel.getByRole('checkbox', { name: alex.name })).toBeDisabled();
+  await expect(panel.getByText('0 selected · maximum 1,000 per batch')).toBeVisible();
 });
 
-test('volunteers can check in riders but cannot open or call bulk assignment', async ({ page }) => {
+test('volunteers can check in riders but cannot open or call bulk assignment', async ({ page, browser, baseURL }) => {
   const api = page.request;
   const { eventId, organizationId } = await (await api.post('/api/demo')).json();
   await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
   const email = 'bib-volunteer@example.test';
   expect((await api.post(`/api/organizations/${organizationId}/members`, { data: { email, role: 'check_in_volunteer' } })).ok()).toBe(true);
-  await page.addInitScript((user) => sessionStorage.setItem('cyclereg.test-session', user), email);
-  await page.goto(`/#/events/${eventId}/check-in`);
-  await expect(page.getByRole('searchbox', { name: 'Find a rider' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Assign bibs', exact: true })).toHaveCount(0);
+  const volunteerContext = await browser.newContext({ extraHTTPHeaders: { Authorization: `Bearer test:${email}` } });
+  await volunteerContext.addInitScript((user) => sessionStorage.setItem('cyclereg.test-session', user), email);
+  const volunteer = await volunteerContext.newPage();
+  await volunteer.goto(`${baseURL}/#/events/${eventId}/check-in`);
+  await expect(volunteer.getByRole('searchbox', { name: 'Find a rider' })).toBeVisible();
+  await expect(volunteer.getByRole('button', { name: 'Assign bibs', exact: true })).toHaveCount(0);
+  await volunteerContext.close();
   const refused = await api.post(`/api/events/${eventId}/bibs/preview`, { headers: { Authorization: `Bearer test:${email}` }, data: {} });
   expect(refused.status()).toBe(403);
+});
+
+test('an assigned bib stays visible when the following list refresh fails', async ({ page }) => {
+  const api = page.request;
+  const { eventId } = await (await api.post('/api/demo')).json();
+  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await api.post(`/api/events/${eventId}/check-in-demo-riders`);
+  await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 299 }] } });
+  await page.goto(`/#/events/${eventId}/check-in`);
+  await page.getByRole('button', { name: 'Assign bibs', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Bulk bib assignment', exact: true });
+  await panel.getByRole('checkbox', { name: 'Alex Demo', exact: true }).check();
+  await panel.getByRole('button', { name: 'Preview bib assignments', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Apply 1 bib assignment', exact: true })).toBeEnabled();
+  await page.route(`**/api/events/${eventId}/check-in?*`, (route) => route.abort());
+  await panel.getByRole('button', { name: 'Apply 1 bib assignment', exact: true }).click();
+  await expect(panel.getByText('1 bib assigned. Readiness and check-in are unchanged.')).toBeVisible();
+  await expect(panel.getByRole('alert')).toContainText('Numbers were assigned, but the rider list could not refresh');
+  await expect(panel.getByRole('checkbox', { name: 'Alex Demo', exact: true })).toBeDisabled();
+  await expect(panel.getByRole('row', { name: /Alex Demo/ })).toContainText('100');
 });

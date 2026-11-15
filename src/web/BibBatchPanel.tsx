@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { bibBatchExclusion, type BibBatch, type BibPlan, type CheckInList } from '../shared/checkin';
+import { MAX_BIB_BATCH_SIZE, bibBatchExclusion, type BibBatch, type BibPlan, type CheckInList } from '../shared/checkin';
 import { api, type ApiError } from './api';
 
 /** Number allocation is a separate task from race-morning readiness and bib handoff. */
-export function BibBatchPanel({ eventId, dayId, onApplied, onClose }: { eventId: string; dayId: string; onApplied: () => void; onClose: () => void }) {
+export function BibBatchPanel({ eventId, dayId, onChanged, onClose }: { eventId: string; dayId: string; onChanged: () => void; onClose: () => void }) {
   const [data, setData] = useState<CheckInList | null>(null);
   const [raceId, setRaceId] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -30,6 +30,14 @@ export function BibBatchPanel({ eventId, dayId, onApplied, onClose }: { eventId:
     setMessage('');
   }
 
+  async function refreshRiders() {
+    const result = await api.checkInList(eventId, dayId, '');
+    if (active.current) {
+      setData(result);
+      setSelected((ids) => ids.filter((id) => result.riders.some((r) => r.orderId === id && !bibBatchExclusion(r))));
+    }
+  }
+
   async function allocate() {
     setBusy(true);
     setError(null);
@@ -37,21 +45,35 @@ export function BibBatchPanel({ eventId, dayId, onApplied, onClose }: { eventId:
     try {
       if (preview) {
         const result = await api.applyBibs(eventId, preview.batch, preview.plan.fingerprint);
+        onChanged();
         if (!active.current) return;
         setPreview(null);
         setSelected([]);
         setMessage(`${result.applied} ${result.applied === 1 ? 'bib' : 'bibs'} assigned. Readiness and check-in are unchanged.`);
-        onApplied();
-        setData(await api.checkInList(eventId, dayId, ''));
+        setData((current) => current && ({ ...current, riders: current.riders.map((r) => {
+          const assignment = result.assignments.find((a) => a.orderId === r.orderId);
+          return assignment ? { ...r, bib: assignment.bib } : r;
+        }) }));
+        try {
+          await refreshRiders();
+        } catch {
+          if (active.current) setError('Numbers were assigned, but the rider list could not refresh. Close and reopen assignment to reload.');
+        }
       } else {
         const batch: BibBatch = { dayId, orderIds: selected, sort, ...(raceId ? { raceId } : {}), ...(categoryId ? { categoryId } : {}) };
         const plan = await api.previewBibs(eventId, batch);
         if (active.current) setPreview({ batch, plan });
       }
     } catch (err) {
+      onChanged();
       if (active.current) {
         setPreview(null);
-        setError((err as ApiError).message);
+        setError((err as ApiError).message + ' Request a new preview before applying.');
+        try {
+          await refreshRiders();
+        } catch {
+          if (active.current) setError((err as ApiError).message + ' The rider list could not refresh. Close and reopen assignment to reload.');
+        }
       }
     } finally {
       if (active.current) setBusy(false);
@@ -90,9 +112,9 @@ export function BibBatchPanel({ eventId, dayId, onApplied, onClose }: { eventId:
         </fieldset>
         <p className="muted small">Ranges follow each rider’s earliest category with a range on this day, then the event/day range. Narrowing the selection does not override that range.</p>
         <div className="ci-bib__actions">
-          <button type="button" className="btn btn--secondary btn--small" disabled={busy || !selectable.length || selectable.length > 1000} onClick={() => { setSelected(selectable.map((r) => r.orderId)); invalidate(); }}>Select all unassigned ({selectable.length})</button>
+          <button type="button" className="btn btn--secondary btn--small" disabled={busy || !selectable.length || selectable.length > MAX_BIB_BATCH_SIZE} onClick={() => { setSelected(selectable.map((r) => r.orderId)); invalidate(); }}>Select all unassigned ({selectable.length})</button>
           <button type="button" className="btn btn--ghost btn--small" disabled={busy || !selected.length} onClick={() => { setSelected([]); invalidate(); }}>Clear selection</button>
-          <span role="status">{selected.length} selected · maximum 1,000 per batch</span>
+          <span role="status">{selected.length} selected · maximum {MAX_BIB_BATCH_SIZE.toLocaleString('en-US')} per batch</span>
         </div>
         {!riders.length ? <p>No riders entered in this scope.</p> : <div className="table-wrap ci-batch__table" role="region" aria-label="Riders for bib assignment" tabIndex={0}>
           <table>
@@ -100,7 +122,7 @@ export function BibBatchPanel({ eventId, dayId, onApplied, onClose }: { eventId:
             <tbody>{riders.map((r) => {
               const exclusion = bibBatchExclusion(r);
               return <tr key={r.orderId}>
-                <th scope="row"><label className="ci-batch__choice"><input type="checkbox" disabled={busy || !!exclusion || (!selected.includes(r.orderId) && selected.length >= 1000)} checked={selected.includes(r.orderId)} onChange={(e) => { setSelected((ids) => e.target.checked ? [...ids, r.orderId] : ids.filter((id) => id !== r.orderId)); invalidate(); }} />{r.name}</label></th>
+                <th scope="row"><label className="ci-batch__choice"><input type="checkbox" disabled={busy || !!exclusion || (!selected.includes(r.orderId) && selected.length >= MAX_BIB_BATCH_SIZE)} checked={selected.includes(r.orderId)} onChange={(e) => { setSelected((ids) => e.target.checked ? [...ids, r.orderId] : ids.filter((id) => id !== r.orderId)); invalidate(); }} />{r.name}</label></th>
                 <td>{r.entries.map((e) => e.categoryName).join(', ')}</td><td>{r.bib ?? 'Unassigned'}</td>
                 <td>{exclusion ?? (r.result.ready ? 'Available for allocation' : 'Available; readiness blocked')}</td>
               </tr>;
@@ -122,7 +144,7 @@ export function BibBatchPanel({ eventId, dayId, onApplied, onClose }: { eventId:
         </div>
       </>}
       {message && <p role="status" className="text-ok">{message}</p>}
-      {error && <p role="alert" className="text-error">{error} {data ? 'Review the selection and request a new preview before applying.' : 'Close and reopen assignment to retry loading riders.'}</p>}
+      {error && <p role="alert" className="text-error">{error} {!data && 'Close and reopen assignment to retry loading riders.'}</p>}
     </section>
   );
 }
