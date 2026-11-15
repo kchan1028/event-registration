@@ -1470,6 +1470,12 @@ export function OrderPage({ orderId }: { orderId: string }) {
             <span className="num">{refunded > 0 && refunded === order.totalCents ? '$0' : formatCents(confirmed ? order.totalCents - refunded : 0)}</span>
           </p>
           <PaymentNote mode={mode} />
+          {order.refundPolicy.length > 0 && (
+            <details className="tray__policy">
+              <summary>Refund policy you accepted</summary>
+              <RefundLines lines={order.refundPolicy} />
+            </details>
+          )}
         </section>
       </main>
     </div>

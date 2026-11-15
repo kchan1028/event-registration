@@ -10,7 +10,7 @@ describe('refund rule templates', () => {
   it('describe the tiered template with dates counted back from the first race day', () => {
     expect(describeRefundRules(REFUND_TEMPLATES.tiered.rules, '2027-04-24')).toEqual([
       'Withdraw on or before Thursday, March 25, 2027 (30 days before the first race day): 100% of the entry amount back as a refund.',
-      'Withdraw on or before Saturday, April 17, 2027 (7 days before the first race day): 50% of the entry amount back as a refund.',
+      'Withdraw after Thursday, March 25, 2027 (30 days before the first race day) and on or before Saturday, April 17, 2027 (7 days before the first race day): 50% of the entry amount back as a refund.',
       'After Saturday, April 17, 2027 (7 days before the first race day): nothing back.',
       'Fees are not returned.',
       'If the organizer cancels your race: a full refund of the entry amount.',

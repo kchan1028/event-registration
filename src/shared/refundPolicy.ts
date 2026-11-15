@@ -53,7 +53,11 @@ const CANCELLATION_TEXT: Record<RefundRules['organizerCancellation'], string> = 
 export function describeRefundRules(rules: RefundRules, firstDay: string): string[] {
   const tiers = [...rules.tiers].sort((a, b) => b.daysBefore - a.daysBefore);
   const when = (days: number) => (days === 0 ? `the first race day (${formatDate(firstDay)})` : `${formatDate(addDays(firstDay, -days))} (${days === 1 ? '1 day' : `${days} days`} before the first race day)`);
-  const lines = tiers.map((t) => (t.percent === 0 ? `Withdraw on or before ${when(t.daysBefore)}: nothing back.` : `Withdraw on or before ${when(t.daysBefore)}: ${t.percent}% of the entry amount ${RETURN_TEXT[rules.returnAs]}.`));
+  // Each step starts the day after the previous deadline, so a withdrawal date matches exactly one sentence.
+  const lines = tiers.map((t, i) => {
+    const span = i === 0 ? `Withdraw on or before ${when(t.daysBefore)}` : `Withdraw after ${when(tiers[i - 1].daysBefore)} and on or before ${when(t.daysBefore)}`;
+    return `${span}: ${t.percent === 0 ? 'nothing back' : `${t.percent}% of the entry amount ${RETURN_TEXT[rules.returnAs]}`}.`;
+  });
   const last = tiers.at(-1);
   lines.push(last ? `After ${when(last.daysBefore)}: nothing back.` : 'Withdrawals: nothing back.');
   if (tiers.some((t) => t.percent > 0)) lines.push('Fees are not returned.');
