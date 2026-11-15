@@ -22,7 +22,7 @@ function describeChange(c: MembershipChange): string {
     case 'invited':
       return `${by} invited ${c.email} as ${role}`;
     case 'invitation_renewed':
-      return `${by} renewed the ${role} invitation for ${c.email}`;
+      return `${by} resent the ${role} invitation to ${c.email}`;
     case 'invitation_accepted':
       return `${c.email} signed in and took up the ${role} invitation`;
     case 'invitation_expired':
@@ -36,11 +36,17 @@ function describeChange(c: MembershipChange): string {
   }
 }
 
+const EMAIL_STATUS: Record<'recorded' | 'sent' | 'failed', string> = {
+  recorded: 'Email recorded, not sent (local email)',
+  sent: 'Email sent',
+  failed: 'Email failed to send',
+};
+
 /**
  * People and roles for one organization. Owners only; the server refuses everyone else.
  * Adding an email that has never signed in records an invitation that becomes a role the
  * first time that person signs in with the same email, if that is within INVITATION_DAYS.
- * Renewing (adding it again) starts the period over. An owner can hand ownership to a teammate
+ * Resending (adding it again) emails it again and starts the period over. An owner can hand ownership to a teammate
  * who has signed in; every change appears under Recent changes with who made it.
  */
 export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }) {
@@ -138,9 +144,15 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
                 {expired && <span className="tag tag--error">Expired</span>}
                 <span className="muted small">
                   {expired ? 'Ended' : 'Not signed in yet, open until'} <time dateTime={i.expiresAt}>{formatDateTime(i.expiresAt)}</time>
+                  {i.lastEmail && (
+                    <>
+                      {' · '}
+                      <span className={i.lastEmail.status === 'failed' ? 'team__email-failed' : undefined}>{EMAIL_STATUS[i.lastEmail.status]}</span>
+                    </>
+                  )}
                 </span>
                 <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.addMember(orgId, i.email, i.role))}>
-                  Renew<span className="sr-only"> invitation for {i.email} for {INVITATION_DAYS} days</span>
+                  Resend<span className="sr-only"> invitation to {i.email}, open for {INVITATION_DAYS} more days</span>
                 </button>
                 <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.removeMember(orgId, i.email, i.role))}>
                   Cancel<span className="sr-only"> invitation for {i.email}</span>

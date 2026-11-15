@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { AuthProvider } from '../src/server/auth';
 import { authProviderFromEnv } from '../src/server/auth';
+import { emailFromEnv, type EmailSender } from '../src/server/email';
 import type { EventConfig } from '../src/shared/schema';
 import { INVITATION_DAYS } from '../src/shared/roles';
 import { as, fakeAuth } from './support/auth';
@@ -205,7 +206,7 @@ describe('organizer roles', () => {
     const invited = (await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: newcomer, role: 'check_in_volunteer' })).json() as {
       invitations: { email: string; role: string; expiresAt: string }[];
     };
-    expect(invited.invitations).toEqual([{ email: newcomer, role: 'check_in_volunteer', expiresAt: expect.any(String) }]);
+    expect(invited.invitations).toEqual([{ email: newcomer, role: 'check_in_volunteer', expiresAt: expect.any(String), lastEmail: { status: 'recorded', at: expect.any(String) } }]);
     expect((await call(newcomer, 'GET', `/api/events/${eventId}/check-in`)).statusCode).toBe(200);
     const members = (await call(OWNER, 'GET', `/api/organizations/${valley}/members`)).json() as { members: { email: string }[]; invitations: unknown[] };
     expect(members.members.map((m) => m.email)).toContain(newcomer);
@@ -228,8 +229,8 @@ describe('organizer roles', () => {
     now = new Date(now.getTime() + 13 * DAY);
     const list = (await invite(renewed)).json() as { invitations: unknown[] };
     expect(list.invitations).toEqual([
-      { email: late, role: 'finance', expiresAt: new Date(Date.parse('2027-03-01T18:00:00Z') + INVITATION_DAYS * DAY).toISOString() },
-      { email: renewed, role: 'finance', expiresAt: new Date(now.getTime() + INVITATION_DAYS * DAY).toISOString() },
+      { email: late, role: 'finance', expiresAt: new Date(Date.parse('2027-03-01T18:00:00Z') + INVITATION_DAYS * DAY).toISOString(), lastEmail: { status: 'recorded', at: '2027-03-01T18:00:00.000Z' } },
+      { email: renewed, role: 'finance', expiresAt: new Date(now.getTime() + INVITATION_DAYS * DAY).toISOString(), lastEmail: { status: 'recorded', at: now.toISOString() } },
     ]);
     now = new Date(now.getTime() + 2 * DAY);
     // Signing in after the invitation expired gives no role; the renewed one still works.
@@ -247,6 +248,53 @@ describe('organizer roles', () => {
     // The late person now has an account, so adding them again gives the role straight away.
     await invite(late);
     expect(((await call(late, 'GET', '/api/me')).json() as { memberships: { roles: string[] }[] }).memberships).toEqual([expect.objectContaining({ roles: ['finance'] })]);
+  });
+
+  it('emails an invitation through the configured sender, records failures, and never emails for a seed script', async () => {
+    const sent: { to: string; subject: string; text: string }[] = [];
+    let fail = false;
+    const email: EmailSender = {
+      mode: 'ses',
+      async send(m) {
+        if (fail) throw new Error('Email address is not verified.');
+        sent.push(m);
+        return `msg-${sent.length}`;
+      },
+    };
+    const { app, access } = await testApp({ auth: fakeAuth(), email, appUrl: 'https://beta.example.test' });
+    const call = (who: string, method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(who), payload });
+    const org = (await call(OWNER, 'POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const invite = (who: string) => call(OWNER, 'POST', `/api/organizations/${org.id}/members`, { email: who, role: 'finance' });
+    const status = async (who: string) =>
+      ((await call(OWNER, 'GET', `/api/organizations/${org.id}/members`)).json() as { invitations: { email: string; lastEmail: { status: string } | null }[] }).invitations.find((i) => i.email === who)?.lastEmail?.status;
+
+    await invite('treasurer@valley.test');
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ to: 'treasurer@valley.test', subject: 'You are invited to Valley Velo on CycleReg' });
+    expect(sent[0].text).toContain(`${OWNER} added you to Valley Velo as Finance.`);
+    expect(sent[0].text).toContain('sign in at https://beta.example.test with this email address (treasurer@valley.test)');
+    expect(await status('treasurer@valley.test')).toBe('sent');
+
+    // A refused send keeps the invitation and shows the failure; resending tries again.
+    fail = true;
+    await invite('timer@valley.test');
+    expect(await status('timer@valley.test')).toBe('failed');
+    fail = false;
+    await invite('timer@valley.test');
+    expect(await status('timer@valley.test')).toBe('sent');
+    expect(sent.map((m) => m.to)).toEqual(['treasurer@valley.test', 'timer@valley.test']);
+
+    // Seed scripts add people without a signed-in actor: no email.
+    await access.addMember(org.id, 'seeded@valley.test', 'owner', null);
+    expect(sent).toHaveLength(2);
+    expect(await status('seeded@valley.test')).toBeUndefined();
+  });
+
+  it('keeps email local unless EMAIL_MODE=ses is fully configured, and never in production', () => {
+    expect(emailFromEnv({}).mode).toBe('local');
+    expect(() => emailFromEnv({ EMAIL_MODE: 'ses', SES_REGION: 'us-west-2', EMAIL_FROM: 'beta@example.test' })).toThrow(/SES_AWS_PROFILE/);
+    expect(() => emailFromEnv({ EMAIL_MODE: 'ses', NODE_ENV: 'production', SES_REGION: 'us-west-2', EMAIL_FROM: 'beta@example.test', SES_AWS_PROFILE: 'cyclereg-beta' })).toThrow(/test-only/);
+    expect(emailFromEnv({ EMAIL_MODE: 'ses', SES_REGION: 'us-west-2', EMAIL_FROM: 'beta@example.test', SES_AWS_PROFILE: 'cyclereg-beta' }).mode).toBe('ses');
   });
 
   it('never removes the last owner', async () => {

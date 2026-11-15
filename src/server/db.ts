@@ -488,6 +488,27 @@ export const MIGRATIONS: string[] = [
   -- orders by the same rule as same-rider suggestions (same license number, or same name and email).
   ALTER TABLE coupons ADD COLUMN max_per_rider integer CHECK (max_per_rider > 0);
   `,
+  `
+  -- Outgoing email (ADR 0006). Written before any send; status records what happened. "recorded":
+  -- the local build kept it and sent nothing. ref ties a message to what it is about; for an
+  -- organizer invitation it is organization_id:email:role.
+  CREATE TABLE email_messages (
+    id text PRIMARY KEY,
+    seq bigint GENERATED ALWAYS AS IDENTITY,
+    organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    kind text NOT NULL CHECK (kind IN ('organizer_invitation')),
+    ref text NOT NULL,
+    to_email text NOT NULL,
+    subject text NOT NULL,
+    body_text text NOT NULL,
+    status text NOT NULL CHECK (status IN ('recorded', 'sent', 'failed')),
+    provider_message_id text,
+    error text,
+    created_at timestamptz NOT NULL,
+    sent_at timestamptz
+  );
+  CREATE INDEX email_messages_by_org_ref ON email_messages(organization_id, ref, created_at);
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

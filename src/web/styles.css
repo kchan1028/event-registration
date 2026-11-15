@@ -4213,3 +4213,7 @@ fieldset:disabled .field label {
 .ci-batch__choice input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--ink); }
 .ci-batch__table { max-height: 360px; margin-top: var(--s-3); }
 .ci-batch__preview { margin-top: var(--s-4); }
+.team__email-failed {
+  color: var(--error);
+  font-weight: 600;
+}
