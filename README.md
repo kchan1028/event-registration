@@ -56,6 +56,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Change-impact preview on Review and publish (affected categories, riders, orders; paid prices kept) | Implemented; resolution workflow for affected entries still Planned |
 | Organizer-managed waitlists: per-category setting, waitlist first, 24-hour offer links | Implemented; automated promotion and email delivery Planned |
 | Organizer transfers and withdrawals of paid entries, with price differences logged | Implemented; automated tests in CI |
+| Event summary on Registrations: riders, entries, unpaid holds, payment exceptions, per-category counts, and (for ledger roles) money that adds up to the ledger CSV | Implemented; automated tests in CI |
 | Organizer refunds of an entry or an order, for simulated and Stripe test-mode payments (no real money moves) | Implemented; automated tests in CI. Not yet checked against a real Stripe sandbox account |
 | Category builder: copy a day's races to another day, bulk edit with before/after preview | Implemented; automated tests in CI |
 | Same-rider suggestions across orders, linked only when the organizer confirms | Implemented; automated tests in CI |

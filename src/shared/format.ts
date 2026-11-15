@@ -5,6 +5,11 @@ export function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 }
 
+/** An amount such as "$80" or "-$12.50". Unlike `formatCents`, zero reads "$0", not "Free". */
+export function formatDollars(cents: number): string {
+  return `${cents < 0 ? '-' : ''}$${(Math.abs(cents) / 100).toFixed(2).replace(/\.00$/, '')}`;
+}
+
 export function formatLength(length: RaceLength): string {
   switch (length.kind) {
     case 'distance': {

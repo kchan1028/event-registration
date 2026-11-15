@@ -174,6 +174,17 @@ describe('organizer roles', () => {
     }
   });
 
+  it('shows the event summary to roles that see registrations, and the money only to ledger roles', async () => {
+    const { call, eventId, team } = await withRoles();
+    const summary = (email: string) => call(email, 'GET', `/api/events/${eventId}/summary`);
+    expect((await summary(team.check_in_volunteer)).statusCode).toBe(403);
+    expect((await summary(team.timer_export)).statusCode).toBe(403);
+    expect((await summary(OTHER_OWNER)).statusCode).toBe(404);
+    const manager = (await summary(team.registration_manager)).json() as { riders: number; money: unknown };
+    expect(manager).toMatchObject({ riders: 0, money: null });
+    expect(((await summary(team.finance)).json() as { money: unknown }).money).toMatchObject({ receivedCents: 0 });
+  });
+
   it('lets only registration managers and owners correct rider details, never the rider', async () => {
     const { call, order, team } = await withRoles();
     const correct = (email: string) => call(email, 'POST', `/api/orders/${order.id}/rider-corrections`, { changes: { team: 'Corrected Team' }, reason: 'Rider asked by email' });
