@@ -2,7 +2,7 @@
 
 An architecture decision record (ADR) is a short document that captures one significant decision: the context, the options considered, what was chosen, and the consequences. ADRs let a successor understand why the system looks the way it does without asking the person who built it.
 
-**Current state:** one ADR is accepted ([0001](0001-stack-for-category-builder-milestone.md), the stack for the local category builder prototype). The backlog below lists decisions still open, with known options and tradeoffs. Options listed in the backlog are not recommendations.
+**Current state:** two ADRs are accepted. [0002](0002-stripe-payments.md) selects Stripe for Planned payments while leaving the merchant/settlement model open. The prototype stack is recorded in [0001](0001-stack-for-category-builder-milestone.md). The backlog below lists decisions still open, with known options and tradeoffs. Options listed in the backlog are not recommendations.
 
 ## Document maintenance rule (mandatory)
 
@@ -71,6 +71,7 @@ Roadmap impact (roadmap.md):
 | Number | Title | Status | Date |
 |---|---|---|---|
 | [0001](0001-stack-for-category-builder-milestone.md) | Stack for the category builder milestone | Accepted | 2026-11-14 |
+| [0002](0002-stripe-payments.md) | Stripe for planned payments | Accepted | 2026-11-14 |
 
 ## Decision backlog
 
@@ -80,7 +81,7 @@ These are unresolved. They are ordered roughly by when the roadmap needs them. "
 |---|---|---|---|
 | Build versus improve the current setup | Phase 0 exit | Improve the incumbent workflow; buy more support; build CycleReg | The roadmap stops the build if a custom product shows no credible advantage |
 | USA Cycling license and waiver path | Before any sanctioned pilot (Phase 3 gate) | Approved platform integration; organizer manual review with paper waivers; a hybrid | Approval may be slow or unavailable; manual paths add volunteer work, which is the problem being solved |
-| Payment provider and merchant-of-record model | Phase 2 | Club as merchant with connected accounts; platform as merchant with payouts | Who handles disputes, payouts, and tax; onboarding effort for each club |
+| Merchant-of-record and Stripe operating model (provider selected in ADR 0002) | Phase 2; expand before Phase 6 passes | Stripe organizer account; Connect charge/transfer models subject to review | Who handles disputes, payouts, and tax; onboarding effort for each club |
 | Application stack | Phase 2 for the core | Prototype decided in ADR 0001 (TypeScript, Node.js, React, SQLite). Revisit for the hosted product after Phase 0 | Successor maintainability and hosting cost matter more than novelty; choose after the federation and payment questions (roadmap next actions) |
 | Primary datastore and capacity enforcement | Phase 2 | Prototype: SQLite with immediate write transactions (ADR 0001). Hosted: a relational database with transactions and row locks; atomic conditional counters; a queue that serializes reservations | Correctness under concurrency first; then operational simplicity for a small team |
 | Hosting, backups, and monitoring | Phase 2 | Managed platform; self-managed cloud resources | Managed services cost more but need less volunteer expertise; restore must be demonstrated either way. Signals to monitor are in [operations.md](../operations.md#monitoring-and-alerts) |

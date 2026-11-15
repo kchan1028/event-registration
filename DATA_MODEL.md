@@ -320,3 +320,13 @@ The prototype does not delete records except simulated test entries.
 ## Not in the database yet
 
 These are in [product.md](product.md#data-model) but do not exist in the prototype: user accounts and sign-in factors, organizer roles and permissions, rider profiles separate from orders, guardian relationships as records, real payments and refunds, automated waitlist promotion, USA Cycling license and waiver checks, and an audit log.
+
+
+## Planned expansion, not current schema
+
+The [season-pass requirements](product.md#cross-organization-bundles-and-season-passes) require a common purchase linking components across organizations/events, participant approvals, accepted rule versions, and per-organization discount/revenue/refund allocations. Current `orders.event_id` and event-local `registration.bundles` cannot represent that purchase. Planned Stripe payment, refund, transfer, and payout references need distinct reconciliation state; successful payment does not mean an organizer has been paid. Reusable rider identity, scoped reporting, promotion redemptions, communications, and overall-participation decisions likewise need an explicit data design before implementation. No SQL migrations, constraints, state transitions, or stored data changed in this documentation update. The target requirements live in product.md; this file continues to describe the existing database above.
+
+
+### Planned participant, bib, and credit extensions
+
+[Participant management](product.md#participant-management) requires reusable rider identity plus organization/role-scoped history, saved views, record-action audits, and identity-correction safeguards; current orders still hold independent rider copies. [Automatic/bulk bib allocation](product.md#automatic-and-bulk-bib-assignment) must retain the existing active-number uniqueness and assignment history while adding stable batch previews, concurrency checks, and atomic application; no batch or automatic-allocation state is stored today. [Credits and deferrals](product.md#reusable-credits-and-deferrals) need an auditable balance ledger with issuance, reservation, redemption, release, expiry and restoration records, original payment allocations, issuing-organization/currency/restriction references, and linked source/destination decisions. These are target requirements only. No current database tables, migrations, constraints, or data behavior changed in this documentation update.
