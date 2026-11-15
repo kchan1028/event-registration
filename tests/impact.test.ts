@@ -98,5 +98,13 @@ describe('change impact API', () => {
     expect(res.publishedVersion).toBe(1);
     expect(res.impact.categories).toHaveLength(1);
     expect(res.impact.categories[0]).toMatchObject({ categoryId: cat.id, kinds: ['price'], held: 1, confirmed: 0, riders: ['Test Rider'] });
+
+    // Publishing a change that touches entered riders needs an explicit acknowledgement, like warnings.
+    const refused = await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    expect(refused.statusCode).toBe(422);
+    expect((refused.json() as { error: string }).error).toContain('Review who the 1 changed category');
+    const ok = await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } });
+    expect(ok.statusCode).toBe(200);
+    expect((ok.json() as { publishedVersion: number }).publishedVersion).toBe(2);
   });
 });
