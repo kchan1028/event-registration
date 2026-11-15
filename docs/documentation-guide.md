@@ -61,7 +61,7 @@ Current layout:
 ├── DESIGN.md                     Visual system of the organizer workspace
 ├── src/
 │   ├── shared/                   Rules used by browser and server (schema, eligibility, capacity, validation, templates, demo data)
-│   ├── server/                   Fastify API, SQLite storage, seed script
+│   ├── server/                   Fastify API, PostgreSQL storage, seed script
 │   └── web/                      React organizer workspace and rider preview
 ├── tests/                        Vitest unit and API tests
 ├── e2e/                          Playwright browser tests and screenshot capture

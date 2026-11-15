@@ -459,7 +459,7 @@ Requirements:
 - Card details are never stored; keep only the payment provider's references.
 - Organizer exports (entries, start lists, ledger) come from the database, so a successor can take over without manual reconstruction. Status: entries, start-list, and simulated-ledger CSV exports are Implemented in the local build (see [roadmap.md](roadmap.md#rider-checkout)).
 
-The local build stores data in a SQLite file on the developer's computer ([ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md)). The hosted database engine and provider are an open decision; see the [decision backlog](docs/decisions/README.md).
+The local build stores data in a PostgreSQL database on the developer's computer. [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md) chose managed PostgreSQL (Render Postgres) for the hosted product; no hosted database exists yet.
 
 ## Integrations and dependencies
 

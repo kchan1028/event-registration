@@ -1,6 +1,6 @@
 # Coding guide
 
-This guide sets the rules code must follow. Most of them protect three things volunteers cannot easily fix by hand on race morning: correct fields, correct money, and private rider data. The local category builder uses TypeScript, Node.js, React, and SQLite ([ADR 0001](decisions/0001-stack-for-category-builder-milestone.md)). Sections about payments, roles, and sign-in describe planned work; nothing for them is built yet.
+This guide sets the rules code must follow. Most of them protect three things volunteers cannot easily fix by hand on race morning: correct fields, correct money, and private rider data. The local build uses TypeScript, Node.js, React ([ADR 0001](decisions/0001-stack-for-category-builder-milestone.md)), and PostgreSQL ([ADR 0004](decisions/0004-hosted-stack-and-database.md)). Sections about payments, roles, and sign-in describe planned work; nothing for them is built yet.
 
 ## Repository structure and commands
 
@@ -66,7 +66,7 @@ The category builder is a P0 requirement. Get the model right first; screens com
 2. A reservation consumes every applicable limit at once: the category cap, the start-group limit, and each capacity pool the category belongs to. If any limit is full, nothing is reserved.
 3. A rider counts **once** toward a start group or pool, even with several classification tags. Dual scoring is allowed only when explicitly configured.
 4. A bundle reserves all component entries in one atomic operation (all succeed or none do). Never sell half a bundle.
-5. Enforce limits with a mechanism that is correct under concurrent checkouts, such as a database transaction with appropriate locking or an atomic conditional update. Counting rows and then inserting in two separate steps is not acceptable. The app runs `canAdmit()` and the insert inside one SQLite `BEGIN IMMEDIATE` transaction (`repo.addTestEntries`), and saves that change limits run in the same kind of transaction. The hosted product's mechanism is still open (see [decisions backlog](decisions/README.md#decision-backlog)).
+5. Enforce limits with a mechanism that is correct under concurrent checkouts, such as a database transaction with appropriate locking or an atomic conditional update. Counting rows and then inserting in two separate steps is not acceptable. The app runs `canAdmit()` and the insert inside one PostgreSQL transaction that first takes the event's lock (`db.lock(eventLock(id))`, an advisory transaction lock; see `repo.addTestEntries`), and saves that change limits, orders, and payments take the same lock. Any new write that can change capacity must do the same ([DATA_MODEL.md](../DATA_MODEL.md#capacity-and-concurrency)).
 6. An organizer cannot lower a cap below confirmed entries plus active reservations.
 7. Archive a category that has entries; never delete it.
 

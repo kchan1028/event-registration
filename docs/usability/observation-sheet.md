@@ -7,7 +7,7 @@ Print one session sheet per participant. Fill it in with participant codes only;
 ```text
 Participant code: P____     Role: rider/parent | organizer | check-in volunteer
 Date: ______________        Facilitator: ______   Note-taker: ______
-Session database (DB_PATH): data/usability-P____.sqlite
+Session database (DATABASE_URL name): cyclereg_usability_p____
 Screen: laptop | phone-sized window (width ____ px)     Theme: light | dark
 Light (volunteers): indoors | bright window | outdoors
 Assistive technology or settings used: ______________________________

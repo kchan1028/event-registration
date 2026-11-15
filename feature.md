@@ -63,7 +63,7 @@ Details: [check-in status](roadmap.md#check-in) and [start-list status](roadmap.
 - The separate Berkeley Omnium fixture includes a $130 two-race package and a podium nomination requiring organizer review. Award approval tools, points, and podium calculation are not built.
 - Light and dark themes are implemented, with system preference, a visible toggle, and a saved device preference.
 - Automated accessibility checks cover main screens in both themes. Manual keyboard, screen-reader, and real-phone passes remain open. See [ACCESSIBILITY.md](ACCESSIBILITY.md).
-- Data is stored in a local SQLite file. No database server is needed. There is no sign-in, so the app must stay on localhost and use fictional rider details. See [DATA_MODEL.md](DATA_MODEL.md).
+- Data is stored in a local PostgreSQL database (a Docker container on the developer's computer, per [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md)). Nothing is hosted. There is no sign-in, so the app must stay on localhost and use fictional rider details. See [DATA_MODEL.md](DATA_MODEL.md).
 
 ## Package and bundle terminology
 
