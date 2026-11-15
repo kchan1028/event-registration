@@ -927,24 +927,39 @@ fieldset {
   background: var(--canvas);
   flex-wrap: wrap;
 }
+/* Names give way first (ellipsis); the status tag keeps its size; when even that
+   does not fit, the actions wrap to a second row instead of overlapping. */
 .topbar__crumbs {
   display: flex;
   align-items: center;
   gap: var(--s-2);
   min-width: 0;
-  flex: 1;
+  flex: 1 1 340px;
+  overflow: hidden;
   color: var(--muted);
   font-size: 14px;
 }
 .topbar__org {
+  flex: 0 100 auto; /* gives way before the event name */
+  min-width: 3ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
+.topbar__sep {
+  flex: none;
+}
 .topbar__event {
+  flex: 0 1 auto;
+  min-width: 10ch;
   font-size: 15px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.topbar__crumbs .tag {
+  flex: none;
 }
 .topbar__actions {
   display: flex;
