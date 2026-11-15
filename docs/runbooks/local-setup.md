@@ -119,7 +119,10 @@ SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts
 | `HOLD_MINUTES` | How long rider checkout holds places before payment | `10` | No |
 | `STRIPE_SECRET_KEY` | Stripe test-mode secret key (`sk_test_...` or `rk_test_...`). Set it to use Stripe hosted Checkout instead of the simulated payment. Live keys are refused | unset (simulated payment) | **Yes.** Only in `.env` or the platform's secret store |
 | `STRIPE_WEBHOOK_SECRET` | Webhook signing secret (`whsec_...`). Required when `STRIPE_SECRET_KEY` is set | none | **Yes** |
-| `PUBLIC_APP_URL` | Origin Stripe sends riders back to after paying. Required in production when Stripe is on | `http://127.0.0.1:5273` outside production | No |
+| `PUBLIC_APP_URL` | Origin Stripe sends riders back to after paying, and the sign-in link in invitation emails. Required in production when Stripe is on | `http://127.0.0.1:5273` outside production | No |
+| `EMAIL_MODE` | `ses` sends email through Amazon SES (test-only beta). Unset: emails are recorded in the database and never sent | unset (local) | No |
+| `SES_REGION`, `EMAIL_FROM`, `SES_AWS_PROFILE` | Required with `EMAIL_MODE=ses`: the SES region, a verified sender address, and the named AWS profile for the project's own AWS account. The app never uses the shell's default `AWS_PROFILE` | none | The profile name is not a secret; the credentials it points to are, and stay in `~/.aws`, never in the repository |
+| `SES_CONFIGURATION_SET` | Optional SES configuration set for sending events | unset | No |
 
 ## Sign-in keys
 
@@ -151,6 +154,17 @@ Without Stripe keys, checkout uses the simulated payment. To try Stripe hosted C
 3. Restart `npm run dev`. The review step now shows **Pay on Stripe (test mode)**. Pay with a Stripe test card such as `4242 4242 4242 4242`; the order confirms when the webhook arrives.
 
 Each person signs in with their own email (one account per email). Organizations created before sign-in existed have no owner; give yourself one by reseeding with `--owner`, or start over below. If you seeded with `--owner` but never signed in with that email, the owner invitation expires after 14 days and signing in then gives no role; reseed with the same `--owner` to renew it.
+
+## Email in test mode (optional)
+
+By default the app records every email (organizer invitations for now) in the `email_messages` table and sends nothing; the team panel says "Email recorded, not sent (local email)". The beta stays test-only, so SES is used only in its sandbox, where it delivers only to addresses you verified.
+
+1. In the project's own AWS account (not an employer account), open Amazon SES in one region and verify the sender address or domain, plus each test recipient's address. A new SES account starts in the sandbox; do not request production access for the beta.
+2. Create a named AWS profile for that account with permission to send through SES (`ses:SendEmail`), for example in `~/.aws/credentials`.
+3. Add to `.env`: `EMAIL_MODE=ses`, `SES_REGION=<region>`, `EMAIL_FROM=<verified sender>`, `SES_AWS_PROFILE=<profile name>`. Restart `npm run dev`.
+4. Invite a verified test address from **Team and roles**. The invitation shows "Email sent", or "Email failed to send" with the reason stored in `email_messages.error`; **Resend** tries again.
+
+`EMAIL_MODE=ses` is refused with `NODE_ENV=production`.
 
 ## Start over
 
