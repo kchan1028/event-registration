@@ -101,7 +101,9 @@ Built November 14, 2026, on the same stack, building on the rider checkout proto
 
 **Verified:** checked by hand in the browser on desktop and phone widths in both themes. Automated tests in `tests/checkin.test.ts` cover the rules, bib collisions and ranges, repeat check-in, bib history, per-day bibs, code lookup, and the absence of contact and payment details; they run in CI. A Playwright test (`e2e/checkin.spec.ts`) checks that Enter right after a scanned code or a unique name opens that rider, and that a blocked rider gets no check-in button.
 
-**Not built yet:** QR scanning with a camera; sign-in and the check-in volunteer role (anyone with the local app can use the screen); rider identity across separate orders (two orders for one rider count as two riders); printable roster; undoing a check-in; measured check-in times.
+**Not built yet:** QR scanning with a camera; sign-in and the check-in volunteer role (anyone with the local app can use the screen); rider identity across separate orders (two orders for one rider count as two riders); undoing a check-in; measured check-in times.
+
+**Printable fallback roster (added November 14, 2026):** **Fallback roster** on the check-in screen opens a print-ready page with one section per race day: every rider by surname with team, racing age, races in start order, status (checked in, ready, or NOT READY with the reason), and bib; an exception checklist of blocked riders with what is missing, what to do, and a space to record who cleared it; and blank rows for riders not on the list. Each section shows when it was printed and that later changes are not shown. It prints black on white whatever the screen theme, and carries no email, phone, emergency contact, license number, or payment amount. A blocked rider is never printed as cleared, even with a check-in on record. Covered by unit tests (`tests/roster.test.ts`) and a Playwright test that run in CI; checked by hand in the browser at desktop and phone widths. A paper print through a real printer has not been checked, and the roster has not been used in a rehearsal.
 
 ## Start lists and timer export
 
@@ -111,7 +113,7 @@ Built November 14, 2026, building on the check-in prototype. It covers the Phase
 
 **Verified:** checked by hand in the browser. Automated tests in `tests/startlists.test.ts` cover CSV quoting and formula guarding, start order, the diff, confirmed-only rows, snapshots and later changes, CSV headers and stable IDs, and the absence of contact data; they run in CI.
 
-**Not built yet:** a format agreed with the actual timer and a round trip through timing software (the open research questions in [product.md](product.md#results-site-updates-research)); a start-list lock; a printable roster; the timer/export role and sign-in (anyone with the local app can download); rider identity across separate orders.
+**Not built yet:** a format agreed with the actual timer and a round trip through timing software (the open research questions in [product.md](product.md#results-site-updates-research)); a start-list lock; the timer/export role and sign-in (anyone with the local app can download); rider identity across separate orders.
 
 ## Delivery approach
 
