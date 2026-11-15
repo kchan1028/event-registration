@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { BIB_SCOPES, rangeFor, type BibSettings } from '../shared/checkin';
+import { BIB_SCOPES, rangeFor, changedBibAssignments, type BibChange, type BibReassignmentPlan, type BibSettings } from '../shared/checkin';
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
 import { can } from '../shared/roles';
 import { AutomaticBibs } from './AutomaticBibs';
-import { BibBatchPanel } from './BibBatchPanel';
+import { BibReassignmentPreview } from './BibReassignmentPreview';
+import { BibBatchPanel, type BibBatchMode } from './BibBatchPanel';
 import { href } from './App';
 import { Icon, ThemeToggle } from './ui';
 
@@ -19,7 +20,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
   const [data, setData] = useState<CheckInList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showBatch, setShowBatch] = useState(false);
+  const [batchMode, setBatchMode] = useState<BibBatchMode | null>(null);
   const [showBibs, setShowBibs] = useState(false);
   const [scanning, setScanning] = useState(false);
   const detailRef = useRef<HTMLElement>(null);
@@ -132,7 +133,8 @@ export function CheckIn({ eventId }: { eventId: string }) {
             ))}
           </div>
         )}
-        {data && can(data.roles, 'checkin.settings') && <button type="button" className="btn btn--secondary btn--small" aria-expanded={showBatch} onClick={() => setShowBatch((v) => !v)}>Assign bibs</button>}
+        {data && can(data.roles, 'checkin.settings') && <button type="button" className="btn btn--secondary btn--small" aria-expanded={batchMode === 'unassigned'} onClick={() => setBatchMode((v) => v === 'unassigned' ? null : 'unassigned')}>Assign bibs</button>}
+        {data && can(data.roles, 'checkin.settings') && <button type="button" className="btn btn--secondary btn--small" aria-expanded={batchMode === 'reassign'} onClick={() => setBatchMode((v) => v === 'reassign' ? null : 'reassign')}>Reassign bibs</button>}
         {data && can(data.roles, 'checkin.settings') && <button type="button" className="btn btn--secondary btn--small" aria-expanded={showBibs} onClick={() => setShowBibs((v) => !v)}>
           Bib ranges
         </button>}
@@ -147,7 +149,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
         </p>
       )}
 
-      {data && showBatch && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId} eventId={eventId} dayId={data.dayId} onChanged={() => refreshAfterBatch.current()} onClose={() => setShowBatch(false)} />}
+      {data && batchMode && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId + batchMode} eventId={eventId} dayId={data.dayId} mode={batchMode} onChanged={() => refreshAfterBatch.current()} onClose={() => setBatchMode(null)} />}
 
       {data && showBibs && can(data.roles, 'checkin.settings') && <>
         <BibSettingsPanel data={data} onSaved={() => void load(q, dayId)} onClose={() => setShowBibs(false)} />
@@ -317,6 +319,8 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
   const [changing, setChanging] = useState(false);
   const [newBib, setNewBib] = useState('');
   const [reason, setReason] = useState('');
+  const [acknowledgeCheckedIn, setAcknowledgeCheckedIn] = useState(false);
+  const [bibPreview, setBibPreview] = useState<{ input: BibChange; plan: BibReassignmentPlan } | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [undoReason, setUndoReason] = useState('');
 
@@ -340,7 +344,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
     setBusy(true);
     setError(null);
     try {
-      onChange(await api.checkIn(eventId, rider.orderId, dayId, bib.trim() ? Number(bib) : null, takeDuration()));
+      onChange(await api.checkIn(eventId, rider.orderId, dayId, rider.bib !== null ? null : bib.trim() ? Number(bib) : null, takeDuration()));
     } catch (err) {
       setError((err as ApiError).message);
     } finally {
@@ -353,11 +357,19 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
     setBusy(true);
     setError(null);
     try {
-      onChange(await api.changeBib(eventId, rider.orderId, dayId, Number(newBib), reason));
-      setChanging(false);
-      setNewBib('');
-      setReason('');
+      if (bibPreview) {
+        onChange(await api.changeBib(eventId, rider.orderId, bibPreview.input, bibPreview.plan.fingerprint));
+        setChanging(false);
+        setNewBib('');
+        setReason('');
+        setAcknowledgeCheckedIn(false);
+        setBibPreview(null);
+      } else {
+        const input = { dayId, bib: Number(newBib), reason, acknowledgeCheckedIn };
+        setBibPreview({ input, plan: await api.previewBibChange(eventId, rider.orderId, input) });
+      }
     } catch (err) {
+      setBibPreview(null);
       setError((err as ApiError).message);
     } finally {
       setBusy(false);
@@ -430,6 +442,12 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
       </div>
 
       <div className="ci-section ci-bib">
+        {!done && rider.bib !== null && <>
+          <p className="ci-bib__label">Assigned bib (before check-in)</p>
+          <p className="ci-bib__number">{rider.bib}</p>
+          <p className="muted small">This number is reserved. Hand it over only after readiness is cleared and check-in is recorded.</p>
+          {!changing && <button type="button" className="btn btn--secondary" onClick={() => setChanging(true)}>Change bib</button>}
+        </>}
         {done ? (
           <>
             <p className="ci-bib__label">Bib</p>
@@ -467,38 +485,41 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
                 </div>
               </form>
             )}
+
+          </>
+        ) : ready && !changing ? (
+          <form onSubmit={checkIn} className="ci-bib__issue">
+            {rider.bib === null && <label>
+              Bib <span className="muted small">(leave empty for the next free bib)</span>
+              <input className="input ci-bib__input" inputMode="numeric" pattern="[0-9]*" value={bib} onChange={(e) => setBib(e.target.value.replace(/\D/g, ''))} />
+            </label>}
+            <button type="submit" className="btn btn--primary btn--large" disabled={busy}>
+              {busy ? 'Checking in…' : rider.bib !== null ? `Check in and issue bib ${rider.bib}` : bib ? `Check in with bib ${bib}` : 'Check in and issue next bib'}
+            </button>
+          </form>
+        ) : null}
             {changing && (
-              <form className="ci-bib__change" onSubmit={changeBib}>
+              <form className="ci-bib__change" onSubmit={changeBib} aria-label="Change rider bib">
                 <label>
                   New bib
-                  <input className="input" inputMode="numeric" pattern="[0-9]*" required value={newBib} onChange={(e) => setNewBib(e.target.value.replace(/\D/g, ''))} />
+                  <input className="input" inputMode="numeric" pattern="[0-9]*" disabled={busy} required value={newBib} onChange={(e) => { setNewBib(e.target.value.replace(/\D/g, '')); setBibPreview(null); }} />
                 </label>
                 <label>
                   Reason
-                  <input className="input" required minLength={3} placeholder="For example: bib damaged" value={reason} onChange={(e) => setReason(e.target.value)} />
+                  <input className="input" disabled={busy} required minLength={3} placeholder="For example: bib damaged" value={reason} onChange={(e) => { setReason(e.target.value); setBibPreview(null); }} />
                 </label>
+                <label className="ci-batch__choice"><input type="checkbox" disabled={busy} checked={acknowledgeCheckedIn} onChange={(e) => { setAcknowledgeCheckedIn(e.target.checked); setBibPreview(null); }} />I approve changing this rider’s issued bib if already checked in.</label>
+                {bibPreview && <BibReassignmentPreview plan={bibPreview.plan} />}
                 <div className="ci-bib__actions">
-                  <button type="submit" className="btn btn--primary" disabled={busy}>
-                    Save new bib
+                  <button type="submit" className="btn btn--primary" disabled={busy || (!!bibPreview && !changedBibAssignments(bibPreview.plan).length)}>
+                    {bibPreview ? 'Apply bib change' : 'Preview bib change'}
                   </button>
-                  <button type="button" className="btn btn--ghost" onClick={() => setChanging(false)}>
+                  <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => { setChanging(false); setBibPreview(null); setAcknowledgeCheckedIn(false); }}>
                     Cancel
                   </button>
                 </div>
               </form>
             )}
-          </>
-        ) : ready ? (
-          <form onSubmit={checkIn} className="ci-bib__issue">
-            <label>
-              Bib <span className="muted small">(leave empty for the next free bib)</span>
-              <input className="input ci-bib__input" inputMode="numeric" pattern="[0-9]*" value={bib} onChange={(e) => setBib(e.target.value.replace(/\D/g, ''))} />
-            </label>
-            <button type="submit" className="btn btn--primary btn--large" disabled={busy}>
-              {busy ? 'Checking in…' : bib ? `Check in with bib ${bib}` : 'Check in and issue next bib'}
-            </button>
-          </form>
-        ) : null}
         {error && (
           <p className="text-error small" role="alert">
             {error}

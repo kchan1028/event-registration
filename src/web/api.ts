@@ -8,7 +8,7 @@ import type { z } from 'zod';
 import type { couponInputSchema, CouponTerms } from '../shared/coupons';
 import type { OrderExtras } from '../shared/categoryExtras';
 import type { FieldChange, RiderCorrection } from '../shared/lookup';
-import type { AutomaticBibInput, AutomaticBibJob, BibSettings, BibBatch, BibPlan, CheckInRider, CheckInList } from '../shared/checkin';
+import type { BibChange, BibReassignment, BibReassignmentPlan, BibReassignmentResult, AutomaticBibInput, AutomaticBibJob, BibSettings, BibBatch, BibPlan, CheckInRider, CheckInList } from '../shared/checkin';
 import type { WaitlistJoin, WaitlistStatus } from '../shared/waitlist';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
@@ -388,8 +388,10 @@ export const api = {
   saveBibSettings: (eventId: string, settings: BibSettings) => request<BibSettings>('PUT', `/api/events/${eventId}/bib-settings`, settings),
   checkIn: (eventId: string, orderId: string, dayId: string, bib: number | null, durationMs: number | null = null) => request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}`, { dayId, bib, durationMs }),
   undoCheckIn: (eventId: string, orderId: string, dayId: string, reason: string) => request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}/undo`, { dayId, reason }),
-  changeBib: (eventId: string, orderId: string, dayId: string, bib: number, reason: string) =>
-    request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}/bib`, { dayId, bib, reason }),
+  previewBibChange: (eventId: string, orderId: string, input: BibChange) => request<BibReassignmentPlan>('POST', `/api/events/${eventId}/check-in/${orderId}/bib/preview`, input),
+  changeBib: (eventId: string, orderId: string, input: BibChange, fingerprint: string) => request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}/bib`, { ...input, fingerprint }),
+  previewReassignments: (eventId: string, input: BibReassignment) => request<BibReassignmentPlan>('POST', `/api/events/${eventId}/bibs/reassign/preview`, input),
+  applyReassignments: (eventId: string, batch: BibReassignment, fingerprint: string) => request<BibReassignmentResult>('POST', `/api/events/${eventId}/bibs/reassign/apply`, { batch, fingerprint }),
   addCheckInDemoRiders: (eventId: string) => request<{ created: number }>('POST', `/api/events/${eventId}/check-in-demo-riders`),
   startLists: (eventId: string) => request<StartListOverview>('GET', `/api/events/${eventId}/start-lists`),
   snapshotStartList: (eventId: string, raceId: string) => request<{ version: number; riders: number }>('POST', `/api/events/${eventId}/start-lists/${raceId}/snapshots`),

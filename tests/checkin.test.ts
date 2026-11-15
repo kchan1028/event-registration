@@ -172,7 +172,9 @@ describe('check-in API', () => {
     await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
     const alex = rider('Alex').orderId;
     await checkIn(alex);
-    const res = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex}/bib`, payload: { dayId: first.dayId, bib: 120, reason: 'Bib torn' } });
+    const input = { dayId: first.dayId, bib: 120, reason: 'Bib torn', acknowledgeCheckedIn: true };
+    const preview = (await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex}/bib/preview`, payload: input })).json() as { fingerprint: string };
+    const res = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex}/bib`, payload: { ...input, fingerprint: preview.fingerprint } });
     const card = res.json() as Card;
     expect(card.bib).toBe(120);
     expect(card.bibHistory.map((h) => [h.bib, h.reason])).toEqual([
