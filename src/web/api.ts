@@ -17,6 +17,33 @@ export interface PublicEvent {
   nowLocal: string;
   enforceWindows: boolean;
   holdMinutes: number;
+  /** Categories with a waitlist turned on, and how many riders are in line. */
+  waitlist: Record<string, { waiting: number }>;
+}
+
+export interface WaitlistEntryView {
+  id: string;
+  categoryId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  racingAge: number;
+  status: 'waiting' | 'offered' | 'expired' | 'accepted' | 'removed';
+  position: number | null;
+  joinedAt: string;
+  offeredAt: string | null;
+  offerExpiresAt: string | null;
+  offerToken: string | null;
+  orderId: string | null;
+}
+
+export interface WaitlistOffer {
+  eventId: string;
+  categoryId: string;
+  categoryName: string;
+  status: WaitlistEntryView['status'];
+  offerExpiresAt: string | null;
+  rider: { firstName: string; lastName: string; email: string; racingAge: number; licenseCategory: string | null; licenseType: string | null; competitionClass: string | null; collegiateDivision: string | null };
 }
 
 export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
@@ -186,8 +213,13 @@ export const api = {
   clearTestEntries: (id: string) => request<{ removed: number; event: EventPayload }>('DELETE', `/api/events/${id}/test-entries`),
   publicEvents: () => request<PublicEventSummary[]>('GET', '/api/public/events'),
   loadPurchaseFlowDemo: () => request<{ organizationId: string; eventIds: string[] }>('POST', '/api/demo/purchase-flow'),
+  joinWaitlist: (eventId: string, body: Record<string, unknown>) => request<WaitlistEntryView>('POST', `/api/public/events/${eventId}/waitlist`, body),
+  waitlistOffer: (token: string) => request<WaitlistOffer>('GET', `/api/public/offers/${encodeURIComponent(token)}`),
+  waitlist: (eventId: string) => request<{ offerHours: number; entries: WaitlistEntryView[] }>('GET', `/api/events/${eventId}/waitlist`),
+  offerWaitlistPlace: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer`),
+  removeFromWaitlist: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/remove`),
   publicEvent: (id: string) => request<PublicEvent>('GET', `/api/public/events/${id}`),
-  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; rider: RiderDetails; waiver: WaiverAcceptance }) =>
+  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null }) =>
     request<OrderView>('POST', `/api/public/events/${eventId}/orders`, body),
   order: (id: string) => request<OrderView>('GET', `/api/orders/${id}`),
   pay: (id: string, attemptId: string, outcome: 'success' | 'failure') => request<OrderView>('POST', `/api/orders/${id}/payment`, { attemptId, outcome }),

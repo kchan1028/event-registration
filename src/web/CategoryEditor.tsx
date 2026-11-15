@@ -234,6 +234,10 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
         <Field label="Category cap" hint={`Blank: no cap of its own. Cannot go below the ${entries} entries already taken.`}>
           {(id, d) => <IntInput id={id} describedBy={d} value={cat.cap} min={Math.max(1, entries)} onCommit={(v) => set((c) => ({ ...c, cap: v }))} />}
         </Field>
+        <label className="check">
+          <input type="checkbox" checked={!!cat.waitlistEnabled} onChange={(e) => set((c) => ({ ...c, waitlistEnabled: e.target.checked }))} />
+          Offer a waitlist when this category is full (you offer freed places in order; each offer holds the place for 24 hours)
+        </label>
         <CapacityUsage draft={draft} categoryId={cat.id} />
         <TestEntries draft={draft} categoryId={cat.id} disabled={cat.status !== 'active'} />
       </section>
