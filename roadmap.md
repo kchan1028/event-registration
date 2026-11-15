@@ -14,9 +14,10 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 | Demo purchase flow fixtures | Implemented (November 14, 2026) | Fake events, riders, fees, worked order totals, and sample waiver text in [docs/fixtures/](docs/fixtures/README.md), used by the rider demo. Phone numbers corrected to 10 digits to match the fixture's own phone rule. |
 | Category builder milestone (organizer prototype) | Implemented (November 14, 2026); partly verified | Local-only prototype. See [Category builder milestone](#category-builder-milestone). |
 | Rider checkout prototype and demo purchase flow (2a) | Implemented (November 14, 2026); partly verified | Simulated payment only. Meets the [2a](product.md#2a-clickable-demo-purchase-flow--phase-1) behavior in automated tests, including both display themes; usability testing with people is not done. See [Rider checkout prototype](#rider-checkout-prototype). |
-| Light and dark display themes | Implemented (November 14, 2026); partly verified | Organizer and rider prototype screens: system default, header toggle on every screen, saved per device, applied before first paint, light palette for print. Token contrast checked against WCAG 2.2 AA in the browser; the rider demo has an automated theme switch test. Check-in screens must adopt it when built. |
+| Race-day check-in prototype | Implemented (November 14, 2026); partly verified | Local only, fake riders. Ready/blocked result, bib ranges, bib history, repeat-safe check-in. Automated tests written; usability test with volunteers not done. See [Check-in prototype](#check-in-prototype). |
+| Light and dark display themes | Implemented (November 14, 2026); partly verified | Organizer and rider prototype screens: system default, header toggle on every screen, saved per device, applied before first paint, light palette for print. Token contrast checked against WCAG 2.2 AA in the browser; the rider demo has an automated theme switch test. The check-in screen uses it, with fixed high-contrast result fills for sunlight. |
 | Phase 0: Establish the case to build | Planned | Not started. The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. Next actions are listed at the end of this document. |
-| Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented as prototypes. The demo purchase flow (product.md 2a), check-in prototype, timer export samples, and usability tests are not finished. |
+| Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented as prototypes. The race-day check-in prototype is implemented too. Timer export samples and usability tests are not finished. |
 | Phase 2: Build the registration core | Planned | Depends on Phase 1 and a settled payment model. |
 | Phase 3: Make race day operable | Planned | USAC acceptance gates live sanctioned use. |
 | Phase 4: Run a controlled live pilot | Planned | Depends on Phase 3. |
@@ -63,7 +64,7 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 
 **Registration windows (added November 14, 2026):** checkout refuses categories outside their opening and closing times, read in the event's time zone; a hold taken while a window is open can still be paid within the hold, and a late payment after the window closed goes to the organizer's queue. Demo events can let testers register at any time; the rider page then says "Demo mode" and when real registration opens. Verified by unit, API, and Playwright tests.
 
-**Not built yet:** real payments, refunds, and payouts; rider accounts and access to past receipts; category transfers and withdrawals; waitlists; emergency contact collection (deferred until role-based access exists); email receipts; check-in, bib assignment, and timer exports.
+**Not built yet:** real payments, refunds, and payouts; rider accounts and access to past receipts; category transfers and withdrawals; waitlists; emergency contact collection (deferred until role-based access exists); email receipts; timer exports. (Check-in and bib assignment: see [Check-in prototype](#check-in-prototype).)
 
 **Pending external dependencies:** a payment provider, USA Cycling license and waiver checks, and sign-in with required MFA. Rider data entered in the prototype stays in the local database; use made-up details.
 
@@ -79,6 +80,16 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 | Uncertain license is paid but not cleared | API and Playwright tests |
 
 **Still open for 2a:** the "without facilitator help" part needs a usability test with people. Display themes come from the shared theme work (PR #11) and the rider screens now carry the same header toggle.
+
+## Check-in prototype
+
+Built November 14, 2026, on the same stack, building on the rider checkout prototype. It covers the Phase 1 deliverable "check-in prototype showing ready/blocked states and bib assignment" and part of [product.md section 5](product.md#5-race-day-operations). Fake riders only; open it from the builder rail under **Race-day check-in**.
+
+**Implemented:** search by name, team, bib, or check-in code (with or without the dash; a code that matches one rider opens it on Enter); a ready/blocked result that needs a confirmed simulated payment and every readiness item for that day's entries, so an unreviewed license blocks and paying alone never clears a rider; blockers that tell the volunteer to send the rider to the registration desk rather than override; bib ranges for the whole event or per race day; the next free bib or a chosen one, with no two active riders on the same bib in a range (enforced by a database index); repeat check-in returns the first time and bib; bib changes need a reason and keep the history; a day summary (riders, checked in, blocked, bibs issued); fictional demo riders for a published demo event. Volunteers see name, team, racing age, entries, readiness, and bib only: no email, phone, emergency contact, license number, or payment amount.
+
+**Verified:** checked by hand in the browser on desktop and phone widths in both themes. Automated tests in `tests/checkin.test.ts` cover the rules, bib collisions and ranges, repeat check-in, bib history, per-day bibs, code lookup, and the absence of contact and payment details; they run in CI.
+
+**Not built yet:** QR scanning with a camera; sign-in and the check-in volunteer role (anyone with the local app can use the screen); rider identity across separate orders (two orders for one rider count as two riders); start-list snapshots, printable roster, and timer exports; undoing a check-in; measured check-in times.
 
 ## Delivery approach
 

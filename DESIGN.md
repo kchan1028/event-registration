@@ -264,6 +264,9 @@ Quiet and compact; the ink button is the only filled button.
 - **Status pill:** same geometry at 600 weight; eligible uses OK, needs review uses Warning, ineligible uses Tyvek Deep with muted text.
 - **Issue count:** text such as "2 errors, 3 warnings" with a status dot, in the paired status tone; "No issues" in green when clear. Never a bare number.
 
+### Check-in result
+The race-day check-in result is the one place status uses a solid fill: white text on deep green (#0b5a2b, "Ready to race") or deep red (#9e1b12, "Not ready"), with a check or cross icon and the words in condensed caps. The fill is the same in light and dark themes because tinted grounds wash out in direct sun; both pairs stay above 7:1. Blockers sit underneath on the paired error ground, each with the action to take. The issued bib is shown as a large condensed numeral. Motion is limited to press feedback, since volunteers repeat these actions all morning.
+
 ### Chips and segmented controls
 - **Chip:** 32px pill with a hairline border and 13px 500 text, wrapping a hidden native input. Selected chips fill with ink and white text. Press scales to 0.96. Focus ring draws on the chip.
 - **Segmented control:** hairline-bordered 8px container with 2px padding; options are 6px-radius 13px labels.

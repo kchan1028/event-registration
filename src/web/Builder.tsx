@@ -378,6 +378,9 @@ function Rail({ draft, route, activeRaceId, errors, warnings }: { draft: Draft; 
       >
         Registrations
       </a>
+      <a className="rail__item" href={href({ page: 'checkin', eventId: ev })}>
+        Race-day check-in
+      </a>
       <a className={`rail__item ${route.view === 'publish' ? 'is-active' : ''}`} href={href({ page: 'event', eventId: ev, view: 'publish' })} aria-current={route.view === 'publish' ? 'page' : undefined}>
         Review and publish
         <IssueCount errors={errors} warnings={warnings} />
