@@ -22,6 +22,8 @@ CycleReg proposes a guided cycling workflow: categories modeled the way road and
 
 Berkeley Omnium (Berkeley Bicycle Club) is the reference scenario and proposed first design partner. It is not an approved migration, and it stays on its current registration system until the launch criteria in [product.md](product.md#launch-criteria) pass.
 
+See [feature.md](feature.md) for a concise overview of implemented and planned features.
+
 ## What works today
 
 The organizer workspace runs locally and is covered by automated tests. Screens below use the labeled demonstration weekend, which is example data, not an approved race schedule.
