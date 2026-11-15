@@ -1,6 +1,6 @@
 ---
-name: CycleReg organizer workspace
-description: Category schedule builder for volunteer-run road race and criterium weekends.
+name: CycleReg rider and organizer workspace
+description: Race-day clarity with selective Liquid Glass for rider and organizer workflows.
 colors:
   ink: "#181d26"
   body: "#333840"
@@ -144,20 +144,26 @@ components:
     height: "12px"
 ---
 
-# Design System: CycleReg organizer workspace
+# Design System: CycleReg rider and organizer workspace
 
 ## Overview
 
-**Creative North Star: "The Race-Tent Field Board"**
+**Creative North Star: "The Race-Tent Field Board, with Liquid Glass"**
+
+Status: **Planned design direction**, November 14, 2026. This documentation change does not implement glass, photography, new settings, or purchase capabilities. The existing YAML tokens above describe the prototype baseline; the material recipe and acceptance checks below are targets for future implementation. [product.md](product.md) owns requirements and [roadmap.md](roadmap.md) owns delivery status.
+
+Apple-inspired means translucent navigation, subtle depth, refined type, and responsive, interruptible interactions. Preserve CycleReg's field-board identity, day hues, Public Sans, and Barlow Condensed numerals. Forms, pricing, race options, receipts, and dense tables stay opaque. Glass belongs to a small functional layer above the content, with no decorative refraction or moving highlights.
+
+Inspection basis: the local rider catalog and Berkeley race-selection screen in dark theme, plus the committed [organizer schedule screenshot](docs/screenshots/02-category-schedule.png). The rider UI already groups category details, availability, and prices, and labels simulated payment and disconnected license checks. The organizer table uses clear hairlines and separate start-group cards. Keep these strengths. This inspection is not a keyboard, mobile, or contrast conformance test.
 
 The workspace is the registration table at a bike race, drawn as software. The ground is Tyvek white like a race bib, the text is bib-black ink, and each race day gets one hue that follows its races everywhere: the rail swatch, the rule under the race header, the clip on each start group, and the segments of its tally bar. Times, counts, caps, and prices are set in a condensed numeral face so they read like bib numbers. Everything else is quiet: hairline borders, modest weights, and one ink button per area.
 
 Density is that of a working tool. Three columns at desktop (rail, schedule, inspector), tables with 10px cell padding, 14px dense text, and status shown in small tinted tags rather than large banners. The one place the world becomes literal is the field board, where start groups are cards with a short day-hue clip across the top edge holding a stack of category tags, with a shared tally bar underneath. The clip metaphor stops there: tags, the clip bar, and the tally.
 
-Detailing follows the Airtable reference: ink primary paired with an outlined secondary, 1px hairlines instead of shadows, and medium (500) weight headings rather than bold.
+Detailing keeps the existing ink primary, outlined secondary, hairlines, and medium (500) headings. Liquid Glass adds depth only where navigation or controls overlap content; it does not replace the working surfaces with translucent cards.
 
 **Key Characteristics:**
-- Tyvek-white and canvas-white surfaces separated by hairlines, not shadows.
+- Stable canvas and Tyvek working surfaces, with selective glass navigation and overlays.
 - One hue per race day, applied through a single inherited day color on each race scope.
 - Condensed tabular numerals for every time, count, cap, and price.
 - Ink primary button, outlined secondary, ghost tertiary.
@@ -198,7 +204,7 @@ The theme follows the system setting until the user picks one with the header to
 ### Named Rules
 **The Day Hue Rule.** A day hue appears only on things that belong to that day: rail swatch, race header rule, clip bar, tally segments, rider preview day rule and group labels. It is never used as a general accent or for buttons.
 
-**The Paired Status Rule.** Status color is always a dark text tone on its matching pale ground (inverted in the dark theme: light tone on deep ground). Never place status text on canvas alone or a status fill behind white text, except the error count badge.
+**The Paired Status Rule.** Status color is always a dark text tone on its matching pale ground (inverted in the dark theme: light tone on deep ground). Never place status text on canvas alone or a status fill behind white text, except the error count badge and the explicitly defined high-contrast check-in result below.
 
 ## Typography
 
@@ -213,7 +219,7 @@ The theme follows the system setting until the user picks one with the header to
 - **Display** (500, 28px, -0.01em): the race name in the race header. The home intro and rider preview title use the same weight at 34px.
 - **Headline** (500, 24px): page titles in settings, pools, and publish views. Rider preview day titles use 500 at 22px.
 - **Title** (600, 17px): section heads such as "Category schedule" and "Start groups". Card and row names use 600 at 14.5px.
-- **Body** (400, 15px, 1.5): default text and ledes, with ledes capped at 68ch and section notes at 70ch. Dense surfaces (tables, rail, inputs, buttons) use 14px.
+- **Body** (400, 15px, 1.5): default text and ledes, with ledes capped at 68ch and section notes at 70ch. Dense desktop surfaces (tables, rail, buttons) use 14px. Editable inputs on phones use at least 16px to avoid focus zoom.
 - **Label** (600, 12.5px): table column headers, stat labels, issue locations. Sentence case, muted color, no tracking.
 - **Numeral** (Barlow Condensed 600, tabular and lining figures): inline at 1.08em of its context; at 26px for start times on clips, 20px for the tally used count, 16px in numeric inputs.
 - **Code** (monospace 12px on tyvek-deep, 4px radius): category codes such as RR-P12. Code inputs are uppercase.
@@ -231,7 +237,22 @@ Spacing follows a 4px base scale (s-1 through s-6). Main content uses 24px paddi
 
 ## Elevation & Depth
 
-The system is flat. Depth comes from the canvas and Tyvek tonal step and from hairline borders. Shadows appear in four narrow places only: the active rail item, the selected row and tag chip markers (which are inset or 1px rings, not lift), and the mobile inspector drawer.
+Working surfaces remain flat. Depth comes from the canvas/Tyvek step, hairlines, selection markers, and a restrained shadow on overlapping controls. Liquid Glass is a navigation and overlay material, never a data container.
+
+### Selective Liquid Glass (Planned)
+
+| Surface | Material rule |
+|---|---|
+| Top navigation, floating action toolbar, mobile entry-tray shell | Glass allowed; keep text and controls on a consistent high-opacity tint. |
+| Popover, menu, sheet or drawer frame | Glass allowed on the frame; form fields, prices, errors, and long reading areas inside remain opaque canvas. Modal sheets also need a separate scrim. |
+| Category rows, tables and sticky table headers, editor fields, package comparisons, checkout totals, receipt, check-in result | Opaque canvas, Tyvek, or paired status ground. No backdrop blur. |
+| Event photography | Content, not a glass texture. No glass cards stacked over other glass. |
+
+Starting material tokens for future implementation, subject to measured contrast: `glass-light` = white at 90% opacity, `glass-dark` = #15181d at 94%, `glass-blur` = 16px, `glass-edge` = the theme's hairline, and `glass-shadow` = 0 4px 16px ink at 10% opacity in light theme. Use a visible theme-appropriate edge in dark theme instead of increasing glow. Keep the existing radius scale; a floating toolbar may use a 16px radius, while fields and tables retain their existing corners. No animated blur, lens distortion, chromatic fringes, or cursor-following shine.
+
+Treat those values as starting points, not proof of contrast. Measure the composited result over the brightest, darkest, and busiest underlying content in both themes. Raise opacity or switch to opaque canvas whenever a contrast target fails. Limit glass to one overlapping layer per region and avoid full-page blur.
+
+**Opaque fallback:** reduced transparency, increased contrast, forced colors, unsupported backdrop filtering, and print use solid canvas with a defined border and no blur. Honor system preferences where supported and provide an explicit Reduce transparency setting so the fallback is always reachable. That setting is Planned. It is independent of theme and reduced motion; all controls, labels, and information remain available in every combination.
 
 ### Shadow Vocabulary
 - **Rail selection** (`box-shadow: 0 1px 2px rgba(24, 29, 38, 0.08), 0 0 0 1px var(--hairline)`): the active rail item, a white tab lifted slightly off the Tyvek rail.
@@ -256,8 +277,8 @@ Quiet and compact; the ink button is the only filled button.
 - **Ghost:** no fill or border; hover fills Tyvek Deep. Used for Edit and in-panel actions.
 - **Danger:** ghost with error text.
 - **Small:** 32px high, 10px padding, 13px label.
-- **States:** press scales to 0.97 over 160ms with the ease-out curve; disabled drops to 45% opacity. Hover styles apply only on hover-capable fine pointers.
-- **Icon button:** 32px square, 6px radius, muted icon, Tyvek Deep on hover, press scales to 0.94.
+- **States:** press feedback follows the motion rules below; disabled controls retain readable labels and an adjacent reason when progress is blocked, rather than relying on low opacity alone. Hover styles apply only on hover-capable fine pointers.
+- **Icon button:** 32px square, 6px radius, muted icon, Tyvek Deep on hover, press feedback must not displace its icon or reduce its effective target.
 
 ### Tags and status
 - **Tag:** 22px pill, Tyvek Deep ground, 12px 500 text. Warn and error variants use the paired status colors.
@@ -268,12 +289,12 @@ Quiet and compact; the ink button is the only filled button.
 The race-day check-in result is the one place status uses a solid fill: white text on deep green (#0b5a2b, "Ready to race") or deep red (#9e1b12, "Not ready"), with a check or cross icon and the words in condensed caps. The fill is the same in light and dark themes because tinted grounds wash out in direct sun; both pairs stay above 7:1. Blockers sit underneath on the paired error ground, each with the action to take. The issued bib is shown as a large condensed numeral. Motion is limited to press feedback, since volunteers repeat these actions all morning.
 
 ### Chips and segmented controls
-- **Chip:** 32px pill with a hairline border and 13px 500 text, wrapping a hidden native input. Selected chips fill with ink and white text. Press scales to 0.96. Focus ring draws on the chip.
+- **Chip:** 32px pill with a hairline border and 13px 500 text, wrapping a hidden native input. Selected chips fill with ink and white text. Use immediate selected-state feedback; any press scale follows the motion rules below. Focus ring draws on the chip.
 - **Segmented control:** hairline-bordered 8px container with 2px padding; options are 6px-radius 13px labels.
 
 ### Inputs / Fields
-- **Style:** canvas fill, 1px hairline, 6px radius, 38px minimum height, 14px text. Labels are 13px 500 ink above the input with a 5px gap; hints and errors are 12.5px below.
-- **Hover / Focus:** hover strengthens the border; focus turns the border Link Blue with a 2px 25% blue outline.
+- **Style:** canvas fill, 1px hairline, 6px radius, 38px minimum height, 14px text on desktop, at least 16px on phones. Labels are 13px 500 ink above the input with a 5px gap; hints and errors are 12.5px below.
+- **Hover / Focus:** hover strengthens the border; focus uses a visible 2px outline with at least 3:1 contrast against adjacent colors; a faint blue tint alone is insufficient.
 - **Error:** border turns error red and an error line appears below.
 - **Variants:** numeric inputs use the numeral face at 16px; code inputs use monospace uppercase; the title input is 20px 600 at 46px high.
 
@@ -291,7 +312,7 @@ The race-day check-in result is the one place status uses a solid fill: white te
 A start group is a Tyvek card (10px radius, soft hairline) with a 44 by 6px day-hue clip bar at the top-left edge. The head reads start time in a 26px numeral, group name in 600 14.5px, and a ghost Edit button. Below it, a stack of tag chips: canvas rows 40px high with a hairline border and 8px radius, holding code, name, and a numeral count against cap, with a 40px move control on a Tyvek strip at the right edge. A selected chip gets an ink border and selection ring. Unassigned categories sit in a canvas clip with a dashed border and a strong-border clip bar. A clip with a problem gets an error-tinted border and an error line.
 
 ### Tally bar (signature)
-A 12px track on Tyvek Deep with a 6px radius and a faint inset ring. Each category in the group is a segment colored from the day hue (full, 62% tint, 40% tint, 80% shade), positioned by transform and animated over 260ms with the ease-out curve, growing from zero on first render. Below the track: used count in a 20px numeral, "of" cap and "left" in numerals, a muted basis line naming the limit source, and a legend of 10px keys when more than one category shares the pool.
+A 12px track on Tyvek Deep with a 6px radius and a faint inset ring. Each category in the group is a segment colored from the day hue (full, 62% tint, 40% tint, 80% shade), positioned by transform. Show the actual count immediately, with no growth from zero on first render; optional transitions for user-triggered reassignment follow the motion rules below. Below the track: used count in a 20px numeral, "of" cap and "left" in numerals, a muted basis line naming the limit source, and a legend of 10px keys when more than one category shares the pool.
 
 ### Notes, alerts, and issues
 - **Note:** 6px radius, Tyvek or paired status ground, 13.5px text with a leading 16px icon.
@@ -313,6 +334,82 @@ A 12px track on Tyvek Deep with a 6px radius and a faint inset ring. Each catego
 - **Signature field:** a full-width input set in italic at 18px.
 - **Readiness list:** icon plus label per item: green check for done, amber warning for organizer review, red for missing.
 
+## Rider and organizer flows
+
+The following are Planned presentation rules, not claims that every state or capability exists. Reuse the component vocabulary above and the business rules in [product.md](product.md).
+
+### Event pages
+
+Lead with one strong, rights-cleared race photograph, event name, dates with year, location, organizer, and one prominent Register action. Keep key details and registration access available if the image fails to load. Use a fixed image aspect ratio to prevent layout shifts; crop around the race, not overlaid text. Informative images need useful alt text; decorative images have empty alt text. Text over photography requires a stable opaque backing or a tested scrim.
+
+Give rider pages 24–32px section gaps on phones and 32–48px on larger screens, with 16–24px side padding and reading text capped near 68ch. Event display titles may grow from 28px on phones to 40px on desktop at weight 500, without truncation. Keep the organizer workspace's compact type and spacing. A sticky registration action may replace the hero action once it scrolls away; avoid two competing primary actions in the same viewport. Show Closed or Not open yet with dates and a next step when registration is unavailable. Photography is a future direction; the current catalog is text-led.
+
+### Race selection and packages
+
+Keep category name, structured eligibility summary and review status, race date, start time and time zone, availability, and current entry price in one readable option. Staging time is separate from start time. On phones, wrap metadata underneath the name without moving the price into an unrelated panel. Keep ineligible, full, and closed options discoverable with a reason; never communicate these states through opacity or color alone. Availability describes remaining capacity, not license clearance or a guaranteed reservation.
+
+For an event package, show each included race, its date, chosen category, individual price, package total, and savings together on an opaque surface. List missing choices explicitly, for example “Choose a Sunday criterium category,” with an action that moves focus to that race. Do not imply that selecting the package selects categories automatically or reserves places. Keep errors about eligibility, capacity, and missing selections next to the affected race and in the entry summary. Update and politely announce the quoted total without moving focus.
+
+**Current versus Planned:** the local prototype supports same-event package pricing and a Berkeley omnium podium nomination subject to organizer review. The existing code/UI calls that package a “bundle.” Dedicated omnium/stage-race setup, TT registration, and cross-event, cross-organization season passes remain Planned. A nomination is not a result, podium award, or license approval. Do not expose a working purchase action for Planned offerings.
+
+Demo examples only: Berkeley road race $80 + criterium $60 = $140 individually, or $130 package, saving $10. The proposed three-race series is Friday TT $50, Saturday road race $80, Sunday criterium $60: $190 individually, $160 package, saving $30. Label that series Planned; it is not proof of TT or series checkout support. Distinguish an event package from a season pass spanning events and organizations. Savings compare the same included entries; show fees separately and never imply an unquoted fee is zero.
+
+### Checkout and confirmation
+
+Keep the running total visible beside desktop forms and in the mobile tray, on an opaque pricing surface. Review shows entries, discounts, fees, total, and the payment action together; state whether the total is final or still being calculated. Do not animate money through intermediate values or silently change a paid entry's accepted price.
+
+Preserve entered details when moving backward, opening the tray, or correcting a failed validation or payment attempt within the flow. Do not reset unrelated fields, clear a signature without explanation, or require re-entry after a recoverable error. This does not authorize storing sensitive details in browser storage. Each field has a persistent label, an associated error explaining how to fix it, and an invalid state. After unsuccessful submission, focus the error summary with links to fields; show payment/network errors beside the payment action with a retry path. Pending submission prevents duplicate actions and states what is happening. Success follows the actual recorded result, never an animation finishing.
+
+Confirmation separates **entry**, **payment**, **waiver**, and **license/readiness** into labeled rows with text, icon, and the next action where needed. “Payment recorded” cannot turn an unsigned waiver or unknown/stale license into “Ready to race.” Examples: “Simulated payment complete,” “Sample waiver signed,” and “License needs organizer review.” Include selected races, total, confirmation code, and check-in instructions without hiding unresolved tasks under a celebration banner. Never display “USAC approved” or imply federation verification is connected.
+
+Keep the Demo label in every demo header and “Simulated payment: no money is charged” near review, payment actions, and confirmation. Describe simulated license results as simulated and disconnected checks as not connected. The watermark supplements readable notices; it is not the only demo disclosure. Live Stripe Checkout is Planned under [ADR 0002](docs/decisions/0002-stripe-payments.md), not enabled by this guide.
+
+### Organizer operations
+
+Keep schedules, rosters, capacity, pricing, and check-in results on stable opaque surfaces with persistent column labels, aligned numerals, and explicit units. Keep display groups, categories, start groups, classifications, capacity pools, and packages visibly distinct. A shared start limit is not a display-header limit. Retain filters, scroll position, and row context after an edit; show saving, saved, and failure as text as well as color, preserving unsaved edits on failure.
+
+Provide visible edit, duplicate, move, and recovery actions without hover dependence. Dragging has keyboard and button alternatives. On narrow screens use an accessible contained table scroller or a labeled record detail view, keeping rider identity and the active action visible. Glass can frame navigation or an inspector, but editing content remains opaque. Check-in lookup, blocker resolution, bib issuance, and repeat scans use immediate feedback with no entrance sequences or celebratory delays. A paid but blocked rider must retain the blocker reason and next action.
+
+## Interaction, mobile, and accessibility
+
+### Purposeful motion (Planned refinements)
+
+Motion explains an origin, a selection, or a changed relationship. It never delays input or business state. These rules supersede the earlier blanket press scales and tally entrance animation.
+
+| Trigger | Allowed response | Reduced motion |
+|---|---|---|
+| Pointer press | Immediate border/fill feedback; optional scale no smaller than 0.98, at most 100ms. Commit on release; allow cancellation. | Instant border/fill, no scale. |
+| Tray, popover, or inspector opens | 160–220ms opacity/short translation from its trigger or screen edge; close in 120–180ms. Reverse from the current position when interrupted. | Appear/close immediately; preserve focus behavior. |
+| User reassigns a category | At most 200ms to show the destination; keep numeric values accurate throughout. | Immediate destination plus a text announcement. |
+| Price, capacity, readiness, scan result | Immediate text/icon update; optional polite announcement for a user-triggered change. No rolling numbers, row cascades, or repeated pulse. | Same immediate update. |
+
+Use transform and opacity for movement, without animating blur, page layout, or the background photograph. No parallax, auto-playing hero motion, bounce on keyboard navigation, or `transition: all`. An interrupting close, new selection, or navigation must take effect immediately. Respect reduced motion from first render: remove slides, springs, scaling, and decorative transitions, while keeping static focus, status, and error cues. Do not announce a hold countdown every second; announce meaningful expiry and recovery instructions.
+
+### Testable acceptance checks for future UI changes
+
+These are review criteria, **not results of this documentation change**. Apply the [coding guide](docs/coding-guide.md#accessibility-and-mobile-usability) and [accessibility checklist](ACCESSIBILITY.md) as well.
+
+| Check | Pass condition |
+|---|---|
+| Composited contrast | Both themes, busy photography and scrolling content: normal text at least 4.5:1, large text at least 3:1, essential control boundaries, icons, and focus indicators at least 3:1 against adjacent colors. Status always has words and an icon. Raise glass opacity when needed. |
+| Transparency alternatives | Reduced transparency and explicit setting show opaque surfaces without lost content; increased contrast and forced colors preserve controls and focus. With backdrop filtering unavailable, navigation remains readable and usable. Test independently and together with reduced motion. |
+| Mobile layout | At 360px and 390px widths, portrait/landscape and software keyboard open, no clipped labels, prices, errors, or actions. Controls have at least 44×44 CSS px effective touch targets without overlapping neighbors; compact desktop visuals may retain their size within a larger target. Inputs use at least 16px text. |
+| Zoom and reflow | At 200% text zoom and 320 CSS px reflow width, content and actions remain available without page-wide horizontal scrolling. A genuinely two-dimensional table may scroll within a labeled, keyboard-accessible region. |
+| Sticky UI | Safe-area insets and adequate bottom space keep the last field, inline error, primary action, and focused element clear of floating bars and the on-screen keyboard. No sticky glass layer obscures focused content. |
+| Keyboard | Complete race choice, package correction, checkout, editor, and check-in with Tab/Shift+Tab, Enter/Space, and appropriate arrow keys. Logical focus order, visible focus, no hover-only actions or keyboard traps. A modal traps focus, closes with Escape, and restores focus to its trigger; a non-modal panel does not trap focus. |
+| Screen reader | Semantic headings, tables with associated headers, labeled controls, and programmatically associated errors. Selection, total, save, and readiness changes are announced once without stealing focus; separate payment/waiver/license states are understandable without color. |
+| Recovery | After an invalid field, server failure, or simulated payment failure, previous details remain; summary links reach the relevant fields and retry is available. Test back navigation and closing/reopening the tray. |
+| Package clarity | With one required race missing, show its name/date, correction action, and why the package is incomplete. Verify savings against the quoted entries; Planned series/season-pass features have no misleading purchase action. |
+| Race-day speed | Repeated lookup, edit, and check-in are usable before any animation completes. No count animation or overlay blur over results; blocked riders show actionable reasons in both themes. Test on a real phone outdoors before calling sunlight usability Verified. |
+
+### Decisions still needing input
+
+- Event photography source, usage rights, and event-specific crops; use an opaque text-led header until assets are approved.
+- Placement of the Planned Reduce transparency setting alongside display preferences. The opaque fallback itself is required regardless of placement.
+- Final glass tint and depth after contrast checks on real devices in both themes; the recipe above is provisional, not a validated palette.
+
+Design guidance used Impeccable, Apple design guidance, and Emil's interaction guidance. The required `awesome-design` brand-reference skill was unavailable in the installed skill paths; the existing CycleReg identity supplies the visual baseline.
+
 ## Do's and Don'ts
 
 ### Do:
@@ -326,7 +423,7 @@ A 12px track on Tyvek Deep with a 6px radius and a faint inset ring. Each catego
 
 ### Don't:
 - **Don't** use a day hue for buttons, links, or decoration outside its own day's elements.
-- **Don't** add drop shadows to cards, clips, or tables at rest.
+- **Don't** add drop shadows to cards, clips, or tables at rest, or apply glass behind forms, prices, or dense data.
 - **Don't** set headings above 17px in bold; use 500.
 - **Don't** use Link Blue as a fill or button color.
 - **Don't** extend the clip metaphor beyond the clip bar, tag chips, and tally (no pins, paper textures, or skeuomorphic boards).
