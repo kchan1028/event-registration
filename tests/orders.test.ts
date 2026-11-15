@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { testApp, testDatabaseUrl } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
 
 type Order = {
@@ -15,7 +15,8 @@ const RIDER = { firstName: 'Test', lastName: 'Rider', email: 'test.rider@example
 async function setup(opts: { publish?: boolean } = {}) {
   let now = new Date('2027-03-01T18:00:00Z');
   const clock = { advance: (min: number) => (now = new Date(now.getTime() + min * 60_000)) };
-  const { app } = buildApp({ dbPath: ':memory:', now: () => now, holdMinutes: 10 });
+  const databaseUrl = await testDatabaseUrl();
+  const { app } = await testApp({ databaseUrl, now: () => now, holdMinutes: 10 });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   if (opts.publish !== false) await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
   const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number; entries: unknown[] };
@@ -27,7 +28,7 @@ async function setup(opts: { publish?: boolean } = {}) {
   const pay = (orderId: string, outcome: 'success' | 'failure', attemptId = `att-${Math.random().toString(36).slice(2)}`) =>
     app.inject({ method: 'POST', url: `/api/orders/${orderId}/payment`, payload: { attemptId, outcome } });
   const entriesCount = async () => ((await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { entries: unknown[] }).entries.length;
-  return { app, eventId, event, code, waiver, order, pay, clock, entriesCount };
+  return { app, databaseUrl, eventId, event, code, waiver, order, pay, clock, entriesCount };
 }
 
 describe('rider checkout: holds and simulated payment', () => {
@@ -101,6 +102,28 @@ describe('rider checkout: holds and simulated payment', () => {
     expect(res.statusCode).toBe(409);
     expect(res.json().error).toMatch(/Nothing was held/);
     expect(await entriesCount()).toBe(before);
+  });
+
+  it('two riders racing for the last place on two connections: exactly one hold, and a repeated payment confirms once', async () => {
+    const { app, databaseUrl, eventId, code, waiver } = await setup();
+    const { app: b } = await testApp({ databaseUrl, now: () => new Date('2027-03-01T18:00:00Z'), holdMinutes: 10 });
+    await app.inject({ method: 'POST', url: `/api/events/${eventId}/test-entries`, payload: { categoryId: code('RR-M60'), count: 24 } }); // 59 of 60
+    const rider60 = { ...RIDER, racingAge: 61 };
+    const body = (clientRequestId: string) => ({ clientRequestId, categoryIds: [code('RR-M60')], rider: rider60, waiver });
+    const race = await Promise.all([
+      app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: body('race-a-12345678') }),
+      b.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: body('race-b-12345678') }),
+    ]);
+    expect(race.map((r) => r.statusCode).sort()).toEqual([201, 409]);
+    const held = race.find((r) => r.statusCode === 201)!.json() as Order;
+    // The same payment notification arriving on both connections at once is processed once.
+    const paid = await Promise.all(
+      [app, b].map((x) => x.inject({ method: 'POST', url: `/api/orders/${held.id}/payment`, payload: { attemptId: 'same-attempt-123', outcome: 'success' } })),
+    );
+    expect(paid.map((p) => p.statusCode)).toEqual([200, 200]);
+    const [first, second] = paid.map((p) => p.json() as Order);
+    expect([first.status, second.status]).toEqual(['confirmed', 'confirmed']);
+    expect(second.checkInCode).toBe(first.checkInCode);
   });
 
   it('expired holds release places; a late payment confirms only if every place is still free', async () => {
@@ -177,7 +200,7 @@ describe('rider checkout: holds and simulated payment', () => {
 
 describe('demo purchase flow fixtures through the API', () => {
   it('loads the fixture events once, published, and orders reproduce the worked totals and simulated license results', async () => {
-    const { app } = buildApp({ dbPath: ':memory:', now: () => new Date('2027-03-01T18:00:00Z') });
+    const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z') });
     const first = await app.inject({ method: 'POST', url: '/api/demo/purchase-flow' });
     expect(first.statusCode).toBe(201);
     const again = await app.inject({ method: 'POST', url: '/api/demo/purchase-flow' });
@@ -211,7 +234,7 @@ describe('registration windows through the API', () => {
   async function realEvent(at: string) {
     let now = new Date(at);
     const clock = { set: (iso: string) => (now = new Date(iso)), advance: (min: number) => (now = new Date(now.getTime() + min * 60_000)) };
-    const { app } = buildApp({ dbPath: ':memory:', now: () => now, holdMinutes: 10 });
+    const { app } = await testApp({ now: () => now, holdMinutes: 10 });
     const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
     const ev = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
     const config = structuredClone(ev.config);
@@ -237,7 +260,7 @@ describe('registration windows through the API', () => {
 
   it('a demo event lets testers register outside the window', async () => {
     let now = new Date('2027-01-15T20:00:00Z');
-    const { app } = buildApp({ dbPath: ':memory:', now: () => now });
+    const { app } = await testApp({ now: () => now });
     const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
     await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
     const pub = (await app.inject({ method: 'GET', url: `/api/public/events/${eventId}` })).json() as { config: EventConfig; enforceWindows: boolean; nowLocal: string };
@@ -263,7 +286,7 @@ describe('registration windows through the API', () => {
 
 describe('Berkeley package order snapshot', () => {
   it('preserves the discount and podium nomination through simulated confirmation and later draft changes', async () => {
-    const { app } = buildApp({ dbPath: ':memory:', now: () => new Date('2027-03-15T18:00:00Z') });
+    const { app } = await testApp({ now: () => new Date('2027-03-15T18:00:00Z') });
     try {
       const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo/berkeley-omnium' })).json();
       const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json();

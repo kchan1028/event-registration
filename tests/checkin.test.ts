@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { testApp } from './support/db';
 import { checkInResult, checkInTiming, mergeReadiness, nextFreeBib } from '../src/shared/checkin';
 import type { ReadinessItem } from '../src/shared/checkout';
 
@@ -44,7 +44,7 @@ type Card = { orderId: string; name: string; checkInCode: string | null; bib: nu
 type List = { dayId: string; days: { id: string }[]; riders: Card[] };
 
 async function setup() {
-  const { app } = buildApp({ dbPath: ':memory:', now: () => new Date('2027-03-01T18:00:00Z') });
+  const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z') });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
   const seeded = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in-demo-riders` });

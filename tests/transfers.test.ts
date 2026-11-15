@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { testApp } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
 
 /* Organizer transfers and withdrawals (product.md acceptance: "Category change"). */
@@ -12,7 +12,7 @@ type Order = { id: string; status: string; totalCents: number; entries: Entry[] 
 
 async function setup() {
   const now = new Date('2027-03-01T18:00:00Z');
-  const { app } = buildApp({ dbPath: ':memory:', now: () => now, holdMinutes: 10 });
+  const { app } = await testApp({ now: () => now, holdMinutes: 10 });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
   const get = async () => (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number; entries: { categoryId: string }[] };

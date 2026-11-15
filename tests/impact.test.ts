@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { testApp } from './support/db';
 import { buildDemoEvent } from '../src/shared/demo';
 import { changeImpact, type ChangeImpact, type ImpactEntry } from '../src/shared/impact';
 import type { EventConfig } from '../src/shared/schema';
@@ -74,7 +74,7 @@ describe('change impact preview', () => {
 describe('change impact API', () => {
   it('returns null before publishing, then lists riders affected by a draft change', async () => {
     const now = new Date('2027-03-01T18:00:00Z');
-    const { app } = buildApp({ dbPath: ':memory:', now: () => now, holdMinutes: 10 });
+    const { app } = await testApp({ now: () => now, holdMinutes: 10 });
     const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
     expect((await app.inject({ method: 'GET', url: `/api/events/${eventId}/impact` })).json()).toEqual({ publishedVersion: null, impact: null });
 

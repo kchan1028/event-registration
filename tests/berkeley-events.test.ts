@@ -1,8 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { testApp, testDatabaseUrl } from './support/db';
 import { buildBerkeleyEvents } from '../src/shared/berkeleyEvents';
 import { eventConfigSchema } from '../src/shared/schema';
 import { validateConfig } from '../src/shared/validation';
@@ -37,9 +34,8 @@ describe('standalone Berkeley demo', () => {
   });
 
   it('publishes both events, persists across restart, and reruns without changing edits or unrelated data', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'berkeley-seed-'));
-    const dbPath = join(dir, 'demo.sqlite');
-    let app = buildApp({ dbPath }).app;
+    const databaseUrl = await testDatabaseUrl();
+    let app = (await testApp({ databaseUrl })).app;
     try {
       const unrelated = (await app.inject({ method: 'POST', url: '/api/organizations', payload: { name: 'Unrelated local club' } })).json();
       const seeded = await app.inject({ method: 'POST', url: endpoint });
@@ -53,7 +49,7 @@ describe('standalone Berkeley demo', () => {
       event.config.event.name = 'Organizer edited draft';
       expect((await app.inject({ method: 'PUT', url: `/api/events/${eventIds[0]}/config`, payload: { config: event.config, revision: event.revision } })).statusCode).toBe(200);
       await app.close();
-      app = buildApp({ dbPath }).app;
+      app = (await testApp({ databaseUrl })).app;
       const rerun = await app.inject({ method: 'POST', url: endpoint });
       expect(rerun.statusCode).toBe(200);
       expect(rerun.json().organizationId).toBe(organizationId);
@@ -66,7 +62,6 @@ describe('standalone Berkeley demo', () => {
       expect(orgs.some((o: { id: string }) => o.id === unrelated.id)).toBe(true);
     } finally {
       await app.close();
-      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

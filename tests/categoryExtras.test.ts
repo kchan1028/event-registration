@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { testApp } from './support/db';
 import { categoryBibRange, checkExtras, pruneExtras } from '../src/shared/categoryExtras';
 import { buildDemoEvent } from '../src/shared/demo';
 import type { EventConfig } from '../src/shared/schema';
@@ -52,7 +52,7 @@ const RIDER = { firstName: 'Pat', lastName: 'Demo', email: 'pat.demo@example.tes
 
 describe('category extras API', () => {
   it('enforces questions and addenda at checkout, stores answers, exports them, and issues bibs from the category range', async () => {
-    const { app } = buildApp({ dbPath: ':memory:', now: () => new Date('2027-03-01T18:00:00Z'), holdMinutes: 10 });
+    const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z'), holdMinutes: 10 });
     const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
     const ev = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
     const config = structuredClone(ev.config);

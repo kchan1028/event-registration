@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { testApp } from './support/db';
 import { parseCsv } from '../src/shared/csv';
 import type { EventConfig } from '../src/shared/schema';
 
@@ -8,7 +8,7 @@ import type { EventConfig } from '../src/shared/schema';
 const RIDER = { firstName: 'Pat', lastName: 'Demo', email: 'pat.demo@example.test', phone: '555-555-0142', team: '=HYPERLINK("x")', racingAge: 40, licenseCategory: '3', licenseType: 'annual', licenseNumber: 'DEMO-900', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Robin Contact', phone: '555-555-0199' } };
 
 async function setup() {
-  const { app } = buildApp({ dbPath: ':memory:', now: () => new Date('2027-03-01T18:00:00Z'), holdMinutes: 10 });
+  const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z'), holdMinutes: 10 });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
   const ev = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
