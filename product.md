@@ -200,7 +200,7 @@ Rules:
 
 ### 5. Race-day operations
 
-Status: check-in search, ready/blocked result, bib ranges, bib history, and repeat-safe check-in are Implemented in the local prototype on fake data (see [roadmap.md](roadmap.md#check-in-prototype)). QR scanning, start-list snapshots, exports, and the printable roster are Planned.
+Status: check-in search, ready/blocked result, bib ranges, bib history, and repeat-safe check-in are Implemented in the local prototype on fake data (see [roadmap.md](roadmap.md#check-in-prototype)). Start-list snapshots with recorded changes and a sample CSV export are Implemented too (see [roadmap.md](roadmap.md#start-lists-and-timer-export)); the CSV format is not yet agreed with a timer. QR scanning, an agreed export format with a tested round trip, and the printable roster are Planned.
 
 - Search or scan a check-in code; codes identify entries and contain no sensitive rider details.
 - Show readiness, missing requirements, race/category, and bib assignment clearly.

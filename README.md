@@ -48,7 +48,8 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Race-day check-in: search by name, team, bib, or check-in code; ready/blocked result; bib ranges per event or day; bib history; repeat-safe check-in | Implemented; automated tests in CI; usability test with volunteers still open |
 | Light and dark themes, following the system setting, with a header toggle | Implemented; contrast checked manually, no automated test yet |
 | CSV import and export of category schedules, with column matching and per-row errors ([format](docs/csv-category-format.md)) | Implemented and tested |
-| Change-impact preview, real payments and refunds, QR scanning, start-list exports | Planned |
+| Start lists per race, numbered snapshots with changes since the last one, and a sample timer CSV (format not yet agreed with a timer) | Implemented; automated tests in CI |
+| Change-impact preview, real payments and refunds, QR scanning, an agreed timer format | Planned |
 
 <details>
 <summary>More screens: category editor, rider preview, publishing, rider checkout, registrations, phone layouts</summary>
@@ -218,6 +219,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | Repository and contributor documentation | Implemented November 14, 2026 |
 | Category builder milestone (local organizer prototype) | Implemented November 14, 2026; shared-cap, eligibility, and fixture criteria verified by automated tests. See [roadmap.md](roadmap.md#category-builder-milestone) |
 | Rider checkout prototype (simulated payment) | Implemented November 14, 2026; buy-both-days, payment retry, license uncertainty, multi-race discount, and bundle criteria verified by automated tests. See [roadmap.md](roadmap.md#rider-checkout-prototype) |
+| Start lists and sample timer export | Implemented November 14, 2026; see [roadmap.md](roadmap.md#start-lists-and-timer-export) |
 | Race-day check-in prototype | Implemented November 14, 2026; see [roadmap.md](roadmap.md#check-in-prototype) |
 | Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; used by the rider demo |
 | Stack | Chosen for the prototype only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |

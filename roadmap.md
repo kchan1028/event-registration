@@ -15,9 +15,10 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 | Category builder milestone (organizer prototype) | Implemented (November 14, 2026); partly verified | Local-only prototype. See [Category builder milestone](#category-builder-milestone). |
 | Rider checkout prototype and demo purchase flow (2a) | Implemented (November 14, 2026); partly verified | Simulated payment only. Meets the [2a](product.md#2a-clickable-demo-purchase-flow--phase-1) behavior in automated tests, including both display themes; usability testing with people is not done. See [Rider checkout prototype](#rider-checkout-prototype). |
 | Race-day check-in prototype | Implemented (November 14, 2026); partly verified | Local only, fake riders. Ready/blocked result, bib ranges, bib history, repeat-safe check-in. Automated tests written; usability test with volunteers not done. See [Check-in prototype](#check-in-prototype). |
+| Start lists and sample timer export | Implemented (November 14, 2026); partly verified | Local only, fake riders. Per-race start lists, numbered snapshots with changes since the last one, and a sample CSV. The format is not agreed with a timer and has not been round-tripped. See [Start lists and timer export](#start-lists-and-timer-export). |
 | Light and dark display themes | Implemented (November 14, 2026); partly verified | Organizer and rider prototype screens: system default, header toggle on every screen, saved per device, applied before first paint, light palette for print. Token contrast checked against WCAG 2.2 AA in the browser; the rider demo has an automated theme switch test. The check-in screen uses it, with fixed high-contrast result fills for sunlight. |
 | Phase 0: Establish the case to build | Planned | Not started. The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. Next actions are listed at the end of this document. |
-| Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented as prototypes. The race-day check-in prototype is implemented too. Timer export samples and usability tests are not finished. |
+| Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented as prototypes. The race-day check-in prototype and sample timer exports are implemented too. Usability tests are not finished, and the export format is not yet agreed with a timer. |
 | Phase 2: Build the registration core | Planned | Depends on Phase 1 and a settled payment model. |
 | Phase 3: Make race day operable | Planned | USAC acceptance gates live sanctioned use. |
 | Phase 4: Run a controlled live pilot | Planned | Depends on Phase 3. |
@@ -66,7 +67,7 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 
 **Registration windows (added November 14, 2026):** checkout refuses categories outside their opening and closing times, read in the event's time zone; a hold taken while a window is open can still be paid within the hold, and a late payment after the window closed goes to the organizer's queue. Demo events can let testers register at any time; the rider page then says "Demo mode" and when real registration opens. Verified by unit, API, and Playwright tests.
 
-**Not built yet:** real payments, refunds, and payouts; rider accounts and access to past receipts; category transfers and withdrawals; waitlists; emergency contact collection (deferred until role-based access exists); email receipts; timer exports. (Check-in and bib assignment: see [Check-in prototype](#check-in-prototype).)
+**Not built yet:** real payments, refunds, and payouts; rider accounts and access to past receipts; category transfers and withdrawals; waitlists; emergency contact collection (deferred until role-based access exists); email receipts. (Check-in and bib assignment: see [Check-in prototype](#check-in-prototype); start lists and exports: see [Start lists and timer export](#start-lists-and-timer-export).)
 
 **Pending external dependencies:** a payment provider, USA Cycling license and waiver checks, and sign-in with required MFA. Rider data entered in the prototype stays in the local database; use made-up details.
 
@@ -91,7 +92,17 @@ Built November 14, 2026, on the same stack, building on the rider checkout proto
 
 **Verified:** checked by hand in the browser on desktop and phone widths in both themes. Automated tests in `tests/checkin.test.ts` cover the rules, bib collisions and ranges, repeat check-in, bib history, per-day bibs, code lookup, and the absence of contact and payment details; they run in CI.
 
-**Not built yet:** QR scanning with a camera; sign-in and the check-in volunteer role (anyone with the local app can use the screen); rider identity across separate orders (two orders for one rider count as two riders); start-list snapshots, printable roster, and timer exports; undoing a check-in; measured check-in times.
+**Not built yet:** QR scanning with a camera; sign-in and the check-in volunteer role (anyone with the local app can use the screen); rider identity across separate orders (two orders for one rider count as two riders); printable roster; undoing a check-in; measured check-in times.
+
+## Start lists and timer export
+
+Built November 14, 2026, building on the check-in prototype. It covers the Phase 1 deliverable "timer export samples" and part of [product.md section 5](product.md#5-race-day-operations). Open it from the builder rail under **Start lists and timer export**.
+
+**Implemented:** a start list per race from confirmed entries only (unpaid, cancelled, and released entries and simulated test entries are left out), in start order with bibs from check-in; numbered, timestamped snapshots tied to the published schedule version; changes since the last snapshot and between snapshots (added, removed, changed bib, category, start group, start time, name, team, or license number), matched by stable entry ID; a sample CSV per race, per snapshot, or for all races in one file. Columns: race date, race, start time, start group, category code, category, race length as configured (for example "45 min + 3 laps", never an invented distance or finish time), bib, last and first name, team, license number, racing age, competition class, license status, checked in, entry ID, rider ID. Values that a spreadsheet would run as a formula are prefixed with an apostrophe. No email, phone, guardian, emergency contact, or payment data is exported.
+
+**Verified:** checked by hand in the browser. Automated tests in `tests/startlists.test.ts` cover CSV quoting and formula guarding, start order, the diff, confirmed-only rows, snapshots and later changes, CSV headers and stable IDs, and the absence of contact data; they run in CI.
+
+**Not built yet:** a format agreed with the actual timer and a round trip through timing software (the open research questions in [product.md](product.md#results-site-updates-research)); a start-list lock; a printable roster; the timer/export role and sign-in (anyone with the local app can download); rider identity across separate orders.
 
 ## Delivery approach
 
