@@ -9,8 +9,8 @@ The USAC questions were emailed on November 15, 2026; nothing else has been sent
 | Question area | Owner | Sent | Answer received | Outcome |
 |---|---|---|---|---|
 | USAC integration and accepted license and waiver processes | KC (project owner), assigned 2026-11-15 | Yes, emailed to USA Cycling 2026-11-15 | No (waiting) | Public research recorded 2026-11-15 in [USAC questions](../usac-questions.md#what-public-sources-already-say); not an answer from USAC |
-| Payment-provider operating model | Not assigned | No | No | Public Stripe research and D01 club answers recorded 2026-11-15 in [payment model questions](../payment-model-questions.md#findings); club answers recorded the same day; approver and 501(c) status still open |
-| Results path to road-results.com | Not assigned | No | No | Public research recorded 2026-11-15 in the [timer export review](../timer-export-review.md#what-public-sources-already-say); who uploads for our events still needs the timer |
+| Payment-provider operating model | KC (project owner), assigned 2026-11-15 | No | No | Public Stripe research and D01 club answers recorded 2026-11-15 in [payment model questions](../payment-model-questions.md#findings); club answers recorded the same day; approver and 501(c) status still open |
+| Results path to road-results.com | KC (project owner), assigned 2026-11-15; more research first | No | No | Public research recorded 2026-11-15 in the [timer export review](../timer-export-review.md#what-public-sources-already-say); who uploads for our events still needs the timer |
 
 ## USA Cycling
 
