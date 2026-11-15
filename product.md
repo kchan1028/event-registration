@@ -97,7 +97,7 @@ Racing age uses the governing body's approved discipline/season rule, not an ass
 6. Preview the rider-facing schedule and simulate representative rider profiles, including riders eligible for multiple races.
 7. Review validation errors and warnings, then publish a versioned configuration.
 
-The schedule table must show category, eligibility summary, start/staging time, distance or duration, price, category cap, shared-field usage, and status. Drafts autosave. Duplicate category and copy-day actions generate new IDs and require review of inherited times, prices, rules, and capacity links. Bulk changes show a before/after preview.
+The schedule table must show category, eligibility summary, start/staging time, distance or duration, price, category cap, shared-field usage, and status. Drafts autosave. Duplicate category and copy-day actions generate new IDs and require review of inherited times, prices, rules, and capacity links. Bulk changes show a before/after preview. Status: duplicate, copy-day, and bulk edit with preview are Implemented in the local prototype (see [roadmap.md](roadmap.md#category-builder-milestone)).
 
 CSV import of category schedules is P0: provide a template, map columns, validate into a draft, and show errors per row before saving. (Implemented as a prototype November 14, 2026: an import only adds categories to the draft, rows with errors are skipped only after the organizer confirms it, and the format is documented in [docs/csv-category-format.md](docs/csv-category-format.md).) Never silently interpret a label as a federation rule. Export the configured schedule and rules for review; importing competitor exports does not imply access to their private systems or automatic equivalence of their rules.
 

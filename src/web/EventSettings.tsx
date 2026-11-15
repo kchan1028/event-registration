@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { copyDay } from '../shared/bulk';
 import { addDays, newId } from '../shared/factory';
 import type { EventConfig } from '../shared/schema';
 import { ApiError } from './api';
@@ -113,6 +114,7 @@ export function EventSettings({ draft }: { draft: Draft }) {
                 <button className="btn btn--ghost btn--small" onClick={() => addRace(day.id)}>
                   <Icon name="plus" /> Add race to {day.label}
                 </button>
+                {races.length > 0 && config.days.length > 1 && <CopyDay draft={draft} fromDayId={day.id} />}
                 {races.length === 0 && config.days.length > 1 && (
                   <button className="btn btn--ghost btn--small btn--danger" onClick={() => update((c) => ({ ...c, days: c.days.filter((d) => d.id !== day.id) }))}>
                     <Icon name="trash" /> Remove day
@@ -315,5 +317,43 @@ export function EventSettings({ draft }: { draft: Draft }) {
         )}
       </section>
     </div>
+  );
+}
+
+/** Copy a day's races, start groups, and categories to another day. Copies are flagged for review. */
+function CopyDay({ draft, fromDayId }: { draft: Draft; fromDayId: string }) {
+  const { config, update } = draft;
+  const others = config.days.filter((d) => d.id !== fromDayId);
+  const [to, setTo] = useState(others[0]?.id ?? '');
+  const [done, setDone] = useState<string | null>(null);
+  const from = config.days.find((d) => d.id === fromDayId)!;
+  const copy = () => {
+    const target = config.days.find((d) => d.id === to);
+    if (!target) return;
+    const preview = copyDay(config, fromDayId, to);
+    update((c) => copyDay(c, fromDayId, to).config);
+    setDone(`Copied ${preview.races} ${preview.races === 1 ? 'race' : 'races'} and ${preview.categories} ${preview.categories === 1 ? 'category' : 'categories'} to ${target.label}. Each copy is marked "Review copy": check times, prices, windows, codes, and capacity.`);
+  };
+  return (
+    <span className="copy-day">
+      <label className="small" htmlFor={`copy-${fromDayId}`}>
+        Copy {from.label}’s races to
+      </label>
+      <select id={`copy-${fromDayId}`} className="input" value={to} onChange={(e) => (setTo(e.target.value), setDone(null))}>
+        {others.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.label} ({d.date})
+          </option>
+        ))}
+      </select>
+      <button className="btn btn--ghost btn--small" onClick={copy} disabled={!to}>
+        Copy
+      </button>
+      {done && (
+        <span className="small text-ok" role="status">
+          {done}
+        </span>
+      )}
+    </span>
   );
 }
