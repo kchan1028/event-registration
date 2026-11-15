@@ -1,7 +1,7 @@
 # Roadmap: cycling race registration
 
 Status: Proposed; no migration or delivery date committed  
-Date: November 14, 2026  
+Date: November 15, 2026
 Related brief: [product.md](product.md)
 
 ## Delivery status
@@ -12,6 +12,7 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 |---|---|---|
 | Repository and documentation foundation | Implemented (November 14, 2026) | Supporting work, not a roadmap phase. |
 | Demo purchase flow fixtures | Implemented (November 14, 2026) | Fake events, riders, fees, worked order totals, and sample waiver text in [docs/fixtures/](docs/fixtures/README.md), used by the rider demo. Phone numbers corrected to 10 digits to match the fixture's own phone rule. |
+| Generated race case-study collection | Verified (November 15, 2026) | Five deterministic scenarios cover criterium, road/shared fields, omnium, empty, and large organizer states. Individual/full loaders and generated-data-only reset are covered by unit/API tests; representative rider and organizer browser journeys pass. This is local simulated data, not live capability or participant evidence. |
 | Category builder milestone | Implemented (November 14, 2026); partly verified | Local only. See [Category builder milestone](#category-builder-milestone). |
 | Rider checkout and demo purchase flow (2a) | Implemented (November 14, 2026); partly verified | Simulated payment only. Meets the [2a](product.md#2a-clickable-demo-purchase-flow--phase-1) behavior in automated tests, including both display themes; usability testing with people is not done. See [Rider checkout](#rider-checkout). |
 | Race-day check-in | Implemented (November 14, 2026); partly verified | Local only, fake riders. Ready/blocked result, bib ranges, bib history, repeat-safe check-in. Automated tests written; usability test with volunteers not done. See [Check-in](#check-in). |
@@ -115,6 +116,8 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 **Pending external dependencies:** a payment provider, USA Cycling license and waiver checks, and sign-in with required MFA. Rider data entered in the app stays in the local database; use made-up details.
 
 **Demo purchase flow (product.md 2a), added after the first checkout build:** a browse-events step; the four fixture riders as a demo rider picker that prefills racer details; emergency contact; a waiver that must be read to the end (or confirmed) and signed with a typed name plus a checkbox, signed by the guardian for a minor; "Complete simulated payment" with no "Pay" or "Buy" buttons; a persistent "Demo" label, "Simulated payment: no money is charged" on review, payment, confirmation, and receipt, a DEMO order number, and a watermarked receipt; an error summary at the top of each step with field-level messages from the fixtures; a progress indicator that returns to completed steps without losing data; the fixture events, capacities, fees, second-race discount, and fixed-price weekend bundle.
+
+**Generated case-study collection (verified November 15, 2026):** five stable local scenarios add a multi-category criterium, shared-field road race, same-event omnium, empty draft, and 120-category/1,000-entry event. The CLI loads one or all and resets only its reserved organization. Unit/API tests verify determinism, pricing, eligibility, capacity states, payment recovery, idempotent loading, and scoped reset. Playwright verifies a decline/retry package purchase, organizer license resolution and export access, and empty/large organizer rendering. This evidence does not verify usability with people. Unsupported cross-event packages, automated waitlist delivery, real refunds, participant transfers, event cancellation, and approved waiver resolution stay in their existing Planned phases.
 
 | 2a check | How it was verified |
 |---|---|

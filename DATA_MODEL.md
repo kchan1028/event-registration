@@ -336,6 +336,12 @@ The configuration is validated on every save. A save is also refused if it would
 
 `npm run seed:berkeley` uses the existing tables and schema. It creates the `Berkeley standalone events (local demo)` organization and two events, each with an immutable published version. Each event contains only its own race, day, categories, display groups, and start groups. No orders, rider records, test entries, or bundles are seeded. Prices are $80 for the road race and $60 for the criterium, with zero fees and surcharges. The organization and both published events are created in one transaction that holds a demo-seed advisory lock, so two seed requests at once create the organization once. Reruns identify this organization by its reserved demo name and return its existing events without overwriting drafts or publishing new versions. Other data is preserved. No SQL migration is needed.
 
+## Generated case-study data
+
+`npm run seed:cases` uses the current tables and schema without a migration. It creates one reserved organization (`org_demo_case_studies_v1`) and fixed event IDs. Scenario configuration and simulated test-entry IDs are stable. A PostgreSQL advisory transaction lock serializes loader and reset requests. Rerunning a scenario returns the existing event instead of overwriting organizer changes or duplicating entries and orders. Seeded payment attempts are simulated records only.
+
+The case-study reset is a narrow development operation. In one transaction it resolves events owned by the reserved organization, then deletes their dependent change-resolution records, rider links, locks, changes, waitlist records, check-ins, bib records, snapshots, payment attempts, order entries, orders, test entries, versions, events, and finally the organization. It never accepts an arbitrary organization ID. Unrelated organizations are preserved. This is not a general rider-data deletion or retention workflow.
+
 ## Capacity and concurrency
 
 - Places taken = test entries + confirmed order entries + held order entries whose order hold has not expired + live waitlist offers (`offered`, not expired) whose rider does not yet hold the place through a live order.
@@ -367,15 +373,15 @@ A new order starts `held` and reserves its places. A successful payment confirms
 
 ## Deletion behavior
 
-The app does not delete records except simulated test entries.
+The app does not delete operational records during ordinary organizer or rider workflows. The generated case-study reset is the one development-only exception described above.
 
-- **No cascades.** Foreign keys have no `ON DELETE` clause and enforcement is on, so deleting a parent row that still has children fails. The app has no endpoint that deletes organizations, events, versions, orders, payment attempts, bibs, check-ins, or snapshots.
-- **Test entries** are the only rows deleted: the organizer's clear action deletes all of an event's `test_entries`.
+- **No cascades.** Foreign keys have no `ON DELETE` clause, so deleting a parent row that still has children fails. Ordinary app endpoints do not delete organizations, events, versions, orders, payment attempts, bibs, check-ins, or snapshots.
+- **Test entries** can be cleared for one event. The generated case-study reset explicitly deletes its own related records in dependency order.
 - **Categories** are archived (`status: archived` in the configuration), not removed, so published versions and existing entries still resolve them. If an order's category is missing from its published version, it shows as "Removed category".
 - **Orders** are never deleted. Cancelled and expired orders stay for history and stop counting toward capacity.
 - **Bibs** are released with a reason, never deleted.
 - **Published versions and start-list snapshots** are insert-only.
-- **Resetting** means dropping and recreating the database ([local setup](docs/runbooks/local-setup.md#start-over)). Retention periods and deletion of rider personal data are not built; [product.md](product.md#data-storage) requires them before a pilot.
+- **General reset** means dropping and recreating the database ([local setup](docs/runbooks/local-setup.md#start-over)). The scoped case-study reset is not a substitute for retention or rider deletion. Retention periods and deletion of rider personal data are not built; [product.md](product.md#data-storage) requires them before a pilot.
 
 ## Not in the database yet
 
@@ -384,7 +390,7 @@ These are in [product.md](product.md#data-model) but do not exist in the app: us
 
 ## Planned expansion, not current schema
 
-The [season-pass requirements](product.md#cross-organization-bundles-and-season-passes) require a common purchase linking components across organizations/events, participant approvals, accepted rule versions, and per-organization discount/revenue/refund allocations. Current `orders.event_id` and event-local `registration.bundles` cannot represent that purchase. Planned Stripe payment, refund, transfer, and payout references need distinct reconciliation state; successful payment does not mean an organizer has been paid. Reusable rider identity, scoped reporting, promotion redemptions, communications, and overall-participation decisions likewise need an explicit data design before implementation. No SQL migrations, constraints, state transitions, or stored data changed in this documentation update. The target requirements live in product.md; this file continues to describe the existing database above.
+The [season-pass requirements](product.md#cross-organization-bundles-and-season-passes) require a common purchase linking components across organizations/events, participant approvals, accepted rule versions, and per-organization discount/revenue/refund allocations. Current `orders.event_id` and event-local `registration.bundles` cannot represent that purchase. Planned Stripe payment, refund, transfer, and payout references need distinct reconciliation state; successful payment does not mean an organizer has been paid. Reusable rider identity, scoped reporting, promotion redemptions, communications, and overall-participation decisions likewise need an explicit data design before implementation. The generated-fixture loader and scoped reset add no SQL migration, product state transition, or live workflow. The target requirements live in product.md; this file continues to describe the existing database above.
 
 
 ### Planned participant, bib, and credit extensions

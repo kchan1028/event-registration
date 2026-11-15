@@ -1,6 +1,20 @@
-# Set up the Berkeley demo
+# Set up local demos
 
 Status: Implemented local demo. Commands checked November 15, 2026.
+
+## Generated case-study collection
+
+For broader race, pricing, capacity, checkout-recovery, and organizer-operation cases, create a separate local PostgreSQL database and load the collection:
+
+```bash
+docker exec cyclereg-postgres createdb -U cyclereg cyclereg_cases
+DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_cases npm run seed:cases
+DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_cases npm run dev
+```
+
+The collection contains a multi-category criterium, shared-field road race, two-day omnium, empty draft, and large event. It also contains clearly labeled simulated payment states. List or load one case with `npm run seed:cases -- --list` and `npm run seed:cases -- --scenario omnium`. Remove only generated collection data with `npm run seed:cases -- --reset`. Keep the same `DATABASE_URL` for every command. Full rules and expected outcomes are in [fixture documentation](docs/fixtures/README.md#generated-race-case-studies).
+
+## Berkeley standalone events
 
 This setup uses two standalone events: Berkeley Hills Road Race ($80) and Berkeley Streets Criterium ($60). Each has one day and one race, with Berkeley's draft category definitions. There is no package, series, podium nomination, extra-entry discount, surcharge, or fee in these two fixtures. Payments and rider details must be simulated.
 

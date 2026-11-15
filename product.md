@@ -282,6 +282,18 @@ Rules:
 - **Separate states.** Entry, payment, and readiness states stay independent in the demo, as in the product. A simulated paid entry is not shown as cleared to race.
 - **Fake rider data only.** Demo riders, prices, fees, and the sample waiver are fictional fixtures in [docs/fixtures/](docs/fixtures/README.md), which also lists the worked orders and totals a demo must reproduce. Never use real rider data or present demo prices and fees as real ones. The one real event allowed is the Berkeley Omnium, which its promoter has approved as demo event data: its fields, distances, times, and field limits come from the published race information, while its entries stay simulated and its base fees are promoter-set at $80 for the road race, $60 for the criterium, and $130 for the package.
 
+### 2b. Deterministic case-study fixtures
+
+Status: Implemented locally and verified with unit, API, and representative browser tests. These fixtures broaden test coverage; they do not add live product support or replace validation with riders and organizers.
+
+- Provide stable, repeatable scenarios for a multi-category criterium, shared-field road race, two-day same-event omnium, empty draft, and large event. Use the fixed reference clock `2027-03-15T18:00:00.000Z` for time-dependent assertions.
+- Include fictional success, duplicate notification, declined/retried, expired hold, and unresolved-license examples. Keep payment, entry, waiver, and readiness states separate and label every payment as simulated.
+- Provide one-scenario and full-collection loaders. Reruns must not duplicate events or orders. Reset must delete only records owned by the generated case-study organization and preserve unrelated local data.
+- Use reserved example addresses and phone numbers. Never load real rider data, contact a provider, or create live charges.
+- Represent unsupported workflows as documented future requirements, not fake working states. Cross-event packages, automated waitlist delivery, real refunds, rider-to-rider transfers, event cancellation, and approved post-order waiver resolution remain Planned.
+
+Acceptance: two independent builds produce equal configurations and stable IDs; the full collection loads and reruns safely; collection reset preserves an unrelated organization; pricing boundaries, eligibility, shared capacity, package totals, atomic reservation, duplicate requests/notifications, recovery states, and readiness transitions pass automated tests; browser tests complete a rider decline/retry purchase and organizer license-review/export journey and render empty and 120-category organizer states. Exact cases and expected outcomes are in [fixture documentation](docs/fixtures/README.md#generated-race-case-studies).
+
 ### 3. Capacity and entry integrity
 
 - Use short-lived capacity reservations during checkout. Release expired reservations.
