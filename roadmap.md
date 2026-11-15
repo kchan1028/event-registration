@@ -79,7 +79,7 @@ Built November 14, 2026, on the stack in [ADR 0001](docs/decisions/0001-stack-fo
 
 **Change resolution workflow (added November 14, 2026):** publishing a change that touches paid entries opens one item per affected entry under **Changes to resolve** on Registrations, listing what changed. The organizer records the outcome (kept as is, transferred, or withdrawn), confirms the rider was told, and adds a note; the server refuses an outcome that does not match the entry (a withdrawal or transfer must have happened on the entry first). A later change to the same entry adds to its open item instead of opening another. Covered by API tests in `tests/resolutions.test.ts` (run in CI) and checked by hand in the browser. Contacting riders happens outside the app.
 
-**Not built yet (still required by product.md):** nothing beyond the hosted Phase 2 work; the local rider checkout is described under [Rider checkout prototype](#rider-checkout-prototype).
+**Not built yet (still required by product.md):** nothing beyond the hosted Phase 2 work; the local rider checkout is described under [Rider checkout](#rider-checkout).
 
 **Pending external dependencies, shown as pending in the interface:** USA Cycling license and waiver checks, Stripe payments, and sign-in with required MFA. Until sign-in exists the app must not be hosted or shared.
 
