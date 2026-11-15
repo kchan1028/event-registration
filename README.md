@@ -52,6 +52,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Start lists per race, numbered snapshots with changes since the last one, and a sample timer CSV (format not yet agreed with a timer) | Implemented; automated tests in CI |
 | Change-impact preview on Review and publish (affected categories, riders, orders; paid prices kept) | Implemented; resolution workflow for affected entries still Planned |
 | Organizer-managed waitlists: per-category setting, waitlist first, 24-hour offer links | Implemented; automated promotion and email delivery Planned |
+| Organizer transfers and withdrawals of paid entries, with price differences logged | Implemented; real refunds Planned |
 | Real payments and refunds, QR scanning, an agreed timer format | Planned |
 
 <details>

@@ -167,6 +167,7 @@ Status: Planned documentation only. The current prototype does not support time 
 - Display waiver version and signature status. Payment success alone does not mean cleared to race.
 - Confirm entries only after authoritative payment confirmation. Handle delayed or failed payments explicitly.
 - Permit organizer-configured changes, withdrawals, and refund requests. Show policy before checkout.
+  - Status: organizer transfers and withdrawals of paid entries are Implemented in the local prototype (see [roadmap.md](roadmap.md#rider-checkout-prototype)). A transfer rechecks eligibility, capacity, the waitlist, schedule conflicts, and the guardian waiver; the price paid is kept and any difference is recorded as owed or due. Rider-initiated change requests and real refunds are Planned.
 
 ### 2a. Clickable demo purchase flow — Phase 1
 

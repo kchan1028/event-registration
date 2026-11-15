@@ -1094,7 +1094,7 @@ export function OrderPage({ orderId }: { orderId: string }) {
               <p className="ticket__code num">{order.checkInCode}</p>
               <p className="muted small">Show this at check-in. It identifies your entry and contains no personal details.</p>
             </div>
-            {order.entries.some((e) => e.readiness.some((r) => r.state !== 'done')) ? (
+            {order.entries.some((e) => e.status !== 'withdrawn' && e.readiness.some((r) => r.state !== 'done')) ? (
               <p className="note note--warn">Not cleared to race yet. A simulated payment does not clear you; each entry below shows what is still needed.</p>
             ) : (
               <p className="note">Everything below is done. Bring your check-in code on race morning to collect your bib.</p>
@@ -1128,7 +1128,8 @@ export function OrderPage({ orderId }: { orderId: string }) {
                 {e.raceName}
                 {e.startTime ? ` · starts ${formatTime(e.startTime)}` : ''}
               </p>
-              {confirmed && (
+              {confirmed && e.status === 'withdrawn' && <p className="small">Withdrawn by the organizer. This entry no longer races.</p>}
+              {confirmed && e.status !== 'withdrawn' && (
                 <ul className="readiness">
                   {e.readiness.map((r) => (
                     <li key={r.key} className={`readiness__item readiness__item--${r.state}`}>

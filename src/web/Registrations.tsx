@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { formatCents } from '../shared/format';
+import type { Category } from '../shared/schema';
 import { api, ApiError, type OrderStatus, type OrderView, type WaitlistEntryView } from './api';
 import { href } from './App';
 import type { Draft } from './Builder';
@@ -100,14 +101,14 @@ export function Registrations({ draft }: { draft: Draft }) {
 
       <ul className="orders">
         {shown.map((o) => (
-          <OrderRow key={o.id} order={o} onChange={(next) => setOrders((list) => (list ?? []).map((x) => (x.id === next.id ? next : x)))} />
+          <OrderRow key={o.id} order={o} categories={draft.config.categories} onChange={(next) => setOrders((list) => (list ?? []).map((x) => (x.id === next.id ? next : x)))} />
         ))}
       </ul>
     </div>
   );
 }
 
-function OrderRow({ order, onChange }: { order: OrderView; onChange: (o: OrderView) => void }) {
+function OrderRow({ order, categories, onChange }: { order: OrderView; categories: Category[]; onChange: (o: OrderView) => void }) {
   return (
     <li className="order">
       <div className="order__head">
@@ -133,14 +134,21 @@ function OrderRow({ order, onChange }: { order: OrderView; onChange: (o: OrderVi
       )}
       <ul className="order__entries">
         {order.entries.map((e) => (
-          <EntryLine key={e.id} entry={e} confirmed={order.status === 'confirmed'} onChange={onChange} />
+          <EntryLine key={e.id} entry={e} confirmed={order.status === 'confirmed'} onChange={onChange}>
+            {order.status === 'confirmed' && e.status === 'confirmed' && (
+              <EntryChange entry={e} categories={categories} taken={order.entries.filter((x) => x.status === 'confirmed').map((x) => x.categoryId)} onChange={onChange} />
+            )}
+          </EntryLine>
         ))}
+      </ul>
+      <ul className="order__entries">
+        {order.entries.flatMap((e) => e.changes.map((c, i) => <ChangeLine key={`${e.id}-${i}`} change={c} />))}
       </ul>
     </li>
   );
 }
 
-function EntryLine({ entry, confirmed, onChange }: { entry: OrderView['entries'][number]; confirmed: boolean; onChange: (o: OrderView) => void }) {
+function EntryLine({ entry, confirmed, onChange, children }: { entry: OrderView['entries'][number]; confirmed: boolean; onChange: (o: OrderView) => void; children?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -166,7 +174,9 @@ function EntryLine({ entry, confirmed, onChange }: { entry: OrderView['entries']
       <span className="order__entry-name">
         <code className="code">{entry.code}</code> {entry.categoryName}
       </span>
-      {confirmed ? (
+      {entry.status === 'withdrawn' ? (
+        <span className="muted small">Withdrawn</span>
+      ) : confirmed ? (
         entry.licenseReviewed ? (
           <span className="readiness__item readiness__item--done">
             <Icon name="check" size={14} /> License reviewed: {entry.licenseReviewNote}
@@ -195,7 +205,101 @@ function EntryLine({ entry, confirmed, onChange }: { entry: OrderView['entries']
       ) : (
         <span className="muted small">{entry.status === 'held' ? 'Place held' : 'Place released'}</span>
       )}
+      {children}
     </li>
+  );
+}
+
+type EntryView = OrderView['entries'][number];
+
+/** One logged transfer or withdrawal, with the money difference stated plainly. */
+function ChangeLine({ change: c }: { change: EntryView['changes'][number] }) {
+  const when = new Date(c.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  const money =
+    c.kind === 'withdraw'
+      ? `Paid ${formatCents(c.amountPaidCents)} for this entry. No refund was processed: payments are simulated, so settle any refund outside the app.`
+      : c.differenceCents === null || c.differenceCents === 0
+        ? `Paid ${formatCents(c.amountPaidCents)}; the new category costs the same. Nothing to settle.`
+        : c.differenceCents > 0
+          ? `Paid ${formatCents(c.amountPaidCents)}; the new category costs ${formatCents(c.newPriceCents ?? 0)}. The rider owes ${formatCents(c.differenceCents)}, to settle outside the app. The price paid was not changed.`
+          : `Paid ${formatCents(c.amountPaidCents)}; the new category costs ${formatCents(c.newPriceCents ?? 0)}. A refund of ${formatCents(-c.differenceCents)} is due, to settle outside the app.`;
+  return (
+    <li className="order__entry order__change">
+      <span className="small">
+        <strong>{c.kind === 'withdraw' ? `Withdrawn from ${c.fromCategoryName}` : `Transferred from ${c.fromCategoryName} to ${c.toCategoryName}`}</strong> · {when} · Reason: {c.reason}
+        <br />
+        {money}
+      </span>
+    </li>
+  );
+}
+
+/** Transfer or withdraw a paid entry. The server rechecks eligibility, capacity, the waitlist, and conflicts. */
+function EntryChange({ entry, categories, taken, onChange }: { entry: EntryView; categories: Category[]; taken: string[]; onChange: (o: OrderView) => void }) {
+  const [mode, setMode] = useState<'none' | 'transfer' | 'withdraw'>('none');
+  const [target, setTarget] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const options = categories.filter((c) => c.status === 'active' && !taken.includes(c.id));
+  const close = () => {
+    setMode('none');
+    setErr(null);
+    setReason('');
+    setTarget('');
+  };
+  const submit = async () => {
+    if (mode === 'transfer' && !target) return setErr('Choose the category to move to.');
+    if (reason.trim().length < 3) return setErr(mode === 'transfer' ? 'Write why the entry is moving.' : 'Write why the entry is withdrawn.');
+    setBusy(true);
+    setErr(null);
+    try {
+      onChange(mode === 'transfer' ? await api.transferEntry(entry.id, target, reason) : await api.withdrawEntry(entry.id, reason));
+      close();
+    } catch (e) {
+      setErr((e as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (mode === 'none') {
+    return (
+      <span className="order__entry-actions">
+        <button className="btn btn--secondary btn--small" aria-label={`Transfer ${entry.code} ${entry.categoryName}`} onClick={() => setMode('transfer')}>
+          Transfer
+        </button>
+        <button className="btn btn--ghost btn--small" aria-label={`Withdraw ${entry.code} ${entry.categoryName}`} onClick={() => setMode('withdraw')}>
+          Withdraw
+        </button>
+      </span>
+    );
+  }
+  const label = mode === 'transfer' ? `Transfer ${entry.categoryName}` : `Withdraw ${entry.categoryName}`;
+  return (
+      <span className="review-form" role="group" aria-label={label}>
+        {mode === 'transfer' && (
+          <select className="input" aria-label={`Move ${entry.categoryName} to`} value={target} onChange={(e) => setTarget(e.target.value)}>
+            <option value="">Move to…</option>
+            {options.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.timingCode} {c.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <input className="input" aria-label={mode === 'transfer' ? 'Reason for the transfer' : 'Reason for the withdrawal'} placeholder={mode === 'transfer' ? 'Reason, for example: upgraded to Cat 3' : 'Reason, for example: injured, asked to withdraw'} value={reason} onChange={(e) => setReason(e.target.value)} />
+        <button className="btn btn--primary btn--small" disabled={busy} onClick={submit}>
+          {mode === 'transfer' ? 'Transfer entry' : 'Withdraw entry'}
+        </button>
+        <button className="btn btn--ghost btn--small" onClick={close}>
+          Cancel
+        </button>
+        {err && (
+          <span className="text-error small" role="alert">
+            {err}
+          </span>
+        )}
+      </span>
   );
 }
 
