@@ -254,6 +254,15 @@ for (const mobile of [false, true]) {
     await expect(panel.getByRole('button', { name: 'Apply 0 bib changes', exact: true })).toBeDisabled();
     await panel.getByRole('combobox', { name: 'Replacement numbers', exact: true }).selectOption('manual');
     await panel.getByRole('button', { name: 'Preview bib changes', exact: true }).click();
+    await expect(panel.getByRole('note')).toContainText('Alex Demo (Saturday)');
+    if (mobile) {
+      const ridersTable = panel.getByRole('region', { name: 'Riders for bib assignment', exact: true });
+      await ridersTable.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+      const selection = await panel.getByRole('checkbox', { name: 'Alex Demo', exact: true }).boundingBox();
+      const tableBounds = await ridersTable.boundingBox();
+      expect(selection!.x).toBeGreaterThanOrEqual(tableBounds!.x);
+      expect(selection!.x + selection!.width).toBeLessThanOrEqual(tableBounds!.x + tableBounds!.width);
+    }
     expect((await new AxeBuilder({ page }).include('[aria-label="Bulk bib reassignment"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
     await page.screenshot({ path: `test-results/bib-reassignment-${mobile ? 'mobile' : 'desktop'}.png`, fullPage: true, animations: 'disabled' });
     if (mobile) {

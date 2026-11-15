@@ -4215,4 +4215,5 @@ fieldset:disabled .field label {
 .ci-batch__choice { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; cursor: pointer; }
 .ci-batch__choice input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--ink); }
 .ci-batch__table { max-height: 360px; margin-top: var(--s-3); }
+.ci-batch__table th:first-child { position: sticky; left: 0; z-index: 1; min-width: 10rem; background: var(--canvas); border-right: 1px solid var(--hairline); }
 .ci-batch__preview { margin-top: var(--s-4); }
