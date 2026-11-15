@@ -99,8 +99,11 @@ Proposed signals, from [product.md](../product.md#quality-requirements). Tools a
 | Email bounces and suppressions | Riders miss confirmations or race notices | Support owner |
 | Sign-in and second-factor failure spikes | Riders locked out, or an attack | Technical lead |
 | Backup job failures | Recovery would not be possible | Technical lead |
+| `GET /api/health` failing (HTTP 503 means the app is up but cannot reach the database) | Nobody can register or check in | Technical lead |
 
 Alerts must not include card data, emergency contacts, or other restricted fields.
+
+Implemented in the local build (November 15, 2026): `GET /api/health` runs a database query and answers 503 when it fails, so a platform health check (Render's health-check path, per [ADR 0004](decisions/0004-hosted-stack-and-database.md)) can take an instance out of service. On `SIGTERM` the server stops taking new requests, finishes the ones in progress, and closes its database connections. No platform is configured yet.
 
 ## Backups and recovery
 
