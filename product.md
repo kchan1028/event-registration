@@ -357,7 +357,8 @@ Acceptance: allocate a full confirmed field in stable order, repeat without chan
 
 ### 6. Money and reporting
 
-- Use Stripe hosted Checkout for the Planned payment integration, selected by the product owner November 14, 2026 ([ADR 0002](docs/decisions/0002-stripe-payments.md)). No Stripe integration or account is configured today; the current demo stays simulated. Never store card details.
+- Use Stripe hosted Checkout for the payment integration, selected by the product owner November 14, 2026 ([ADR 0002](docs/decisions/0002-stripe-payments.md)). Implemented locally in test mode only (November 15, 2026): with Stripe test keys set, the rider pays on Stripe's hosted page and only a signature-verified Stripe notification confirms the order; live keys are refused until the merchant and settlement model ([ADR 0005](docs/decisions/0005-merchant-and-settlement-model.md)) is accepted. Without keys, the demo stays simulated. No Stripe account is configured by the project yet. Never store card details.
+- A Stripe payment confirms an order only if it comes from a session the app opened for that order and matches the order total exactly. A mismatch, a payment after the rider cancelled, or a late payment for places no longer free goes to the organizer's exception queue. A second paid session for one order is recorded as a duplicate charge for refund and never creates a second entry.
 - Establish who collects funds, who is merchant of record, who handles payouts, and who bears disputes before taking live payments.
 - Record order totals, line items, discounts, processing/platform fees, refunds, and settlement references.
 - Support partial refunds against specific entries with an explicit effect on capacity and bundle pricing.

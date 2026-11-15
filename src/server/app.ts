@@ -22,6 +22,7 @@ import { createResolutions } from './resolutions';
 import { createStartLists } from './startlists';
 import { createCoupons } from './coupons';
 import { createOrders, type Orders } from './orders';
+import { createPayments, paymentsFromEnv, publicAppUrl, type PaymentProvider } from './payments';
 import { createWaitlist } from './waitlist';
 import { createRepo, HttpError, type Repo } from './repo';
 import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
@@ -49,6 +50,10 @@ export interface AppOptions {
   holdMinutes?: number;
   /** Who is calling (ADR 0003). Defaults to Clerk, or the local test provider, from the environment. */
   auth?: AuthProvider;
+  /** Payment provider (ADR 0002). Defaults to Stripe test mode when STRIPE_SECRET_KEY is set, otherwise simulated. */
+  payments?: PaymentProvider;
+  /** Where Stripe sends riders back. Defaults to PUBLIC_APP_URL. */
+  appUrl?: string;
 }
 
 export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; orders: Orders; access: Access } {
@@ -65,6 +70,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const caseStudies = createCaseStudyFixtures(db, repo, orders);
   const provider = opts.auth ?? authProviderFromEnv();
   const access = createAccess(db, provider, clock);
+  const paymentProvider = opts.payments ?? paymentsFromEnv();
+  const payments = createPayments(db, orders, paymentProvider, clock, opts.appUrl ?? (paymentProvider.mode === 'simulated' ? '' : publicAppUrl()));
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
   // Migrations run once before the server accepts requests (listen, or the first inject in tests).
@@ -112,7 +119,10 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       issues: validateConfig(record.config, entries),
       pending: {
         licenseVerification: 'USA Cycling license and category checks are not connected. Every license is unverified and needs review.',
-        payments: 'Payments are not connected. Checkout uses a simulated payment and takes no money.',
+        payments:
+          payments.mode === 'stripe_test'
+            ? 'Payments use Stripe test mode. Only Stripe test cards work and no real money moves.'
+            : 'Payments are not connected. Checkout uses a simulated payment and takes no money.',
         signIn: 'Sign-in is by emailed link or code only. Multi-factor sign-in for organizers is not built yet (Phase 3), so use fictional data only.',
       },
     };
@@ -342,7 +352,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return caseStudies.reset();
   });
 
-  app.get('/api/public/events/:id', isPublic, async (req) => orders.publicEvent(idParam.parse(req.params).id));
+  app.get('/api/public/events/:id', isPublic, async (req) => ({ ...(await orders.publicEvent(idParam.parse(req.params).id)), paymentMode: payments.mode }));
 
   // Riders sign in before checkout; the order belongs to their account.
   app.post('/api/public/events/:id/orders', async (req, reply) => {
@@ -413,8 +423,26 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/orders/:id/payment', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrder(me(req), id, true);
+    // With a real provider connected, only a verified provider notification can mark an order paid.
+    if (payments.mode !== 'simulated') throw new HttpError(409, 'This build takes payment through Stripe test mode. Use the payment page.');
     const body = z.object({ attemptId: z.string().min(8).max(64), outcome: z.enum(['success', 'failure']) }).parse(req.body);
     return orders.pay(id, body.attemptId, body.outcome);
+  });
+
+  // Stripe hosted Checkout (test mode): opens or reuses the order's payment page.
+  app.post('/api/orders/:id/checkout-session', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrder(me(req), id, true);
+    return payments.startCheckout(id);
+  });
+
+  // Stripe notifications. Public, because Stripe calls it; trusted only after the signature on the raw body verifies.
+  app.register(async (scope) => {
+    scope.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => done(null, body));
+    scope.post('/api/payments/stripe/webhook', isPublic, async (req) => {
+      const signature = req.headers['stripe-signature'];
+      return payments.handleWebhook(String(req.body ?? ''), Array.isArray(signature) ? signature[0] : signature);
+    });
   });
 
   app.post('/api/orders/:id/cancel', async (req) => {

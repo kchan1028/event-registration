@@ -377,6 +377,37 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX orders_by_account ON orders(account_id);
   ALTER TABLE waitlist_entries ADD COLUMN account_id text REFERENCES accounts(id) ON DELETE SET NULL;
   `,
+  `
+  -- Stripe hosted Checkout in test mode (ADR 0002, Phase 2). One row per Checkout Session.
+  -- At most one session per order is open at a time, so a rider cannot pay twice by accident.
+  CREATE TABLE payment_sessions (
+    id text PRIMARY KEY,
+    order_id text NOT NULL REFERENCES orders(id),
+    provider text NOT NULL,
+    url text NOT NULL,
+    amount_cents integer NOT NULL,
+    status text NOT NULL CHECK (status IN ('open', 'completed', 'expired')),
+    expires_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL
+  );
+  CREATE INDEX payment_sessions_by_order ON payment_sessions(order_id, created_at);
+  -- Every verified provider notification, processed once by its event ID, with what it did.
+  CREATE TABLE provider_events (
+    id text PRIMARY KEY,
+    provider text NOT NULL,
+    type text NOT NULL,
+    session_id text,
+    order_id text REFERENCES orders(id),
+    outcome text NOT NULL,
+    result text NOT NULL,
+    received_at timestamptz NOT NULL
+  );
+  CREATE INDEX provider_events_by_order ON provider_events(order_id, received_at);
+  -- Where a payment attempt came from. Simulated attempts keep provider 'simulated'.
+  ALTER TABLE payment_attempts ADD COLUMN provider text NOT NULL DEFAULT 'simulated';
+  ALTER TABLE payment_attempts ADD COLUMN provider_ref text;
+  ALTER TABLE payment_attempts ADD COLUMN amount_cents integer;
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

@@ -15,11 +15,22 @@ import type { Db } from './db';
 import { eventLock, HttpError, type Repo } from './repo';
 
 /**
- * Checkout: atomic holds, simulated payment, and organizer review.
- * Payment is simulated. Nothing is charged and no provider is called.
+ * Checkout: atomic holds, payment fulfillment, and organizer review.
+ * Payment is simulated, or Stripe test mode (src/server/payments.ts) where configured.
  */
 
 export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
+
+/** success/failure from the simulated button or a provider; mismatch: a provider reported money that does not match the order total. */
+export type PaymentOutcome = 'success' | 'failure' | 'mismatch';
+
+/** Where a payment attempt came from, kept with the attempt for reconciliation. */
+export interface PaymentSource {
+  provider: 'simulated' | 'stripe_test';
+  /** The provider's payment reference (a Stripe PaymentIntent ID), when there is one. */
+  ref: string | null;
+  amountCents: number | null;
+}
 
 interface OrderRow {
   id: string;
@@ -141,12 +152,21 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     const corrections = groupBy(
       await db.all<CorrectionRow>(`SELECT order_id, changes_json, cleared_reviews_json, reason, created_at FROM rider_corrections WHERE order_id = ANY($1) ORDER BY created_at, seq`, [ids]),
     );
+    // How each paid order was paid: the simulated button or Stripe test mode.
+    const paidWith = new Map(
+      (
+        await db.all<{ order_id: string; provider: PaymentSource['provider'] }>(
+          `SELECT DISTINCT ON (order_id) order_id, provider FROM payment_attempts WHERE order_id = ANY($1) AND outcome = 'success' ORDER BY order_id, created_at DESC`,
+          [ids],
+        )
+      ).map((r) => [r.order_id, r.provider]),
+    );
     return rows.map((row) => {
       const config = configs.get(`${row.event_id}:${row.published_version}`)!;
       // A transfer can move an entry to a category added in a later published version.
       const latestVersion = latestByEvent.get(row.event_id);
       const latest = latestVersion ? configs.get(`${row.event_id}:${latestVersion}`)! : config;
-      return buildView(row, config, latest, entries.get(row.id) ?? [], changes.get(row.id) ?? [], corrections.get(row.id) ?? []);
+      return { ...buildView(row, config, latest, entries.get(row.id) ?? [], changes.get(row.id) ?? [], corrections.get(row.id) ?? []), paidWith: paidWith.get(row.id) ?? null };
     });
   }
 
@@ -409,11 +429,11 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     getOrder: view,
 
     /**
-     * Process a simulated payment notification exactly once per attempt ID.
+     * Process a payment notification (simulated, or a verified Stripe event) exactly once per attempt ID.
      * A success after the hold expired confirms only if every place is still
      * free; otherwise the order goes to the organizer's exception queue.
      */
-    async pay(orderId: string, attemptId: string, outcome: 'success' | 'failure') {
+    async pay(orderId: string, attemptId: string, outcome: PaymentOutcome, source: PaymentSource = { provider: 'simulated', ref: null, amountCents: null }) {
       return db.transaction(async () => {
         await lockEventOf(`SELECT event_id FROM orders WHERE id = $1`, orderId);
         const seen = await db.get<{ order_id: string }>(`SELECT order_id FROM payment_attempts WHERE id = $1`, [attemptId]);
@@ -429,6 +449,9 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
 
         if (status === 'confirmed' || status === 'needs_attention') {
           next = status; // duplicate or late notification: nothing changes
+        } else if (outcome === 'mismatch') {
+          // Money arrived but not the amount this order was priced at: a person decides, never a silent confirmation.
+          next = 'needs_attention';
         } else if (outcome === 'failure') {
           next = status === 'held' ? 'payment_failed' : status;
         } else if (status === 'held' || status === 'payment_failed') {
@@ -465,7 +488,10 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
             if (next === 'needs_attention') await db.run(`UPDATE order_entries SET status = 'released' WHERE order_id = $1`, [orderId]);
           }
         }
-        await db.run(`INSERT INTO payment_attempts (id, order_id, outcome, result_status, created_at) VALUES ($1, $2, $3, $4, $5)`, [attemptId, orderId, outcome, next, t]);
+        await db.run(
+          `INSERT INTO payment_attempts (id, order_id, outcome, result_status, created_at, provider, provider_ref, amount_cents) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [attemptId, orderId, outcome, next, t, source.provider, source.ref, source.amountCents],
+        );
         return view(orderId);
       });
     },

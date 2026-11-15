@@ -121,6 +121,10 @@ function SimulatedNote() {
   return <p className="simulated">Simulated payment: no money is charged.</p>;
 }
 
+function TestModeNote() {
+  return <p className="simulated">Stripe test mode: only test cards work and no real money moves.</p>;
+}
+
 /** Error summary at the top of a step; focuses itself so screen readers announce it. */
 function ErrorSummary({ errors }: { errors: { id: string; message: string }[] }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -358,7 +362,7 @@ export function Register({ eventId }: { eventId: string }) {
           <>
         {draft.step === 'details' && <DetailsStep config={config} draft={draft} update={update} goTo={goTo} />}
         {draft.step === 'waiver' && <Waiver ev={ev} draft={draft} update={update} goTo={goTo} />}
-        {draft.step === 'review' && draft.orderId && <Review orderId={draft.orderId} eventId={eventId} goTo={goTo} />}
+        {draft.step === 'review' && draft.orderId && <Review orderId={draft.orderId} eventId={eventId} goTo={goTo} paymentMode={ev.paymentMode} />}
           </>
         )}
       </main>
@@ -1155,7 +1159,7 @@ function orderRaceName(order: OrderView) {
   return (raceId: string) => order.entries.find((e) => order.quote.lines.find((l) => l.categoryId === e.categoryId)?.raceId === raceId)?.raceName ?? '';
 }
 
-function Review({ orderId, eventId, goTo }: { orderId: string; eventId: string; goTo: (s: Step) => void }) {
+function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; eventId: string; goTo: (s: Step) => void; paymentMode: PublicEvent['paymentMode'] }) {
   const [order, setOrder] = useState<OrderView | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1189,20 +1193,35 @@ function Review({ orderId, eventId, goTo }: { orderId: string; eventId: string; 
       setBusy(false);
     }
   };
+  const payWithStripe = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const next = await api.startCheckout(order.id);
+      if (next.kind === 'redirect') window.location.assign(next.url);
+      else setOrder(await api.order(order.id));
+    } catch (e) {
+      setErr((e as ApiError).message);
+      setBusy(false);
+    }
+  };
+  const stripe = paymentMode === 'stripe_test';
   const mm = Math.floor(left / 60);
   const ss = String(left % 60).padStart(2, '0');
 
   return (
     <section className="reg__panel" aria-labelledby="review-title">
       <h2 id="review-title">Review your order</h2>
-      <SimulatedNote />
+      {stripe ? <TestModeNote /> : <SimulatedNote />}
       {!expired ? (
         <p className="hold" role="timer" aria-live="off">
           <Icon name="clip" /> Your places are held for <span className="num">{mm}:{ss}</span>
         </p>
       ) : (
         <p className="note note--warn" role="alert">
-          Your hold has ended and the places were released. You can still complete the simulated payment: if every place is still free, your entry is confirmed. Otherwise nothing is charged and the organizer is told.
+          {stripe
+            ? 'Your hold has ended and the places were released. Start a new registration to pay.'
+            : 'Your hold has ended and the places were released. You can still complete the simulated payment: if every place is still free, your entry is confirmed. Otherwise nothing is charged and the organizer is told.'}
         </p>
       )}
       <p className="muted small">
@@ -1218,7 +1237,7 @@ function Review({ orderId, eventId, goTo }: { orderId: string; eventId: string; 
       )}
       {order.status === 'payment_failed' && !expired && (
         <p className="note note--error" role="alert">
-          The simulated payment was declined. Your places are still held. Try again before the timer runs out.
+          {stripe ? 'The payment did not go through.' : 'The simulated payment was declined.'} Your places are still held. Try again before the timer runs out.
         </p>
       )}
       {err && (
@@ -1226,6 +1245,17 @@ function Review({ orderId, eventId, goTo }: { orderId: string; eventId: string; 
           {err}
         </p>
       )}
+      {stripe ? (
+        <div className="paybox">
+          <p className="paybox__title">Pay on Stripe (test mode)</p>
+          <p className="muted small">You will pay on Stripe’s page and come back here. Card details never reach CycleReg. This is test mode: only Stripe test cards work and no real money moves.</p>
+          <div className="form-actions">
+            <button className="btn btn--primary" disabled={busy || expired} onClick={payWithStripe}>
+              {busy ? 'Opening Stripe…' : `Pay ${formatCents(order.totalCents)} on Stripe`}
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="paybox">
         <p className="paybox__title">Simulated payment</p>
         <p className="muted small">A real event would open the payment provider’s page here. This demo asks for no card details and contacts no provider.</p>
@@ -1239,6 +1269,7 @@ function Review({ orderId, eventId, goTo }: { orderId: string; eventId: string; 
           </button>
         </div>
       </div>
+      )}
       <button className="btn btn--ghost" disabled={busy} onClick={() => goTo('races')}>
         <Icon name="arrow-left" /> Change my entries (releases the hold)
       </button>
@@ -1251,13 +1282,23 @@ function Review({ orderId, eventId, goTo }: { orderId: string; eventId: string; 
 export function OrderPage({ orderId }: { orderId: string }) {
   const [order, setOrder] = useState<OrderView | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Back from Stripe: the payment notification can arrive a few seconds after the rider does.
+  const returned = new URLSearchParams(window.location.search).get('checkout') === 'returned';
+  const waiting = returned && (order?.status === 'held' || order?.status === 'payment_failed');
+  const [polls, setPolls] = useState(0);
   useEffect(() => {
     api.order(orderId).then(setOrder).catch((e: ApiError) => setErr(e.message));
-  }, [orderId]);
+  }, [orderId, polls]);
+  useEffect(() => {
+    if (!waiting || polls >= 30) return;
+    const t = window.setTimeout(() => setPolls((n) => n + 1), 2000);
+    return () => window.clearTimeout(t);
+  }, [waiting, polls]);
   if (err) return <div className="state-page"><p className="alert alert--error">{err}</p></div>;
   if (!order) return <div className="state-page"><div className="skeleton skeleton--page" /></div>;
 
   const confirmed = order.status === 'confirmed';
+  const Note = order.paidWith === 'stripe_test' || returned ? TestModeNote : SimulatedNote;
   return (
     <div className="reg">
       <DemoHeader />
@@ -1268,7 +1309,7 @@ export function OrderPage({ orderId }: { orderId: string }) {
             <p className="reg__meta">
               {order.eventName} · {order.rider.firstName} {order.rider.lastName} · order <span className="num">{order.orderNumber}</span>
             </p>
-            <SimulatedNote />
+            <Note />
             <div className="ticket">
               <p className="ticket__label">Check-in code (demo)</p>
               <p className="ticket__code num">{order.checkInCode}</p>
@@ -1276,17 +1317,23 @@ export function OrderPage({ orderId }: { orderId: string }) {
               <p className="muted small">Show this at check-in. It identifies your entry and contains no personal details.</p>
             </div>
             {order.entries.some((e) => e.status !== 'withdrawn' && e.readiness.some((r) => r.state !== 'done')) ? (
-              <p className="note note--warn">Not cleared to race yet. A simulated payment does not clear you; each entry below shows what is still needed.</p>
+              <p className="note note--warn">Not cleared to race yet. Paying does not clear you; each entry below shows what is still needed.</p>
             ) : (
               <p className="note">Everything below is done. Bring your check-in code on race morning to collect your bib.</p>
             )}
           </>
+        ) : waiting && polls < 30 ? (
+          <>
+            <h1 className="done__title">Confirming your payment</h1>
+            <TestModeNote />
+            <p className="note" role="status">Stripe is telling us about your payment. This page updates on its own in a few seconds.</p>
+          </>
         ) : order.status === 'needs_attention' ? (
           <>
             <h1 className="done__title">We could not confirm your entry</h1>
-            <SimulatedNote />
+            <Note />
             <p className="note note--warn" role="alert">
-              Your simulated payment arrived after your hold ended or after you left the order, and a place could not be confirmed. The organizer sees this in their exception queue and will contact you.
+              Your payment arrived after your hold ended or after you left the order, or did not match the order total, and a place could not be confirmed. The organizer sees this in their exception queue and will contact you.
             </p>
           </>
         ) : (
@@ -1348,10 +1395,10 @@ export function OrderPage({ orderId }: { orderId: string }) {
             ))}
           </ul>
           <p className="quote__total">
-            <span>{confirmed ? 'Total (simulated, not charged)' : 'Not charged'}</span>
+            <span>{confirmed ? (order.paidWith === 'stripe_test' ? 'Total paid (Stripe test mode)' : 'Total (simulated, not charged)') : 'Not charged'}</span>
             <span className="num">{formatCents(confirmed ? order.totalCents : 0)}</span>
           </p>
-          <SimulatedNote />
+          <Note />
         </section>
       </main>
     </div>

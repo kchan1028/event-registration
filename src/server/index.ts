@@ -3,6 +3,7 @@ import { buildApp } from './app';
 import { authProviderFromEnv, type AuthProvider } from './auth';
 import { DEFAULT_DATABASE_URL, ensureLocalDatabase } from './db';
 import { listenHost } from './listen';
+import { paymentsFromEnv, publicAppUrl, type PaymentProvider } from './payments';
 
 // Local keys (CLERK_SECRET_KEY and others) live in a gitignored .env; real environment variables win.
 if (existsSync('.env')) process.loadEnvFile('.env');
@@ -10,8 +11,13 @@ if (existsSync('.env')) process.loadEnvFile('.env');
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001);
 const host = listenHost(); // 127.0.0.1 unless HOST says otherwise
 let auth: AuthProvider;
+let payments: PaymentProvider;
+let appUrl = '';
 try {
   auth = authProviderFromEnv();
+  // Stripe test mode when STRIPE_SECRET_KEY is set (live keys are refused); otherwise simulated payments.
+  payments = paymentsFromEnv();
+  if (payments.mode !== 'simulated') appUrl = publicAppUrl();
 } catch (err) {
   console.error((err as Error).message);
   process.exit(1);
@@ -27,7 +33,7 @@ try {
 
 // The built web app is served in production, and by the browser tests (SERVE_WEB=1).
 const serveWeb = process.env.NODE_ENV === 'production' || process.env.SERVE_WEB === '1';
-const { app } = buildApp({ databaseUrl, serveWeb, logger: true, auth });
+const { app } = buildApp({ databaseUrl, serveWeb, logger: true, auth, payments, appUrl });
 
 app.listen({ port, host }).catch((err) => {
   app.log.error(err);
