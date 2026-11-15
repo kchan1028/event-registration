@@ -44,7 +44,7 @@ async function setup(opts: { holdMinutes?: number } = {}) {
   const webhook = (id: string, type: string, session: Record<string, unknown>, secret = WEBHOOK_SECRET) => {
     const payload = JSON.stringify({ id, object: 'event', type, livemode: false, data: { object: { object: 'checkout.session', currency: 'usd', payment_status: 'paid', payment_intent: 'pi_test_1', ...session } } });
     const header = client.webhooks.generateTestHeaderString({ payload, secret });
-    return app.inject({ method: 'POST', url: '/api/payments/stripe/webhook', headers: { 'content-type': 'application/json', 'stripe-signature': header }, payload });
+    return app.inject({ method: 'POST', url: '/api/payments/stripe/webhook', headers: { 'content-type': 'application/json; charset=utf-8', 'stripe-signature': header }, payload });
   };
   /** A paid session event for an order, as Stripe would send it. */
   const paidSession = (o: Order, sessionId = 'cs_test_1', extra: Record<string, unknown> = {}) => ({ id: sessionId, amount_total: o.totalCents, metadata: { order_id: o.id }, client_reference_id: o.id, ...extra });
