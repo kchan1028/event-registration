@@ -177,7 +177,7 @@ describe('coupons API', () => {
     expect((await s.list())[0].redemptions).toEqual({ confirmed: 0, reserved: 1 });
     const blocked = await s.order([s.code('RR-D23')], 'ONE');
     expect(blocked.statusCode).toBe(409);
-    expect(blocked.json().error).toMatch(/fully redeemed/);
+    expect(blocked.json().error).toMatch(/fully redeemed.*remove the code.*Nothing was held/);
     expect((await s.check('ONE')).statusCode).toBe(409);
 
     s.clock.advance(11); // the first hold expires

@@ -349,9 +349,14 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         if (!admitted.ok) throw new HttpError(409, `${admitted.message} Nothing was held. Choose another race and try again.`, { categoryId: admitted.categoryId });
 
         // A coupon is checked and counted under the same lock that takes the places, so the cap holds.
-        const coupon = input.couponCode ? await coupons.redeemable(eventId, input.couponCode, config.event.timeZone) : null;
+        const coupon = input.couponCode
+          ? await coupons.redeemable(eventId, input.couponCode, config.event.timeZone).catch((err: unknown) => {
+              if (err instanceof HttpError) throw new HttpError(err.status, `${err.message} Go back to Choose races and remove the code to continue. Nothing was held.`);
+              throw err;
+            })
+          : null;
         const q = quote(config, input.categoryIds, todayIn(config.event.timeZone, clock()), coupon ? termsOf(coupon) : null);
-        if (q.coupon?.unappliedReason) throw new HttpError(422, `${q.coupon.unappliedReason} Remove the code to continue. Nothing was held.`);
+        if (q.coupon?.unappliedReason) throw new HttpError(422, `${q.coupon.unappliedReason} Go back to Choose races and remove the code to continue. Nothing was held.`);
         const t = nowIso();
         const expires = new Date(clock().getTime() + holdMinutes * 60_000).toISOString();
         await db.run(
