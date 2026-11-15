@@ -234,6 +234,8 @@ export function buildBerkeleyOmniumEvent(): { config: EventConfig; entryPlan: { 
       additionalRaceDiscountMode: 'each_additional_entry',
       // Berkeley Omnium rule (2026 race information): a second criterium race costs $20, flat, on race day too.
       sameRaceExtraEntryCents: 2000,
+      // Registration opens March 1, 2027; let the demo take entries before then.
+      demoIgnoreWindows: true,
       platformFeeCents: 0,
       platformFeeLabel: 'Platform fee',
       processingFeeBasisPoints: 0,

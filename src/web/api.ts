@@ -11,6 +11,8 @@ export interface PublicEvent {
   config: EventConfig;
   remaining: Record<string, number | null>;
   today: string;
+  nowLocal: string;
+  enforceWindows: boolean;
   holdMinutes: number;
 }
 

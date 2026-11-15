@@ -152,6 +152,7 @@ function build(
       waiverVersion: FIXTURE_WAIVER_VERSION,
       ...FEES,
       ...registration,
+      demoIgnoreWindows: registration.demoIgnoreWindows ?? true,
     },
     days: dayRows,
     races,

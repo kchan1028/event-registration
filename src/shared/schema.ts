@@ -98,6 +98,11 @@ export const registrationSettingsSchema = z.object({
   /** Percentage of the entries subtotal after discounts, in basis points (300 = 3%). */
   processingFeeBasisPoints: z.number().int().min(0).max(2000).default(0),
   processingFeeLabel: z.string().max(60).default('Processing fee'),
+  /**
+   * Demo events only: let testers register outside each category's registration
+   * window. Ignored for real events, which always enforce the windows.
+   */
+  demoIgnoreWindows: z.boolean().default(true),
   recoveryMinutes: z.number().int().min(0).max(180),
   refundPolicy: z.string().max(1000),
   waiverText: z.string().max(4000),
@@ -113,6 +118,7 @@ export const DEFAULT_REGISTRATION_SETTINGS: z.infer<typeof registrationSettingsS
   platformFeeLabel: 'Platform fee',
   processingFeeBasisPoints: 0,
   processingFeeLabel: 'Processing fee',
+  demoIgnoreWindows: true,
   recoveryMinutes: 15,
   refundPolicy: '',
   waiverText: '',
