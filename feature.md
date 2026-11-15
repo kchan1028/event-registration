@@ -73,6 +73,7 @@ These are not available in the prototype. Phase order and dependencies remain in
 
 | Feature | Status | Requirement reference |
 |---|---|---|
+| Reusable organizer templates: event formats, category presets, guided starts, and saved setups | Planned enhancement; current format templates are structural only | [Organizer templates](product.md#reusable-organizer-templates); [six research cases](docs/case-studies/organizer-templates/README.md) |
 | Accounts, MFA, and organizer roles | Planned | [Sign-in and account security](product.md#sign-in-and-account-security) |
 | Stripe hosted Checkout, refunds, payouts, and reconciliation | Planned; Stripe selected, operating model pending | [Money and reporting](product.md#6-money-and-reporting) |
 | Federation license and waiver verification | Planned; access and approval required | [Future USA Cycling integration](product.md#future-usa-cycling-waiver-and-license-integration) |
