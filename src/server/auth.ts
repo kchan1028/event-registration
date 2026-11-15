@@ -187,6 +187,13 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
     await requireOrg(account, row.organization_id, permission, 'Entry not found.');
   }
 
+  /** Organizer action on a whole order (for example correcting rider details): checked against the order's event. */
+  async function requireOrderOrganizer(account: Account, orderId: string, permission: Permission): Promise<void> {
+    const row = await db.get<{ organization_id: string }>(`SELECT e.organization_id FROM orders o JOIN events e ON e.id = o.event_id WHERE o.id = $1`, [orderId]);
+    if (!row) throw new HttpError(404, 'Order not found.');
+    await requireOrg(account, row.organization_id, permission, 'Order not found.');
+  }
+
   /**
    * An order is visible to the account that placed it and to organizers of its event who may
    * see orders. `ownerOnly` (paying, cancelling) allows only the account that placed it.
@@ -270,7 +277,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
     });
   }
 
-  return { accountFor, rolesIn, requireOrg, requireEvent, requireOrderEntry, requireOrder, memberships, grant, listMembers, addMember, removeMember };
+  return { accountFor, rolesIn, requireOrg, requireEvent, requireOrderEntry, requireOrderOrganizer, requireOrder, memberships, grant, listMembers, addMember, removeMember };
 }
 
 export type Access = ReturnType<typeof createAccess>;

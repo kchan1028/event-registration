@@ -324,6 +324,22 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX orders_by_coupon ON orders(coupon_id) WHERE coupon_id IS NOT NULL;
   `,
   `
+  -- Organizer corrections to a rider's details, append-only (product.md 4: corrections need a reason and an
+  -- audit trail). Each row lists the fields changed with before and after values. A corrected license number
+  -- clears earlier license reviews on the order; the cleared reviews are kept here. Prices never change.
+  CREATE TABLE rider_corrections (
+    id text PRIMARY KEY,
+    seq bigint GENERATED ALWAYS AS IDENTITY,
+    event_id text NOT NULL REFERENCES events(id),
+    order_id text NOT NULL REFERENCES orders(id),
+    changes_json jsonb NOT NULL,
+    cleared_reviews_json jsonb,
+    reason text NOT NULL,
+    created_at timestamptz NOT NULL
+  );
+  CREATE INDEX rider_corrections_by_order ON rider_corrections(order_id, created_at);
+  `,
+  `
   -- Sign-in (ADR 0003, Phase 2 email sign-in). One account per person, keyed by the identity
   -- provider's user ID; the email is the provider's verified primary address.
   CREATE TABLE accounts (

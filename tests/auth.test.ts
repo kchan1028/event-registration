@@ -113,6 +113,7 @@ describe('organizations are isolated from each other', () => {
       ['resolutions', 'GET', `/api/events/${eventId}/resolutions`],
       ['change impact', 'GET', `/api/events/${eventId}/impact`],
       ['coupons', 'GET', `/api/events/${eventId}/coupons`],
+      ['correct rider details', 'POST', `/api/orders/${order.id}/rider-corrections`, { changes: { firstName: 'Taken' }, reason: 'Takeover attempt' }],
       ['create coupon', 'POST', `/api/events/${eventId}/coupons`, { code: 'TAKEOVER', kind: 'percent', percent: 100 }],
       ['new event in their org', 'POST', `/api/organizations/${valley}/events`, { name: 'Takeover', template: 'weekend', startDate: '2027-04-24', timeZone: 'America/Los_Angeles' }],
       ['members', 'GET', `/api/organizations/${valley}/members`],
@@ -169,6 +170,15 @@ describe('organizer roles', () => {
         expect((await call(email, method, url, payload)).statusCode, `${email} ${name}`).toBe(status);
       }
     }
+  });
+
+  it('lets only registration managers and owners correct rider details, never the rider', async () => {
+    const { call, order, team } = await withRoles();
+    const correct = (email: string) => call(email, 'POST', `/api/orders/${order.id}/rider-corrections`, { changes: { team: 'Corrected Team' }, reason: 'Rider asked by email' });
+    expect((await correct(team.finance)).statusCode).toBe(403);
+    expect((await correct(team.check_in_volunteer)).statusCode).toBe(403);
+    expect((await correct(RIDER_EMAIL)).statusCode).toBe(404);
+    expect((await correct(team.registration_manager)).statusCode).toBe(200);
   });
 
   it("returns the caller's roles with the event so the screens can hide other tools", async () => {

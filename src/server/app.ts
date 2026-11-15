@@ -11,6 +11,7 @@ import { configFromTemplate } from '../shared/factory';
 import { buildFixtureEvents, FIXTURE_ORG_NAME } from '../shared/fixtures';
 import { createEventInputSchema, eventConfigSchema } from '../shared/schema';
 import { entriesCsv, ledgerCsv } from '../shared/exports';
+import { riderCorrectionSchema } from '../shared/lookup';
 import { changeImpact, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
 import { openDb } from './db';
@@ -424,7 +425,16 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.get('/api/events/:id/orders', async (req) => {
     await onEvent(req, 'orders.view');
-    return orders.listOrders(idParam.parse(req.params).id);
+    const { q } = z.object({ q: z.string().max(120).optional() }).parse(req.query);
+    return orders.listOrders(idParam.parse(req.params).id, q ?? '');
+  });
+
+  // Organizer corrections to rider details. A reason is required and every correction is kept.
+  app.post('/api/orders/:id/rider-corrections', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrderOrganizer(me(req), id, 'entries.manage');
+    const body = z.object({ changes: riderCorrectionSchema, reason: z.string().trim().min(3, 'Write why the details are being corrected.').max(300) }).parse(req.body);
+    return orders.correctRider(id, body.changes, body.reason);
   });
 
   // Organizer transfers and withdrawals of paid entries. A reason is required and logged.

@@ -5,6 +5,7 @@ import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNo
 import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { termsOf } from '../shared/coupons';
+import { applyCorrection, matchesRegistration, type FieldChange, type RiderCorrection } from '../shared/lookup';
 import { categoryPrice, quote, todayIn, type Quote } from '../shared/pricing';
 import { checkExtras, describeAnswers, EMPTY_EXTRAS, orderExtrasSchema, pruneExtras, type OrderExtras } from '../shared/categoryExtras';
 import type { EventConfig } from '../shared/schema';
@@ -47,6 +48,14 @@ interface ChangeRow {
   amount_paid_cents: number;
   new_price_cents: number | null;
   difference_cents: number | null;
+  reason: string;
+  created_at: string;
+}
+
+interface CorrectionRow {
+  order_id: string;
+  changes_json: FieldChange[];
+  cleared_reviews_json: { categoryId: string; note: string | null; reviewedAt: string | null }[] | null;
   reason: string;
   created_at: string;
 }
@@ -129,12 +138,15 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         [ids],
       ),
     );
+    const corrections = groupBy(
+      await db.all<CorrectionRow>(`SELECT order_id, changes_json, cleared_reviews_json, reason, created_at FROM rider_corrections WHERE order_id = ANY($1) ORDER BY created_at, seq`, [ids]),
+    );
     return rows.map((row) => {
       const config = configs.get(`${row.event_id}:${row.published_version}`)!;
       // A transfer can move an entry to a category added in a later published version.
       const latestVersion = latestByEvent.get(row.event_id);
       const latest = latestVersion ? configs.get(`${row.event_id}:${latestVersion}`)! : config;
-      return buildView(row, config, latest, entries.get(row.id) ?? [], changes.get(row.id) ?? []);
+      return buildView(row, config, latest, entries.get(row.id) ?? [], changes.get(row.id) ?? [], corrections.get(row.id) ?? []);
     });
   }
 
@@ -144,7 +156,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     return (await viewsOf([row]))[0];
   }
 
-  function buildView(row: OrderRow, config: EventConfig, latest: EventConfig, rows: EntryRow[], changes: ChangeRow[]) {
+  function buildView(row: OrderRow, config: EventConfig, latest: EventConfig, rows: EntryRow[], changes: ChangeRow[], corrections: CorrectionRow[]) {
     const findCat = (id: string) => config.categories.find((c) => c.id === id) ?? latest.categories.find((c) => c.id === id);
     const rider = row.rider_json;
     const waiver = row.waiver_json;
@@ -222,6 +234,13 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       answers: describeAnswers(latest, extras),
       addenda: extras.addenda.map((id) => ({ categoryId: id, title: findCat(id)?.addendum?.title ?? 'Category waiver addendum' })),
       entries,
+      /** Organizer corrections to rider details, oldest first. Each has its reason and before/after values. */
+      corrections: corrections.map((c) => ({
+        changes: c.changes_json,
+        licenseReviewsCleared: c.cleared_reviews_json?.length ?? 0,
+        reason: c.reason,
+        at: c.created_at,
+      })),
     };
   }
 
@@ -466,9 +485,41 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       });
     },
 
-    async listOrders(eventId: string) {
+    /** Every order of the event, newest first. With `query`, only registrations it finds (see `matchesRegistration`). */
+    async listOrders(eventId: string, query = '') {
       await repo.getEvent(eventId);
-      return viewsOf(await db.all<OrderRow>(`SELECT * FROM orders WHERE event_id = $1 ORDER BY created_at DESC, seq`, [eventId]));
+      const views = await viewsOf(await db.all<OrderRow>(`SELECT * FROM orders WHERE event_id = $1 ORDER BY created_at DESC, seq`, [eventId]));
+      return query ? views.filter((o) => matchesRegistration(o, query)) : views;
+    },
+
+    /**
+     * Organizer corrects rider details with a reason. Only contact and identity fields change
+     * (see CORRECTABLE_FIELDS); the price, entries, and waiver signature never do. Each correction
+     * is appended to rider_corrections. A new license number clears earlier license reviews,
+     * because the review was of the old number.
+     */
+    async correctRider(orderId: string, patch: RiderCorrection, reason: string) {
+      return db.transaction(async () => {
+        await lockEventOf(`SELECT event_id FROM orders WHERE id = $1`, orderId);
+        const row = await orderRow(orderId);
+        if (!row) throw new HttpError(404, 'Order not found.');
+        const { rider, changes } = applyCorrection(row.rider_json, patch);
+        if (changes.length === 0) throw new HttpError(422, 'Nothing changed. Edit a field before saving.');
+        const parsed = riderDetailsSchema.safeParse(rider);
+        if (!parsed.success) throw new HttpError(422, parsed.error.issues[0].message, parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));
+        const t = nowIso();
+        let cleared: { categoryId: string; note: string | null; reviewedAt: string | null }[] = [];
+        if (changes.some((c) => c.field === 'licenseNumber')) {
+          cleared = (await entryRows(orderId)).filter((e) => e.license_reviewed).map((e) => ({ categoryId: e.category_id, note: e.license_review_note, reviewedAt: e.license_reviewed_at }));
+          if (cleared.length > 0) await db.run(`UPDATE order_entries SET license_reviewed = false, license_review_note = NULL, license_reviewed_at = NULL WHERE order_id = $1`, [orderId]);
+        }
+        await db.run(`UPDATE orders SET rider_json = $1, updated_at = $2 WHERE id = $3`, [JSON.stringify(parsed.data), t, orderId]);
+        await db.run(
+          `INSERT INTO rider_corrections (id, event_id, order_id, changes_json, cleared_reviews_json, reason, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [newId('cor'), row.event_id, orderId, JSON.stringify(changes), cleared.length > 0 ? JSON.stringify(cleared) : null, reason, t],
+        );
+        return view(orderId);
+      });
     },
 
     /**

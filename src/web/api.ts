@@ -4,6 +4,7 @@ import type { Issue } from '../shared/validation';
 import type { ReadinessItem, RiderDetails, WaiverAcceptance } from '../shared/checkout';
 import type { Quote } from '../shared/pricing';
 import type { CouponTerms } from '../shared/coupons';
+import type { FieldChange, RiderCorrection } from '../shared/lookup';
 import type { BibSettings, CheckInResult, PaymentState } from '../shared/checkin';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
@@ -138,6 +139,7 @@ export interface OrderView {
     licenseReviewNote: string | null;
     readiness: ReadinessItem[];
   }[];
+  corrections: { changes: FieldChange[]; licenseReviewsCleared: number; reason: string; at: string }[];
 }
 
 export type CouponView = CouponTerms & {
@@ -353,6 +355,7 @@ export const api = {
   orders: (eventId: string) => request<OrderView[]>('GET', `/api/events/${eventId}/orders`),
   transferEntry: (entryId: string, toCategoryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/transfer`, { toCategoryId, reason }),
   withdrawEntry: (entryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/withdraw`, { reason }),
+  correctRider: (orderId: string, changes: RiderCorrection, reason: string) => request<OrderView>('POST', `/api/orders/${orderId}/rider-corrections`, { changes, reason }),
   reviewLicense: (entryId: string, note: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/license-review`, { note }),
   checkInList: (eventId: string, dayId: string | null, q: string) =>
     request<CheckInList>('GET', `/api/events/${eventId}/check-in?${new URLSearchParams({ ...(dayId ? { day: dayId } : {}), q })}`),
