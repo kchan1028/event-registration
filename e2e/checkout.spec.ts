@@ -148,7 +148,7 @@ test('rider screens follow the theme toggle and remember it', async ({ page }) =
 test('with the demo setting off, categories outside their window cannot be chosen', async ({ page }) => {
   test.skip(new Date() >= new Date('2027-02-01T17:00:00Z'), 'Demo windows open Feb 1, 2027; this check needs a date before that.');
   await page.goto('/');
-  await page.getByRole('button', { name: 'Load demonstration event' }).click();
+  await page.getByRole('button', { name: 'fictional example weekend' }).click();
   await expect(page.getByRole('heading', { name: 'Saturday road race', level: 2 })).toBeVisible();
   await page.getByRole('link', { name: 'Event setup' }).click();
   await page.getByLabel(/let testers register outside the registration windows/).uncheck();
