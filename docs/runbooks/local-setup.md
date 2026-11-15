@@ -104,7 +104,8 @@ SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts
 | `DATABASE_URL` | PostgreSQL connection string for the app and the seed scripts | `postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg` | Locally no (test credentials). A hosted database password is a secret and belongs in the platform's secret store |
 | `TEST_DATABASE_URL` | PostgreSQL server for the API tests (any database on it; tests create their own) | `postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg` | No |
 | `E2E_DATABASE_URL` | Throwaway database for the end-to-end test, reset on each run | `postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_e2e` | No |
-| `PORT` or `API_PORT` | API server port | `3001` | No |
+| `PORT` or `API_PORT` | API server port | `3001` (`10000` in the Docker image) | No |
+| `HOST` | Address the API listens on. Only `127.0.0.1`, `localhost`, or `::1` are accepted until sign-in exists ([deploy runbook](deploy-render.md)) | `127.0.0.1` | No |
 | `NODE_ENV=production` | Makes the API also serve the built web app from `dist/web` | unset | No |
 | `HOLD_MINUTES` | How long rider checkout holds places before payment | `10` | No |
 
