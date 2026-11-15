@@ -45,6 +45,6 @@ Score each option 1 (poor) to 5 (strong) per criterion, with a one-line reason t
 
 ## Reading the result
 
-- If A or B scores within 10 points of C, recommend A or B. A small lead does not justify building and supporting a new platform.
+- Proposed rule (the product owner may change it before scoring): if A or B scores within 10 points of C, recommend A or B. A small lead does not justify building and supporting a new platform.
 - C must lead on "Removes the measured top costs". If it does not, it has no credible advantage.
 - Record the recommendation and the main reason in [decision-memo.md](decision-memo.md#build-versus-improve).

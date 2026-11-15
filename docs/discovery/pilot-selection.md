@@ -11,7 +11,7 @@ Choosing the event now does not commit anyone to it. It tests whether a realisti
 | Size | One day, one discipline (road race or criterium), modest field | Two-day weekend or a large championship |
 | Categories | Some shared fields and at least one junior category, so the pilot tests real rules | Only one open category (proves little) |
 | Sanctioning | Clear path to the agreed license and waiver process, or an unsanctioned event if USAC acceptance is not yet in place | Sanctioned event with no accepted process |
-| Date | At least 4 months after Phase 3 is expected to finish | Date that forces the schedule |
+| Date | Proposed: at least 4 months after Phase 3 is expected to finish (adjust with the organizer) | Date that forces the schedule |
 | Organizer | Willing, available, and able to give honest feedback | Organizer who expects the developer to run everything |
 | Fallback | Organizer can switch back to the current provider if the pilot is stopped before opening | No fallback |
 | Timer | Willing to test exports before the event | Timer not reachable before race day |
