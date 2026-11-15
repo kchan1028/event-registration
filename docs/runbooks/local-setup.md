@@ -150,7 +150,7 @@ Without Stripe keys, checkout uses the simulated payment. To try Stripe hosted C
 
 3. Restart `npm run dev`. The review step now shows **Pay on Stripe (test mode)**. Pay with a Stripe test card such as `4242 4242 4242 4242`; the order confirms when the webhook arrives.
 
-Each person signs in with their own email (one account per email). Organizations created before sign-in existed have no owner; give yourself one by reseeding with `--owner`, or start over below.
+Each person signs in with their own email (one account per email). Organizations created before sign-in existed have no owner; give yourself one by reseeding with `--owner`, or start over below. If you seeded with `--owner` but never signed in with that email, the owner invitation expires after 14 days and signing in then gives no role; reseed with the same `--owner` to renew it.
 
 ## Start over
 

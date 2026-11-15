@@ -452,6 +452,17 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX membership_changes_by_org ON membership_changes(organization_id, created_at);
   `,
+  `
+  -- Invitations expire. Existing ones get the 14-day lifetime (INVITATION_DAYS when this ran) from
+  -- when they were sent. Adding the same invitation again renews it; an expired one is dropped,
+  -- and recorded, when that person signs in.
+  ALTER TABLE organization_invitations ADD COLUMN expires_at timestamptz;
+  UPDATE organization_invitations SET expires_at = created_at + interval '14 days';
+  ALTER TABLE organization_invitations ALTER COLUMN expires_at SET NOT NULL;
+  ALTER TABLE membership_changes DROP CONSTRAINT membership_changes_action_check;
+  ALTER TABLE membership_changes ADD CONSTRAINT membership_changes_action_check
+    CHECK (action IN ('granted', 'invited', 'invitation_renewed', 'invitation_accepted', 'invitation_expired', 'removed', 'invitation_cancelled', 'ownership_transferred'));
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AuthProvider } from '../src/server/auth';
 import { authProviderFromEnv } from '../src/server/auth';
 import type { EventConfig } from '../src/shared/schema';
+import { INVITATION_DAYS } from '../src/shared/roles';
 import { as, fakeAuth } from './support/auth';
 import { testApp } from './support/db';
 
@@ -190,15 +191,50 @@ describe('organizer roles', () => {
     const { call, valley, eventId } = await twoClubs();
     const newcomer = 'newcomer@valley.test';
     const invited = (await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: newcomer, role: 'check_in_volunteer' })).json() as {
-      invitations: { email: string; role: string }[];
+      invitations: { email: string; role: string; expiresAt: string }[];
     };
-    expect(invited.invitations).toEqual([{ email: newcomer, role: 'check_in_volunteer' }]);
+    expect(invited.invitations).toEqual([{ email: newcomer, role: 'check_in_volunteer', expiresAt: expect.any(String) }]);
     expect((await call(newcomer, 'GET', `/api/events/${eventId}/check-in`)).statusCode).toBe(200);
     const members = (await call(OWNER, 'GET', `/api/organizations/${valley}/members`)).json() as { members: { email: string }[]; invitations: unknown[] };
     expect(members.members.map((m) => m.email)).toContain(newcomer);
     expect(members.invitations).toEqual([]);
     expect((await call(OWNER, 'POST', `/api/organizations/${valley}/members/remove`, { email: newcomer, role: 'check_in_volunteer' })).statusCode).toBe(200);
     expect((await call(newcomer, 'GET', `/api/events/${eventId}/check-in`)).statusCode).toBe(404);
+  });
+
+  it('expires an invitation after INVITATION_DAYS, and adding it again renews it', async () => {
+    const DAY = 86_400_000;
+    let now = new Date('2027-03-01T18:00:00Z');
+    const { app } = await testApp({ auth: fakeAuth(), now: () => now });
+    const call = (email: string, method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(email), payload });
+    const org = (await call(OWNER, 'POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const late = 'late@valley.test';
+    const renewed = 'renewed@valley.test';
+    const invite = (email: string) => call(OWNER, 'POST', `/api/organizations/${org.id}/members`, { email, role: 'finance' });
+    await invite(late);
+    await invite(renewed);
+    now = new Date(now.getTime() + 13 * DAY);
+    const list = (await invite(renewed)).json() as { invitations: unknown[] };
+    expect(list.invitations).toEqual([
+      { email: late, role: 'finance', expiresAt: new Date(Date.parse('2027-03-01T18:00:00Z') + INVITATION_DAYS * DAY).toISOString() },
+      { email: renewed, role: 'finance', expiresAt: new Date(now.getTime() + INVITATION_DAYS * DAY).toISOString() },
+    ]);
+    now = new Date(now.getTime() + 2 * DAY);
+    // Signing in after the invitation expired gives no role; the renewed one still works.
+    expect(((await call(late, 'GET', '/api/me')).json() as { memberships: unknown[] }).memberships).toEqual([]);
+    expect(((await call(renewed, 'GET', '/api/me')).json() as { memberships: { roles: string[] }[] }).memberships).toEqual([expect.objectContaining({ organizationId: org.id, roles: ['finance'] })]);
+    const after = (await call(OWNER, 'GET', `/api/organizations/${org.id}/members`)).json() as { invitations: unknown[]; history: { action: string; email: string; by: string | null }[] };
+    expect(after.invitations).toEqual([]);
+    expect(after.history.slice(0, 5).map(({ action, email, by }) => ({ action, email, by }))).toEqual([
+      { action: 'invitation_accepted', email: renewed, by: renewed },
+      { action: 'invitation_expired', email: late, by: late },
+      { action: 'invitation_renewed', email: renewed, by: OWNER },
+      { action: 'invited', email: renewed, by: OWNER },
+      { action: 'invited', email: late, by: OWNER },
+    ]);
+    // The late person now has an account, so adding them again gives the role straight away.
+    await invite(late);
+    expect(((await call(late, 'GET', '/api/me')).json() as { memberships: { roles: string[] }[] }).memberships).toEqual([expect.objectContaining({ roles: ['finance'] })]);
   });
 
   it('never removes the last owner', async () => {
