@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
 import { applyCorrection, matchesRegistration, normalizeText } from '../src/shared/lookup';
-import type { RiderDetails } from '../src/shared/checkout';
+import { checkSignature, type RiderDetails } from '../src/shared/checkout';
 import type { EventConfig } from '../src/shared/schema';
 
 /* Registration lookup and manual corrections (product.md 4, Organizer workspace). */
@@ -37,6 +37,17 @@ describe('matching a registration', () => {
     expect(matchesRegistration({ ...reg, checkInCode: null }, 'K7M2P')).toBe(false);
   });
 
+  it('finds an order number with the CR- prefix, with or without the prefix, and never by the prefix alone', () => {
+    const real = { ...reg, orderNumber: 'CR-AB12CD34' };
+    expect(matchesRegistration(real, 'cr-ab12cd34')).toBe(true);
+    expect(matchesRegistration(real, 'AB12CD34')).toBe(true);
+    expect(matchesRegistration(real, 'CR-AB12')).toBe(true);
+    expect(matchesRegistration(real, 'CR-')).toBe(false);
+    expect(matchesRegistration(real, 'DEMO-AB12CD34')).toBe(true); // the typed prefix is ignored, the code is what matches
+    // A check-in code that happens to start with CR is still found by its first characters.
+    expect(matchesRegistration({ ...real, checkInCode: 'CR7KP-Q9R4T' }, 'cr7k')).toBe(true);
+  });
+
   it('finds a junior by the guardian name and email', () => {
     const junior = { ...reg, rider: { ...reg.rider, email: '', guardian: { name: 'Jordan Parent', email: 'jordan.parent@example.test' } } };
     expect(matchesRegistration(junior, 'jordan')).toBe(true);
@@ -45,6 +56,12 @@ describe('matching a registration', () => {
 
   it('normalizes text', () => {
     expect(normalizeText('  Ñandú   RIDER ')).toBe('nandu rider');
+  });
+
+  it('accepts a waiver signature typed without the accents in the rider name', () => {
+    const rider = { firstName: 'José', lastName: 'Núñez', guardian: null };
+    expect(checkSignature(rider, { signatureName: 'jose  nunez', signerRole: 'rider' }, false)).toBeNull();
+    expect(checkSignature(rider, { signatureName: 'Jose Nunes', signerRole: 'rider' }, false)).not.toBeNull();
   });
 });
 
@@ -94,7 +111,7 @@ async function setup() {
   let n = 0;
   const buy = async (rider: Record<string, unknown>, codes: string[]) => {
     const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: `${rider.firstName} ${rider.lastName}`, signerRole: 'rider' };
-    const o = (await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `lookup-${++n}-xxxx`, categoryIds: codes.map(code), rider, waiver } })).json() as Order;
+    const o = (await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `lookup-${++n}-xxxx`, categoryIds: codes.map(code), rider, waiver } })).json() as Order;
     return (await app.inject({ method: 'POST', url: `/api/orders/${o.id}/payment`, payload: { attemptId: `att-lookup-${n}-xx`, outcome: 'success' } })).json() as Order;
   };
   const search = async (q: string) => ((await app.inject({ method: 'GET', url: `/api/events/${eventId}/orders?q=${encodeURIComponent(q)}` })).json() as Order[]).map((o) => o.rider.lastName);

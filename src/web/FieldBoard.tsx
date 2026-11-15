@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { distinctRiders, poolCategoryIds, startGroupCategoryIds } from '../shared/capacity';
+import { distinctRiders, entryCountsByCategory, poolCategoryIds, startGroupCategoryIds, usageForLimit, type LimitUsage } from '../shared/capacity';
 import { newId } from '../shared/factory';
 import { formatTime, sortCategories } from '../shared/format';
-import type { Category, EventConfig, StartGroup, TestEntry } from '../shared/schema';
+import type { CapacityPool, Category, EventConfig, StartGroup, CapacityEntry } from '../shared/schema';
 import type { Draft } from './Builder';
 import { dayHue, Field, Icon, IntInput } from './ui';
 
@@ -11,7 +11,7 @@ import { dayHue, Field, Icon, IntInput } from './ui';
  * start together, with one tally for the shared field. A rider counts once.
  */
 export function FieldBoard({ draft, raceId, onSelect, selectedId }: { draft: Draft; raceId: string; onSelect: (id: string) => void; selectedId: string | null }) {
-  const { config, update } = draft;
+  const { config, update, readOnly } = draft;
   const race = config.races.find((r) => r.id === raceId)!;
   const dayIndex = config.days.findIndex((d) => d.id === race.dayId);
   const groups = [...config.startGroups.filter((g) => g.raceId === raceId)].sort((a, b) => (a.startTime ?? '99').localeCompare(b.startTime ?? '99'));
@@ -30,11 +30,13 @@ export function FieldBoard({ draft, raceId, onSelect, selectedId }: { draft: Dra
       <div className="section-head">
         <h3 id="board-title">Start groups and shared field limits</h3>
         <p className="section-head__note">
-          Categories clipped together start together. Each keeps its own classification and cap, and a rider counts once toward the shared limit.
+          Categories in one start group start together. Each keeps its own classification and cap, and a rider counts once toward the shared limit.
         </p>
-        <button className="btn btn--secondary btn--small" onClick={addGroup}>
-          <Icon name="plus" /> Add start group
-        </button>
+        {!readOnly && (
+          <button className="btn btn--secondary btn--small" onClick={addGroup}>
+            <Icon name="plus" /> Add start group
+          </button>
+        )}
       </div>
 
       <div className="board__grid">
@@ -47,13 +49,13 @@ export function FieldBoard({ draft, raceId, onSelect, selectedId }: { draft: Dra
               <span className="clip__time num">--:--</span>
               <h4 className="clip__name">Not in a start group</h4>
             </header>
-            <p className="clip__hint">These categories have no start time yet. Clip each one into a start group.</p>
+            <p className="clip__hint">These categories have no start time yet. Add each one to a start group.</p>
             <TagList cats={unassigned} groups={groups} draft={draft} onSelect={onSelect} selectedId={selectedId} />
           </article>
         )}
         {groups.length === 0 && unassigned.length === 0 && (
           <div className="empty">
-            <p>Add a start group, give it a start time, then clip categories into it.</p>
+            <p>{readOnly ? 'No start groups yet.' : 'Add a start group, give it a start time, then add categories to it.'}</p>
           </div>
         )}
       </div>
@@ -79,11 +81,13 @@ function Clip({ group, draft, cats, groups, editing, setEditing, onSelect, selec
         <h4 className="clip__name" id={`clip-${group.id}`}>
           {group.name || 'Unnamed start group'}
         </h4>
-        <button className="btn btn--ghost btn--small" aria-expanded={editing} onClick={() => setEditing(editing ? null : group.id)}>
-          {editing ? 'Done' : 'Edit'}
-        </button>
+        {!draft.readOnly && (
+          <button className="btn btn--ghost btn--small" aria-expanded={editing} onClick={() => setEditing(editing ? null : group.id)}>
+            {editing ? 'Done' : 'Edit'}
+          </button>
+        )}
       </header>
-      {editing && (
+      {editing && !draft.readOnly && (
         <div className="clip__form">
           <Field label="Name">{(id) => <input id={id} className="input" value={group.name} onChange={(e) => patch({ name: e.target.value })} maxLength={80} />}</Field>
           <div className="form-row form-row--3">
@@ -103,15 +107,14 @@ function Clip({ group, draft, cats, groups, editing, setEditing, onSelect, selec
           <Icon name="error" size={14} /> {e.message}
         </p>
       ))}
-      {cats.length > 0 ? <TagList cats={cats} groups={groups} draft={draft} onSelect={onSelect} selectedId={selectedId} /> : <p className="clip__hint">Empty. Choose this start group in a category tag's start group menu to clip it here.</p>}
+      {cats.length > 0 ? <TagList cats={cats} groups={groups} draft={draft} onSelect={onSelect} selectedId={selectedId} /> : <p className="clip__hint">{draft.readOnly ? 'Empty.' : "Empty. Choose this start group in a category tag's start group menu to add it here."}</p>}
       <Tally config={config} entries={draft.data.entries} group={group} cats={cats} />
     </article>
   );
 }
 
 function TagList({ cats, groups, draft, onSelect, selectedId }: { cats: Category[]; groups: StartGroup[]; draft: Draft; onSelect: (id: string) => void; selectedId: string | null }) {
-  const counts = new Map<string, number>();
-  for (const e of draft.data.entries) counts.set(e.categoryId, (counts.get(e.categoryId) ?? 0) + 1);
+  const counts = entryCountsByCategory(draft.data.entries);
   const move = (catId: string, sgId: string) =>
     draft.update((c) => ({ ...c, categories: c.categories.map((x) => (x.id === catId ? { ...x, startGroupId: sgId || null } : x)) }));
   return (
@@ -121,28 +124,35 @@ function TagList({ cats, groups, draft, onSelect, selectedId }: { cats: Category
           <button className="tagchip__main" onClick={() => onSelect(cat.id)}>
             <code className="code">{cat.classifications[0]?.code || cat.timingCode || '?'}</code>
             <span className="tagchip__name">{cat.name || 'Unnamed'}</span>
-            <span className="tagchip__count num" aria-label={`${counts.get(cat.id) ?? 0} entries${cat.cap ? ` of ${cat.cap}` : ''}`}>
-              {counts.get(cat.id) ?? 0}
+            <span className="tagchip__count num" aria-label={`${counts[cat.id] ?? 0} places taken${cat.cap ? ` of ${cat.cap}` : ''}`}>
+              {counts[cat.id] ?? 0}
               {cat.cap ? <span className="tagchip__cap">/{cat.cap}</span> : null}
             </span>
           </button>
-          <select className="tagchip__move" aria-label={`Start group for ${cat.name || 'category'}`} value={cat.startGroupId ?? ''} onChange={(e) => move(cat.id, e.target.value)}>
-            <option value="">Start group: none</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                Start group: {g.startTime ? `${formatTime(g.startTime)} · ` : ''}
-                {g.name || 'Unnamed'}
-              </option>
-            ))}
-          </select>
+          {!draft.readOnly && (
+            <select className="tagchip__move" aria-label={`Start group for ${cat.name || 'category'}`} value={cat.startGroupId ?? ''} onChange={(e) => move(cat.id, e.target.value)}>
+              <option value="">Start group: none</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  Start group: {g.startTime ? `${formatTime(g.startTime)} · ` : ''}
+                  {g.name || 'Unnamed'}
+                </option>
+              ))}
+            </select>
+          )}
         </li>
       ))}
     </ul>
   );
 }
 
+/** A pool's shared limit with how many distinct riders use it, counted by the shared capacity rule. */
+export function poolUsage(config: EventConfig, pool: CapacityPool, entries: readonly CapacityEntry[]): LimitUsage {
+  return usageForLimit({ kind: 'pool', id: pool.id, name: pool.name, limit: pool.limit, categoryIds: poolCategoryIds(config, pool.id) }, entries);
+}
+
 /** The shared tally: one bar per start group, segmented by category, scaled to the binding limit. */
-export function Tally({ config, entries, group, cats }: { config: EventConfig; entries: TestEntry[]; group: StartGroup; cats: Category[] }) {
+export function Tally({ config, entries, group, cats }: { config: EventConfig; entries: CapacityEntry[]; group: StartGroup; cats: Category[] }) {
   const memberIds = startGroupCategoryIds(config, group.id);
   const used = distinctRiders(entries, memberIds).size;
   const pools = config.capacityPools.filter((p) => poolCategoryIds(config, p.id).some((id) => memberIds.includes(id)));
@@ -152,15 +162,22 @@ export function Tally({ config, entries, group, cats }: { config: EventConfig; e
   });
   const caps = cats.map((c) => c.cap);
   let limit: number | null = null;
+  let remaining: number | null = null;
   let basis = '';
   if (group.fieldLimit !== null) {
-    limit = group.fieldLimit;
+    const u = usageForLimit({ kind: 'start_group', id: group.id, name: group.name, limit: group.fieldLimit, categoryIds: memberIds }, entries);
+    limit = u.limit;
+    remaining = u.remaining;
     basis = 'shared field limit';
   } else if (coveringPool) {
-    limit = coveringPool.limit;
+    // The pool can reach beyond this start group, so the places left come from everyone counted in the pool.
+    const u = poolUsage(config, coveringPool, entries);
+    limit = u.limit;
+    remaining = u.remaining;
     basis = `shared pool: ${coveringPool.name}`;
   } else if (cats.length > 0 && caps.every((c) => c !== null)) {
     limit = (caps as number[]).reduce((a, b) => a + b, 0);
+    remaining = Math.max(0, limit - used);
     basis = cats.length > 1 ? 'category caps added up; no shared limit' : 'category cap';
   }
   const scale = limit ?? Math.max(used, 1);
@@ -171,7 +188,6 @@ export function Tally({ config, entries, group, cats }: { config: EventConfig; e
     left += n;
     return seg;
   });
-  const remaining = limit === null ? null : Math.max(0, limit - used);
   const summary =
     limit === null ? `${used} riders entered. No field limit applies.` : `${used} of ${limit} places taken, ${remaining} left (${basis}).`;
 
@@ -205,8 +221,7 @@ export function Tally({ config, entries, group, cats }: { config: EventConfig; e
       {pools
         .filter((p) => p !== coveringPool || group.fieldLimit !== null)
         .map((p) => {
-          const ids = poolCategoryIds(config, p.id);
-          const pu = distinctRiders(entries, ids).size;
+          const pu = poolUsage(config, p, entries).used;
           return (
             <p key={p.id} className="tally__pool">
               <Icon name="users" size={14} /> Also limited by pool <strong>{p.name}</strong>: <span className="num">{pu}</span> of <span className="num">{p.limit}</span>

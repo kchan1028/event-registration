@@ -38,6 +38,16 @@ describe('copy a race day', () => {
     expect(added.every((i) => i.key.endsWith('.review'))).toBe(true);
   });
 
+  it('copying the same day twice still gives every category its own timing code', () => {
+    const config = buildDemoEvent().config;
+    const [sat, sun] = config.days;
+    const twice = copyDay(copyDay(config, sat.id, sun.id).config, sat.id, sun.id).config;
+    const codes = twice.categories.filter((c) => c.status !== 'archived' && c.timingCode).map((c) => c.timingCode);
+    expect(new Set(codes).size).toBe(codes.length);
+    expect(codes.some((c) => c.endsWith('-COPY2'))).toBe(true);
+    expect(codes.every((c) => c.length <= 24)).toBe(true);
+  });
+
   it('does nothing when copying a day onto itself', () => {
     const config = buildDemoEvent().config;
     expect(copyDay(config, config.days[0].id, config.days[0].id)).toEqual({ config, races: 0, categories: 0 });

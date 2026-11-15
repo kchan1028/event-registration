@@ -1,11 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { usageForCategory } from '../shared/capacity';
-import { summarizePath } from '../shared/eligibility';
-import { blankPath, duplicateCategory, newId, updateCategory } from '../shared/factory';
+import { licenseLabel, summarizePath } from '../shared/eligibility';
+import { blankPath, newId, updateCategory } from '../shared/factory';
 import { formatTime } from '../shared/format';
 import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, type Category, type EligibilityPath, type RaceLength } from '../shared/schema';
+import { OFFER_HOURS } from '../shared/waitlist';
 import { ApiError } from './api';
 import type { Draft } from './Builder';
+import { duplicateAndSelect } from './CategoryTable';
 import { Field, Icon, IntInput, MoneyInput, Pending } from './ui';
 
 export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = false }: { draft: Draft; categoryId: string; onClose: () => void; onSelect: (id: string) => void; drawer?: boolean }) {
@@ -21,6 +23,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
   const cat = config.categories.find((c) => c.id === categoryId)!;
   const race = config.races.find((r) => r.id === cat.raceId)!;
   const groups = config.startGroups.filter((g) => g.raceId === cat.raceId);
+  // Every place in use in this category: test entries, confirmed and held order entries, and live waitlist offers.
   const entries = draft.data.entries.filter((e) => e.categoryId === cat.id).length;
   const issues = draft.issues.filter((i) => i.target.kind === 'category' && i.target.id === cat.id);
   const set = (fn: (c: Category) => Category) => update((cfg) => updateCategory(cfg, cat.id, fn));
@@ -39,21 +42,10 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
     onClose();
   };
 
-  const duplicate = () => {
-    const before = new Set(config.categories.map((c) => c.id));
-    let copyId: string | null = null;
-    update((cfg) => {
-      const next = duplicateCategory(cfg, cat.id);
-      copyId = next.categories.find((x) => !before.has(x.id))?.id ?? null;
-      return next;
-    });
-    if (copyId) onSelect(copyId);
-  };
-
   return (
     <div className="editor">
       <header className="editor__head">
-        <p className="editor__context">Editing a category in {race.name}</p>
+        <p className="editor__context">{draft.readOnly ? `A category in ${race.name} (view only)` : `Editing a category in ${race.name}`}</p>
         <button ref={closeRef} className="icon-btn editor__close" onClick={onClose} aria-label="Close category editor">
           <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d="M4 4l8 8M12 4l-8 8" />
@@ -61,6 +53,8 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
         </button>
       </header>
 
+      {/* View only: every control below is switched off together. The wrapper takes no space of its own. */}
+      <fieldset disabled={draft.readOnly} style={{ display: 'contents' }}>
       <Field label="Category name" className="field--title">
         {(id) => <input id={id} className="input input--title" value={cat.name} onChange={(e) => set((c) => ({ ...c, name: e.target.value }))} maxLength={120} />}
       </Field>
@@ -75,7 +69,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
       )}
       {cat.status === 'archived' && (
         <div className="alert alert--warn">
-          <p>This category is archived. It keeps its {entries} test entries and is hidden from the schedule.</p>
+          <p>This category is archived. It keeps its {entries} {entries === 1 ? 'entry' : 'entries'} and is hidden from the schedule.</p>
           <button className="btn btn--small btn--secondary" onClick={() => set((c) => ({ ...c, status: 'active' }))}>
             Restore category
           </button>
@@ -226,20 +220,20 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
             {(id, d) => <input id={id} aria-describedby={d} type="datetime-local" className="input" value={cat.registration.closesAt ?? ''} onChange={(e) => set((c) => ({ ...c, registration: { ...c.registration, closesAt: e.target.value || null } }))} />}
           </Field>
         </div>
-        <Pending>Payments are not connected. Prices are shown to riders but nothing is charged.</Pending>
+        <Pending>{draft.data.pending.payments}</Pending>
       </section>
 
       <section className="editor__section" aria-labelledby={`${cat.id}-cap`}>
         <h3 id={`${cat.id}-cap`}>Capacity</h3>
-        <Field label="Category cap" hint={`Blank: no cap of its own. Cannot go below the ${entries} entries already taken.`}>
+        <Field label="Category cap" hint={`Blank: no cap of its own. Cannot go below the ${entries} ${entries === 1 ? 'place' : 'places'} already taken.`}>
           {(id, d) => <IntInput id={id} describedBy={d} value={cat.cap} min={Math.max(1, entries)} onCommit={(v) => set((c) => ({ ...c, cap: v }))} />}
         </Field>
         <label className="check">
           <input type="checkbox" checked={!!cat.waitlistEnabled} onChange={(e) => set((c) => ({ ...c, waitlistEnabled: e.target.checked }))} />
-          Offer a waitlist when this category is full (you offer freed places in order; each offer holds the place for 24 hours)
+          Offer a waitlist when this category is full (you offer freed places in order; each offer holds the place for {OFFER_HOURS} hours)
         </label>
         <CapacityUsage draft={draft} categoryId={cat.id} />
-        <TestEntries draft={draft} categoryId={cat.id} disabled={cat.status !== 'active'} />
+        {!draft.readOnly && <TestEntries draft={draft} categoryId={cat.id} disabled={cat.status !== 'active'} />}
       </section>
 
       <section className="editor__section" aria-labelledby={`${cat.id}-extras`}>
@@ -353,21 +347,23 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
         </Field>
       </section>
 
-      <footer className="editor__foot">
-        <button className="btn btn--secondary" onClick={duplicate}>
-          <Icon name="copy" /> Duplicate
-        </button>
-        {cat.status !== 'archived' && (
-          <button className="btn btn--ghost btn--danger" onClick={remove}>
-            <Icon name="trash" /> {entries > 0 ? 'Archive (has entries)' : 'Delete category'}
+      </fieldset>
+
+      {!draft.readOnly && (
+        <footer className="editor__foot">
+          <button className="btn btn--secondary" onClick={() => duplicateAndSelect(draft, cat.id, onSelect)}>
+            <Icon name="copy" /> Duplicate
           </button>
-        )}
-      </footer>
+          {cat.status !== 'archived' && (
+            <button className="btn btn--ghost btn--danger" onClick={remove}>
+              <Icon name="trash" /> {entries > 0 ? 'Archive (has entries)' : 'Delete category'}
+            </button>
+          )}
+        </footer>
+      )}
     </div>
   );
 }
-
-const LICENSE_LABEL: Record<string, string> = { PRO: 'Pro', '1': 'Cat 1', '2': 'Cat 2', '3': 'Cat 3', '4': 'Cat 4', '5': 'Cat 5' };
 
 function PathEditor({ path, index, total, onChange, onRemove }: { path: EligibilityPath; index: number; total: number; onChange: (p: EligibilityPath) => void; onRemove: () => void }) {
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
@@ -387,7 +383,7 @@ function PathEditor({ path, index, total, onChange, onRemove }: { path: Eligibil
           {LICENSE_CATEGORIES.map((c) => (
             <label key={c} className={`chip ${path.licenseCategories.includes(c) ? 'is-on' : ''}`}>
               <input type="checkbox" checked={path.licenseCategories.includes(c)} onChange={() => onChange({ ...path, licenseCategories: toggle(path.licenseCategories, c) })} />
-              {LICENSE_LABEL[c]}
+              {licenseLabel(c)}
             </label>
           ))}
         </div>
@@ -553,8 +549,8 @@ function TestEntries({ draft, categoryId, disabled }: { draft: Draft; categoryId
   };
   return (
     <div className="test-entries">
-      <p className="test-entries__title">Simulate entries</p>
-      <p className="muted small">Test entries have no rider data and no payment. They check that caps and shared limits hold.</p>
+      <p className="test-entries__title">Add test entries</p>
+      <p className="muted small">Test entries have no rider data and no payment. They check that caps and shared limits hold. The counts above also include real registrations and held places.</p>
       <div className="form-row form-row--tight">
         <IntInput value={count} min={1} max={500} onCommit={setCount} ariaLabel="Number of test entries" />
         <button className="btn btn--secondary btn--small" onClick={run} disabled={busy || disabled || !count}>

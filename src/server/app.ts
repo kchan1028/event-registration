@@ -19,15 +19,15 @@ import { createCheckIn } from './checkin';
 import { createCaseStudyFixtures } from './caseStudies';
 import { createIdentity } from './identity';
 import { createResolutions } from './resolutions';
-import { createStartLists } from './startlists';
+import { createStartLists, slug } from './startlists';
 import { createCoupons } from './coupons';
-import { createOrders, type Orders } from './orders';
+import { createOrders, isLiveOrder, type Orders } from './orders';
 import { createPayments, paymentsFromEnv, publicAppUrl, type PaymentProvider } from './payments';
 import { createRefunds } from './refunds';
 import { createWaitlist } from './waitlist';
-import { createRepo, HttpError, type Repo } from './repo';
+import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
 import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
-import { ROLES, type Permission } from '../shared/roles';
+import { ROLES, type Permission, type Role } from '../shared/roles';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -35,7 +35,7 @@ declare module 'fastify' {
     account?: Account;
   }
   interface FastifyContextConfig {
-    /** Routes open without sign-in: health, the public event list, and rider event pages. */
+    /** Routes open without sign-in: health, the public event list and event pages, and the Stripe webhook (trusted only by its signature). */
     public?: boolean;
   }
 }
@@ -49,7 +49,7 @@ export interface AppOptions {
   now?: () => Date;
   /** How long checkout holds places before payment. */
   holdMinutes?: number;
-  /** Who is calling (ADR 0003). Defaults to Clerk, or the local test provider, from the environment. */
+  /** Who is calling (ADR 0003). Defaults to Clerk, or the local test provider, from the environment (throws when it is not configured). */
   auth?: AuthProvider;
   /** Payment provider (ADR 0002). Defaults to Stripe test mode when STRIPE_SECRET_KEY is set, otherwise simulated. */
   payments?: PaymentProvider;
@@ -58,6 +58,11 @@ export interface AppOptions {
 }
 
 export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; orders: Orders; access: Access } {
+  // Sign-in, payments, and the app URL are resolved from the environment here and nowhere else.
+  // A missing or refused setting throws before anything is opened; src/server/index.ts prints it and exits.
+  const provider = opts.auth ?? authProviderFromEnv();
+  const paymentProvider = opts.payments ?? paymentsFromEnv();
+  const appUrl = opts.appUrl ?? (paymentProvider.mode === 'simulated' ? '' : publicAppUrl());
   const db = openDb(opts.databaseUrl, (err) => app.log.error(err));
   const clock = opts.now ?? (() => new Date());
   const repo = createRepo(db, clock);
@@ -69,16 +74,22 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const startLists = createStartLists(db, repo, orders, clock, identity);
   const waitlist = createWaitlist(db, repo, clock);
   const caseStudies = createCaseStudyFixtures(db, repo, orders);
-  const provider = opts.auth ?? authProviderFromEnv();
   const access = createAccess(db, provider, clock);
-  const paymentProvider = opts.payments ?? paymentsFromEnv();
   const refunds = createRefunds(db, paymentProvider, clock);
-  const payments = createPayments(db, orders, paymentProvider, clock, opts.appUrl ?? (paymentProvider.mode === 'simulated' ? '' : publicAppUrl()), refunds.onRefundEvent);
+  const payments = createPayments(db, orders, paymentProvider, clock, appUrl, refunds.onRefundEvent);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
   // Migrations run once before the server accepts requests (listen, or the first inject in tests).
   app.addHook('onReady', async () => db.migrate());
-  const idParam = z.object({ id: z.string().min(1).max(64) });
+  // Route parameters. Every ID is bounded the same way.
+  const idStr = z.string().min(1).max(64);
+  const idParam = z.object({ id: idStr });
+  const versionParams = z.object({ id: idStr, version: z.coerce.number().int().min(1) });
+  const resolutionParams = z.object({ id: idStr, rid: idStr });
+  const couponParams = z.object({ id: idStr, couponId: idStr });
+  const waitlistParams = z.object({ id: idStr, entryId: idStr });
+  const checkInParams = z.object({ id: idStr, orderId: idStr });
+  const raceParams = z.object({ id: idStr, raceId: idStr });
   app.addHook('onClose', async () => db.close());
 
   // Sign-in is required for every API route unless the route is marked public. Default deny:
@@ -95,10 +106,18 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     if (!req.account) throw new HttpError(401, 'Sign in to continue.');
     return req.account;
   }
-  const onEvent = (req: { account?: Account; params: unknown }, permission: Permission) => {
-    const { id } = idParam.parse(req.params);
-    return access.requireEvent(me(req), id, permission);
-  };
+  /**
+   * For routes under /api/events/:id: parses the route parameters once (`schema` when the route has
+   * more than `:id`), checks the caller's permission on the event, and returns the parameters with the caller's roles.
+   */
+  async function onEvent<P extends { id: string } = { id: string }>(
+    req: { account?: Account; params: unknown },
+    permission: Permission,
+    schema: z.ZodType<P, z.ZodTypeDef, unknown> = idParam as unknown as z.ZodType<P, z.ZodTypeDef, unknown>,
+  ): Promise<P & { roles: Role[] }> {
+    const params = schema.parse(req.params);
+    return { ...params, roles: await access.requireEvent(me(req), params.id, permission) };
+  }
   const isPublic = { config: { public: true } };
 
   app.setErrorHandler((err, _req, reply) => {
@@ -150,7 +169,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   // Only the organizations the caller belongs to, with the caller's roles in each.
   app.get('/api/organizations', async (req) => {
     const mine = new Map((await access.memberships(me(req).id)).map((m) => [m.organizationId, m.roles]));
-    return (await repo.listOrganizations()).filter((o) => mine.has(o.id)).map((o) => ({ ...o, roles: mine.get(o.id)! }));
+    return (await repo.listOrganizations([...mine.keys()])).map((o) => ({ ...o, roles: mine.get(o.id)! }));
   });
 
   // Anyone signed in can start an organization and becomes its owner.
@@ -193,41 +212,43 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.get('/api/events/:id', async (req) => {
-    const roles = await onEvent(req, 'event.view');
-    return { ...(await eventPayload(idParam.parse(req.params).id)), roles };
+    const { id, roles } = await onEvent(req, 'event.view');
+    return { ...(await eventPayload(id)), roles };
   });
 
   app.put('/api/events/:id/config', async (req) => {
-    await onEvent(req, 'event.edit');
-    const { id } = idParam.parse(req.params);
+    const { id } = await onEvent(req, 'event.edit');
     const body = z.object({ revision: z.number().int(), config: eventConfigSchema }).parse(req.body);
     await repo.saveDraft(id, body.revision, body.config);
     return eventPayload(id);
   });
 
   app.post('/api/events/:id/publish', async (req) => {
-    await onEvent(req, 'event.edit');
-    const { id } = idParam.parse(req.params);
+    const { id } = await onEvent(req, 'event.edit');
     const body = z.object({ acknowledgeWarnings: z.boolean().default(false), acknowledgeImpact: z.boolean().default(false) }).parse(req.body ?? {});
-    // A change that touches riders who already entered must be reviewed, like warnings.
-    const { impact } = await impactFor(id);
-    if (impact && impact.categories.length > 0 && !body.acknowledgeImpact) {
-      const n = impact.categories.length;
-      throw new HttpError(422, `Review who the ${n} changed ${n === 1 ? 'category' : 'categories'} with entries affect before publishing.`, impact);
-    }
-    const result = await repo.publish(id, body.acknowledgeWarnings);
-    // Paid entries the change touches each get an item in the resolution workflow.
-    if (impact && impact.categories.length > 0) await resolutions.record(id, result.version, impact);
-    return { ...(await eventPayload(id)), publishedVersion: result.version };
+    // One transaction under the event lock: the impact that was reviewed is the impact that is published
+    // and recorded, with no entry or draft change in between. repo.publish joins it as a savepoint.
+    const version = await db.transaction(async () => {
+      await db.lock(eventLock(id));
+      // A change that touches riders who already entered must be reviewed, like warnings.
+      const { impact } = await impactFor(id);
+      if (impact && impact.categories.length > 0 && !body.acknowledgeImpact) {
+        const n = impact.categories.length;
+        throw new HttpError(422, `Review who the ${n} changed ${n === 1 ? 'category' : 'categories'} with entries affect before publishing.`, impact);
+      }
+      const result = await repo.publish(id, body.acknowledgeWarnings);
+      // Paid entries the change touches each get an item in the resolution workflow.
+      if (impact && impact.categories.length > 0) await resolutions.record(id, result.version, impact);
+      return result.version;
+    });
+    return { ...(await eventPayload(id)), publishedVersion: version };
   });
 
   app.get('/api/events/:id/resolutions', async (req) => {
-    await onEvent(req, 'entries.manage');
-    return resolutions.list(idParam.parse(req.params).id);
+    return resolutions.list((await onEvent(req, 'entries.manage')).id);
   });
   app.post('/api/events/:id/resolutions/:rid', async (req) => {
-    await onEvent(req, 'entries.manage');
-    const p = z.object({ id: z.string().min(1).max(64), rid: z.string().min(1).max(64) }).parse(req.params);
+    const p = await onEvent(req, 'entries.manage', resolutionParams);
     const body = z
       .object({ outcome: z.enum(['kept', 'transferred', 'withdrawn']), riderNotified: z.boolean(), note: z.string().trim().min(3, 'Write what was agreed with the rider.').max(300) })
       .parse(req.body);
@@ -244,7 +265,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const published = await repo.getVersion(id, record.publishedVersion);
     const rows = await db.all<{ order_id: string; category_id: string; status: string; rider_json: { firstName?: string; lastName?: string } }>(
       `SELECT oe.order_id, oe.category_id, oe.status, o.rider_json FROM order_entries oe JOIN orders o ON o.id = oe.order_id
-       WHERE oe.event_id = $1 AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > $2)) ORDER BY oe.seq`,
+       WHERE oe.event_id = $1 AND ${liveEntrySql('$2')} ORDER BY oe.seq`,
       [id, clock().toISOString()],
     );
     const entries: ImpactEntry[] = rows.map((r) => {
@@ -260,19 +281,16 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   }
 
   app.get('/api/events/:id/impact', async (req) => {
-    await onEvent(req, 'event.edit');
-    return impactFor(idParam.parse(req.params).id);
+    return impactFor((await onEvent(req, 'event.edit')).id);
   });
 
   app.get('/api/events/:id/versions/:version', async (req) => {
-    await onEvent(req, 'event.view');
-    const p = z.object({ id: z.string(), version: z.coerce.number().int().min(1) }).parse(req.params);
+    const p = await onEvent(req, 'event.view', versionParams);
     return { version: p.version, config: await repo.getVersion(p.id, p.version) };
   });
 
   app.post('/api/events/:id/test-entries', async (req) => {
-    await onEvent(req, 'event.edit');
-    const { id } = idParam.parse(req.params);
+    const { id } = await onEvent(req, 'event.edit');
     const body = z
       .object({
         categoryId: z.string().min(1).max(64),
@@ -285,38 +303,30 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.delete('/api/events/:id/test-entries', async (req) => {
-    await onEvent(req, 'event.edit');
-    const { id } = idParam.parse(req.params);
+    const { id } = await onEvent(req, 'event.edit');
     const removed = await repo.clearTestEntries(id);
     return { removed, event: await eventPayload(id) };
   });
 
   // Rider checkout. Uses the latest published version only.
   app.get('/api/public/events', isPublic, async () => {
-    const published = (await repo.listOrganizations()).flatMap((o) => o.events.filter((e) => e.publishedVersion !== null).map((e) => ({ id: e.id, organizationName: o.name })));
-    const out = [];
-    for (const { id, organizationName } of published) {
-      const record = await repo.getEvent(id);
-      const config = await repo.getVersion(id, record.publishedVersion!);
-      out.push({
-        id,
-        organizationName,
-        name: config.event.name,
-        venue: config.event.venue,
-        isDemo: config.event.isDemo,
-        days: config.days.map((d) => ({ date: d.date, label: d.label, races: config.races.filter((r) => r.dayId === d.id).map((r) => r.name) })),
-        categoryCount: config.categories.filter((c) => c.status !== 'archived').length,
-      });
-    }
-    return out;
+    return (await repo.listPublished()).map(({ id, organizationName, config }) => ({
+      id,
+      organizationName,
+      name: config.event.name,
+      venue: config.event.venue,
+      isDemo: config.event.isDemo,
+      days: config.days.map((d) => ({ date: d.date, label: d.label, races: config.races.filter((r) => r.dayId === d.id).map((r) => r.name) })),
+      categoryCount: config.categories.filter((c) => c.status !== 'archived').length,
+    }));
   });
 
   /** Loads the clickable demo purchase flow fixtures (docs/fixtures) once, published. */
   app.post('/api/demo/purchase-flow', async (req, reply) => {
-    const existing = (await repo.listOrganizations()).find((o) => o.name === FIXTURE_ORG_NAME);
-    if (existing && existing.events.length > 0) {
+    const existing = await repo.findOrganizationByName(FIXTURE_ORG_NAME);
+    if (existing && existing.eventIds.length > 0) {
       await joinDemo(req, existing.id);
-      return reply.status(200).send({ organizationId: existing.id, eventIds: existing.events.map((e) => e.id) });
+      return reply.status(200).send({ organizationId: existing.id, eventIds: existing.eventIds });
     }
     const org = existing ?? (await repo.createOrganization(FIXTURE_ORG_NAME));
     const eventIds: string[] = [];
@@ -356,8 +366,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.get('/api/public/events/:id', isPublic, async (req) => ({ ...(await orders.publicEvent(idParam.parse(req.params).id)), paymentMode: payments.mode }));
 
-  // Riders sign in before checkout; the order belongs to their account.
-  app.post('/api/public/events/:id/orders', async (req, reply) => {
+  // Rider routes (/api/rider/...) need sign-in like every route not marked public. The order belongs to the rider's account.
+  app.post('/api/rider/events/:id/orders', async (req, reply) => {
     const { id } = idParam.parse(req.params);
     const body = z
       .object({
@@ -374,57 +384,51 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   // Coupons (src/server/coupons.ts). Riders check a code; the order re-checks and counts it under the event lock.
-  app.post('/api/public/events/:id/coupons/check', async (req) => {
+  app.post('/api/rider/events/:id/coupons/check', async (req) => {
     const { id } = idParam.parse(req.params);
     const { code } = z.object({ code: z.string().trim().min(1).max(32) }).parse(req.body);
     return coupons.check(id, code);
   });
   app.get('/api/events/:id/coupons', async (req) => {
-    await onEvent(req, 'event.edit');
-    return coupons.list(idParam.parse(req.params).id);
+    return coupons.list((await onEvent(req, 'event.edit')).id);
   });
   app.post('/api/events/:id/coupons', async (req, reply) => {
-    await onEvent(req, 'event.edit');
-    return reply.status(201).send(await coupons.create(idParam.parse(req.params).id, req.body));
+    const { id } = await onEvent(req, 'event.edit');
+    return reply.status(201).send(await coupons.create(id, req.body));
   });
   app.post('/api/events/:id/coupons/:couponId/active', async (req) => {
-    await onEvent(req, 'event.edit');
-    const p = z.object({ id: z.string().min(1).max(64), couponId: z.string().min(1).max(64) }).parse(req.params);
+    const p = await onEvent(req, 'event.edit', couponParams);
     const { active } = z.object({ active: z.boolean() }).parse(req.body);
     return coupons.setActive(p.id, p.couponId, active);
   });
 
   // Organizer-managed waitlists (src/server/waitlist.ts).
-  app.post('/api/public/events/:id/waitlist', async (req, reply) => reply.status(201).send(await waitlist.join(idParam.parse(req.params).id, req.body, me(req).id)));
-  // The offer link is private to the rider it was sent to; opening it still needs sign-in.
-  app.get('/api/public/offers/:token', async (req) => waitlist.offerByToken(z.object({ token: z.string().min(10).max(64) }).parse(req.params).token));
+  app.post('/api/rider/events/:id/waitlist', async (req, reply) => reply.status(201).send(await waitlist.join(idParam.parse(req.params).id, req.body, me(req).id)));
+  // The offer link is private to the rider it was sent to; opening it needs sign-in.
+  app.get('/api/rider/offers/:token', async (req) => waitlist.offerByToken(z.object({ token: z.string().min(10).max(64) }).parse(req.params).token));
   app.get('/api/events/:id/waitlist', async (req) => {
-    await onEvent(req, 'entries.manage');
-    return waitlist.list(idParam.parse(req.params).id);
+    return waitlist.list((await onEvent(req, 'entries.manage')).id);
   });
-  const waitlistParams = z.object({ id: z.string().min(1).max(64), entryId: z.string().min(1).max(64) });
   app.post('/api/events/:id/waitlist/:entryId/offer', async (req) => {
-    await onEvent(req, 'entries.manage');
-    const p = waitlistParams.parse(req.params);
+    const p = await onEvent(req, 'entries.manage', waitlistParams);
     return waitlist.offer(p.id, p.entryId);
   });
   app.post('/api/events/:id/waitlist/:entryId/remove', async (req) => {
-    await onEvent(req, 'entries.manage');
-    const p = waitlistParams.parse(req.params);
+    const p = await onEvent(req, 'entries.manage', waitlistParams);
     return waitlist.remove(p.id, p.entryId);
   });
 
   // A rider sees their own orders; organizers who may see orders see their events' orders.
   app.get('/api/orders/:id', async (req) => {
     const { id } = idParam.parse(req.params);
-    await access.requireOrder(me(req), id);
+    await access.requireOrderAccess(me(req), { orderId: id }, { rider: true, permission: 'orders.view' });
     return orders.getOrder(id);
   });
 
   // Only the rider who placed an order pays for or cancels it.
   app.post('/api/orders/:id/payment', async (req) => {
     const { id } = idParam.parse(req.params);
-    await access.requireOrder(me(req), id, true);
+    await access.requireOrderAccess(me(req), { orderId: id }, { rider: true });
     // With a real provider connected, only a verified provider notification can mark an order paid.
     if (payments.mode !== 'simulated') throw new HttpError(409, 'This build takes payment through Stripe test mode. Use the payment page.');
     const body = z.object({ attemptId: z.string().min(8).max(64), outcome: z.enum(['success', 'failure']) }).parse(req.body);
@@ -434,26 +438,27 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   // Stripe hosted Checkout (test mode): opens or reuses the order's payment page.
   app.post('/api/orders/:id/checkout-session', async (req) => {
     const { id } = idParam.parse(req.params);
-    await access.requireOrder(me(req), id, true);
+    await access.requireOrderAccess(me(req), { orderId: id }, { rider: true });
     return payments.startCheckout(id);
   });
 
   // Refunds: money back to the rider from one payment, optionally for one entry. Owner or finance role.
   app.get('/api/orders/:id/refunds', async (req) => {
     const { id } = idParam.parse(req.params);
-    await access.requireOrderOrganizer(me(req), id, 'orders.view');
+    await access.requireOrderAccess(me(req), { orderId: id }, { permission: 'orders.view' });
     return refunds.list(id);
   });
   app.post('/api/orders/:id/refunds', async (req) => {
     const { id } = idParam.parse(req.params);
-    await access.requireOrderOrganizer(me(req), id, 'payments.refund');
+    await access.requireOrderAccess(me(req), { orderId: id }, { permission: 'payments.refund' });
     await refunds.request(id, req.body, me(req).id);
     return orders.getOrder(id);
   });
   app.post('/api/refunds/:id/retry', async (req) => {
-    const orderId = await refunds.orderOf(idParam.parse(req.params).id);
-    await access.requireOrderOrganizer(me(req), orderId, 'payments.refund');
-    await refunds.retry(idParam.parse(req.params).id);
+    const { id } = idParam.parse(req.params);
+    const orderId = await refunds.orderOf(id);
+    await access.requireOrderAccess(me(req), { orderId }, { permission: 'payments.refund' });
+    await refunds.retry(id);
     return orders.getOrder(orderId);
   });
 
@@ -468,20 +473,20 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.post('/api/orders/:id/cancel', async (req) => {
     const { id } = idParam.parse(req.params);
-    await access.requireOrder(me(req), id, true);
+    await access.requireOrderAccess(me(req), { orderId: id }, { rider: true });
     return orders.cancel(id);
   });
 
   app.get('/api/events/:id/orders', async (req) => {
-    await onEvent(req, 'orders.view');
+    const { id } = await onEvent(req, 'orders.view');
     const { q } = z.object({ q: z.string().max(120).optional() }).parse(req.query);
-    return orders.listOrders(idParam.parse(req.params).id, q ?? '');
+    return orders.listOrders(id, q ?? '');
   });
 
   // Organizer corrections to rider details. A reason is required and every correction is kept.
   app.post('/api/orders/:id/rider-corrections', async (req) => {
     const { id } = idParam.parse(req.params);
-    await access.requireOrderOrganizer(me(req), id, 'entries.manage');
+    await access.requireOrderAccess(me(req), { orderId: id }, { permission: 'entries.manage' });
     const body = z.object({ changes: riderCorrectionSchema, reason: z.string().trim().min(3, 'Write why the details are being corrected.').max(300) }).parse(req.body);
     return orders.correctRider(id, body.changes, body.reason);
   });
@@ -489,40 +494,37 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   // Organizer transfers and withdrawals of paid entries. A reason is required and logged.
   app.post('/api/order-entries/:id/transfer', async (req) => {
     const { id } = idParam.parse(req.params);
-    await access.requireOrderEntry(me(req), id, 'entries.manage');
+    await access.requireOrderAccess(me(req), { entryId: id }, { permission: 'entries.manage' });
     const body = z.object({ toCategoryId: z.string().min(1).max(64), reason: z.string().trim().min(3, 'Write why the entry is moving.').max(300) }).parse(req.body);
     return orders.transferEntry(id, body.toCategoryId, body.reason);
   });
   app.post('/api/order-entries/:id/withdraw', async (req) => {
     const { id } = idParam.parse(req.params);
-    await access.requireOrderEntry(me(req), id, 'entries.manage');
+    await access.requireOrderAccess(me(req), { entryId: id }, { permission: 'entries.manage' });
     const body = z.object({ reason: z.string().trim().min(3, 'Write why the entry is withdrawn.').max(300) }).parse(req.body);
     return orders.withdrawEntry(id, body.reason);
   });
 
   app.post('/api/order-entries/:id/license-review', async (req) => {
     const { id } = idParam.parse(req.params);
-    await access.requireOrderEntry(me(req), id, 'entries.manage');
+    await access.requireOrderAccess(me(req), { entryId: id }, { permission: 'entries.manage' });
     const body = z.object({ note: z.string().trim().min(3, 'Say how the license was checked.').max(300) }).parse(req.body);
     return orders.reviewLicense(id, body.note);
   });
 
   // Race-day check-in. Volunteers see readiness and bib only.
   app.get('/api/events/:id/check-in', async (req) => {
-    await onEvent(req, 'checkin');
-    const { id } = idParam.parse(req.params);
+    const { id } = await onEvent(req, 'checkin');
     const q = z.object({ day: z.string().max(64).optional(), q: z.string().max(80).default('') }).parse(req.query);
     return checkIn.list(id, q.day, q.q);
   });
 
   app.put('/api/events/:id/bib-settings', async (req) => {
-    await onEvent(req, 'checkin.settings');
-    return checkIn.saveSettings(idParam.parse(req.params).id, req.body);
+    return checkIn.saveSettings((await onEvent(req, 'checkin.settings')).id, req.body);
   });
 
   app.post('/api/events/:id/check-in/:orderId', async (req) => {
-    await onEvent(req, 'checkin');
-    const p = z.object({ id: z.string().min(1).max(64), orderId: z.string().min(1).max(64) }).parse(req.params);
+    const p = await onEvent(req, 'checkin', checkInParams);
     const body = z
       .object({ dayId: z.string().min(1).max(64), bib: z.number().int().min(1).max(99999).nullable().default(null), durationMs: z.number().int().min(0).max(86_400_000).nullable().default(null) })
       .parse(req.body);
@@ -530,8 +532,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.post('/api/events/:id/check-in/:orderId/bib', async (req) => {
-    await onEvent(req, 'checkin');
-    const p = z.object({ id: z.string().min(1).max(64), orderId: z.string().min(1).max(64) }).parse(req.params);
+    const p = await onEvent(req, 'checkin', checkInParams);
     const body = z
       .object({ dayId: z.string().min(1).max(64), bib: z.number().int().min(1).max(99999), reason: z.string().trim().min(3, 'Say why the bib changed.').max(200) })
       .parse(req.body);
@@ -539,64 +540,60 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.post('/api/events/:id/check-in/:orderId/undo', async (req) => {
-    await onEvent(req, 'checkin');
-    const p = z.object({ id: z.string().min(1).max(64), orderId: z.string().min(1).max(64) }).parse(req.params);
+    const p = await onEvent(req, 'checkin', checkInParams);
     const body = z.object({ dayId: z.string().min(1).max(64), reason: z.string().trim().min(3, 'Say why the check-in is being undone.').max(200) }).parse(req.body);
     return checkIn.undoCheckIn(p.id, p.orderId, body.dayId, body.reason);
   });
 
   // Rider identity across orders: suggestions and organizer-confirmed links (src/server/identity.ts).
   app.get('/api/events/:id/rider-identity', async (req) => {
-    await onEvent(req, 'entries.manage');
-    return identity.overview(idParam.parse(req.params).id);
+    return identity.overview((await onEvent(req, 'entries.manage')).id);
   });
   const pairBody = z.object({ orderIds: z.tuple([z.string().min(1).max(64), z.string().min(1).max(64)]) });
   app.post('/api/events/:id/rider-identity/link', async (req) => {
-    await onEvent(req, 'entries.manage');
+    const { id } = await onEvent(req, 'entries.manage');
     const { orderIds } = pairBody.parse(req.body);
-    return identity.link(idParam.parse(req.params).id, orderIds[0], orderIds[1]);
+    return identity.link(id, orderIds[0], orderIds[1]);
   });
   app.post('/api/events/:id/rider-identity/dismiss', async (req) => {
-    await onEvent(req, 'entries.manage');
+    const { id } = await onEvent(req, 'entries.manage');
     const { orderIds } = pairBody.parse(req.body);
-    return identity.dismiss(idParam.parse(req.params).id, orderIds[0], orderIds[1]);
+    return identity.dismiss(id, orderIds[0], orderIds[1]);
   });
   app.post('/api/events/:id/rider-identity/unlink', async (req) => {
-    await onEvent(req, 'entries.manage');
-    const { orderId } = z.object({ orderId: z.string().min(1).max(64) }).parse(req.body);
-    return identity.unlink(idParam.parse(req.params).id, orderId);
+    const { id } = await onEvent(req, 'entries.manage');
+    const { orderId } = z.object({ orderId: idStr }).parse(req.body);
+    return identity.unlink(id, orderId);
   });
 
   app.post('/api/events/:id/check-in-demo-riders', async (req, reply) => {
-    await onEvent(req, 'event.edit');
-    return reply.status(201).send(await checkIn.addDemoRiders(idParam.parse(req.params).id));
+    const { id } = await onEvent(req, 'event.edit');
+    return reply.status(201).send(await checkIn.addDemoRiders(id));
   });
 
   // Start lists and the sample timer export. No contact or payment data.
   app.get('/api/events/:id/start-lists', async (req) => {
-    await onEvent(req, 'startlists');
-    return startLists.overview(idParam.parse(req.params).id);
+    return startLists.overview((await onEvent(req, 'startlists')).id);
   });
 
   app.post('/api/events/:id/start-lists/:raceId/snapshots', async (req, reply) => {
-    await onEvent(req, 'startlists');
-    const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
+    const p = await onEvent(req, 'startlists', raceParams);
     return reply.status(201).send(await startLists.snapshot(p.id, p.raceId));
   });
 
   app.post('/api/events/:id/start-lists/:raceId/lock', async (req, reply) => {
-    await onEvent(req, 'startlists');
-    const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
+    const p = await onEvent(req, 'startlists', raceParams);
     return reply.status(201).send(await startLists.lock(p.id, p.raceId));
   });
 
   // Organizer exports from the database: entries and a ledger (simulated or Stripe test-mode payments and refunds). No contact or emergency details.
   app.get('/api/events/:id/exports/:kind', async (req, reply) => {
-    const p = z.object({ id: z.string().min(1).max(64), kind: z.enum(['entries.csv', 'ledger.csv']) }).parse(req.params);
-    await onEvent(req, p.kind === 'entries.csv' ? 'export.entries' : 'export.ledger');
+    // The permission depends on which file is asked for, so the parameters are parsed before the check.
+    const p = z.object({ id: idStr, kind: z.enum(['entries.csv', 'ledger.csv']) }).parse(req.params);
+    await access.requireEvent(me(req), p.id, p.kind === 'entries.csv' ? 'export.entries' : 'export.ledger');
     const record = await repo.getEvent(p.id);
-    const list = (await orders.listOrders(p.id)).filter((o) => o.status !== 'cancelled' && o.status !== 'expired');
-    const slugName = record.config.event.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'event';
+    const list = (await orders.listOrders(p.id)).filter(isLiveOrder);
+    const slugName = slug(record.config.event.name, 'event');
     const demo = record.config.event.isDemo ? '-DEMO' : '';
     const body = p.kind === 'entries.csv' ? entriesCsv(list, await identity.keyOf(p.id)) : ledgerCsv(list);
     return reply
@@ -607,8 +604,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.get('/api/events/:id/start-lists/:raceId/csv', async (req, reply) => {
-    await onEvent(req, 'startlists');
-    const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
+    const p = await onEvent(req, 'startlists', raceParams);
     const q = z.object({ snapshot: z.coerce.number().int().min(1).optional() }).parse(req.query);
     const file = await startLists.csv(p.id, p.raceId, q.snapshot ?? null);
     return reply
@@ -638,8 +634,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/demo/berkeley-events', async (req, reply) => {
     const result = await db.transaction(async () => {
       await db.lock('demo:berkeley-events'); // two seed requests at once create the organization once
-      const existing = (await repo.listOrganizations()).find((o) => o.name === BERKELEY_DEMO_ORG);
-      if (existing) return { created: false, organizationId: existing.id, eventIds: existing.events.map((e) => e.id) };
+      const existing = await repo.findOrganizationByName(BERKELEY_DEMO_ORG);
+      if (existing) return { created: false, organizationId: existing.id, eventIds: existing.eventIds };
       const org = await repo.createOrganization(BERKELEY_DEMO_ORG);
       const eventIds: string[] = [];
       for (const config of buildBerkeleyEvents()) {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { formatLocalDateTime } from './checkout';
+import { formatLocalDateTime, timeWindowState } from './checkout';
+import { localDateTime } from './schema';
 
 /**
  * Basic coupons (product.md: Promotions). An organizer creates codes per event; a rider
@@ -7,8 +8,6 @@ import { formatLocalDateTime } from './checkout';
  * step 3 of the pricing rule in `pricing.ts`. Redemption caps are enforced on the server
  * under the event lock (src/server/coupons.ts).
  */
-
-const localDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/, 'Use YYYY-MM-DDTHH:MM');
 
 /** Codes are stored and compared in upper case, so riders can type them in any case. */
 export const normalizeCouponCode = (code: string) => code.trim().toUpperCase();
@@ -44,14 +43,12 @@ const windowFields = {
 export const couponInputSchema = z
   .discriminatedUnion('kind', [z.object({ ...fixedTerms, ...windowFields }), z.object({ ...percentTerms, ...windowFields })])
   .refine((c) => !c.validFrom || !c.validUntil || c.validFrom < c.validUntil, { message: 'The end must be after the start.', path: ['validUntil'] });
-export type CouponInput = z.infer<typeof couponInputSchema>;
 
 export type CouponWindowState = 'not_yet' | 'open' | 'ended';
 
 export function couponWindowState(c: { validFrom: string | null; validUntil: string | null }, nowLocal: string): CouponWindowState {
-  if (c.validFrom && nowLocal < c.validFrom) return 'not_yet';
-  if (c.validUntil && nowLocal >= c.validUntil) return 'ended';
-  return 'open';
+  const state = timeWindowState(c.validFrom, c.validUntil, nowLocal);
+  return state === 'closed' ? 'ended' : state;
 }
 
 /** Why a code cannot be used right now, in words for the rider. Null when it can. */

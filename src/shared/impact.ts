@@ -37,7 +37,7 @@ export interface ChangeImpact {
   startListsChange: boolean;
 }
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const dollars = (c: number) => `$${(c / 100).toFixed(2).replace(/\.00$/, '')}`;
 const limitText = (n: number | null) => (n === null ? 'no limit' : String(n));
 const STATUS: Record<Category['status'], string> = { active: 'open', closed: 'closed', archived: 'archived' };
@@ -46,7 +46,7 @@ function categoryChanges(before: EventConfig, after: EventConfig, b: Category, a
   const kinds = new Set<ImpactKind>();
   const details: string[] = [];
 
-  if (!same(b.eligibility, a.eligibility)) {
+  if (!sameJson(b.eligibility, a.eligibility)) {
     kinds.add('eligibility');
     details.push('Who can enter changed. Riders already entered were accepted under the old rules.');
   }
@@ -74,12 +74,12 @@ function categoryChanges(before: EventConfig, after: EventConfig, b: Category, a
       details.push(`Start group field limit changed from ${limitText(sgB.fieldLimit)} to ${limitText(sgA.fieldLimit)}.`);
     }
   }
-  if (!same(b.length, a.length)) {
+  if (!sameJson(b.length, a.length)) {
     kinds.add('start');
     details.push('Race length changed.');
   }
 
-  if (!same(b.classifications, a.classifications) || b.timingCode !== a.timingCode) {
+  if (!sameJson(b.classifications, a.classifications) || b.timingCode !== a.timingCode) {
     kinds.add('classification');
     details.push('Timer code or finishing classifications changed.');
   }
@@ -93,12 +93,12 @@ function categoryChanges(before: EventConfig, after: EventConfig, b: Category, a
       .filter((p) => p.memberCategoryIds.includes(c.id) || (c.startGroupId !== null && p.memberStartGroupIds.includes(c.startGroupId)))
       .map((p) => `${p.id}:${p.limit}`)
       .sort();
-  if (!same(poolKey(before, b), poolKey(after, a))) {
+  if (!sameJson(poolKey(before, b), poolKey(after, a))) {
     kinds.add('limit');
     details.push('Shared capacity pool membership or limit changed.');
   }
 
-  if (!same(b.pricing, a.pricing)) {
+  if (!sameJson(b.pricing, a.pricing)) {
     kinds.add('price');
     const base = b.pricing.baseCents !== a.pricing.baseCents ? ` Base price ${dollars(b.pricing.baseCents)} → ${dollars(a.pricing.baseCents)}.` : '';
     details.push(`Price changed.${base} Paid entries keep the price they paid; only new entries use the new price.`);
@@ -108,7 +108,7 @@ function categoryChanges(before: EventConfig, after: EventConfig, b: Category, a
     kinds.add('availability');
     details.push(`Category ${STATUS[b.status]} → ${STATUS[a.status]}. Existing entries are kept.`);
   }
-  if (!same(b.registration, a.registration)) {
+  if (!sameJson(b.registration, a.registration)) {
     kinds.add('availability');
     details.push('Registration window changed.');
   }

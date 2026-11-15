@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { remainingForCategory, startGroupCategoryIds } from '../shared/capacity';
-import { evaluateCategory, summarizeEligibility, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
+import { evaluateCategory, licenseLabel, summarizeEligibility, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories, startGroupFor } from '../shared/format';
 import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, type Category } from '../shared/schema';
 import { countIssues } from '../shared/validation';
@@ -8,6 +8,7 @@ import { formatLocalDateTime } from '../shared/checkout';
 import { href } from './App';
 import type { Draft } from './Builder';
 import { Tally } from './FieldBoard';
+import { byDisplayGroup, formatMonthDay } from './format';
 import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
 
 const EMPTY: RiderProfile = { racingAge: null, licenseCategory: null, licenseType: null, competitionClass: null, collegiateDivision: null };
@@ -15,8 +16,7 @@ const EMPTY: RiderProfile = { racingAge: null, licenseCategory: null, licenseTyp
 function priceLine(cat: Category): string {
   const parts = [formatCents(cat.pricing.baseCents)];
   for (const pc of [...cat.pricing.priceChanges].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))) {
-    const [, m, d] = pc.effectiveFrom.split('-').map(Number);
-    parts.push(`${formatCents(pc.cents)} from ${new Date(Date.UTC(2000, m - 1, d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`);
+    parts.push(`${formatCents(pc.cents)} from ${formatMonthDay(pc.effectiveFrom)}`);
   }
   return parts.join(', then ');
 }
@@ -51,7 +51,7 @@ export function Preview({ draft }: { draft: Draft }) {
         )}
         <div className="pending-stack">
           <Pending>License checks with USA Cycling are not connected. Your license will be reviewed by the organizer.</Pending>
-          <Pending>Online payment is not available in this preview.</Pending>
+          <Pending>{data.pending.payments}</Pending>
         </div>
 
         <section className="checker" aria-labelledby="checker-title">
@@ -65,7 +65,7 @@ export function Preview({ draft }: { draft: Draft }) {
                   <option value="">Unknown</option>
                   {LICENSE_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
-                      {c === 'PRO' ? 'Pro' : `Cat ${c}`}
+                      {licenseLabel(c)}
                     </option>
                   ))}
                 </select>
@@ -120,9 +120,7 @@ export function Preview({ draft }: { draft: Draft }) {
               .filter((r) => r.dayId === day.id)
               .map((race) => {
                 const cats = sortCategories(config.categories.filter((c) => c.raceId === race.id && c.status !== 'archived'));
-                const groups = [...[...config.displayGroups].sort((a, b) => a.sortOrder - b.sortOrder).map((g) => ({ id: g.id as string | null, name: g.name })), { id: null, name: 'Other categories' }]
-                  .map((g) => ({ ...g, cats: cats.filter((c) => c.displayGroupId === g.id) }))
-                  .filter((g) => g.cats.length);
+                const groups = byDisplayGroup(config, cats, 'Other categories');
                 return (
                   <div key={race.id} className="pv-race">
                     <h3 className="pv-race__title">

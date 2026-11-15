@@ -27,7 +27,6 @@ export const refundRequestSchema = z.object({
   amountCents: z.number().int().positive('Enter an amount above zero.').max(10_000_000),
   reason: z.string().trim().min(3, 'Write why the money is being refunded.').max(300),
 });
-export type RefundRequest = z.infer<typeof refundRequestSchema>;
 
 /**
  * Whether a refund may move from one status to another. Stripe can report events out of order,

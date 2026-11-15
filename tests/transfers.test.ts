@@ -21,7 +21,7 @@ async function setup() {
   const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
   let n = 0;
   const buy = async (codes: string[]) => {
-    const created = await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `req-${++n}-xxxxxxxx`, categoryIds: codes.map(code), rider: RIDER, waiver } });
+    const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `req-${++n}-xxxxxxxx`, categoryIds: codes.map(code), rider: RIDER, waiver } });
     expect(created.statusCode).toBe(201);
     const o = created.json() as Order;
     const paid = await app.inject({ method: 'POST', url: `/api/orders/${o.id}/payment`, payload: { attemptId: `attempt-${n}-xxxx`, outcome: 'success' } });
@@ -110,5 +110,23 @@ describe('organizer withdrawals', () => {
     // A withdrawn entry cannot be withdrawn or transferred again.
     expect((await s.withdraw(sat.id)).statusCode).toBe(409);
     expect((await s.transfer(sat.id, 'RR-D23')).statusCode).toBe(409);
+  });
+});
+
+describe('license review', () => {
+  it('refuses a withdrawn entry in plain words and leaves it unreviewed', async () => {
+    const s = await setup();
+    const order = await s.buy(['RR-M35-34', 'CR-M35-34']);
+    const [gone, kept] = order.entries;
+    expect((await s.withdraw(gone.id)).statusCode).toBe(200);
+    const review = (entryId: string) => s.app.inject({ method: 'POST', url: `/api/order-entries/${entryId}/license-review`, payload: { note: 'License card seen' } });
+    const refused = await review(gone.id);
+    expect(refused.statusCode).toBe(409);
+    expect((refused.json() as { error: string }).error).toBe('This entry was withdrawn, so its license cannot be reviewed.');
+    const ok = await review(kept.id);
+    expect(ok.statusCode).toBe(200);
+    const after = (ok.json() as { entries: { id: string; licenseReviewed: boolean }[] }).entries;
+    expect(after.find((e) => e.id === gone.id)?.licenseReviewed).toBe(false);
+    expect(after.find((e) => e.id === kept.id)?.licenseReviewed).toBe(true);
   });
 });

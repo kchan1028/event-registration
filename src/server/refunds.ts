@@ -3,6 +3,7 @@ import { formatCents } from '../shared/format';
 import type { Quote } from '../shared/pricing';
 import { refundableCents, refundCanMove, refundRequestSchema, type RefundStatus } from '../shared/refunds';
 import type { Db } from './db';
+import { paidLine } from './orders';
 import type { PaymentProvider, ProviderEvent, ProviderRefund } from './payments';
 import { HttpError } from './repo';
 
@@ -28,7 +29,7 @@ interface RefundRow {
   requested_by_email?: string | null;
 }
 
-export interface RefundablePayment {
+interface RefundablePayment {
   /** Stripe PaymentIntent ID; null for a simulated payment. */
   ref: string | null;
   provider: 'simulated' | 'stripe_test';
@@ -123,8 +124,6 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
   }
 
   return {
-    paymentsOf,
-
     /** Payments and refunds for the organizer's refund panel, with who asked for each refund. */
     async list(orderId: string) {
       const payments = await paymentsOf(orderId);
@@ -161,7 +160,7 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
           if (pay.kind !== 'order' || order.status !== 'confirmed') throw new HttpError(409, 'Only the payment that confirmed this order can be refunded entry by entry.');
           const entry = await db.get<{ category_id: string; original_category_id: string | null }>(`SELECT category_id, original_category_id FROM order_entries WHERE id = $1 AND order_id = $2`, [input.entryId, orderId]);
           if (!entry) throw new HttpError(404, 'That entry is not part of this order.');
-          const paid = order.quote_json.lines.find((l) => l.categoryId === (entry.original_category_id ?? entry.category_id))?.totalCents ?? 0;
+          const paid = paidLine(order.quote_json, entry)?.totalCents ?? 0;
           const used = await db.all<{ amount_cents: number; status: RefundStatus }>(`SELECT amount_cents, status FROM refunds WHERE entry_id = $1`, [input.entryId]);
           const left = refundableCents(paid, used.map((u) => ({ amountCents: u.amount_cents, status: u.status })));
           if (input.amountCents > left) throw new HttpError(409, `At most ${formatCents(left)} of this entry can still be refunded.`);

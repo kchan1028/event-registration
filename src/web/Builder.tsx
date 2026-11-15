@@ -17,12 +17,16 @@ import { Registrations } from './Registrations';
 import { CsvImport } from './CsvImport';
 import { dayHue, Icon, Pending, ThemeToggle } from './ui';
 import { AccountMenu } from './auth';
-import { can, ROLE_LABELS } from '../shared/roles';
+import { formatMonthDay } from './format';
+import { can, ROLE_LABELS, type Role } from '../shared/roles';
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error' | 'conflict';
 
 export interface Draft {
-  data: EventPayload;
+  /** The event as last loaded or saved. `roles` are the signed-in person's roles in its organization. */
+  data: EventPayload & { roles: Role[] };
+  /** True when the person may look at the schedule but not change it (no `event.edit`). Edits are ignored. */
+  readOnly: boolean;
   config: EventConfig;
   issues: Issue[];
   saveState: SaveState;
@@ -39,7 +43,12 @@ export interface Draft {
  * known revision; the server rejects stale saves instead of overwriting.
  */
 function useDraft(eventId: string) {
-  const [data, setData] = useState<EventPayload | null>(null);
+  const [data, setDataRaw] = useState<Draft['data'] | null>(null);
+  // Only GET /api/events/:id sends the caller's roles; payloads from saves and publishes keep the ones already known.
+  const setData = useCallback((payload: EventPayload) => setDataRaw((prev) => ({ ...payload, roles: payload.roles ?? prev?.roles ?? [] })), []);
+  const readOnly = !can(data?.roles ?? [], 'event.edit');
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
   const [config, setConfig] = useState<EventConfig | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('saved');
@@ -64,7 +73,7 @@ function useDraft(eventId: string) {
         setSaveError(null);
       })
       .catch((e: ApiError) => setLoadError(e.message));
-  }, [eventId]);
+  }, [eventId, setData]);
   useEffect(load, [load]);
 
   const flush = useCallback(async (): Promise<boolean> => {
@@ -97,11 +106,12 @@ function useDraft(eventId: string) {
     await inflight.current;
     if (ok && configRef.current !== cfg) timer.current = window.setTimeout(() => void flush(), 400);
     return ok;
-  }, [eventId]);
+  }, [eventId, setData]);
 
   const update = useCallback(
     (fn: (c: EventConfig) => EventConfig) => {
-      if (!configRef.current) return;
+      // A person who cannot edit never changes the working copy, so nothing autosaves into a refusal.
+      if (!configRef.current || readOnlyRef.current) return;
       const next = fn(configRef.current);
       configRef.current = next;
       setConfig(next);
@@ -127,14 +137,14 @@ function useDraft(eventId: string) {
       setData(event);
       return result;
     },
-    [eventId, flush],
+    [eventId, flush, setData],
   );
 
   const clearTestEntries = useCallback(async () => {
     const { removed, event } = await api.clearTestEntries(eventId);
     setData(event);
     return removed;
-  }, [eventId]);
+  }, [eventId, setData]);
 
   const publish = useCallback(
     async (acknowledgeWarnings: boolean, acknowledgeImpact = false) => {
@@ -143,13 +153,13 @@ function useDraft(eventId: string) {
       setData(payload);
       return payload.publishedVersion;
     },
-    [eventId, flush],
+    [eventId, flush, setData],
   );
 
   const issues = useMemo(() => (config && data ? validateConfig(config, data.entries) : []), [config, data]);
 
   const draft: Draft | null =
-    data && config ? { data, config, issues, saveState, saveError, update, addTestEntries, clearTestEntries, publish, reload: load } : null;
+    data && config ? { data, readOnly, config, issues, saveState, saveError, update, addTestEntries, clearTestEntries, publish, reload: load } : null;
   return { draft, loadError };
 }
 
@@ -165,7 +175,7 @@ function useWide(): boolean {
   );
 }
 
-export function IssueCount({ errors, warnings }: { errors: number; warnings: number }) {
+function IssueCount({ errors, warnings }: { errors: number; warnings: number }) {
   if (errors + warnings === 0) return <span className="issue-count issue-count--ok">No issues</span>;
   return (
     <span className={`issue-count ${errors ? 'issue-count--error' : 'issue-count--warn'}`}>
@@ -214,6 +224,8 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
   if (route.view === 'preview') return <Preview draft={draft} />;
 
   const counts = countIssues(draft.issues);
+  const { roles } = draft.data;
+  const editView = route.view === 'setup' || route.view === 'pools' || route.view === 'publish' || route.view === 'import';
   const race = config.races.find((r) => r.id === raceId) ?? null;
   const selectedCategory = selected ? config.categories.find((c) => c.id === selected && c.raceId === race?.id) : undefined;
 
@@ -244,12 +256,12 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
           <strong>Example data.</strong> {config.event.demoNotice}
         </p>
       )}
-      {draft.data.roles && !can(draft.data.roles, 'event.edit') && (
+      {draft.readOnly && (
         <p className="alert alert--warn role-banner" role="note">
-          You are signed in as {draft.data.roles.map((r) => ROLE_LABELS[r].toLowerCase()).join(' and ')} for this organization. You can look at the schedule;
+          You are signed in as {roles.map((r) => ROLE_LABELS[r].toLowerCase()).join(' and ')} for this organization. You can look at the schedule;
           changes need a registration manager or owner.{' '}
-          {can(draft.data.roles, 'checkin') && <a href={href({ page: 'checkin', eventId: route.eventId })}>Open check-in</a>}
-          {can(draft.data.roles, 'startlists') && <a href={href({ page: 'event', eventId: route.eventId, view: 'startlists' })}>Open start lists</a>}
+          {can(roles, 'checkin') && <a href={href({ page: 'checkin', eventId: route.eventId })}>Open check-in</a>}
+          {can(roles, 'startlists') && <a href={href({ page: 'event', eventId: route.eventId, view: 'startlists' })}>Open start lists</a>}
         </p>
       )}
       <div className={`workspace ${selectedCategory ? 'has-selection' : ''}`}>
@@ -270,12 +282,13 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
               </a>
             </div>
           )}
-          {route.view === 'setup' && <EventSettings draft={draft} />}
-          {route.view === 'pools' && <Pools draft={draft} />}
-          {route.view === 'publish' && <Publish draft={draft} onOpenIssue={openIssue} />}
-          {route.view === 'registrations' && <Registrations draft={draft} />}
-          {route.view === 'import' && <CsvImport draft={draft} />}
-          {route.view === 'startlists' && <StartLists draft={draft} />}
+          {editView && draft.readOnly && <NoAccess>Event setup, shared pools, import, and publishing need a registration manager or owner.</NoAccess>}
+          {route.view === 'setup' && !draft.readOnly && <EventSettings draft={draft} />}
+          {route.view === 'pools' && !draft.readOnly && <Pools draft={draft} />}
+          {route.view === 'publish' && !draft.readOnly && <Publish draft={draft} onOpenIssue={openIssue} />}
+          {route.view === 'registrations' && (can(roles, 'orders.view') ? <Registrations draft={draft} /> : <NoAccess>Registrations need a registration manager, finance, or owner role.</NoAccess>)}
+          {route.view === 'import' && !draft.readOnly && <CsvImport draft={draft} />}
+          {route.view === 'startlists' && (can(roles, 'startlists') ? <StartLists draft={draft} /> : <NoAccess>Start lists need a timer and exports, registration manager, or owner role.</NoAccess>)}
         </main>
         {selectedCategory && !wide && <div className="scrim" aria-hidden="true" onClick={() => setSelected(null)} />}
         <aside
@@ -291,6 +304,17 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
           )}
         </aside>
       </div>
+    </div>
+  );
+}
+
+/** Shown in place of a section the signed-in person's roles do not cover (the server refuses it too). */
+function NoAccess({ children }: { children: string }) {
+  return (
+    <div className="empty">
+      <p>
+        <strong>Your role does not include this section.</strong> {children}
+      </p>
     </div>
   );
 }
@@ -320,26 +344,34 @@ function TopBar({ draft, eventId, errors, warnings }: { draft: Draft; eventId: s
         <h1 className="topbar__event">{config.event.name}</h1>
         <span className="tag">{published}</span>
       </div>
-      <div className={`save save--${saveState}`} role="status" aria-live="polite">
-        <span className="save__dot" aria-hidden="true" />
-        {label[saveState]}
-        {saveError && (saveState === 'error' || saveState === 'conflict') && <span className="save__detail">{saveError}</span>}
-        {saveState === 'conflict' && (
-          <button className="btn btn--small btn--secondary" onClick={draft.reload}>
-            Reload
-          </button>
-        )}
-      </div>
+      {draft.readOnly ? (
+        <div className="save">View only</div>
+      ) : (
+        <div className={`save save--${saveState}`} role="status" aria-live="polite">
+          <span className="save__dot" aria-hidden="true" />
+          {label[saveState]}
+          {saveError && (saveState === 'error' || saveState === 'conflict') && <span className="save__detail">{saveError}</span>}
+          {saveState === 'conflict' && (
+            <button className="btn btn--small btn--secondary" onClick={draft.reload}>
+              Reload
+            </button>
+          )}
+        </div>
+      )}
       <nav className="topbar__actions" aria-label="Event actions">
         <a className="btn btn--secondary" href={href({ page: 'event', eventId, view: 'preview' })}>
           <Icon name="eye" /> Rider preview
         </a>
-        <a className="topbar__issues" href={href({ page: 'event', eventId, view: 'publish' })}>
-          <IssueCount errors={errors} warnings={warnings} />
-        </a>
-        <a className="btn btn--primary" href={href({ page: 'event', eventId, view: 'publish' })}>
-          Review and publish
-        </a>
+        {!draft.readOnly && (
+          <>
+            <a className="topbar__issues" href={href({ page: 'event', eventId, view: 'publish' })}>
+              <IssueCount errors={errors} warnings={warnings} />
+            </a>
+            <a className="btn btn--primary" href={href({ page: 'event', eventId, view: 'publish' })}>
+              Review and publish
+            </a>
+          </>
+        )}
         <ThemeToggle />
         <AccountMenu />
       </nav>
@@ -350,15 +382,19 @@ function TopBar({ draft, eventId, errors, warnings }: { draft: Draft; eventId: s
 function Rail({ draft, route, activeRaceId, errors, warnings }: { draft: Draft; route: Extract<Route, { page: 'event' }>; activeRaceId: string | null; errors: number; warnings: number }) {
   const { config } = draft;
   const ev = route.eventId;
+  const { roles } = draft.data;
+  const edit = !draft.readOnly;
   return (
     <nav className="rail" aria-label="Event sections">
-      <a className={`rail__item ${route.view === 'setup' ? 'is-active' : ''}`} href={href({ page: 'event', eventId: ev, view: 'setup' })} aria-current={route.view === 'setup' ? 'page' : undefined}>
-        Event setup
-      </a>
+      {edit && (
+        <a className={`rail__item ${route.view === 'setup' ? 'is-active' : ''}`} href={href({ page: 'event', eventId: ev, view: 'setup' })} aria-current={route.view === 'setup' ? 'page' : undefined}>
+          Event setup
+        </a>
+      )}
       {config.days.map((day, di) => (
         <div className="rail__day" key={day.id}>
           <p className="rail__day-label">
-            {day.label} <span>{shortDate(day.date)}</span>
+            {day.label} <span>{formatMonthDay(day.date)}</span>
           </p>
           {config.races
             .filter((r) => r.dayId === day.id)
@@ -383,46 +419,53 @@ function Rail({ draft, route, activeRaceId, errors, warnings }: { draft: Draft; 
             })}
         </div>
       ))}
-      <a className={`rail__item ${route.view === 'pools' ? 'is-active' : ''}`} href={href({ page: 'event', eventId: ev, view: 'pools' })} aria-current={route.view === 'pools' ? 'page' : undefined}>
-        Shared capacity pools <span className="rail__count">{config.capacityPools.length}</span>
-      </a>
-      <a className={`rail__item ${route.view === 'import' ? 'is-active' : ''}`} href={href({ page: 'event', eventId: ev, view: 'import' })} aria-current={route.view === 'import' ? 'page' : undefined}>
-        Import and export
-      </a>
-      <a
-        className={`rail__item ${route.view === 'registrations' ? 'is-active' : ''}`}
-        href={href({ page: 'event', eventId: ev, view: 'registrations' })}
-        aria-current={route.view === 'registrations' ? 'page' : undefined}
-      >
-        Registrations
-      </a>
-      <a className="rail__item" href={href({ page: 'checkin', eventId: ev })}>
-        Race-day check-in
-      </a>
-      <a
-        className={`rail__item ${route.view === 'startlists' ? 'is-active' : ''}`}
-        href={href({ page: 'event', eventId: ev, view: 'startlists' })}
-        aria-current={route.view === 'startlists' ? 'page' : undefined}
-      >
-        Start lists and timer export
-      </a>
-      <a className={`rail__item ${route.view === 'publish' ? 'is-active' : ''}`} href={href({ page: 'event', eventId: ev, view: 'publish' })} aria-current={route.view === 'publish' ? 'page' : undefined}>
-        Review and publish
-        <IssueCount errors={errors} warnings={warnings} />
-      </a>
+      {edit && (
+        <a className={`rail__item ${route.view === 'pools' ? 'is-active' : ''}`} href={href({ page: 'event', eventId: ev, view: 'pools' })} aria-current={route.view === 'pools' ? 'page' : undefined}>
+          Shared capacity pools <span className="rail__count">{config.capacityPools.length}</span>
+        </a>
+      )}
+      {edit && (
+        <a className={`rail__item ${route.view === 'import' ? 'is-active' : ''}`} href={href({ page: 'event', eventId: ev, view: 'import' })} aria-current={route.view === 'import' ? 'page' : undefined}>
+          Import and export
+        </a>
+      )}
+      {can(roles, 'orders.view') && (
+        <a
+          className={`rail__item ${route.view === 'registrations' ? 'is-active' : ''}`}
+          href={href({ page: 'event', eventId: ev, view: 'registrations' })}
+          aria-current={route.view === 'registrations' ? 'page' : undefined}
+        >
+          Registrations
+        </a>
+      )}
+      {can(roles, 'checkin') && (
+        <a className="rail__item" href={href({ page: 'checkin', eventId: ev })}>
+          Race-day check-in
+        </a>
+      )}
+      {can(roles, 'startlists') && (
+        <a
+          className={`rail__item ${route.view === 'startlists' ? 'is-active' : ''}`}
+          href={href({ page: 'event', eventId: ev, view: 'startlists' })}
+          aria-current={route.view === 'startlists' ? 'page' : undefined}
+        >
+          Start lists and timer export
+        </a>
+      )}
+      {edit && (
+        <a className={`rail__item ${route.view === 'publish' ? 'is-active' : ''}`} href={href({ page: 'event', eventId: ev, view: 'publish' })} aria-current={route.view === 'publish' ? 'page' : undefined}>
+          Review and publish
+          <IssueCount errors={errors} warnings={warnings} />
+        </a>
+      )}
       <div className="rail__pending">
         <p className="rail__pending-title">Not connected yet</p>
         <Pending>USA Cycling license checks</Pending>
-        <Pending>Real payments (checkout is simulated)</Pending>
+        <Pending>{draft.data.pending.payments}</Pending>
         <Pending>Multi-factor sign-in for organizers</Pending>
       </div>
     </nav>
   );
-}
-
-function shortDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
 const DISCIPLINE: Record<string, string> = { road_race: 'Road race', criterium: 'Criterium' };
@@ -434,7 +477,8 @@ function RaceHeader({ draft, raceId }: { draft: Draft; raceId: string }) {
   const day = config.days[dayIndex];
   const cats = config.categories.filter((c) => c.raceId === raceId && c.status !== 'archived');
   const groups = config.startGroups.filter((g) => g.raceId === raceId);
-  const entries = draft.data.entries.filter((e) => cats.some((c) => c.id === e.categoryId)).length;
+  // Every place in use: test entries, confirmed and held order entries, and live waitlist offers.
+  const taken = draft.data.entries.filter((e) => cats.some((c) => c.id === e.categoryId)).length;
   return (
     <header className="race-head" style={{ ['--day' as string]: dayHue(dayIndex) }}>
       <h2 className="race-head__name">{race.name}</h2>
@@ -443,8 +487,8 @@ function RaceHeader({ draft, raceId }: { draft: Draft; raceId: string }) {
         {race.course ? ` · ${race.course}` : ''}
       </p>
       <p className="race-head__stats">
-        {cats.length} {cats.length === 1 ? 'category' : 'categories'} · {groups.length} start {groups.length === 1 ? 'group' : 'groups'} · {entries} test{' '}
-        {entries === 1 ? 'entry' : 'entries'}
+        {cats.length} {cats.length === 1 ? 'category' : 'categories'} · {groups.length} start {groups.length === 1 ? 'group' : 'groups'} · {taken}{' '}
+        {taken === 1 ? 'place' : 'places'} taken
       </p>
     </header>
   );

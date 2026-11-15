@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
-import { canAdmit, remainingForCategory } from '../shared/capacity';
+import { canAdmit, remainingForCategory, type LimitUsage } from '../shared/capacity';
 import { evaluateCategory } from '../shared/eligibility';
-import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNow, mayBeMinor, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
+import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNow, needsGuardian, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { termsOf } from '../shared/coupons';
@@ -23,7 +23,7 @@ import { eventLock, HttpError, type Repo } from './repo';
 export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
 
 /** success/failure from the simulated button or a provider; mismatch: a provider reported money that does not match the order total. */
-export type PaymentOutcome = 'success' | 'failure' | 'mismatch';
+type PaymentOutcome = 'success' | 'failure' | 'mismatch';
 
 /** Where a payment attempt came from, kept with the attempt for reconciliation. */
 export interface PaymentSource {
@@ -85,7 +85,8 @@ interface EntryRow {
   license_reviewed_at: string | null;
 }
 
-function groupBy<T extends { order_id: string }>(rows: T[]): Map<string, T[]> {
+/** Rows grouped by their order, keeping each order's rows in the order given. */
+export function groupByOrder<T extends { order_id: string }>(rows: T[]): Map<string, T[]> {
   const out = new Map<string, T[]>();
   for (const r of rows) {
     const list = out.get(r.order_id);
@@ -93,6 +94,25 @@ function groupBy<T extends { order_id: string }>(rows: T[]): Map<string, T[]> {
     else out.set(r.order_id, [r]);
   }
   return out;
+}
+
+/** A live order still matters to organizers and race day: anything but a cancelled order or a hold that ran out. */
+export function isLiveOrder(o: { status: OrderStatus }): boolean {
+  return o.status !== 'cancelled' && o.status !== 'expired';
+}
+
+/** The quote line an entry was bought on. A transferred entry keeps the line of the category it was bought in. */
+export function paidLine(q: Quote, entry: { category_id: string; original_category_id: string | null }) {
+  return q.lines.find((l) => l.categoryId === (entry.original_category_id ?? entry.category_id));
+}
+
+/** Order numbers are marked DEMO- on demonstration events and CR- on every other event (see ORDER_NUMBER_PREFIXES). */
+function orderNumber(orderId: string, config: EventConfig): string {
+  return `${config.event.isDemo ? 'DEMO-' : 'CR-'}${orderId.slice(4, 12).toUpperCase()}`;
+}
+
+function fullMessage(name: string, limit: LimitUsage): string {
+  return `${name} is full (${limit.name}: ${limit.used} of ${limit.limit}).`;
 }
 
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -108,12 +128,6 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
   const nowIso = () => clock().toISOString();
   const orderRow = (id: string) => db.get<OrderRow>(`SELECT * FROM orders WHERE id = $1`, [id]);
   const entryRows = (orderId: string) => db.all<EntryRow>(`SELECT * FROM order_entries WHERE order_id = $1 ORDER BY seq`, [orderId]);
-
-  async function publishedConfig(eventId: string): Promise<{ config: EventConfig; version: number; organizationName: string }> {
-    const record = await repo.getEvent(eventId);
-    if (!record.publishedVersion) throw new HttpError(409, 'Registration is not open: this event has no published version yet.');
-    return { config: await repo.getVersion(eventId, record.publishedVersion), version: record.publishedVersion, organizationName: record.organizationName };
-  }
 
   /** Inside a transaction: take the event lock of the order or entry that `sql` finds, if it exists. */
   async function lockEventOf(sql: string, id: string) {
@@ -143,14 +157,14 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       if (latest) wanted.push(latest);
       for (const [v, cfg] of await repo.getVersions(eventId, wanted)) configs.set(`${eventId}:${v}`, cfg);
     }
-    const entries = groupBy(await db.all<EntryRow>(`SELECT * FROM order_entries WHERE order_id = ANY($1) ORDER BY seq`, [ids]));
-    const changes = groupBy(
+    const entries = groupByOrder(await db.all<EntryRow>(`SELECT * FROM order_entries WHERE order_id = ANY($1) ORDER BY seq`, [ids]));
+    const changes = groupByOrder(
       await db.all<ChangeRow>(
         `SELECT order_id, entry_id, kind, from_category_id, to_category_id, amount_paid_cents, new_price_cents, difference_cents, reason, created_at FROM entry_changes WHERE order_id = ANY($1) ORDER BY created_at, seq`,
         [ids],
       ),
     );
-    const corrections = groupBy(
+    const corrections = groupByOrder(
       await db.all<CorrectionRow>(`SELECT order_id, changes_json, cleared_reviews_json, reason, created_at FROM rider_corrections WHERE order_id = ANY($1) ORDER BY created_at, seq`, [ids]),
     );
     // How each paid order was paid: the simulated button or Stripe test mode.
@@ -163,7 +177,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       ).map((r) => [r.order_id, r.provider]),
     );
     // Refunds, without the organizer's reason or who asked: the rider sees this view too.
-    const refunds = groupBy(
+    const refunds = groupByOrder(
       await db.all<{ order_id: string; id: string; entry_id: string | null; amount_cents: number; status: RefundStatus; created_at: string }>(
         `SELECT order_id, id, entry_id, amount_cents, status, created_at FROM refunds WHERE order_id = ANY($1) ORDER BY created_at`,
         [ids],
@@ -193,13 +207,13 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     const q = row.quote_json;
     const extras: OrderExtras = row.extras_json ?? EMPTY_EXTRAS;
     const status = effectiveStatus(row);
-    const guardianRequired = mayBeMinor(rider.racingAge) || rows.some((e) => config.categories.find((c) => c.id === e.category_id)?.eligibility.guardianRequired);
+    const guardianRequired = needsGuardian(config, rows.map((e) => e.category_id), rider.racingAge);
     const entries = rows.map((e) => {
       const cat = findCat(e.category_id);
       const cfg = config.categories.some((c) => c.id === e.category_id) ? config : latest;
       const race = cfg.races.find((r) => r.id === cat?.raceId);
       const sg = cfg.startGroups.find((g) => g.id === cat?.startGroupId);
-      const paidLine = q.lines.find((l) => l.categoryId === (e.original_category_id ?? e.category_id));
+      const paid = paidLine(q, e);
       return {
         id: e.id,
         categoryId: e.category_id,
@@ -212,10 +226,10 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         licenseReviewed: e.license_reviewed,
         licenseReviewNote: e.license_review_note,
         /** What the rider paid for this entry at purchase (after discounts). Never changed by a transfer or withdrawal. */
-        amountPaidCents: paidLine?.totalCents ?? 0,
+        amountPaidCents: paid?.totalCents ?? 0,
         /** The discount accepted on this entry at purchase, and why (bundle, additional race, or coupon). */
-        discountCents: paidLine?.discountCents ?? 0,
-        discountReason: paidLine?.discountReason ?? null,
+        discountCents: paid?.discountCents ?? 0,
+        discountReason: paid?.discountReason ?? null,
         withdrawnAt: e.withdrawn_at,
         changes: changes
           .filter((c) => c.entry_id === e.id)
@@ -231,17 +245,17 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           })),
         readiness: readiness({
           licenseReviewed: e.license_reviewed,
-          licenseNote: e.license_review_note,
+          licenseSimulated: !!e.license_review_note?.startsWith('Simulated'),
           signerName: waiver.signatureName,
-          guardianRequired: mayBeMinor(rider.racingAge) || !!cat?.eligibility.guardianRequired,
+          guardianRequired: needsGuardian(cfg, [e.category_id], rider.racingAge),
           guardianSigned: waiver.signerRole === 'guardian',
         }),
       };
     });
     return {
       id: row.id,
-      /** Shown to riders; marked as a demo because payment is simulated. */
-      orderNumber: `DEMO-${row.id.slice(4, 12).toUpperCase()}`,
+      /** Shown to riders. */
+      orderNumber: orderNumber(row.id, config),
       eventId: row.event_id,
       eventName: config.event.name,
       isDemo: config.event.isDemo,
@@ -308,8 +322,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       const r = canAdmit(config, current, categoryId, riderRef);
       const name = config.categories.find((c) => c.id === categoryId)?.name ?? 'A category';
       if (!r.ok) {
-        const message =
-          r.reason === 'full' ? `${name} is full (${r.blockedBy.name}: ${r.blockedBy.used} of ${r.blockedBy.limit}).` : r.reason === 'closed' ? `${name} is closed to new entries.` : `${name} cannot be entered.`;
+        const message = r.reason === 'full' ? fullMessage(name, r.blockedBy) : r.reason === 'closed' ? `${name} is closed to new entries.` : `${name} cannot be entered.`;
         return { ok: false, message, categoryId };
       }
       current.push({ id: `pending-${categoryId}`, categoryId, riderRef });
@@ -319,7 +332,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
 
   return {
     async publicEvent(eventId: string) {
-      const { config, version, organizationName } = await publishedConfig(eventId);
+      const { config, version, organizationName } = await repo.getPublished(eventId);
       const entries = await repo.entries(eventId);
       const blockers = await waitlistBlockers(config, eventId);
       const remaining: Record<string, number | null> = {};
@@ -349,7 +362,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     async createOrder(
       eventId: string,
       input: { clientRequestId: string; categoryIds: string[]; rider?: unknown; waiver?: unknown; extras?: unknown; offerToken?: string | null; couponCode?: string | null },
-      accountId: string | null = null,
+      /** The signed-in rider's account; null only for orders the demo seeders place. */
+      accountId: string | null,
     ) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
@@ -361,7 +375,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         if (existing && existing.account_id !== accountId) throw new HttpError(409, 'This checkout request was already used. Start checkout again.');
         if (existing) return view(existing.id);
 
-        const { config, version } = await publishedConfig(eventId);
+        const { config, version } = await repo.getPublished(eventId);
         const rider = riderDetailsSchema.parse(input.rider);
         const waiver = waiverAcceptanceSchema.parse(input.waiver);
         if (waiver.version !== config.registration.waiverVersion) throw new HttpError(409, 'The waiver changed while you were registering. Read the current version and accept it again.');
@@ -438,6 +452,13 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
 
     getOrder: view,
 
+    /** Several orders in one batch of queries, keyed by order ID. An unknown ID is left out. */
+    async getOrders(ids: readonly string[]) {
+      const unique = [...new Set(ids)];
+      const views = unique.length ? await viewsOf(await db.all<OrderRow>(`SELECT * FROM orders WHERE id = ANY($1)`, [unique])) : [];
+      return new Map(views.map((v) => [v.id, v]));
+    },
+
     /**
      * Process a payment notification (simulated, or a verified Stripe event) exactly once per attempt ID.
      * A success after the hold expired confirms only if every place is still
@@ -474,7 +495,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           const config = await repo.getVersion(row.event_id, row.published_version);
           const own = await entryRows(orderId);
           const ids = own.map((e) => e.category_id);
-          const riderRef = own[0]?.rider_ref ?? `rider-${orderId}`;
+          const riderRef = await repo.riderRef(orderId);
           // The hold ended, so the order needs places again: windows must still be open and every place free.
           const nowLocal = localNow(config.event.timeZone, clock());
           const windowsOpen =
@@ -561,7 +582,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     /**
      * Organizer moves a paid entry to another category. Eligibility, capacity, the waitlist,
      * schedule conflicts, and the guardian waiver are rechecked. The price paid is kept; any
-     * difference is recorded for the organizer to settle outside the app (payments are simulated).
+     * difference is recorded for the organizer to settle (money back goes through a refund, see
+     * src/server/refunds.ts; the app does not collect a difference owed).
      */
     async transferEntry(entryId: string, toCategoryId: string, reason: string) {
       return db.transaction(async () => {
@@ -571,7 +593,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const row = (await orderRow(e.order_id))!;
         if (effectiveStatus(row) !== 'confirmed' || e.status !== 'confirmed') throw new HttpError(409, 'Only a paid, active entry can be transferred.');
         if (e.category_id === toCategoryId) throw new HttpError(422, 'Choose a different category.');
-        const { config } = await publishedConfig(e.event_id);
+        const { config } = await repo.getPublished(e.event_id);
         const target = config.categories.find((c) => c.id === toCategoryId);
         if (!target || target.status !== 'active') throw new HttpError(422, 'That category is not open for entries.');
         const others = (await entryRows(e.order_id)).filter((x) => x.id !== e.id && x.status === 'confirmed');
@@ -581,15 +603,14 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const waiver = row.waiver_json;
         const elig = evaluateCategory(target, profileOf(rider));
         if (elig.status === 'ineligible') throw new HttpError(422, `Not eligible for ${target.name}: ${elig.reasons.join('; ')}.`);
-        if ((target.eligibility.guardianRequired || mayBeMinor(rider.racingAge)) && waiver.signerRole !== 'guardian') throw new HttpError(422, `${target.name} needs a waiver signed by a parent or guardian. Register the rider again with a guardian instead.`);
+        if (needsGuardian(config, [target.id], rider.racingAge) && waiver.signerRole !== 'guardian') throw new HttpError(422, `${target.name} needs a waiver signed by a parent or guardian. Register the rider again with a guardian instead.`);
         const block = findConflicts(config, [...others.map((x) => x.category_id), target.id]).find((c) => c.level === 'block');
         if (block) throw new HttpError(409, block.message);
         if ((await waitlistBlockers(config, e.event_id)).has(target.id)) throw new HttpError(409, `${target.name} has riders on its waitlist. Offer the place through the waitlist instead.`);
-        const room = canAdmit(config, (await repo.entries(e.event_id)).filter((x) => x.id !== e.id), target.id, e.rider_ref);
-        if (!room.ok) throw new HttpError(409, room.reason === 'full' ? `${target.name} is full (${room.blockedBy.name}: ${room.blockedBy.used} of ${room.blockedBy.limit}).` : `${target.name} cannot take this entry.`);
+        const room = canAdmit(config, (await repo.entries(e.event_id)).filter((x) => x.id !== e.id), target.id, await repo.riderRef(e.order_id));
+        if (!room.ok) throw new HttpError(409, room.reason === 'full' ? fullMessage(target.name, room.blockedBy) : `${target.name} cannot take this entry.`);
 
-        const q = row.quote_json;
-        const paid = q.lines.find((l) => l.categoryId === (e.original_category_id ?? e.category_id))?.totalCents ?? 0;
+        const paid = paidLine(row.quote_json, e)?.totalCents ?? 0;
         const race = config.races.find((r) => r.id === target.raceId);
         const day = config.days.find((d) => d.id === race?.dayId);
         const newPrice = categoryPrice(target, todayIn(config.event.timeZone, clock()), day?.date ?? '').cents;
@@ -603,7 +624,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       });
     },
 
-    /** Organizer withdraws a paid entry. The place is freed; the amount paid is recorded, and any refund is handled outside the app. */
+    /** Organizer withdraws a paid entry. The place is freed and the amount paid is recorded. A withdrawal never refunds; a refund is a separate step (src/server/refunds.ts). */
     async withdrawEntry(entryId: string, reason: string) {
       return db.transaction(async () => {
         await lockEventOf(`SELECT event_id FROM order_entries WHERE id = $1`, entryId);
@@ -611,8 +632,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         if (!e) throw new HttpError(404, 'Entry not found.');
         const row = (await orderRow(e.order_id))!;
         if (effectiveStatus(row) !== 'confirmed' || e.status !== 'confirmed') throw new HttpError(409, 'Only a paid, active entry can be withdrawn.');
-        const q = row.quote_json;
-        const paid = q.lines.find((l) => l.categoryId === (e.original_category_id ?? e.category_id))?.totalCents ?? 0;
+        const paid = paidLine(row.quote_json, e)?.totalCents ?? 0;
         const t = nowIso();
         await db.run(`UPDATE order_entries SET status = 'withdrawn', withdrawn_at = $1 WHERE id = $2`, [t, e.id]);
         await db.run(
@@ -623,12 +643,16 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       });
     },
 
-    /** Organizer marks a license as reviewed. Needs a reason; the time is recorded. */
+    /** Organizer marks a license as reviewed. Needs a reason; the time is recorded. A withdrawn entry is refused. */
     async reviewLicense(entryId: string, note: string) {
-      const row = await db.get<{ order_id: string }>(`SELECT order_id FROM order_entries WHERE id = $1`, [entryId]);
-      if (!row) throw new HttpError(404, 'Entry not found.');
-      await db.run(`UPDATE order_entries SET license_reviewed = true, license_review_note = $1, license_reviewed_at = $2 WHERE id = $3`, [note, nowIso(), entryId]);
-      return view(row.order_id);
+      return db.transaction(async () => {
+        await lockEventOf(`SELECT event_id FROM order_entries WHERE id = $1`, entryId);
+        const row = await db.get<{ order_id: string; status: EntryRow['status'] }>(`SELECT order_id, status FROM order_entries WHERE id = $1`, [entryId]);
+        if (!row) throw new HttpError(404, 'Entry not found.');
+        if (row.status === 'withdrawn') throw new HttpError(409, 'This entry was withdrawn, so its license cannot be reviewed.');
+        await db.run(`UPDATE order_entries SET license_reviewed = true, license_review_note = $1, license_reviewed_at = $2 WHERE id = $3`, [note, nowIso(), entryId]);
+        return view(row.order_id);
+      });
     },
   };
 }

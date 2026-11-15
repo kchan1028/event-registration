@@ -66,7 +66,7 @@ export interface Quote {
     categoryIds: string[];
     status: 'needs_review';
   } } | null;
-  /** Absent on orders placed before coupons existed. */
+  /** Stored quotes from before coupons existed have no `coupon` field, so readers must allow for it. */
   coupon?: QuoteCoupon | null;
   subtotalCents: number;
   discountCents: number;

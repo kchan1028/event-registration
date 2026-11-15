@@ -1,15 +1,24 @@
 import type { LimitUsage } from '../shared/capacity';
 import type { RefundStatus } from '../shared/refunds';
-import type { CreateEventInput, EventConfig, TestEntry } from '../shared/schema';
+import type { CreateEventInput, EventConfig, CapacityEntry } from '../shared/schema';
 import type { Issue } from '../shared/validation';
 import type { ReadinessItem, RiderDetails, WaiverAcceptance } from '../shared/checkout';
 import type { Quote } from '../shared/pricing';
-import type { CouponTerms } from '../shared/coupons';
+import type { z } from 'zod';
+import type { couponInputSchema, CouponTerms } from '../shared/coupons';
+import type { OrderExtras } from '../shared/categoryExtras';
 import type { FieldChange, RiderCorrection } from '../shared/lookup';
-import type { BibSettings, CheckInResult, PaymentState } from '../shared/checkin';
+import type { BibSettings, checkInTiming, CheckInResult, PaymentState } from '../shared/checkin';
+import type { WaitlistJoin, WaitlistStatus } from '../shared/waitlist';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
 import type { Role } from '../shared/roles';
+
+/** simulated: the labeled demo button. stripe_test: Stripe hosted Checkout in test mode. */
+export type PaymentMode = 'simulated' | 'stripe_test';
+
+/** What an organizer sends to create a coupon code. */
+export type CouponInput = z.input<typeof couponInputSchema>;
 
 export interface PublicEvent {
   eventId: string;
@@ -21,8 +30,7 @@ export interface PublicEvent {
   nowLocal: string;
   enforceWindows: boolean;
   holdMinutes: number;
-  /** simulated: the labeled demo button. stripe_test: Stripe hosted Checkout in test mode. */
-  paymentMode: 'simulated' | 'stripe_test';
+  paymentMode: PaymentMode;
   /** Categories with a waitlist turned on, and how many riders are in line. */
   waitlist: Record<string, { waiting: number }>;
 }
@@ -34,7 +42,7 @@ export interface WaitlistEntryView {
   lastName: string;
   email: string;
   racingAge: number;
-  status: 'waiting' | 'offered' | 'expired' | 'accepted' | 'removed';
+  status: WaitlistStatus;
   position: number | null;
   joinedAt: string;
   offeredAt: string | null;
@@ -77,9 +85,9 @@ export interface WaitlistOffer {
   eventId: string;
   categoryId: string;
   categoryName: string;
-  status: WaitlistEntryView['status'];
+  status: WaitlistStatus;
   offerExpiresAt: string | null;
-  rider: { firstName: string; lastName: string; email: string; racingAge: number; licenseCategory: string | null; licenseType: string | null; competitionClass: string | null; collegiateDivision: string | null };
+  rider: Omit<WaitlistJoin, 'categoryId'>;
 }
 
 export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
@@ -96,7 +104,7 @@ export interface PublicEventSummary {
 
 export interface RefundablePaymentView {
   ref: string | null;
-  provider: 'simulated' | 'stripe_test';
+  provider: PaymentMode;
   kind: 'order' | 'duplicate';
   amountCents: number;
   refundedCents: number;
@@ -107,7 +115,7 @@ export interface OrganizerRefundView {
   id: string;
   entryId: string | null;
   paymentRef: string | null;
-  provider: 'simulated' | 'stripe_test';
+  provider: PaymentMode;
   amountCents: number;
   reason: string;
   status: RefundStatus;
@@ -118,7 +126,7 @@ export interface OrganizerRefundView {
 
 export interface OrderView {
   /** How the order was paid: the simulated button or Stripe test mode. Null until paid. */
-  paidWith: 'simulated' | 'stripe_test' | null;
+  paidWith: PaymentMode | null;
   /** Refunds, oldest first (no reason: riders see this too). */
   refunds: { id: string; entryId: string | null; amountCents: number; status: RefundStatus; at: string }[];
   answers: { categoryId: string; category: string; label: string; answer: string }[];
@@ -190,9 +198,10 @@ export interface EventPayload {
   publishedRevision: number | null;
   updatedAt: string;
   config: EventConfig;
-  entries: TestEntry[];
+  entries: CapacityEntry[];
   versions: { version: number; publishedAt: string; draftRevision: number; warningsAcknowledged: number }[];
   issues: Issue[];
+  /** What is not connected yet, in words for the screen. `payments` follows the server's payment mode. */
   pending: { licenseVerification: string; payments: string; signIn: string };
   /** The caller's roles in the event's organization (sent by GET /api/events/:id). */
   roles?: Role[];
@@ -263,16 +272,9 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
  * Downloads a file from a signed-in route. A plain link cannot send the session token, so the
  * file is fetched with it and saved under the name the server gives.
  */
-export async function downloadFile(url: string): Promise<void> {
-  const res = await fetch(url, { headers: await authHeaders() }).catch(() => {
-    throw new ApiError(0, 'Cannot reach the CycleReg server. Check that it is running, then try again.');
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => null);
-    throw new ApiError(res.status, data?.error ?? `Download failed (${res.status}).`);
-  }
-  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? 'download.csv';
-  const href = URL.createObjectURL(await res.blob());
+/** Saves a blob as a file download under the given name. */
+export function saveBlob(name: string, blob: Blob): void {
+  const href = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = href;
   a.download = name;
@@ -282,10 +284,16 @@ export async function downloadFile(url: string): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(href), 1000);
 }
 
-export interface Membership {
-  organizationId: string;
-  name: string;
-  roles: Role[];
+export async function downloadFile(url: string): Promise<void> {
+  const res = await fetch(url, { headers: await authHeaders() }).catch(() => {
+    throw new ApiError(0, 'Cannot reach the CycleReg server. Check that it is running, then try again.');
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(res.status, data?.error ?? `Download failed (${res.status}).`);
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? 'download.csv';
+  saveBlob(name, await res.blob());
 }
 
 export interface MemberList {
@@ -317,7 +325,7 @@ export interface CheckInList {
   days: { id: string; label: string; date: string }[];
   dayId: string;
   settings: BibSettings;
-  summary: { riders: number; checkedIn: number; blocked: number; bibsIssued: number; timing: { timed: number; medianSeconds: number | null; p95Seconds: number | null } };
+  summary: { riders: number; checkedIn: number; blocked: number; bibsIssued: number; timing: ReturnType<typeof checkInTiming> };
   riders: CheckInRider[];
 }
 
@@ -341,7 +349,6 @@ export interface StartListOverview {
 }
 
 export const api = {
-  me: () => request<{ account: { id: string; email: string }; memberships: Membership[] }>('GET', '/api/me'),
   members: (orgId: string) => request<MemberList>('GET', `/api/organizations/${orgId}/members`),
   addMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role }),
   removeMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members/remove`, { email, role }),
@@ -359,8 +366,8 @@ export const api = {
   clearTestEntries: (id: string) => request<{ removed: number; event: EventPayload }>('DELETE', `/api/events/${id}/test-entries`),
   publicEvents: () => request<PublicEventSummary[]>('GET', '/api/public/events'),
   loadPurchaseFlowDemo: () => request<{ organizationId: string; eventIds: string[] }>('POST', '/api/demo/purchase-flow'),
-  joinWaitlist: (eventId: string, body: Record<string, unknown>) => request<WaitlistEntryView>('POST', `/api/public/events/${eventId}/waitlist`, body),
-  waitlistOffer: (token: string) => request<WaitlistOffer>('GET', `/api/public/offers/${encodeURIComponent(token)}`),
+  joinWaitlist: (eventId: string, body: WaitlistJoin) => request<WaitlistEntryView>('POST', `/api/rider/events/${eventId}/waitlist`, body),
+  waitlistOffer: (token: string) => request<WaitlistOffer>('GET', `/api/rider/offers/${encodeURIComponent(token)}`),
   riderIdentity: (eventId: string) => request<RiderIdentityOverview>('GET', `/api/events/${eventId}/rider-identity`),
   linkRiders: (eventId: string, a: string, b: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/link`, { orderIds: [a, b] }),
   dismissRiderMatch: (eventId: string, a: string, b: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/dismiss`, { orderIds: [a, b] }),
@@ -372,11 +379,11 @@ export const api = {
   offerWaitlistPlace: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer`),
   removeFromWaitlist: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/remove`),
   publicEvent: (id: string) => request<PublicEvent>('GET', `/api/public/events/${id}`),
-  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null; extras?: { answers: Record<string, Record<string, string>>; addenda: string[] }; couponCode?: string | null }) =>
-    request<OrderView>('POST', `/api/public/events/${eventId}/orders`, body),
-  checkCoupon: (eventId: string, code: string) => request<CouponTerms>('POST', `/api/public/events/${eventId}/coupons/check`, { code }),
+  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null; extras?: OrderExtras; couponCode?: string | null }) =>
+    request<OrderView>('POST', `/api/rider/events/${eventId}/orders`, body),
+  checkCoupon: (eventId: string, code: string) => request<CouponTerms>('POST', `/api/rider/events/${eventId}/coupons/check`, { code }),
   coupons: (eventId: string) => request<CouponView[]>('GET', `/api/events/${eventId}/coupons`),
-  createCoupon: (eventId: string, body: Record<string, unknown>) => request<CouponView>('POST', `/api/events/${eventId}/coupons`, body),
+  createCoupon: (eventId: string, body: CouponInput) => request<CouponView>('POST', `/api/events/${eventId}/coupons`, body),
   setCouponActive: (eventId: string, couponId: string, active: boolean) => request<CouponView>('POST', `/api/events/${eventId}/coupons/${couponId}/active`, { active }),
   order: (id: string) => request<OrderView>('GET', `/api/orders/${id}`),
   pay: (id: string, attemptId: string, outcome: 'success' | 'failure') => request<OrderView>('POST', `/api/orders/${id}/payment`, { attemptId, outcome }),

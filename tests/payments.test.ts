@@ -36,7 +36,7 @@ async function setup(opts: { holdMinutes?: number } = {}) {
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
   let r = 0;
   const order = async (codes: string[]) =>
-    (await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `req-${++r}-xxxxxxxx`, categoryIds: codes.map(code), rider: RIDER, waiver } })).json() as Order;
+    (await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `req-${++r}-xxxxxxxx`, categoryIds: codes.map(code), rider: RIDER, waiver } })).json() as Order;
   const checkout = (orderId: string, headers: Record<string, string> = {}) => app.inject({ method: 'POST', url: `/api/orders/${orderId}/checkout-session`, headers });
   const get = async (orderId: string) => (await app.inject({ method: 'GET', url: `/api/orders/${orderId}` })).json() as Order;
 

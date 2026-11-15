@@ -27,7 +27,7 @@ async function twoClubs() {
   const event = (await call(OWNER, 'GET', `/api/events/${demo.eventId}`)).json() as { config: EventConfig; revision: number };
   const categoryId = event.config.categories.find((c) => c.timingCode === 'RR-M35-34')!.id;
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
-  const placed = await call(RIDER_EMAIL, 'POST', `/api/public/events/${demo.eventId}/orders`, { clientRequestId: 'rider-request-0001', categoryIds: [categoryId], rider: RIDER, waiver });
+  const placed = await call(RIDER_EMAIL, 'POST', `/api/rider/events/${demo.eventId}/orders`, { clientRequestId: 'rider-request-0001', categoryIds: [categoryId], rider: RIDER, waiver });
   expect(placed.statusCode).toBe(201);
   const order = placed.json() as { id: string; entries: { id: string }[] };
   const hills = (await call(OTHER_OWNER, 'POST', '/api/organizations', { name: 'Hills Velo' })).json() as { id: string };
@@ -213,6 +213,25 @@ describe('organizer roles', () => {
   });
 });
 
+describe('rider routes', () => {
+  it('live under /api/rider and need sign-in; the old /api/public paths for them are gone', async () => {
+    const { app, call, eventId, categoryId, waiver } = await twoClubs();
+    const rider = 'second.rider@example.test';
+    const body = { clientRequestId: 'rider-request-0002', categoryIds: [categoryId], rider: { ...RIDER, email: rider }, waiver };
+    for (const [method, path, payload] of [
+      ['POST', `events/${eventId}/orders`, body],
+      ['POST', `events/${eventId}/coupons/check`, { code: 'NOPE' }],
+      ['POST', `events/${eventId}/waitlist`, { categoryId }],
+      ['GET', 'offers/not-a-real-offer-token', undefined],
+    ] as const) {
+      expect((await app.inject({ method, url: `/api/rider/${path}`, ...(payload ? { payload } : {}) })).statusCode, `${method} ${path} signed out`).toBe(401);
+      expect((await call(rider, method, `/api/rider/${path}`, payload)).statusCode, `${method} ${path} signed in`).not.toBe(401);
+      expect((await call(rider, method, `/api/public/${path}`, payload)).statusCode, `old ${method} ${path}`).toBe(404);
+    }
+    expect((await call(rider, 'POST', `/api/rider/events/${eventId}/orders`, body)).statusCode).toBe(201);
+  });
+});
+
 describe('riders see only their own orders', () => {
   it('lets the rider read and pay their order, and nobody else', async () => {
     const { call, order } = await twoClubs();
@@ -223,13 +242,15 @@ describe('riders see only their own orders', () => {
     expect((await call(stranger, 'POST', `/api/orders/${order.id}/cancel`)).statusCode).toBe(404);
     // The organizer can read it but not pay for or cancel the rider's order.
     expect((await call(OWNER, 'GET', `/api/orders/${order.id}`)).statusCode).toBe(200);
-    expect((await call(OWNER, 'POST', `/api/orders/${order.id}/payment`, { attemptId: 'attempt-0002', outcome: 'success' })).statusCode).toBe(404);
+    // 403, not 404: the organizer can already see the order, so nothing is hidden by pretending it is missing.
+    expect((await call(OWNER, 'POST', `/api/orders/${order.id}/payment`, { attemptId: 'attempt-0002', outcome: 'success' })).statusCode).toBe(403);
+    expect((await call(OWNER, 'POST', `/api/orders/${order.id}/cancel`)).statusCode).toBe(403);
     expect((await call(RIDER_EMAIL, 'POST', `/api/orders/${order.id}/payment`, { attemptId: 'attempt-0003', outcome: 'success' })).statusCode).toBe(200);
   });
 
   it("does not hand back another account's order for a reused checkout request ID", async () => {
     const { call, eventId, categoryId, waiver } = await twoClubs();
-    const res = await call('stranger@example.test', 'POST', `/api/public/events/${eventId}/orders`, { clientRequestId: 'rider-request-0001', categoryIds: [categoryId], rider: RIDER, waiver });
+    const res = await call('stranger@example.test', 'POST', `/api/rider/events/${eventId}/orders`, { clientRequestId: 'rider-request-0001', categoryIds: [categoryId], rider: RIDER, waiver });
     expect(res.statusCode).toBe(409);
   });
 

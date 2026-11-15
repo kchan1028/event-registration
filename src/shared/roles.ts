@@ -53,7 +53,3 @@ const GRANTS: Record<Role, readonly Permission[]> = {
 export function can(roles: readonly Role[], permission: Permission): boolean {
   return roles.some((r) => GRANTS[r].includes(permission));
 }
-
-export function isRole(value: unknown): value is Role {
-  return typeof value === 'string' && (ROLES as readonly string[]).includes(value);
-}

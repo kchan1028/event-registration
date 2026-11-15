@@ -7,9 +7,12 @@
  * No email, phone, guardian, emergency contact, or payment data is exported.
  */
 
+import { writeCsv } from './csv';
+import { NO_START_TIME_SORT_KEY } from './format';
+
 export interface StartListRow {
   entryId: string; // stable per entry
-  riderId: string; // stable per rider (order) until reusable identity exists
+  riderId: string; // stable per rider: orders the organizer linked as one rider share it
   raceId: string;
   raceName: string;
   raceDate: string;
@@ -50,24 +53,15 @@ export const CSV_COLUMNS: { key: keyof StartListRow; header: string }[] = [
   { key: 'riderId', header: 'rider_id' },
 ];
 
-/** RFC 4180 field, with a leading apostrophe on values a spreadsheet would run as a formula. */
-export function csvField(value: unknown): string {
-  let s = value === null || value === undefined ? '' : typeof value === 'boolean' ? (value ? 'Y' : 'N') : String(value);
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 export function toCsv(rows: StartListRow[]): string {
-  const lines = [CSV_COLUMNS.map((c) => c.header).join(',')];
-  for (const r of rows) lines.push(CSV_COLUMNS.map((c) => csvField(r[c.key])).join(','));
-  return lines.join('\r\n') + '\r\n';
+  return writeCsv([CSV_COLUMNS.map((c) => c.header), ...rows.map((r) => CSV_COLUMNS.map((c) => r[c.key]))]);
 }
 
 /** Start order: start time, then category code, then bib (unassigned last), then name. */
 export function sortRows(rows: StartListRow[]): StartListRow[] {
   return [...rows].sort(
     (a, b) =>
-      (a.startTime ?? '99:99').localeCompare(b.startTime ?? '99:99') ||
+      (a.startTime ?? NO_START_TIME_SORT_KEY).localeCompare(b.startTime ?? NO_START_TIME_SORT_KEY) ||
       a.classificationCode.localeCompare(b.classificationCode) ||
       (a.bib ?? Number.MAX_SAFE_INTEGER) - (b.bib ?? Number.MAX_SAFE_INTEGER) ||
       a.lastName.localeCompare(b.lastName) ||

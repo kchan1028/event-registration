@@ -12,7 +12,7 @@ import pg from 'pg';
  * the driver returns parsed values.
  */
 
-export type Param = string | number | boolean | null | readonly string[] | readonly number[];
+type Param =string | number | boolean | null | readonly string[] | readonly number[];
 
 export interface Db {
   all<T>(sql: string, params?: readonly Param[]): Promise<T[]>;
@@ -32,7 +32,7 @@ export interface Db {
   close(): Promise<void>;
 }
 
-// seq columns keep insertion order for ties on a timestamp (SQLite used rowid).
+// seq columns keep insertion order for ties on a timestamp.
 export const MIGRATIONS: string[] = [
   `
   CREATE TABLE organizations (

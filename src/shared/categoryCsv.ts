@@ -1,6 +1,6 @@
-import { writeCsv } from './csv';
+import { stripFormulaGuard, writeCsv } from './csv';
 import { blankPath, newId } from './factory';
-import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, LICENSE_TYPES, type Category, type CollegiateDivision, type EventConfig, type LicenseCategory, type LicenseType } from './schema';
+import { COLLEGIATE_DIVISIONS, GENDER_CLASSES, LICENSE_CATEGORIES, LICENSE_TYPES, type Category, type CollegiateDivision, type EventConfig, type LicenseCategory, type LicenseType } from './schema';
 import { validateConfig } from './validation';
 
 /**
@@ -53,13 +53,14 @@ export const CSV_FIELDS: CsvField[] = [
   { key: 'prize', label: 'Prize text', required: false, help: 'Shown as written', example: '' },
 ];
 
-const norm = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/** How headers and names are matched on import: lower case, with punctuation and extra spaces ignored. */
+const matchKey = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 /** Match CSV headers to fields by key or label, ignoring case and punctuation. */
 export function autoMap(headers: string[]): Record<string, number | null> {
   const map: Record<string, number | null> = {};
   for (const f of CSV_FIELDS) {
-    const idx = headers.findIndex((h) => norm(h) === norm(f.key) || norm(h) === norm(f.label));
+    const idx = headers.findIndex((h) => matchKey(h) === matchKey(f.key) || matchKey(h) === matchKey(f.label));
     map[f.key] = idx >= 0 ? idx : null;
   }
   return map;
@@ -108,7 +109,8 @@ export function planImport(config: EventConfig, table: string[][], mapping: Reco
     const line = i + 2;
     const get = (key: string) => {
       const idx = mapping[key];
-      return idx === null || idx === undefined ? '' : (cells[idx] ?? '').trim();
+      // The export guards text a spreadsheet would run as a formula; drop that guard so a re-import matches.
+      return idx === null || idx === undefined ? '' : stripFormulaGuard((cells[idx] ?? '').trim());
     };
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -162,7 +164,7 @@ export function planImport(config: EventConfig, table: string[][], mapping: Reco
     const name = get('category');
     if (!name) errors.push('Category name is empty.');
     const raceName = get('race');
-    const race = config.races.find((r) => norm(r.name) === norm(raceName));
+    const race = config.races.find((r) => matchKey(r.name) === matchKey(raceName));
     if (!race) errors.push(raceName ? `Race "${raceName}" does not exist in this event. Add it in Event setup or fix the name.` : 'Race is empty.');
     const code = get('timing_code').toUpperCase();
     if (!code) errors.push('Timing code is empty.');
@@ -179,7 +181,7 @@ export function planImport(config: EventConfig, table: string[][], mapping: Reco
     const stagingTime = time('staging_time', 'Staging time');
     const fieldLimit = int('field_limit', 'Field limit', 1);
     if (race && sgName) {
-      const gkey = `${race.id}|${norm(sgName)}`;
+      const gkey = `${race.id}|${matchKey(sgName)}`;
       const prev = groupTimes.get(gkey);
       if (prev && (prev.start !== startTime || prev.staging !== stagingTime || prev.limit !== fieldLimit)) {
         errors.push(`Start group "${sgName}" has a different start time, staging time, or field limit on line ${prev.line}. Rows in one start group must agree.`);
@@ -191,7 +193,7 @@ export function planImport(config: EventConfig, table: string[][], mapping: Reco
     const minAge = int('min_age', 'Minimum racing age');
     const maxAge = int('max_age', 'Maximum racing age');
     const cls = (get('competition_class') || 'any').toLowerCase();
-    if (!['any', 'women', 'men'].includes(cls)) errors.push(`Competition class: "${get('competition_class')}" should be any, women, or men.`);
+    if (!(GENDER_CLASSES as readonly string[]).includes(cls)) errors.push(`Competition class: "${get('competition_class')}" should be any, women, or men.`);
     const collRaw = get('collegiate_divisions');
     const collegiateRequired = collRaw !== '';
     const collegiateDivisions = collRaw.toLowerCase() === 'any' ? [] : listOf<CollegiateDivision>(collRaw.toUpperCase(), COLLEGIATE_DIVISIONS, 'Collegiate divisions', errors);
@@ -238,7 +240,7 @@ export function planImport(config: EventConfig, table: string[][], mapping: Reco
                 licenseTypes: licenseTypesRaw.length ? licenseTypesRaw : ['annual', 'one_day'],
                 minAge,
                 maxAge,
-                genderClass: (['any', 'women', 'men'].includes(cls) ? cls : 'any') as 'any' | 'women' | 'men',
+                genderClass: GENDER_CLASSES.find((g) => g === cls) ?? 'any',
                 collegiateRequired,
                 collegiateDivisions,
               },
@@ -281,14 +283,14 @@ export function applyImport(config: EventConfig, plan: ImportPlan): { config: Ev
   for (const row of plan.rows) {
     if (!row.category) continue;
     const cat = structuredClone(row.category);
-    let sg = next.startGroups.find((g) => g.raceId === cat.raceId && norm(g.name) === norm(row.startGroup.name));
+    let sg = next.startGroups.find((g) => g.raceId === cat.raceId && matchKey(g.name) === matchKey(row.startGroup.name));
     if (!sg) {
       sg = { id: newId('sg'), raceId: cat.raceId, name: row.startGroup.name, startTime: row.startGroup.startTime, stagingTime: row.startGroup.stagingTime, fieldLimit: row.startGroup.fieldLimit };
       next.startGroups.push(sg);
     }
     cat.startGroupId = sg.id;
     if (row.displayGroup) {
-      let dg = next.displayGroups.find((g) => norm(g.name) === norm(row.displayGroup));
+      let dg = next.displayGroups.find((g) => matchKey(g.name) === matchKey(row.displayGroup));
       if (!dg) {
         dg = { id: newId('dg'), name: row.displayGroup, sortOrder: Math.max(-1, ...next.displayGroups.map((g) => g.sortOrder)) + 1 };
         next.displayGroups.push(dg);
@@ -308,7 +310,7 @@ export function issuesAfterImport(config: EventConfig, plan: ImportPlan) {
   return validateConfig(applyImport(config, plan).config).filter((i) => i.level === 'error');
 }
 
-const yn = (b: boolean) => (b ? 'yes' : 'no');
+const yesNoText = (b: boolean) => (b ? 'yes' : 'no');
 const dollars = (cents: number) => (cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2));
 const localOut = (v: string | null) => (v ? v.replace('T', ' ') : '');
 
@@ -339,8 +341,8 @@ export function exportCategoriesCsv(config: EventConfig): string {
       max_age: p.maxAge,
       competition_class: p.genderClass,
       collegiate_divisions: p.collegiateRequired ? (p.collegiateDivisions.length ? p.collegiateDivisions.join(';') : 'any') : '',
-      guardian_required: yn(c.eligibility.guardianRequired),
-      organizer_review: yn(c.eligibility.organizerReview),
+      guardian_required: yesNoText(c.eligibility.guardianRequired),
+      organizer_review: yesNoText(c.eligibility.organizerReview),
       length_type: len.kind === 'unset' ? '' : len.kind,
       distance: len.kind === 'distance' ? len.distance : '',
       distance_unit: len.kind === 'distance' ? len.unit : '',

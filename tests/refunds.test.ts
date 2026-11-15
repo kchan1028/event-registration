@@ -29,7 +29,7 @@ async function setup(opts: { stripe?: boolean } = {}) {
   const code = (c: string) => event.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
   const order = async (codes: string[]) =>
-    (await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `req-${codes.join('-')}-xxxxxxxx`, categoryIds: codes.map(code), rider: RIDER, waiver } })).json() as Order;
+    (await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `req-${codes.join('-')}-xxxxxxxx`, categoryIds: codes.map(code), rider: RIDER, waiver } })).json() as Order;
   const webhook = (id: string, type: string, object: Record<string, unknown>) => {
     const payload = JSON.stringify({ id, object: 'event', type, livemode: false, data: { object } });
     const header = client.webhooks.generateTestHeaderString({ payload, secret: WEBHOOK_SECRET });

@@ -6,10 +6,23 @@ import { duplicateCategory, moveCategory, newCategory } from '../shared/factory'
 import { formatCents, formatLength, formatTime, sortCategories, startGroupFor } from '../shared/format';
 import type { Category } from '../shared/schema';
 import type { Draft } from './Builder';
-import { Icon } from './ui';
+import { byDisplayGroup } from './format';
+import { Icon, parseMoney } from './ui';
+
+/** Copies a category in the draft and opens the copy in the editor. */
+export function duplicateAndSelect(draft: Draft, categoryId: string, onSelect: (id: string) => void): void {
+  const before = new Set(draft.config.categories.map((c) => c.id));
+  let copyId: string | null = null;
+  draft.update((cfg) => {
+    const next = duplicateCategory(cfg, categoryId);
+    copyId = next.categories.find((x) => !before.has(x.id))?.id ?? null;
+    return next;
+  });
+  if (copyId) onSelect(copyId);
+}
 
 export function CategoryTable({ draft, raceId, selectedId, onSelect }: { draft: Draft; raceId: string; selectedId: string | null; onSelect: (id: string) => void }) {
-  const { config, update } = draft;
+  const { config, update, readOnly } = draft;
   const cats = sortCategories(config.categories.filter((c) => c.raceId === raceId && c.status !== 'archived'));
   const archived = config.categories.filter((c) => c.raceId === raceId && c.status === 'archived');
   const counts = entryCountsByCategory(draft.data.entries);
@@ -19,12 +32,7 @@ export function CategoryTable({ draft, raceId, selectedId, onSelect }: { draft: 
   const togglePick = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const allPicked = cats.length > 0 && pickedHere.length === cats.length;
 
-  const groups = [
-    ...[...config.displayGroups].sort((a, b) => a.sortOrder - b.sortOrder).map((g) => ({ id: g.id as string | null, name: g.name })),
-    { id: null, name: 'No display group' },
-  ]
-    .map((g) => ({ ...g, cats: cats.filter((c) => c.displayGroupId === g.id) }))
-    .filter((g) => g.cats.length > 0);
+  const groups = byDisplayGroup(config, cats, 'No display group');
 
   const add = () => {
     const cat = newCategory(config, raceId);
@@ -37,17 +45,20 @@ export function CategoryTable({ draft, raceId, selectedId, onSelect }: { draft: 
       <div className="section-head">
         <h3 id="schedule-title">Category schedule</h3>
         <p className="section-head__note">What riders buy. Display group headers only arrange the list; they never set limits.</p>
-        <button className="btn btn--primary btn--small" onClick={add}>
-          <Icon name="plus" /> Add category
-        </button>
+        {!readOnly && (
+          <button className="btn btn--primary btn--small" onClick={add}>
+            <Icon name="plus" /> Add category
+          </button>
+        )}
       </div>
 
-      {pickedHere.length > 0 && <BulkEdit draft={draft} ids={pickedHere} counts={counts} onDone={() => setPicked([])} />}
+      {!readOnly && pickedHere.length > 0 && <BulkEdit draft={draft} ids={pickedHere} counts={counts} onDone={() => setPicked([])} />}
 
       {cats.length === 0 ? (
         <div className="empty">
           <p>
-            <strong>No categories in this race yet.</strong> Add one, set who can enter and what it costs, then clip it into a start group below.
+            <strong>No categories in this race yet.</strong>
+            {readOnly ? '' : ' Add one, set who can enter and what it costs, then add it to a start group below.'}
           </p>
         </div>
       ) : (
@@ -56,7 +67,7 @@ export function CategoryTable({ draft, raceId, selectedId, onSelect }: { draft: 
             <thead>
               <tr>
                 <th scope="col" className="col-pick">
-                  <input type="checkbox" aria-label="Select every category in this race for bulk edit" checked={allPicked} onChange={() => setPicked(allPicked ? [] : cats.map((c) => c.id))} />
+                  {readOnly ? <span className="sr-only">Select</span> : <input type="checkbox" aria-label="Select every category in this race for bulk edit" checked={allPicked} onChange={() => setPicked(allPicked ? [] : cats.map((c) => c.id))} />}
                 </th>
                 <th scope="col" className="col-order">
                   <span className="sr-only">Order</span>
@@ -72,7 +83,7 @@ export function CategoryTable({ draft, raceId, selectedId, onSelect }: { draft: 
                   Cap
                 </th>
                 <th scope="col" className="col-num">
-                  Entries
+                  Places taken
                 </th>
                 <th scope="col">
                   <span className="sr-only">Actions</span>
@@ -122,7 +133,7 @@ export function CategoryTable({ draft, raceId, selectedId, onSelect }: { draft: 
 }
 
 function Row({ cat, draft, first, last, selected, hasError, entries, onSelect, picked, onPick }: { cat: Category; draft: Draft; first: boolean; last: boolean; selected: boolean; hasError: boolean; entries: number; onSelect: (id: string) => void; picked: boolean; onPick: () => void }) {
-  const { config, update } = draft;
+  const { config, update, readOnly } = draft;
   const sg = startGroupFor(config, cat);
   const remaining = remainingForCategory(config, draft.data.entries, cat.id);
   const shared = sg ? config.categories.filter((c) => c.startGroupId === sg.id && c.status !== 'archived').length > 1 : false;
@@ -130,10 +141,10 @@ function Row({ cat, draft, first, last, selected, hasError, entries, onSelect, p
   return (
     <tr className={`cat-row ${selected ? 'is-selected' : ''} ${cat.status === 'closed' ? 'is-closed' : ''}`} onClick={() => onSelect(cat.id)}>
       <td className="col-pick" onClick={(e) => e.stopPropagation()}>
-        <input type="checkbox" aria-label={`Select ${name} for bulk edit`} checked={picked} onChange={onPick} />
+        {!readOnly && <input type="checkbox" aria-label={`Select ${name} for bulk edit`} checked={picked} onChange={onPick} />}
       </td>
       <td className="col-order">
-        <div className="order-btns">
+        <div className="order-btns" hidden={readOnly}>
           <button className="icon-btn" disabled={first} aria-label={`Move ${name} up`} onClick={(e) => (e.stopPropagation(), update((c) => moveCategory(c, cat.id, -1)))}>
             <Icon name="up" size={14} />
           </button>
@@ -174,24 +185,16 @@ function Row({ cat, draft, first, last, selected, hasError, entries, onSelect, p
       <td className="nowrap" data-label="Length">{formatLength(cat.length)}</td>
       <td className="col-num num" data-label="Price">{formatCents(cat.pricing.baseCents)}</td>
       <td className="col-num num" data-label="Cap">{cat.cap ?? '·'}</td>
-      <td className="col-num" data-label="Entries">
+      <td className="col-num" data-label="Places taken">
         <span className="num">{entries}</span>
         <span className="cat-row__sub">{remaining === null ? 'no limit' : remaining === 0 ? 'full' : `${remaining} left`}</span>
       </td>
       <td>
-        <button className="icon-btn" aria-label={`Duplicate ${name}`} title="Duplicate" onClick={(e) => {
-          e.stopPropagation();
-          const before = new Set(config.categories.map((c) => c.id));
-          let copyId: string | null = null;
-          update((c) => {
-            const next = duplicateCategory(c, cat.id);
-            copyId = next.categories.find((x) => !before.has(x.id))?.id ?? null;
-            return next;
-          });
-          if (copyId) onSelect(copyId);
-        }}>
-          <Icon name="copy" size={14} />
-        </button>
+        {!readOnly && (
+          <button className="icon-btn" aria-label={`Duplicate ${name}`} title="Duplicate" onClick={(e) => (e.stopPropagation(), duplicateAndSelect(draft, cat.id, onSelect))}>
+            <Icon name="copy" size={14} />
+          </button>
+        )}
       </td>
     </tr>
   );
@@ -214,8 +217,8 @@ function BulkEdit({ draft, ids, counts, onDone }: { draft: Draft; ids: string[];
 
   const change: BulkChange | null = (() => {
     if (field === 'price' || field === 'dayOfSurcharge') {
-      if (value.trim() === '' || !/^\d+(\.\d{1,2})?$/.test(value.trim())) return null;
-      return { field, cents: Math.round(Number(value) * 100) };
+      const cents = parseMoney(value);
+      return cents === null ? null : { field, cents };
     }
     if (field === 'cap') {
       if (value.trim() === '') return { field, cap: null };

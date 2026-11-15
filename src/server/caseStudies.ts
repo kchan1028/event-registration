@@ -7,7 +7,7 @@ const scenarioByKey = () => new Map(buildCaseStudyScenarios().map((scenario) => 
 
 export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
   async function organization() {
-    const existing = (await repo.listOrganizations()).find((row) => row.id === CASE_STUDY_ORG_ID);
+    const existing = await db.get<{ id: string }>(`SELECT id FROM organizations WHERE id = $1`, [CASE_STUDY_ORG_ID]);
     return existing ?? repo.createOrganization(CASE_STUDY_ORG_NAME, CASE_STUDY_ORG_ID);
   }
 
@@ -21,7 +21,8 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
       licenseCategory: '3' as const, licenseType: 'annual' as const, licenseNumber: 'DEMO-CASE-001', competitionClass: 'men' as const,
       collegiateDivision: null, guardian: null, emergencyContact: { name: 'Riley Example', phone: '202-555-0176' },
     };
-    const create = (suffix: string) => orders.createOrder(eventId, { clientRequestId: `case-study-${suffix}`, categoryIds: [category.id], rider, waiver, extras: {} });
+    // No account: seeded fictional orders belong to nobody.
+    const create = (suffix: string) => orders.createOrder(eventId, { clientRequestId: `case-study-${suffix}`, categoryIds: [category.id], rider, waiver, extras: {} }, null);
 
     const successful = await create('successful');
     await orders.pay(successful.id, 'case-attempt-success', 'success');
@@ -39,8 +40,8 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
   async function loadUnlocked(key: CaseStudyKey) {
     const scenario = scenarioByKey().get(key);
     if (!scenario) throw new Error(`Unknown case study: ${key}`);
-    const existing = (await repo.listOrganizations()).flatMap((org) => org.events).find((event) => event.id === scenario.eventId);
-    if (existing) return { created: false, key, eventId: scenario.eventId, published: existing.publishedVersion !== null };
+    const existing = await db.get<{ published_version: number | null }>(`SELECT published_version FROM events WHERE id = $1`, [scenario.eventId]);
+    if (existing) return { created: false, key, eventId: scenario.eventId, published: existing.published_version !== null };
     const org = await organization();
     const record = await repo.createEvent(org.id, scenario.config, scenario.eventId);
     for (const plan of scenario.entryPlan) await repo.addTestEntries(record.id, plan.categoryId, plan.count, plan.riderRefs);
@@ -71,6 +72,12 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
       const eventIds = (await db.all<{ id: string }>(`SELECT id FROM events WHERE organization_id = $1`, [CASE_STUDY_ORG_ID])).map((row) => row.id);
       if (eventIds.length === 0) return { removedEvents: 0 };
       const ids = eventIds.map((_, index) => `$${index + 1}`).join(', ');
+      const orderIds = `SELECT id FROM orders WHERE event_id IN (${ids})`;
+      // Children before parents: none of these foreign keys cascade.
+      await db.run(`DELETE FROM refunds WHERE order_id IN (${orderIds})`, eventIds);
+      await db.run(`DELETE FROM provider_events WHERE order_id IN (${orderIds})`, eventIds);
+      await db.run(`DELETE FROM payment_sessions WHERE order_id IN (${orderIds})`, eventIds);
+      await db.run(`DELETE FROM rider_corrections WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM entry_resolutions WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM rider_link_dismissals WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM rider_links WHERE event_id IN (${ids})`, eventIds);
@@ -82,9 +89,10 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
       await db.run(`DELETE FROM bib_assignments WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM bib_settings WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM start_list_snapshots WHERE event_id IN (${ids})`, eventIds);
-      await db.run(`DELETE FROM payment_attempts WHERE order_id IN (SELECT id FROM orders WHERE event_id IN (${ids}))`, eventIds);
+      await db.run(`DELETE FROM payment_attempts WHERE order_id IN (${orderIds})`, eventIds);
       await db.run(`DELETE FROM order_entries WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM orders WHERE event_id IN (${ids})`, eventIds);
+      await db.run(`DELETE FROM coupons WHERE event_id IN (${ids})`, eventIds); // after orders: orders.coupon_id references coupons
       await db.run(`DELETE FROM test_entries WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM event_versions WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM events WHERE id IN (${ids})`, eventIds);
@@ -95,5 +103,3 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
 
   return { load, loadAll, reset };
 }
-
-export type CaseStudyFixtures = ReturnType<typeof createCaseStudyFixtures>;

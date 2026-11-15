@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { evaluateCategory, type EligibilityResult, type RiderProfile } from './eligibility';
-import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, LICENSE_TYPES, type Category, type EventConfig } from './schema';
+import { formatTime } from './format';
+import { normalizeText } from './lookup';
+import { COLLEGIATE_DIVISIONS, COMPETITION_CLASSES, LICENSE_CATEGORIES, LICENSE_TYPES, type Category, type EventConfig } from './schema';
 
 /**
  * Rider checkout rules shared by the browser and the server:
@@ -28,13 +30,23 @@ export const MESSAGES = {
 } as const;
 
 const digits = (s: string) => s.replace(/\D/g, '');
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Something before an @, then a domain with a dot. Used wherever a rider types an email. */
+export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const optionalPhone = z
   .string()
   .trim()
   .max(24)
   .default('')
   .refine((v) => v === '' || digits(v).length === 10, MESSAGES.phoneFormat);
+
+/** The rider facts eligibility is checked against (see `RiderProfile`), as a rider enters them at checkout or on a waitlist. */
+export const riderProfileFields = {
+  racingAge: z.number().int().min(5).max(110),
+  licenseCategory: z.enum(LICENSE_CATEGORIES).nullable(),
+  licenseType: z.enum(LICENSE_TYPES).nullable(),
+  competitionClass: z.enum(COMPETITION_CLASSES).nullable(),
+  collegiateDivision: z.enum(COLLEGIATE_DIVISIONS).nullable(),
+};
 
 export const riderDetailsSchema = z
   .object({
@@ -43,12 +55,8 @@ export const riderDetailsSchema = z
     email: z.string().trim().max(120).default(''),
     phone: optionalPhone,
     team: z.string().trim().max(80).default(''),
-    racingAge: z.number().int().min(5).max(110),
-    licenseCategory: z.enum(LICENSE_CATEGORIES).nullable(),
-    licenseType: z.enum(LICENSE_TYPES).nullable(),
+    ...riderProfileFields,
     licenseNumber: z.string().trim().max(30).default(''),
-    competitionClass: z.enum(['women', 'men', 'other']).nullable(),
-    collegiateDivision: z.enum(COLLEGIATE_DIVISIONS).nullable(),
     demoRiderId: z.string().max(40).nullable().default(null),
     emergencyContact: z.object({
       name: z.string().trim().min(1, MESSAGES.emergencyName).max(120),
@@ -73,7 +81,7 @@ export const riderDetailsSchema = z
     const target = d.guardian && !d.email ? ['guardian', 'email'] : ['email'];
     const value = d.guardian && !d.email ? d.guardian.email : d.email;
     if (!value) ctx.addIssue({ code: 'custom', path: target, message: MESSAGES.email });
-    else if (!EMAIL.test(value)) ctx.addIssue({ code: 'custom', path: target, message: MESSAGES.emailFormat });
+    else if (!EMAIL_PATTERN.test(value)) ctx.addIssue({ code: 'custom', path: target, message: MESSAGES.emailFormat });
   });
 export type RiderDetails = z.infer<typeof riderDetailsSchema>;
 
@@ -87,8 +95,6 @@ export const waiverAcceptanceSchema = z.object({
 });
 export type WaiverAcceptance = z.infer<typeof waiverAcceptanceSchema>;
 
-const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
-
 /**
  * Racing age is the rider's age on December 31 of the season, so a rider with racing age 18 can still be 17 on race day.
  * A parent or guardian signs for every rider with racing age 18 or under, in any category (project owner, November 15, 2026).
@@ -100,12 +106,17 @@ export function mayBeMinor(racingAge: number | null): boolean {
   return racingAge !== null && racingAge <= GUARDIAN_MAX_RACING_AGE;
 }
 
+/** A guardian signs when the rider may be a minor or any chosen category asks for one. */
+export function needsGuardian(config: EventConfig, categoryIds: readonly string[], racingAge: number | null): boolean {
+  return mayBeMinor(racingAge) || categoryIds.some((id) => config.categories.find((c) => c.id === id)?.eligibility.guardianRequired);
+}
+
 /** The signer is the guardian when any entry needs one, otherwise the rider; the typed name must match. */
 export function checkSignature(rider: Pick<RiderDetails, 'firstName' | 'lastName' | 'guardian'>, waiver: Pick<WaiverAcceptance, 'signatureName' | 'signerRole'>, needsGuardian: boolean): string | null {
   const role = needsGuardian ? 'guardian' : 'rider';
   if (waiver.signerRole !== role) return needsGuardian ? 'A parent or guardian must sign for this entry.' : MESSAGES.signatureMismatch;
   const expected = role === 'guardian' ? (rider.guardian?.name ?? '') : `${rider.firstName} ${rider.lastName}`;
-  return norm(waiver.signatureName) === norm(expected) && expected.trim() ? null : MESSAGES.signatureMismatch;
+  return normalizeText(waiver.signatureName) === normalizeText(expected) && expected.trim() ? null : MESSAGES.signatureMismatch;
 }
 
 export function profileOf(d: Pick<RiderDetails, 'racingAge' | 'licenseCategory' | 'licenseType' | 'competitionClass' | 'collegiateDivision'>): RiderProfile {
@@ -183,12 +194,16 @@ export function localNow(timeZone: string, now: Date = new Date()): string {
 
 export type WindowState = 'open' | 'not_yet' | 'closed';
 
-/** Open from opensAt (inclusive) until closesAt (exclusive). A missing side does not limit. */
-export function windowState(cat: Pick<Category, 'registration'>, nowLocal: string): WindowState {
-  const { opensAt, closesAt } = cat.registration;
-  if (opensAt && nowLocal < opensAt) return 'not_yet';
-  if (closesAt && nowLocal >= closesAt) return 'closed';
+/** Open from `from` (inclusive) until `until` (exclusive), all in local event time. A missing side does not limit. */
+export function timeWindowState(from: string | null, until: string | null, nowLocal: string): WindowState {
+  if (from && nowLocal < from) return 'not_yet';
+  if (until && nowLocal >= until) return 'closed';
   return 'open';
+}
+
+/** A category's registration window: open from opensAt (inclusive) until closesAt (exclusive). */
+export function windowState(cat: Pick<Category, 'registration'>, nowLocal: string): WindowState {
+  return timeWindowState(cat.registration.opensAt, cat.registration.closesAt, nowLocal);
 }
 
 /** Real events always enforce windows; a demo event can let testers try registration at any time. */
@@ -200,9 +215,8 @@ export function enforcesWindows(config: Pick<EventConfig, 'event' | 'registratio
 export function formatLocalDateTime(local: string): string {
   const [d, t] = local.split('T');
   const [y, m, day] = d.split('-').map(Number);
-  const [h, min] = t.split(':').map(Number);
   const date = new Date(Date.UTC(y, m - 1, day)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-  return `${date}, ${h % 12 === 0 ? 12 : h % 12}:${String(min).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+  return `${date}, ${formatTime(t)}`;
 }
 
 export function windowMessage(cat: Pick<Category, 'registration' | 'name'>, state: WindowState, timeZoneLabel = ''): string | null {
@@ -226,7 +240,6 @@ export function checkSelection(config: EventConfig, categoryIds: readonly string
   const eligibility: Record<string, EligibilityResult> = {};
   if (categoryIds.length === 0) problems.push('Choose at least one race.');
   if (new Set(categoryIds).size !== categoryIds.length) problems.push('A category was chosen twice.');
-  let needsGuardian = false;
   for (const id of categoryIds) {
     const cat = config.categories.find((c) => c.id === id);
     if (!cat || cat.status === 'archived') {
@@ -241,22 +254,21 @@ export function checkSelection(config: EventConfig, categoryIds: readonly string
     const result = evaluateCategory(cat, profile);
     eligibility[id] = result;
     if (result.status === 'ineligible') problems.push(`You are not eligible for ${cat.name}: ${result.reasons.join('; ')}.`);
-    if (cat.eligibility.guardianRequired) needsGuardian = true;
   }
-  if (mayBeMinor(profile.racingAge)) needsGuardian = true;
   const conflicts = findConflicts(config, categoryIds);
   for (const c of conflicts) if (c.level === 'block') problems.push(c.message);
-  return { ok: problems.length === 0, problems, eligibility, conflicts, needsGuardian };
+  return { ok: problems.length === 0, problems, eligibility, conflicts, needsGuardian: needsGuardian(config, categoryIds, profile.racingAge) };
 }
 
 export type ReadinessItem = { key: 'license' | 'waiver' | 'guardian'; label: string; state: 'done' | 'needs_review' | 'missing' };
 
 /** What a rider still needs before they are cleared to race. Paying never clears a rider by itself. */
-export function readiness(opts: { licenseReviewed: boolean; licenseNote: string | null; signerName: string | null; guardianRequired: boolean; guardianSigned: boolean }): ReadinessItem[] {
+/** `licenseSimulated`: the review came from the demo's simulated license check, not from a person. */
+export function readiness(opts: { licenseReviewed: boolean; licenseSimulated: boolean; signerName: string | null; guardianRequired: boolean; guardianSigned: boolean }): ReadinessItem[] {
   const items: ReadinessItem[] = [
     {
       key: 'license',
-      label: opts.licenseReviewed ? (opts.licenseNote?.startsWith('Simulated') ? 'License: simulated check valid (demo)' : 'License reviewed by the organizer') : 'License needs review: not verified yet. Bring your license to the registration desk before you race.',
+      label: opts.licenseReviewed ? (opts.licenseSimulated ? 'License: simulated check valid (demo)' : 'License reviewed by the organizer') : 'License needs review: not verified yet. Bring your license to the registration desk before you race.',
       state: opts.licenseReviewed ? 'done' : 'needs_review',
     },
     { key: 'waiver', label: opts.signerName ? `Waiver signed by ${opts.signerName}` : 'Waiver not signed', state: opts.signerName ? 'done' : 'missing' },

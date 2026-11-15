@@ -1,7 +1,8 @@
-import type { Category, CollegiateDivision, EligibilityPath, LicenseCategory, LicenseType } from './schema';
+import type { Category, CollegiateDivision, CompetitionClass, EligibilityPath, LicenseCategory, LicenseType } from './schema';
 
 /**
- * A rider profile used by the organizer preview's "check a rider" tool.
+ * The rider facts eligibility is checked against. The same check gates checkout, joining a
+ * waitlist, and transfers, and runs in the organizer preview's "check a rider" tool.
  * Racing age is entered directly: the governing body's racing-age rule is not
  * implemented here (see product.md, Eligibility). License data is self-reported
  * because federation verification is not connected.
@@ -10,7 +11,7 @@ export interface RiderProfile {
   racingAge: number | null;
   licenseCategory: LicenseCategory | null; // null = unknown
   licenseType: LicenseType | null;
-  competitionClass: 'women' | 'men' | 'other' | null;
+  competitionClass: CompetitionClass | null;
   collegiateDivision: CollegiateDivision | null; // null = not a collegiate rider
 }
 
@@ -20,8 +21,6 @@ export interface EligibilityResult {
   status: EligibilityStatus;
   /** Plain-English reasons, closest matching path first. */
   reasons: string[];
-  /** License data is never verified: no federation connection exists yet. */
-  licenseVerification: 'pending';
 }
 
 const RANK: Record<EligibilityStatus, number> = { eligible: 2, needs_review: 1, ineligible: 0 };
@@ -86,9 +85,9 @@ export function evaluateCategory(category: Category, rider: RiderProfile): Eligi
 
 function withReview(category: Category, r: { status: EligibilityStatus; reasons: string[] }): EligibilityResult {
   if (r.status === 'eligible' && category.eligibility.organizerReview) {
-    return { status: 'needs_review', reasons: ['organizer reviews every entry in this category'], licenseVerification: 'pending' };
+    return { status: 'needs_review', reasons: ['organizer reviews every entry in this category'] };
   }
-  return { ...r, licenseVerification: 'pending' };
+  return r;
 }
 
 /** Short, human summary of one path, e.g. "Cat 3/4 · age 35+ · women". */

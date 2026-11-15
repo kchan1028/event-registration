@@ -1,29 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { formatTime } from '../shared/format';
 import { FIELD_LABELS, type StartListDiff } from '../shared/startlist';
-import { api, ApiError, type StartListOverview } from './api';
+import { api, ApiError } from './api';
 import type { Draft } from './Builder';
+import { formatDateTime } from './format';
+import { useLoad } from './useLoad';
 import { DownloadLink, Pending } from './ui';
 
 /** Start lists per race, timestamped snapshots, and the sample timer CSV. */
 export function StartLists({ draft }: { draft: Draft }) {
   const eventId = draft.data.id;
-  const [data, setData] = useState<StartListOverview | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, setError, reload: load } = useLoad(() => api.startLists(eventId), [eventId]);
   const [raceId, setRaceId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    api
-      .startLists(eventId)
-      .then((d) => {
-        setData(d);
-        setError(null);
-      })
-      .catch((e: ApiError) => setError(e.message));
-  }, [eventId]);
-  useEffect(load, [load]);
 
   const race = data?.races.find((r) => r.raceId === raceId) ?? data?.races[0] ?? null;
 
@@ -115,7 +105,7 @@ export function StartLists({ draft }: { draft: Draft }) {
           {race.lock && (
             <div className="note" role="status">
               <span>
-              <strong>Locked</strong> at snapshot v{race.lock.snapshotVersion} on {new Date(race.lock.lockedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}.{' '}
+              <strong>Locked</strong> at snapshot v{race.lock.snapshotVersion} on {formatDateTime(race.lock.lockedAt)}.{' '}
               <DownloadLink href={api.startListCsvUrl(eventId, race.raceId, race.lock.snapshotVersion)}>
                 Download the locked list
               </DownloadLink>
@@ -183,7 +173,7 @@ export function StartLists({ draft }: { draft: Draft }) {
               {race.snapshots.map((s) => (
                 <li key={s.version}>
                   <div>
-                    <strong>v{s.version}</strong> · {new Date(s.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · {s.riders} {s.riders === 1 ? 'rider' : 'riders'}
+                    <strong>v{s.version}</strong> · {formatDateTime(s.createdAt)} · {s.riders} {s.riders === 1 ? 'rider' : 'riders'}
                     <span className="muted small"> · schedule version {s.publishedVersion}</span>
                     {s.changesFromPrevious && <span className="small"> · {summary(s.changesFromPrevious)} from v{s.version - 1}</span>}
                   </div>

@@ -4,6 +4,7 @@ import { countIssues, type Issue } from '../shared/validation';
 import { api, ApiError } from './api';
 import { href } from './App';
 import type { Draft } from './Builder';
+import { formatDateTime } from './format';
 import { IssueList } from './IssuesPanel';
 import { Icon, Pending } from './ui';
 
@@ -68,7 +69,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
           <p className="publish-status__num num">{warnings}</p>
         </div>
         <div>
-          <p className="publish-status__label">Draft revision</p>
+          <p className="publish-status__label">Draft save number</p>
           <p className="publish-status__num num">{data.revision}</p>
         </div>
         <div>
@@ -92,7 +93,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
       <div className="publish-box">
         <div className="pending-stack">
           <Pending>USA Cycling license checks are not connected. Published categories still mark every license for review.</Pending>
-          <Pending>Payments are not connected. Published events open a rider registration page with simulated payment only.</Pending>
+          <Pending>{data.pending.payments}</Pending>
         </div>
         {warnings > 0 && (
           <label className="check">
@@ -128,7 +129,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
               <tr>
                 <th scope="col">Version</th>
                 <th scope="col">Published</th>
-                <th scope="col">From draft revision</th>
+                <th scope="col">Draft save number</th>
                 <th scope="col">Warnings acknowledged</th>
               </tr>
             </thead>
@@ -136,7 +137,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
               {data.versions.map((v) => (
                 <tr key={v.version}>
                   <td className="num">v{v.version}</td>
-                  <td>{new Date(v.publishedAt).toLocaleString()}</td>
+                  <td>{formatDateTime(v.publishedAt)}</td>
                   <td className="num">{v.draftRevision}</td>
                   <td className="num">{v.warningsAcknowledged}</td>
                 </tr>

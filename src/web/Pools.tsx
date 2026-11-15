@@ -1,8 +1,8 @@
-import { distinctRiders, poolCategoryIds } from '../shared/capacity';
 import { newId } from '../shared/factory';
 import { sortCategories } from '../shared/format';
 import type { CapacityPool } from '../shared/schema';
 import type { Draft } from './Builder';
+import { poolUsage } from './FieldBoard';
 import { Field, Icon, IntInput } from './ui';
 
 export function Pools({ draft }: { draft: Draft }) {
@@ -24,8 +24,7 @@ export function Pools({ draft }: { draft: Draft }) {
       )}
 
       {config.capacityPools.map((pool) => {
-        const members = poolCategoryIds(config, pool.id);
-        const used = distinctRiders(draft.data.entries, members).size;
+        const { used, remaining } = poolUsage(config, pool, draft.data.entries);
         const issues = draft.issues.filter((i) => i.target.kind === 'pool' && i.target.id === pool.id);
         return (
           <section className="pool" key={pool.id} aria-label={pool.name || 'Capacity pool'}>
@@ -34,7 +33,7 @@ export function Pools({ draft }: { draft: Draft }) {
               <Field label="Shared limit">{(id) => <IntInput id={id} value={pool.limit} min={Math.max(1, used)} allowEmpty={false} onCommit={(v) => v && patch(pool.id, { limit: v })} />}</Field>
             </div>
             <p className="pool__usage">
-              <span className="num">{used}</span> of <span className="num">{pool.limit}</span> places taken · <span className="num">{Math.max(0, pool.limit - used)}</span> left
+              <span className="num">{used}</span> of <span className="num">{pool.limit}</span> places taken · <span className="num">{remaining}</span> left
             </p>
             {issues.map((i) => (
               <p key={i.key} className={`issue issue--${i.level}`}>

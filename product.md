@@ -224,7 +224,7 @@ Status: Planned documentation only. The current app does not support time trials
 - Display waiver version and signature status. Payment success alone does not mean cleared to race.
 - Confirm entries only after authoritative payment confirmation. Handle delayed or failed payments explicitly.
 - Permit organizer-configured changes, withdrawals, and refund requests. Show policy before checkout.
-  - Status: organizer transfers and withdrawals of paid entries are Implemented in the local build (see [roadmap.md](roadmap.md#rider-checkout)). A transfer rechecks eligibility, capacity, the waitlist, schedule conflicts, and the guardian waiver; the price paid is kept and any difference is recorded as owed or due. Rider-initiated change requests and real refunds are Planned.
+  - Status: organizer transfers and withdrawals of paid entries are Implemented in the local build (see [roadmap.md](roadmap.md#rider-checkout)). A transfer rechecks eligibility, capacity, the waitlist, schedule conflicts, and the guardian waiver; the price paid is kept and any difference is recorded as owed or due. Organizer refunds of an entry or an order are Implemented for simulated and Stripe test-mode payments; a refund does not withdraw the entry. Rider-initiated change requests and refunds of real money are Planned.
 
 ### Rider self-service
 

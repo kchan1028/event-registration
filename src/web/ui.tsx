@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
 import { useTheme } from './theme';
 import { downloadFile, type ApiError } from './api';
 
@@ -36,7 +36,6 @@ export function IntInput({
   max = 10000,
   allowEmpty = true,
   describedBy,
-  placeholder,
   ariaLabel,
 }: {
   id?: string;
@@ -46,7 +45,6 @@ export function IntInput({
   max?: number;
   allowEmpty?: boolean;
   describedBy?: string;
-  placeholder?: string;
   ariaLabel?: string;
 }) {
   const [text, setText] = useState(value === null ? '' : String(value));
@@ -59,7 +57,6 @@ export function IntInput({
       inputMode="numeric"
       className="input input--num"
       value={text}
-      placeholder={placeholder}
       aria-label={ariaLabel}
       aria-invalid={invalid || undefined}
       aria-describedby={describedBy}
@@ -74,12 +71,23 @@ export function IntInput({
   );
 }
 
-/** Dollar input stored as integer cents. */
-export function MoneyInput({ id, cents, onCommit, describedBy, ariaLabel }: { id?: string; cents: number; onCommit: (c: number) => void; describedBy?: string; ariaLabel?: string }) {
-  const fmt = (c: number) => (c % 100 === 0 ? String(c / 100) : (c / 100).toFixed(2));
+/** Typed dollars ("45" or "45.50") as integer cents; null when it is not a plain dollar amount. */
+export function parseMoney(text: string): number | null {
+  const t = text.trim();
+  return /^\d{1,5}(\.\d{1,2})?$/.test(t) ? Math.round(Number(t) * 100) : null;
+}
+
+/** Cents as the dollars a person would type: "45" or "45.50". */
+export function moneyText(cents: number): string {
+  return cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
+}
+
+/** Dollar input stored as integer cents. With `onClear`, an empty field is allowed and means "no amount". */
+export function MoneyInput({ id, cents, onCommit, onClear, describedBy, ariaLabel }: { id?: string; cents: number | null; onCommit: (c: number) => void; onClear?: () => void; describedBy?: string; ariaLabel?: string }) {
+  const fmt = (c: number | null) => (c === null ? '' : moneyText(c));
   const [text, setText] = useState(fmt(cents));
   useEffect(() => setText(fmt(cents)), [cents]);
-  const valid = /^\d{1,5}(\.\d{1,2})?$/.test(text.trim());
+  const valid = parseMoney(text) !== null || (!!onClear && text.trim() === '');
   return (
     <span className="money">
       <span aria-hidden="true" className="money__sign">
@@ -95,11 +103,113 @@ export function MoneyInput({ id, cents, onCommit, describedBy, ariaLabel }: { id
         aria-describedby={describedBy}
         onChange={(e) => {
           setText(e.target.value);
-          if (/^\d{1,5}(\.\d{1,2})?$/.test(e.target.value.trim())) onCommit(Math.round(Number(e.target.value) * 100));
+          const c = parseMoney(e.target.value);
+          if (c !== null) onCommit(c);
+          else if (onClear && e.target.value.trim() === '') onClear();
         }}
         onBlur={() => setText(fmt(cents))}
       />
     </span>
+  );
+}
+
+/**
+ * A short form that asks for a reason before an organizer action: it keeps the typed reason, the
+ * busy state, and the error, and closes through `onCancel`. `inline` sits inside an entry row;
+ * `block` is a full form with a labeled reason field. Extra fields go in `children`, before the reason.
+ */
+export function ReasonForm({
+  variant,
+  label,
+  intro,
+  reasonLabel,
+  placeholder,
+  hint,
+  submitLabel,
+  busyLabel,
+  missing,
+  validate,
+  disabled = false,
+  onSubmit,
+  onCancel,
+  children,
+}: {
+  variant: 'inline' | 'block';
+  /** Accessible name of the form. */
+  label: string;
+  intro?: ReactNode;
+  reasonLabel: string;
+  placeholder?: string;
+  hint?: string;
+  submitLabel: string;
+  busyLabel?: string;
+  /** Message when the reason is shorter than three characters. Leave out when `validate` checks the reason. */
+  missing?: string;
+  /** Checked before sending; returns a message to show, or null. */
+  validate?: (reason: string) => string | null;
+  disabled?: boolean;
+  /** Does the action; a thrown error's message is shown and the form stays open. */
+  onSubmit: (reason: string) => Promise<void>;
+  onCancel: () => void;
+  children?: ReactNode;
+}) {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const submit = async (e?: FormEvent) => {
+    e?.preventDefault();
+    const problem = validate?.(reason.trim()) ?? (missing && reason.trim().length < 3 ? missing : null);
+    if (problem) return setErr(problem);
+    setBusy(true);
+    setErr(null);
+    try {
+      await onSubmit(reason.trim());
+    } catch (e2) {
+      setErr((e2 as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (variant === 'inline') {
+    return (
+      <span className="review-form" role="group" aria-label={label}>
+        {children}
+        <input className="input" aria-label={reasonLabel} placeholder={placeholder} value={reason} onChange={(e) => setReason(e.target.value)} />
+        <button className="btn btn--primary btn--small" disabled={busy || disabled} onClick={() => void submit()}>
+          {submitLabel}
+        </button>
+        <button className="btn btn--ghost btn--small" onClick={onCancel}>
+          Cancel
+        </button>
+        {err && (
+          <span className="text-error small" role="alert">
+            {err}
+          </span>
+        )}
+      </span>
+    );
+  }
+  return (
+    <form className="correction" onSubmit={submit} noValidate aria-label={label}>
+      {intro && <p className="small muted">{intro}</p>}
+      {children}
+      <Field label={reasonLabel} hint={hint}>
+        {(id, d) => <input id={id} aria-describedby={d} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />}
+      </Field>
+      {err && (
+        <p className="text-error small" role="alert">
+          {err}
+        </p>
+      )}
+      <div className="form-actions">
+        <button className="btn btn--primary btn--small" type="submit" disabled={busy || disabled}>
+          {busy ? (busyLabel ?? submitLabel) : submitLabel}
+        </button>
+        <button className="btn btn--ghost btn--small" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 

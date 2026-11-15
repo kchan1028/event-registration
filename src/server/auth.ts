@@ -45,7 +45,7 @@ function bearer(req: FastifyRequest): string | null {
  * `pending` (sign-up tasks unfinished) counts as signed out. Clerk applies sign-in attempt
  * rate limits and lockout itself.
  */
-export function clerkAuth(opts: { secretKey: string; authorizedParties?: string[] }): AuthProvider {
+function clerkAuth(opts: { secretKey: string; authorizedParties?: string[] }): AuthProvider {
   const client = createClerkClient({ secretKey: opts.secretKey });
   return {
     async verify(req) {
@@ -180,33 +180,28 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
     return requireOrg(account, await orgOfEvent(eventId), permission, 'Event not found.');
   }
 
-  /** Organizer action on one order entry: checked against the entry's own event. */
-  async function requireOrderEntry(account: Account, entryId: string, permission: Permission): Promise<void> {
-    const row = await db.get<{ organization_id: string }>(`SELECT e.organization_id FROM order_entries oe JOIN events e ON e.id = oe.event_id WHERE oe.id = $1`, [entryId]);
-    if (!row) throw new HttpError(404, 'Entry not found.');
-    await requireOrg(account, row.organization_id, permission, 'Entry not found.');
-  }
-
-  /** Organizer action on a whole order (for example correcting rider details): checked against the order's event. */
-  async function requireOrderOrganizer(account: Account, orderId: string, permission: Permission): Promise<void> {
-    const row = await db.get<{ organization_id: string }>(`SELECT e.organization_id FROM orders o JOIN events e ON e.id = o.event_id WHERE o.id = $1`, [orderId]);
-    if (!row) throw new HttpError(404, 'Order not found.');
-    await requireOrg(account, row.organization_id, permission, 'Order not found.');
-  }
-
   /**
-   * An order is visible to the account that placed it and to organizers of its event who may
-   * see orders. `ownerOnly` (paying, cancelling) allows only the account that placed it.
+   * The one check for routes that act on an order or on one of its entries.
+   * `rider`: the account that placed the order may do this. `permission`: so may a member of the
+   * event's organization whose role grants it. Someone who is neither the rider nor a member gets
+   * 404, so order and entry IDs cannot be probed. A member who lacks the permission, or who tries
+   * a rider-only action (paying, cancelling), gets 403: they can already see the order exists.
    */
-  async function requireOrder(account: Account, orderId: string, ownerOnly = false): Promise<void> {
+  async function requireOrderAccess(account: Account, target: { orderId: string } | { entryId: string }, allow: { rider?: boolean; permission?: Permission }): Promise<void> {
+    const byEntry = 'entryId' in target;
+    const notFound = byEntry ? 'Entry not found.' : 'Order not found.';
     const row = await db.get<{ account_id: string | null; organization_id: string }>(
-      `SELECT o.account_id, e.organization_id FROM orders o JOIN events e ON e.id = o.event_id WHERE o.id = $1`,
-      [orderId],
+      byEntry
+        ? `SELECT o.account_id, e.organization_id FROM order_entries oe JOIN orders o ON o.id = oe.order_id JOIN events e ON e.id = o.event_id WHERE oe.id = $1`
+        : `SELECT o.account_id, e.organization_id FROM orders o JOIN events e ON e.id = o.event_id WHERE o.id = $1`,
+      [byEntry ? target.entryId : target.orderId],
     );
-    if (!row) throw new HttpError(404, 'Order not found.');
-    if (row.account_id === account.id) return;
-    if (!ownerOnly && can(await rolesIn(account.id, row.organization_id), 'orders.view')) return;
-    throw new HttpError(404, 'Order not found.');
+    if (!row) throw new HttpError(404, notFound);
+    if (allow.rider && row.account_id === account.id) return;
+    const roles = await rolesIn(account.id, row.organization_id);
+    if (roles.length === 0) throw new HttpError(404, notFound);
+    if (!allow.permission) throw new HttpError(403, 'Only the rider who placed this order can do this.');
+    if (!can(roles, allow.permission)) throw new HttpError(403, 'Your role in this organization does not allow this.');
   }
 
   /** The organizations the account belongs to, with its roles in each. */
@@ -277,7 +272,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
     });
   }
 
-  return { accountFor, rolesIn, requireOrg, requireEvent, requireOrderEntry, requireOrderOrganizer, requireOrder, memberships, grant, listMembers, addMember, removeMember };
+  return { accountFor, requireOrg, requireEvent, requireOrderAccess, memberships, grant, listMembers, addMember, removeMember };
 }
 
 export type Access = ReturnType<typeof createAccess>;

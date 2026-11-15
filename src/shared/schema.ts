@@ -7,12 +7,15 @@ import { z } from 'zod';
 export const LICENSE_CATEGORIES = ['PRO', '1', '2', '3', '4', '5'] as const;
 export const LICENSE_TYPES = ['annual', 'one_day'] as const;
 export const GENDER_CLASSES = ['any', 'women', 'men'] as const;
+/** What a rider declares. "other" needs organizer confirmation for a women's or men's field. */
+export const COMPETITION_CLASSES = ['women', 'men', 'other'] as const;
 export const COLLEGIATE_DIVISIONS = ['A', 'B', 'C', 'D'] as const;
 
 const id = z.string().min(1).max(64);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24-hour HH:MM');
-const localDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/, 'Use YYYY-MM-DDTHH:MM');
+/** Wall-clock time in the event's time zone, as stored for registration and coupon windows. */
+export const localDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/, 'Use YYYY-MM-DDTHH:MM');
 const cents = z.number().int().min(0).max(10_000_00);
 const limit = z.number().int().min(1).max(10_000).nullable();
 
@@ -174,21 +177,20 @@ export const eventConfigSchema = z.object({
 export type LicenseCategory = (typeof LICENSE_CATEGORIES)[number];
 export type LicenseType = (typeof LICENSE_TYPES)[number];
 export type GenderClass = (typeof GENDER_CLASSES)[number];
+export type CompetitionClass = (typeof COMPETITION_CLASSES)[number];
 export type CollegiateDivision = (typeof COLLEGIATE_DIVISIONS)[number];
 export type EligibilityPath = z.infer<typeof eligibilityPathSchema>;
 export type RaceLength = z.infer<typeof raceLengthSchema>;
 export type Category = z.infer<typeof categorySchema>;
 export type EventConfig = z.infer<typeof eventConfigSchema>;
 export type Race = EventConfig['races'][number];
-export type RaceDay = EventConfig['days'][number];
 export type StartGroup = EventConfig['startGroups'][number];
-export type DisplayGroup = EventConfig['displayGroups'][number];
 export type CapacityPool = EventConfig['capacityPools'][number];
 export type RegistrationSettings = z.infer<typeof registrationSettingsSchema>;
 export type Bundle = RegistrationSettings['bundles'][number];
 
-/** A simulated entry used to exercise capacity rules. No payment, no rider data. */
-export interface TestEntry {
+/** A place in use for capacity counting: an organizer test entry, a confirmed or held order entry, or a live waitlist offer. */
+export interface CapacityEntry {
   id: string;
   categoryId: string;
   riderRef: string;

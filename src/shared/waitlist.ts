@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, LICENSE_TYPES } from './schema';
+import { EMAIL_PATTERN, MESSAGES, riderProfileFields } from './checkout';
 
 /**
  * Organizer-managed waitlists (product.md: first release supports organizer-managed
@@ -10,7 +10,7 @@ import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, LICENSE_TYPES } from './schem
  * - While anyone is waiting or holds an offer, freed places go to the waitlist first:
  *   the category is not sold to the public until the list is empty.
  * - The organizer offers places in order. An offer reserves the place for 24 hours;
- *   the rider registers and pays (simulated) through a private link. An unused offer
+ *   the rider registers and pays through a private link, like any other order. An unused offer
  *   expires and the organizer offers the next rider.
  */
 
@@ -36,12 +36,8 @@ export const waitlistJoinSchema = z.object({
   categoryId: z.string().min(1).max(64),
   firstName: z.string().trim().min(1, 'Enter your first name.').max(60),
   lastName: z.string().trim().min(1, 'Enter your last name.').max(60),
-  email: z.string().trim().min(3, 'Enter an email so the organizer can offer you a place.').max(120),
-  racingAge: z.number().int().min(5).max(110),
-  licenseCategory: z.enum(LICENSE_CATEGORIES).nullable(),
-  licenseType: z.enum(LICENSE_TYPES).nullable(),
-  competitionClass: z.enum(['women', 'men', 'other']).nullable(),
-  collegiateDivision: z.enum(COLLEGIATE_DIVISIONS).nullable(),
+  email: z.string().trim().min(1, 'Enter an email so the organizer can offer you a place.').max(120).regex(EMAIL_PATTERN, MESSAGES.emailFormat),
+  ...riderProfileFields,
 });
 
 export type WaitlistJoin = z.infer<typeof waitlistJoinSchema>;

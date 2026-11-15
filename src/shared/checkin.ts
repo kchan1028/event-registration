@@ -10,7 +10,6 @@ import type { ReadinessItem } from './checkout';
 
 /** "weekend": one bib per rider for the whole event. "day": a separate bib range and bib for each race day. */
 export const BIB_SCOPES = ['weekend', 'day'] as const;
-export type BibScope = (typeof BIB_SCOPES)[number];
 
 export const bibRangeSchema = z
   .object({

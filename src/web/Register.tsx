@@ -1,22 +1,26 @@
 import QRCode from 'qrcode';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
-import { checkSignature, findConflicts, formatLocalDateTime, mayBeMinor, MESSAGES, riderDetailsSchema, windowMessage, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
-import { evaluateCategory, summarizeEligibility, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
+import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, MESSAGES, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
+import { evaluateCategory, licenseLabel, summarizeEligibility, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories } from '../shared/format';
 import { categoryPrice, quote, type Quote } from '../shared/pricing';
 import type { CouponTerms } from '../shared/coupons';
 import { REFUND_STATUS_LABEL } from '../shared/refunds';
 import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, type Category, type EventConfig } from '../shared/schema';
-import { api, ApiError, type OrderView, type PublicEvent, type PublicEventSummary, type WaitlistOffer } from './api';
+import { OFFER_HOURS } from '../shared/waitlist';
+import { api, ApiError, type OrderView, type PaymentMode, type PublicEvent, type PublicEventSummary, type WaitlistOffer } from './api';
 import { href, navigate } from './App';
+import { formatDateTime, refundedCents } from './format';
 import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
 import { AccountMenu, SignInPrompt, useSession } from './auth';
+import { useLoad } from './useLoad';
 
 /*
- * Clickable demo purchase flow (product.md 2a). Payment is simulated on every
- * screen: no card, no provider, no money.
+ * Rider purchase flow (product.md 2a). No real money moves: payment is either the simulated
+ * button or Stripe test mode, whichever the server runs, and the wording follows that mode.
+ * Demo labels show only for demo events.
  */
 
 type Step = 'races' | 'details' | 'waiver' | 'review';
@@ -24,7 +28,7 @@ const STEPS: { key: Step; label: string }[] = [
   { key: 'races', label: 'Choose races' },
   { key: 'details', label: 'Racer details' },
   { key: 'waiver', label: 'Waiver' },
-  { key: 'review', label: 'Review and simulated payment' },
+  { key: 'review', label: 'Review and payment' },
 ];
 
 type Details = Omit<RiderDetails, 'racingAge' | 'licenseCategory' | 'licenseType' | 'competitionClass' | 'collegiateDivision'>;
@@ -77,9 +81,21 @@ function freshDraft(): Draft {
 
 type Update = (fn: (d: Draft) => Draft) => void;
 
+const draftKey = (eventId: string) => `cyclereg.register.${eventId}`;
+
+/** Forgets the stored registration once its order no longer needs it. With `orderId`, only when the stored one is for that order. */
+function clearStoredDraft(eventId: string, orderId?: string): void {
+  try {
+    const raw = sessionStorage.getItem(draftKey(eventId));
+    if (raw && (!orderId || (JSON.parse(raw) as Draft).orderId === orderId)) sessionStorage.removeItem(draftKey(eventId));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 /** Keeps an unfinished registration in this tab only, so a refresh or Back does not lose it. */
 function useStoredDraft(eventId: string): [Draft, Update] {
-  const key = `cyclereg.register.${eventId}`;
+  const key = draftKey(eventId);
   const [draft, setDraft] = useState<Draft>(() => {
     try {
       const raw = sessionStorage.getItem(key);
@@ -102,14 +118,15 @@ function useStoredDraft(eventId: string): [Draft, Update] {
   return [draft, update];
 }
 
-function DemoHeader() {
+/** Rider page header. The Demo badge shows only for a demo event; the note follows how payment works there. */
+function RegHeader({ demo = false, mode = null }: { demo?: boolean; mode?: PaymentMode | null }) {
   return (
     <header className="reg__bar">
-      <a className="brand" href={href({ page: 'events' })} aria-label="CycleReg demo, all events">
+      <a className="brand" href={href({ page: 'events' })} aria-label="CycleReg, all events">
         CycleReg
       </a>
-      <span className="demo-badge">Demo</span>
-      <span className="reg__bar-note">Rider registration with simulated payment</span>
+      {demo && <span className="demo-badge">Demo</span>}
+      <span className="reg__bar-note">{mode === 'simulated' ? 'Rider registration with simulated payment' : mode === 'stripe_test' ? 'Rider registration, Stripe test mode' : 'Rider registration'}</span>
       <span className="reg__bar-end">
         <ThemeToggle />
         <AccountMenu />
@@ -118,12 +135,10 @@ function DemoHeader() {
   );
 }
 
-function SimulatedNote() {
-  return <p className="simulated">Simulated payment: no money is charged.</p>;
-}
-
-function TestModeNote() {
-  return <p className="simulated">Stripe test mode: only test cards work and no real money moves.</p>;
+/** How payment works, in one line. Nothing shows when the mode is not known yet. */
+function PaymentNote({ mode }: { mode: PaymentMode | null }) {
+  if (!mode) return null;
+  return <p className="simulated">{mode === 'stripe_test' ? 'Stripe test mode: only test cards work and no real money moves.' : 'Simulated payment: no money is charged.'}</p>;
 }
 
 /** Error summary at the top of a step; focuses itself so screen readers announce it. */
@@ -160,21 +175,14 @@ function ErrorSummary({ errors }: { errors: { id: string; message: string }[] })
 /* Step 0: browse events --------------------------------------------------- */
 
 export function RegisterIndex() {
-  const [events, setEvents] = useState<PublicEventSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    api
-      .publicEvents()
-      .then(setEvents)
-      .catch((e: ApiError) => setError(e.message));
-  }, []);
+  const { data: events, error } = useLoad<PublicEventSummary[]>(() => api.publicEvents(), []);
   return (
     <div className="reg">
-      <DemoHeader />
+      <RegHeader />
       <main className="reg__main reg__main--narrow">
         <h1 className="done__title">Choose an event</h1>
         <div className="pending-stack">
-          <Pending>Every event here is demonstration data. Payment is simulated and no money is charged.</Pending>
+          <Pending>No real money moves here: payment is simulated or runs in Stripe test mode. Events marked “Demo data” are fictional.</Pending>
         </div>
         {error && <p className="alert alert--error">{error}</p>}
         {events === null && !error && <div className="skeleton" aria-label="Loading events" />}
@@ -190,7 +198,10 @@ export function RegisterIndex() {
           {events?.map((e) => (
             <li key={e.id}>
               <a className="event-pick__link" href={href({ page: 'register', eventId: e.id })}>
-                <span className="event-pick__name">{e.name}</span>
+                <span className="event-pick__name">
+                  {e.name}
+                  {e.isDemo && <span className="tag tag--demo">Demo data</span>}
+                </span>
                 <span className="event-pick__meta">
                   {e.days.map((d) => formatDate(d.date)).join(' and ')}
                   {e.venue ? ` · ${e.venue}` : ''}
@@ -239,7 +250,7 @@ export function Register({ eventId }: { eventId: string }) {
           offerToken: token,
           offerCategoryId: o.categoryId,
           selected: d.selected.includes(o.categoryId) ? d.selected : [...d.selected, o.categoryId],
-          profile: d.profile.racingAge === null ? { racingAge: o.rider.racingAge, licenseCategory: o.rider.licenseCategory, licenseType: o.rider.licenseType, competitionClass: o.rider.competitionClass, collegiateDivision: o.rider.collegiateDivision } as RiderProfile : d.profile,
+          profile: d.profile.racingAge === null ? profileOf(o.rider) : d.profile,
           details: d.details.firstName ? d.details : { ...d.details, firstName: o.rider.firstName, lastName: o.rider.lastName, email: o.rider.email },
         }));
       })
@@ -250,7 +261,7 @@ export function Register({ eventId }: { eventId: string }) {
   if (error) {
     return (
       <div className="reg">
-        <DemoHeader />
+        <RegHeader />
         <main className="reg__main reg__main--narrow">
           <p className="alert alert--warn" role="alert">
             {error.message}
@@ -281,7 +292,7 @@ export function Register({ eventId }: { eventId: string }) {
 
   return (
     <div className="reg">
-      <DemoHeader />
+      <RegHeader demo={config.event.isDemo} mode={ev.paymentMode} />
       <main className="reg__main">
         <section className="reg__event" aria-labelledby="reg-title">
           <a className="link small" href={href({ page: 'events' })}>
@@ -304,7 +315,11 @@ export function Register({ eventId }: { eventId: string }) {
           )}
           {offer && <OfferBanner offer={offer} />}
           <div className="pending-stack">
-            <Pending>Payment is simulated. No card is asked for and no money is charged.</Pending>
+            <Pending>
+              {ev.paymentMode === 'stripe_test'
+                ? 'Payment runs in Stripe test mode. Only Stripe test cards work and no real money moves.'
+                : 'Payment is simulated. No card is asked for and no money is charged.'}
+            </Pending>
             <Pending>USA Cycling license checks are not connected. Demo riders carry a simulated license result; everyone else is reviewed by the organizer.</Pending>
           </div>
         </section>
@@ -410,17 +425,25 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
   const next = () => {
     const errs: { id: string; message: string }[] = [];
     if (draft.profile.racingAge === null) errs.push({ id: 'f-racing-age', message: 'Enter your racing age.' });
-    if (draft.selected.length === 0) errs.push({ id: 'schedule', message: MESSAGES.entry });
+    // The same gate the server applies to the order: eligibility, closed categories, registration windows, and start conflicts.
+    const check = checkSelection(config, draft.selected, draft.profile, { nowLocal: ev.nowLocal });
+    // The shared rule gives each problem in words. The summary also links each one to the race it is about.
+    const anchor = (message: string) => {
+      const named = draft.selected.find((sel) => {
+        const name = config.categories.find((c) => c.id === sel)?.name;
+        return !!name && message.includes(name);
+      });
+      const id = check.conflicts.find((c) => c.message === message)?.b ?? named;
+      return id ? `opt-${id}` : 'schedule';
+    };
+    for (const message of check.problems) errs.push({ id: anchor(message), message });
+    // Places left and waitlist offers are live counts the shared rule does not see.
     for (const id of draft.selected) {
       const cat = config.categories.find((c) => c.id === id);
-      if (cat && checking && evaluateCategory(cat, draft.profile).status === 'ineligible') errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.ineligible}` });
       // A waitlist offer reserves this rider's place, so its category is not full for them.
       const offeredHere = !!draft.offerToken && draft.offerCategoryId === id;
       if (cat && ev.remaining[id] === 0 && !offeredHere) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.full}` });
-      const wmsg = cat && ev.enforceWindows ? windowMessage(cat, windowState(cat, ev.nowLocal)) : null;
-      if (wmsg) errs.push({ id: `opt-${id}`, message: wmsg });
     }
-    for (const c of conflicts.filter((x) => x.level === 'block')) errs.push({ id: `opt-${c.b}`, message: c.message });
     if (intent && intentMissing.length) {
       errs.push({ id: 'tray-title', message: `The ${intent.name} needs one eligible race on each day. Add a race in ${intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.` });
     }
@@ -443,7 +466,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                 <option value="">None, I’ll enter my own made-up details</option>
                 {DEMO_RIDERS.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.firstName} {r.lastName}: racing age {r.racingAge}, Cat {r.licenseCategory}, {r.competitionClass}
+                    {r.firstName} {r.lastName}: racing age {r.racingAge}, {licenseLabel(r.licenseCategory)}, {r.competitionClass}
                     {r.guardian ? ', with guardian' : ''}
                     {r.licenseCheck === 'simulated_unknown' ? ', license not verified' : ''}
                   </option>
@@ -461,7 +484,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                   <option value="">I don’t know</option>
                   {LICENSE_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
-                      {c === 'PRO' ? 'Pro' : `Cat ${c}`}
+                      {licenseLabel(c)}
                     </option>
                   ))}
                 </select>
@@ -490,7 +513,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
               )}
             </Field>
           </div>
-          <p className="muted small">Racing age is the age your federation uses for the season. This demo does not calculate it from a birth date.</p>
+          <p className="muted small">Racing age is the age your federation uses for the season. It is not calculated from a birth date yet.</p>
         </section>
 
         <div id="schedule" tabIndex={-1} className="schedule-anchor">
@@ -613,13 +636,13 @@ function RaceOption({
   result,
   conflicts,
   onToggle,
-  offered = false,
-  waitlist = null,
+  offered,
+  waitlist,
 }: {
   config: EventConfig;
   cat: Category;
-  offered?: boolean;
-  waitlist?: ReactNode;
+  offered: boolean;
+  waitlist: ReactNode;
   today: string;
   selected: boolean;
   remaining: number | null;
@@ -884,7 +907,7 @@ function riderFrom(draft: Draft, needsGuardian: boolean): Record<string, unknown
 
 function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; draft: Draft; update: Update; goTo: (s: Step) => void }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const needsGuardian = mayBeMinor(draft.profile.racingAge) || draft.selected.some((id) => config.categories.find((c) => c.id === id)?.eligibility.guardianRequired);
+  const needsGuardian = guardianNeeded(config, draft.selected, draft.profile.racingAge);
   const d = draft.details;
   const set = (p: Partial<Details>) => update((x) => ({ ...x, details: { ...x.details, ...p } }));
   const g = d.guardian ?? { name: '', relationship: '', email: '', phone: '' };
@@ -940,7 +963,7 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
         </Field>
       </div>
       <div className="form-row">
-        <Field label={needsGuardian ? 'Rider email (optional for a minor)' : 'Email for the receipt (required)'} id={FIELD_IDS.email} error={errors.email} hint="No email is sent in this demo.">
+        <Field label={needsGuardian ? 'Rider email (optional for a minor)' : 'Email for the receipt (required)'} id={FIELD_IDS.email} error={errors.email} hint="No email is sent yet.">
           {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.email || undefined} type="email" className="input" autoComplete="email" value={d.email} onChange={(e) => set({ email: e.target.value })} />}
         </Field>
         <Field label="Phone (optional)" id={FIELD_IDS.phone} error={errors.phone}>
@@ -983,7 +1006,7 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
       <div className="summary-line">
         <p>
           Racing age <strong className="num">{draft.profile.racingAge}</strong> · License{' '}
-          <strong>{draft.profile.licenseCategory ? (draft.profile.licenseCategory === 'PRO' ? 'Pro' : `Cat ${draft.profile.licenseCategory}`) : 'not known'}</strong>
+          <strong>{draft.profile.licenseCategory ? licenseLabel(draft.profile.licenseCategory) : 'not known'}</strong>
         </p>
         <button type="button" className="link-btn" onClick={() => goTo('races')}>
           Change
@@ -1037,7 +1060,7 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
 
 function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; update: Update; goTo: (s: Step) => void }) {
   const { config } = ev;
-  const needsGuardian = mayBeMinor(draft.profile.racingAge) || draft.selected.some((id) => config.categories.find((c) => c.id === id)?.eligibility.guardianRequired);
+  const needsGuardian = guardianNeeded(config, draft.selected, draft.profile.racingAge);
   const signer = needsGuardian ? (draft.details.guardian?.name ?? '') : `${draft.details.firstName} ${draft.details.lastName}`.trim();
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<{ id: string; message: string }[]>([]);
@@ -1092,7 +1115,7 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
       <ErrorSummary errors={errors} />
       <h2 id="waiver-title">Waiver</h2>
       <p className="muted small">
-        Version <code className="code">{config.registration.waiverVersion || 'none'}</code>. Sample text for the demo: a signature here has no legal effect.
+        Version <code className="code">{config.registration.waiverVersion || 'none'}</code>.{config.event.isDemo ? ' Sample text for the demo: a signature here has no legal effect.' : ''}
       </p>
       <div
         ref={boxRef}
@@ -1145,7 +1168,7 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
   );
 }
 
-/* Step 4: review, held places, simulated payment ------------------------- */
+/* Step 4: review, held places, payment ------------------------------------ */
 
 function useCountdown(until: string | null): number {
   const [now, setNow] = useState(() => Date.now());
@@ -1171,11 +1194,7 @@ function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; even
 
   useEffect(() => {
     if (order?.status === 'confirmed' || order?.status === 'needs_attention') {
-      try {
-        sessionStorage.removeItem(`cyclereg.register.${eventId}`);
-      } catch {
-        /* ignore */
-      }
+      clearStoredDraft(eventId);
       navigate({ page: 'order', orderId });
     }
   }, [order?.status, orderId, eventId]);
@@ -1213,7 +1232,7 @@ function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; even
   return (
     <section className="reg__panel" aria-labelledby="review-title">
       <h2 id="review-title">Review your order</h2>
-      {stripe ? <TestModeNote /> : <SimulatedNote />}
+      <PaymentNote mode={paymentMode} />
       {!expired ? (
         <p className="hold" role="timer" aria-live="off">
           <Icon name="clip" /> Your places are held for <span className="num">{mm}:{ss}</span>
@@ -1259,8 +1278,8 @@ function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; even
       ) : (
       <div className="paybox">
         <p className="paybox__title">Simulated payment</p>
-        <p className="muted small">A real event would open the payment provider’s page here. This demo asks for no card details and contacts no provider.</p>
-        <SimulatedNote />
+        <p className="muted small">A real event would open the payment provider’s page here. This simulated payment asks for no card details and contacts no provider.</p>
+        <PaymentNote mode="simulated" />
         <div className="form-actions">
           <button className="btn btn--primary" disabled={busy} onClick={() => pay('success')}>
             {busy ? 'Processing…' : `Complete simulated payment (${formatCents(order.totalCents)})`}
@@ -1284,7 +1303,14 @@ export function OrderPage({ orderId }: { orderId: string }) {
   const [order, setOrder] = useState<OrderView | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // Back from Stripe: the payment notification can arrive a few seconds after the rider does.
-  const returned = new URLSearchParams(window.location.search).get('checkout') === 'returned';
+  // Read once for this order, then taken out of the address so an order opened later in this tab does not look like a return.
+  const [returned] = useState(() => new URLSearchParams(window.location.search).get('checkout') === 'returned');
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('checkout')) return;
+    url.searchParams.delete('checkout');
+    window.history.replaceState(window.history.state, '', url);
+  }, []);
   const waiting = returned && (order?.status === 'held' || order?.status === 'payment_failed');
   const [polls, setPolls] = useState(0);
   useEffect(() => {
@@ -1295,14 +1321,22 @@ export function OrderPage({ orderId }: { orderId: string }) {
     const t = window.setTimeout(() => setPolls((n) => n + 1), 2000);
     return () => window.clearTimeout(t);
   }, [waiting, polls]);
+  // A Stripe payment never passes through the review step again, so the finished registration is forgotten here.
+  const confirmedEventId = order?.status === 'confirmed' ? order.eventId : null;
+  useEffect(() => {
+    if (confirmedEventId) clearStoredDraft(confirmedEventId, orderId);
+  }, [confirmedEventId, orderId]);
   if (err) return <div className="state-page"><p className="alert alert--error">{err}</p></div>;
   if (!order) return <div className="state-page"><div className="skeleton skeleton--page" /></div>;
 
   const confirmed = order.status === 'confirmed';
-  const Note = order.paidWith === 'stripe_test' || returned ? TestModeNote : SimulatedNote;
+  // How this order was paid; before payment, only a return from Stripe tells us the mode.
+  const mode: PaymentMode | null = order.paidWith ?? (returned ? 'stripe_test' : null);
+  // Display only: money returned or on its way back. Entries and readiness do not change with a refund.
+  const refunded = confirmed ? refundedCents(order.totalCents, order.refunds) : 0;
   return (
     <div className="reg">
-      <DemoHeader />
+      <RegHeader demo={order.isDemo} mode={mode} />
       <main className="reg__main reg__main--narrow">
         {confirmed ? (
           <>
@@ -1310,9 +1344,9 @@ export function OrderPage({ orderId }: { orderId: string }) {
             <p className="reg__meta">
               {order.eventName} · {order.rider.firstName} {order.rider.lastName} · order <span className="num">{order.orderNumber}</span>
             </p>
-            <Note />
+            <PaymentNote mode={mode} />
             <div className="ticket">
-              <p className="ticket__label">Check-in code (demo)</p>
+              <p className="ticket__label">Check-in code{order.isDemo ? ' (demo)' : ''}</p>
               <p className="ticket__code num">{order.checkInCode}</p>
               {order.checkInCode && <CheckInQr code={order.checkInCode} />}
               <p className="muted small">Show this at check-in. It identifies your entry and contains no personal details.</p>
@@ -1326,13 +1360,13 @@ export function OrderPage({ orderId }: { orderId: string }) {
         ) : waiting && polls < 30 ? (
           <>
             <h1 className="done__title">Confirming your payment</h1>
-            <TestModeNote />
+            <PaymentNote mode="stripe_test" />
             <p className="note" role="status">Stripe is telling us about your payment. This page updates on its own in a few seconds.</p>
           </>
         ) : order.status === 'needs_attention' ? (
           <>
             <h1 className="done__title">We could not confirm your entry</h1>
-            <Note />
+            <PaymentNote mode={mode} />
             <p className="note note--warn" role="alert">
               Your payment arrived after your hold ended or after you left the order, or did not match the order total, and a place could not be confirmed. The organizer sees this in their exception queue and will contact you.
             </p>
@@ -1370,10 +1404,12 @@ export function OrderPage({ orderId }: { orderId: string }) {
             </li>
           ))}
         </ul>
-        <section className="receipt" aria-labelledby="receipt-title" data-watermark="DEMO">
-          <h2 id="receipt-title">Demo receipt</h2>
+        <section className="receipt" aria-labelledby="receipt-title" data-watermark={order.isDemo ? 'DEMO' : undefined}>
+          <h2 id="receipt-title">{order.isDemo ? 'Demo receipt' : 'Receipt'}</h2>
           <p className="muted small">
-            Order <span className="num">{order.orderNumber}</span> · not a real receipt
+            Order <span className="num">{order.orderNumber}</span>
+            {order.isDemo ? ' · not a real receipt' : ''}
+            {refunded > 0 && <span className="status status--muted receipt__refunded">{refunded === order.totalCents ? 'Refunded' : 'Partly refunded'}</span>}
           </p>
           <ul className="receipt__lines">
             {order.quote.lines.map((l) => (
@@ -1405,11 +1441,23 @@ export function OrderPage({ orderId }: { orderId: string }) {
               ))}
             </ul>
           )}
+          {refunded > 0 && (
+            <ul className="receipt__lines">
+              <li>
+                <span>{order.paidWith === 'stripe_test' ? 'Total paid (Stripe test mode)' : 'Total paid (simulated, not charged)'}</span>
+                <span className="num">{formatCents(order.totalCents)}</span>
+              </li>
+              <li>
+                <span>Refunded</span>
+                <span className="num">−{formatCents(refunded)}</span>
+              </li>
+            </ul>
+          )}
           <p className="quote__total">
-            <span>{confirmed ? (order.paidWith === 'stripe_test' ? 'Total paid (Stripe test mode)' : 'Total (simulated, not charged)') : 'Not charged'}</span>
-            <span className="num">{formatCents(confirmed ? order.totalCents : 0)}</span>
+            <span>{!confirmed ? 'Not charged' : refunded > 0 ? 'Net paid' : order.paidWith === 'stripe_test' ? 'Total paid (Stripe test mode)' : 'Total (simulated, not charged)'}</span>
+            <span className="num">{refunded > 0 && refunded === order.totalCents ? '$0' : formatCents(confirmed ? order.totalCents - refunded : 0)}</span>
           </p>
-          <Note />
+          <PaymentNote mode={mode} />
         </section>
       </main>
     </div>
@@ -1418,11 +1466,11 @@ export function OrderPage({ orderId }: { orderId: string }) {
 
 /** Shown when a rider opens a waitlist offer link. */
 function OfferBanner({ offer }: { offer: WaitlistOffer }) {
-  const until = offer.offerExpiresAt ? new Date(offer.offerExpiresAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : null;
+  const until = offer.offerExpiresAt ? formatDateTime(offer.offerExpiresAt) : null;
   if (offer.status === 'offered') {
     return (
       <p className="note note--ok" role="note">
-        <strong>Waitlist offer:</strong> a place in {offer.categoryName} is held for you until {until}. Finish registering and complete the simulated payment before then, or it goes to the next rider.
+        <strong>Waitlist offer:</strong> a place in {offer.categoryName} is held for you until {until}. Finish registering and pay before then, or it goes to the next rider.
       </p>
     );
   }
@@ -1448,7 +1496,7 @@ function JoinWaitlist({ ev, cat, draft }: { ev: PublicEvent; cat: Category; draf
   if (joined) {
     return (
       <span className="opt__reason" role="status">
-        You are number {joined.position ?? '?'} on the waitlist for {cat.name}. If a place opens, the organizer sends you a private link and you have 24 hours to register. No email is sent in this demo.
+        You are number {joined.position ?? '?'} on the waitlist for {cat.name}. If a place opens, the organizer sends you a private link and you have {OFFER_HOURS} hours to register. No email is sent yet.
       </span>
     );
   }
@@ -1464,14 +1512,15 @@ function JoinWaitlist({ ev, cat, draft }: { ev: PublicEvent; cat: Category; draf
   }
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (p.racingAge === null) {
+    const racingAge = p.racingAge;
+    if (racingAge === null) {
       setError('Answer "About you" above first, so the organizer knows you can enter this category.');
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      const r = await api.joinWaitlist(ev.eventId, { categoryId: cat.id, ...form, ...p });
+      const r = await api.joinWaitlist(ev.eventId, { categoryId: cat.id, ...form, ...p, racingAge });
       setJoined({ position: r.position });
     } catch (err) {
       setError((err as ApiError).message);

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
 import { parseCsv } from '../src/shared/csv';
+import { entriesCsv, ledgerCsv, type ExportOrder } from '../src/shared/exports';
 import type { EventConfig } from '../src/shared/schema';
 
-/* Organizer exports: entries and a simulated ledger, from the database. */
+/* Organizer exports: entries and a ledger (simulated or Stripe test-mode payments, refunds), from the database. */
 
 const RIDER = { firstName: 'Pat', lastName: 'Demo', email: 'pat.demo@example.test', phone: '555-555-0142', team: '=HYPERLINK("x")', racingAge: 40, licenseCategory: '3', licenseType: 'annual', licenseNumber: 'DEMO-900', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Robin Contact', phone: '555-555-0199' } };
 
@@ -16,7 +17,7 @@ async function setup() {
   const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Demo', signerRole: 'rider' };
   let n = 0;
   const buy = async (codes: string[], pay = true) => {
-    const created = await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `export-${++n}-xxxxxx`, categoryIds: codes.map(code), rider: RIDER, waiver } });
+    const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `export-${++n}-xxxxxx`, categoryIds: codes.map(code), rider: RIDER, waiver } });
     expect(created.statusCode).toBe(201);
     const order = created.json() as { id: string; entries: { id: string; categoryId: string }[] };
     if (pay) expect((await app.inject({ method: 'POST', url: `/api/orders/${order.id}/payment`, payload: { attemptId: `attempt-${n}-xxxx`, outcome: 'success' } })).statusCode).toBe(200);
@@ -70,6 +71,86 @@ describe('organizer exports', () => {
     expect(sum).toBe(Math.round(Number(total[col('amount')]) * 100));
     const transfer = data.find((r) => r[col('kind')] === 'transfer_difference')!;
     expect(transfer[col('note')]).toContain('not settled');
-    expect(data.find((r) => r[col('kind')] === 'withdrawal')![col('note')]).toContain('settled outside the app');
+    expect(data.find((r) => r[col('kind')] === 'withdrawal')![col('note')]).toContain('separate refund row');
+  });
+});
+
+/* The CSV builders on their own: no database, one fictional order shaped like the server's order view. */
+
+function order(over: Partial<ExportOrder> = {}): ExportOrder {
+  const line = (categoryId: string, code: string, name: string, priceCents: number, discountCents = 0) => ({ categoryId, raceId: 'race_1', dayId: 'day_1', code, name, priceCents, dayOfSurcharge: false, discountCents, discountReason: discountCents ? 'Additional race' : null, totalCents: priceCents - discountCents });
+  const lines = [line('cat_a', 'RR-A', 'Road race A', 5000), line('cat_b', 'CR-B', 'Criterium B', 4000, 500)];
+  return {
+    id: 'ord_1',
+    orderNumber: 'DEMO-AAAA1111',
+    status: 'confirmed',
+    createdAt: '2027-03-01T18:00:00.000Z',
+    confirmedAt: '2027-03-01T18:01:00.000Z',
+    rider: { firstName: 'Pat', lastName: 'Demo', team: 'Sample Velo', racingAge: 40, licenseCategory: '3' },
+    waiver: { signatureName: 'Pat Demo' },
+    quote: { onDate: '2027-03-01', lines, bundle: null, coupon: null, subtotalCents: 9000, discountCents: 500, entriesTotalCents: 8500, fees: [], totalCents: 8500 },
+    totalCents: 8500,
+    couponCode: null,
+    entries: lines.map((l, i) => ({ id: `ent_${i + 1}`, categoryId: l.categoryId, code: l.code, categoryName: l.name, raceName: 'Race', status: 'confirmed', amountPaidCents: l.totalCents, discountCents: l.discountCents, discountReason: l.discountReason, licenseReviewed: false, changes: [] })),
+    answers: [],
+    paidWith: 'simulated',
+    refunds: [],
+    ...over,
+  };
+}
+
+const table = (csv: string) => {
+  const [header, ...data] = parseCsv(csv);
+  return data.map((r) => Object.fromEntries(header.map((h, i) => [h, r[i]])));
+};
+
+describe('entries and ledger CSV builders', () => {
+  it('shows what was refunded on each entry, counting only refunds that hold money', () => {
+    const refunds: ExportOrder['refunds'] = [
+      { entryId: 'ent_1', amountCents: 2000, status: 'succeeded', at: '2027-03-02T10:00:00.000Z' },
+      { entryId: 'ent_1', amountCents: 500, status: 'pending', at: '2027-03-02T11:00:00.000Z' },
+      { entryId: 'ent_1', amountCents: 900, status: 'failed', at: '2027-03-02T12:00:00.000Z' },
+      { entryId: null, amountCents: 100, status: 'succeeded', at: '2027-03-02T13:00:00.000Z' },
+    ];
+    const rows = table(entriesCsv([order({ refunds })], (id) => id));
+    expect(Object.keys(rows[0]).slice(12, 14)).toEqual(['amount_paid', 'refunded']);
+    const a = rows.find((r) => r.category_code === 'RR-A')!;
+    const b = rows.find((r) => r.category_code === 'CR-B')!;
+    expect([a.amount_paid, a.refunded]).toEqual(['50', '25']);
+    expect([b.amount_paid, b.refunded]).toEqual(['35', '0']);
+
+    const ledger = table(ledgerCsv([order({ refunds })])).filter((r) => r.kind === 'refund');
+    expect(ledger.map((r) => r.amount)).toEqual(['-20', '-5', '', '-1']);
+    expect(ledger[2].note).toBe('Refund failed; no money returned');
+  });
+
+  it('reports nothing paid for an order that is not confirmed, and keeps it out of the ledger', () => {
+    const held = order({ status: 'held', confirmedAt: null, paidWith: null });
+    const rows = table(entriesCsv([held], (id) => id));
+    expect(rows.map((r) => r.amount_paid)).toEqual(['0', '0']);
+    expect(rows.map((r) => r.order_status)).toEqual(['held', 'held']);
+    expect(table(ledgerCsv([held]))).toEqual([]);
+    // Money arrived but no place was confirmed: in the ledger, but not paid for an entry.
+    const late = order({ status: 'needs_attention' });
+    expect(table(entriesCsv([late], (id) => id)).map((r) => r.amount_paid)).toEqual(['0', '0']);
+    expect(table(ledgerCsv([late])).find((r) => r.kind === 'order_total')!.note).toContain('no place was confirmed');
+  });
+
+  it('labels every row of a Stripe test-mode order, including a transfer difference and a refund', () => {
+    const o = order({ paidWith: 'stripe_test', refunds: [{ entryId: 'ent_2', amountCents: 1000, status: 'succeeded', at: '2027-03-03T10:00:00.000Z' }] });
+    o.entries[0].changes = [{ kind: 'transfer', fromCategoryName: 'Road race A', toCategoryName: 'Road race C', amountPaidCents: 5000, newPriceCents: 6000, differenceCents: 1000, reason: 'Upgraded', at: '2027-03-02T09:00:00.000Z' }];
+    o.entries[1].changes = [{ kind: 'transfer', fromCategoryName: 'Criterium B', toCategoryName: 'Criterium D', amountPaidCents: 3500, newPriceCents: 3000, differenceCents: -500, reason: 'Moved down', at: '2027-03-02T09:30:00.000Z' }];
+    const rows = table(ledgerCsv([o]));
+    expect(rows.map((r) => r.kind)).toEqual(['entry', 'entry', 'discount', 'order_total', 'transfer_difference', 'transfer_difference', 'refund']);
+    expect(rows.map((r) => r.amount)).toEqual(['50', '40', '-5', '85', '10', '-5', '-10']);
+    const stripe = 'Stripe test mode: no real money moved';
+    expect(rows.every((r) => r.note.includes(stripe))).toBe(true);
+    expect(rows.some((r) => /simulated/i.test(r.note))).toBe(false);
+    expect(rows[4].note).toBe(`Rider owes this amount; not settled in the app. ${stripe}`);
+    expect(rows[5].note).toContain('Refund due to the rider');
+    expect(rows[6]).toMatchObject({ category_code: 'CR-B', description: 'Refund (succeeded)' });
+
+    const simulated = table(ledgerCsv([order()]));
+    expect(simulated.every((r) => r.note === 'Simulated payment: no money moved')).toBe(true);
   });
 });

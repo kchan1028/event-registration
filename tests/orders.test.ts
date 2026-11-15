@@ -24,7 +24,7 @@ async function setup(opts: { publish?: boolean } = {}) {
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
   let n = 0;
   const order = (categoryIds: string[], extra: Record<string, unknown> = {}) =>
-    app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `req-${++n}-xxxxxxxx`, categoryIds, rider: RIDER, waiver, ...extra } });
+    app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `req-${++n}-xxxxxxxx`, categoryIds, rider: RIDER, waiver, ...extra } });
   const pay = (orderId: string, outcome: 'success' | 'failure', attemptId = `att-${Math.random().toString(36).slice(2)}`) =>
     app.inject({ method: 'POST', url: `/api/orders/${orderId}/payment`, payload: { attemptId, outcome } });
   const entriesCount = async () => ((await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { entries: unknown[] }).entries.length;
@@ -53,8 +53,8 @@ describe('rider checkout: holds and simulated payment', () => {
     const { app, eventId, code, waiver, entriesCount } = await setup();
     const before = await entriesCount();
     const body = { clientRequestId: 'same-request-123', categoryIds: [code('RR-M35-34')], rider: RIDER, waiver };
-    const a = (await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: body })).json() as Order;
-    const b = (await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: body })).json() as Order;
+    const a = (await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: body })).json() as Order;
+    const b = (await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: body })).json() as Order;
     expect(b.id).toBe(a.id);
     expect(await entriesCount()).toBe(before + 1);
   });
@@ -126,8 +126,8 @@ describe('rider checkout: holds and simulated payment', () => {
     const rider60 = { ...RIDER, racingAge: 61 };
     const body = (clientRequestId: string) => ({ clientRequestId, categoryIds: [code('RR-M60')], rider: rider60, waiver });
     const race = await Promise.all([
-      app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: body('race-a-12345678') }),
-      b.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: body('race-b-12345678') }),
+      app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: body('race-a-12345678') }),
+      b.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: body('race-b-12345678') }),
     ]);
     expect(race.map((r) => r.statusCode).sort()).toEqual([201, 409]);
     const held = race.find((r) => r.statusCode === 201)!.json() as Order;
@@ -229,13 +229,13 @@ describe('demo purchase flow fixtures through the API', () => {
 
     const waiverFor = (name: string, role = 'rider') => ({ version: pub.config.registration.waiverVersion, read: true, agreed: true, signatureName: name, signerRole: role });
     const alex = { firstName: 'Alex', lastName: 'Demo', email: 'alex.demo@example.com', phone: '555-555-0101', team: 'Demo Wheelers', racingAge: 29, licenseCategory: '4', licenseType: 'annual', licenseNumber: 'DEMO-100001', competitionClass: 'men', collegiateDivision: null, demoRiderId: 'rider-alex', emergencyContact: { name: 'Robin Demo', phone: '555-555-0111' }, guardian: null };
-    const a = (await app.inject({ method: 'POST', url: `/api/public/events/${valleyId}/orders`, payload: { clientRequestId: 'alex-order-1', categoryIds: [cat('Men Cat 4/5'), cat('Open Cat 4/5 Evening')], rider: alex, waiver: waiverFor('Alex Demo') } })).json() as Order;
+    const a = (await app.inject({ method: 'POST', url: `/api/rider/events/${valleyId}/orders`, payload: { clientRequestId: 'alex-order-1', categoryIds: [cat('Men Cat 4/5'), cat('Open Cat 4/5 Evening')], rider: alex, waiver: waiverFor('Alex Demo') } })).json() as Order;
     expect(a.totalCents).toBe(5965);
     const paidA = (await app.inject({ method: 'POST', url: `/api/orders/${a.id}/payment`, payload: { attemptId: 'alex-attempt-1', outcome: 'success' } })).json() as Order;
     expect(paidA.entries.every((e) => e.readiness.every((r) => r.state === 'done'))).toBe(true);
 
     const sam = { ...alex, firstName: 'Sam', email: 'sam.demo@example.com', racingAge: 31, competitionClass: 'women', licenseNumber: 'DEMO-100004', demoRiderId: 'rider-sam', team: '' };
-    const s = (await app.inject({ method: 'POST', url: `/api/public/events/${valleyId}/orders`, payload: { clientRequestId: 'sam-order-1', categoryIds: [cat('Women Cat 3/4/5')], rider: sam, waiver: waiverFor('Sam Demo') } })).json() as Order;
+    const s = (await app.inject({ method: 'POST', url: `/api/rider/events/${valleyId}/orders`, payload: { clientRequestId: 'sam-order-1', categoryIds: [cat('Women Cat 3/4/5')], rider: sam, waiver: waiverFor('Sam Demo') } })).json() as Order;
     expect(s.totalCents).toBe(3905);
     const paidS = (await app.inject({ method: 'POST', url: `/api/orders/${s.id}/payment`, payload: { attemptId: 'sam-attempt-1', outcome: 'success' } })).json() as Order;
     expect(paidS.status).toBe('confirmed');
@@ -259,7 +259,7 @@ describe('registration windows through the API', () => {
     const code = (c: string) => config.categories.find((x) => x.timingCode === c)!.id;
     const waiver = { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
     let n = 0;
-    const order = (ids: string[]) => app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `win-${++n}-xxxxxx`, categoryIds: ids, rider: RIDER, waiver } });
+    const order = (ids: string[]) => app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `win-${++n}-xxxxxx`, categoryIds: ids, rider: RIDER, waiver } });
     return { app, eventId, code, order, clock };
   }
 
@@ -283,7 +283,7 @@ describe('registration windows through the API', () => {
     expect(pub.nowLocal).toBe('2027-01-15T12:00');
     const cat = pub.config.categories.find((c) => c.timingCode === 'RR-M35-34')!.id;
     const waiver = { version: pub.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
-    const res = await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: 'demo-window-1', categoryIds: [cat], rider: RIDER, waiver } });
+    const res = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: 'demo-window-1', categoryIds: [cat], rider: RIDER, waiver } });
     expect(res.statusCode).toBe(201);
   });
 
@@ -308,7 +308,7 @@ describe('Berkeley package order snapshot', () => {
       const config = event.config as EventConfig;
       const categoryIds = ['RR-M35-34', 'CR-M35-34'].map((code) => config.categories.find((c) => c.timingCode === code)!.id);
       expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
-      const res = await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: {
+      const res = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: {
         clientRequestId: 'berkeley-package-order', categoryIds, rider: RIDER,
         waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' },
       } });
@@ -326,5 +326,28 @@ describe('Berkeley package order snapshot', () => {
     } finally {
       await app.close();
     }
+  });
+});
+
+describe('order numbers', () => {
+  it('start with DEMO- on a demonstration event and CR- on any other event', async () => {
+    const { app, eventId, event, order, code } = await setup();
+    const demo = (await order([code('RR-M35-34')])).json() as Order & { orderNumber: string };
+    expect(demo.orderNumber).toBe(`DEMO-${demo.id.slice(4, 12).toUpperCase()}`);
+
+    // The same event published as a real one: new orders are numbered CR-, the earlier order keeps DEMO-.
+    const config = { ...event.config, event: { ...event.config.event, isDemo: false, demoNotice: '' }, registration: { ...event.config.registration, demoIgnoreWindows: false } };
+    expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    const res = await order([code('CR-M35-34')]);
+    expect(res.statusCode).toBe(201);
+    const real = res.json() as Order & { orderNumber: string };
+    expect(real.orderNumber).toBe(`CR-${real.id.slice(4, 12).toUpperCase()}`);
+    const again = (await app.inject({ method: 'GET', url: `/api/orders/${demo.id}` })).json() as { orderNumber: string };
+    expect(again.orderNumber).toBe(demo.orderNumber);
+    // Organizer search finds an order by its number, with or without the prefix.
+    const find = async (q: string) => ((await app.inject({ method: 'GET', url: `/api/events/${eventId}/orders?${new URLSearchParams({ q })}` })).json() as { id: string }[]).map((o) => o.id);
+    expect(await find(real.orderNumber)).toEqual([real.id]);
+    expect(await find(real.orderNumber.slice(3))).toEqual([real.id]);
   });
 });
