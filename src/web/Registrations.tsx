@@ -144,6 +144,10 @@ function EntryLine({ entry, confirmed, onChange }: { entry: OrderView['entries']
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const submit = async () => {
+    if (note.trim().length < 3) {
+      setErr('Write how you checked the license, for example "license card seen".');
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
@@ -168,13 +172,13 @@ function EntryLine({ entry, confirmed, onChange }: { entry: OrderView['entries']
         ) : open ? (
           <span className="review-form">
             <input className="input" aria-label={`How was the license for ${entry.categoryName} checked?`} placeholder="How you checked it, for example: license card seen" value={note} onChange={(e) => setNote(e.target.value)} />
-            <button className="btn btn--primary btn--small" disabled={busy || note.trim().length < 3} onClick={submit}>
+            <button className="btn btn--primary btn--small" disabled={busy} onClick={submit}>
               Mark reviewed
             </button>
             <button className="btn btn--ghost btn--small" onClick={() => setOpen(false)}>
               Cancel
             </button>
-            {err && <span className="text-error small">{err}</span>}
+            {err && <span className="text-error small" role="alert">{err}</span>}
           </span>
         ) : (
           <span className="order__entry-actions">

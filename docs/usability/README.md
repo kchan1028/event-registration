@@ -8,6 +8,7 @@ Use this kit to find out whether organizers, check-in volunteers, and riders or 
 |---|---|
 | [facilitator-script.md](facilitator-script.md) | What to say before, during, and after each session, and what counts as a rescue |
 | [tasks.md](tasks.md) | The tasks for each role, the starting state, what success looks like, and what to watch for |
+| [pilot-run-2026-11-14.md](pilot-run-2026-11-14.md) | A dry run of every task by the developer tools, before real sessions. Not gate evidence |
 | [observation-sheet.md](observation-sheet.md) | One printed sheet per session, plus the results summary that feeds the exit gate |
 
 ## Who to recruit

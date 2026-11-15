@@ -244,7 +244,7 @@ export function readiness(opts: { licenseReviewed: boolean; licenseNote: string 
   const items: ReadinessItem[] = [
     {
       key: 'license',
-      label: opts.licenseReviewed ? (opts.licenseNote?.startsWith('Simulated') ? 'License: simulated check valid (demo)' : 'License reviewed by the organizer') : 'License needs review: not verified yet',
+      label: opts.licenseReviewed ? (opts.licenseNote?.startsWith('Simulated') ? 'License: simulated check valid (demo)' : 'License reviewed by the organizer') : 'License needs review: not verified yet. Bring your license to the registration desk before you race.',
       state: opts.licenseReviewed ? 'done' : 'needs_review',
     },
     { key: 'waiver', label: opts.signerName ? `Waiver signed by ${opts.signerName}` : 'Waiver not signed', state: opts.signerName ? 'done' : 'missing' },

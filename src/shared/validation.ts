@@ -86,7 +86,7 @@ export function validateConfig(config: EventConfig, entries: readonly TestEntry[
   for (const [k, names] of byRaceTime) {
     if (names.length > 1) {
       const raceId = k.split('@')[0];
-      add('warning', `race.${raceId}.same-start.${k}`, `${names.join(' and ')} start at the same time in the same race.`, { kind: 'race', id: raceId });
+      add('warning', `race.${raceId}.same-start.${k}`, `${names.length} start groups start at the same time in the same race: ${names.map((n) => `“${n}”`).join(', ')}.`, { kind: 'race', id: raceId });
     }
   }
 

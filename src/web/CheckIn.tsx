@@ -49,10 +49,23 @@ export function CheckIn({ eventId }: { eventId: string }) {
     });
   }
 
-  /** A scanned or typed check-in code that matches exactly one rider opens that rider. */
-  function onSearchSubmit(e: FormEvent) {
+  /**
+   * A scanned or typed search that matches exactly one rider opens that rider.
+   * Looks up the current text immediately: a scanner sends Enter before the
+   * debounced search returns, so the list on screen may still be stale.
+   */
+  async function onSearchSubmit(e: FormEvent) {
     e.preventDefault();
-    if (riders.length === 1) select(riders[0]);
+    const query = q.trim();
+    if (!query) return;
+    try {
+      const fresh = await api.checkInList(eventId, dayId, query);
+      setData(fresh);
+      setError(null);
+      if (fresh.riders.length === 1) select(fresh.riders[0]);
+    } catch (err) {
+      setError((err as ApiError).message);
+    }
   }
 
   function replace(r: CheckInRider) {
