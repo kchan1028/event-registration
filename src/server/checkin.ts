@@ -61,6 +61,12 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       bib: activeBib(o.eventId, scope, o.id),
       bibHistory: history,
       checkedInAt: checkIn?.checked_in_at ?? null,
+      undoneCheckIns: db
+        .prepare<[string, string], { checked_in_at: string; undone_at: string; bib: number | null; bib_released: number; reason: string }>(
+          `SELECT checked_in_at, undone_at, bib, bib_released, reason FROM check_in_undos WHERE order_id = ? AND day_id = ? ORDER BY undone_at`,
+        )
+        .all(o.id, dayId)
+        .map((u) => ({ checkedInAt: u.checked_in_at, undoneAt: u.undone_at, bib: u.bib, bibReleased: u.bib_released === 1, reason: u.reason })),
     };
   }
 
@@ -167,6 +173,44 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
           const s = settings(eventId);
           if (card.bib === null) assign(eventId, orderId, dayId, s, requestedBib);
           db.prepare(`INSERT OR IGNORE INTO check_ins (id, event_id, order_id, day_id, checked_in_at) VALUES (?, ?, ?, ?, ?)`).run(newId('chk'), eventId, orderId, dayId, nowIso());
+          return cardFor(eventId, orderId, dayId);
+        })
+        .immediate();
+    },
+
+    /**
+     * Undo a mistaken check-in for one race day. The check-in is removed so the rider can be
+     * checked in again, and the record is kept with the reason. The bib is released unless the
+     * same bib also covers another day this rider is still checked in for (one bib all weekend).
+     */
+    undoCheckIn(eventId: string, orderId: string, dayId: string, reason: string) {
+      const cfg = config(eventId);
+      requireDay(cfg, dayId);
+      return db
+        .transaction(() => {
+          const card = cardFor(eventId, orderId, dayId);
+          if (!card.checkedInAt) throw new HttpError(409, 'This rider is not checked in for this day.');
+          const s = settings(eventId);
+          const scope = bibScopeKey(s, dayId);
+          const otherDaysInScope = cfg.days.filter((d) => d.id !== dayId && bibScopeKey(s, d.id) === scope).map((d) => d.id);
+          const stillCheckedInElsewhere = otherDaysInScope.some(
+            (d) => !!db.prepare<[string, string], { id: string }>(`SELECT id FROM check_ins WHERE order_id = ? AND day_id = ?`).get(orderId, d),
+          );
+          const t = nowIso();
+          const releaseBib = card.bib !== null && !stillCheckedInElsewhere;
+          if (releaseBib) {
+            db.prepare(`UPDATE bib_assignments SET released_at = ?, release_reason = ? WHERE event_id = ? AND scope = ? AND order_id = ? AND released_at IS NULL`).run(
+              t,
+              `Check-in undone: ${reason}`,
+              eventId,
+              scope,
+              orderId,
+            );
+          }
+          db.prepare(`DELETE FROM check_ins WHERE order_id = ? AND day_id = ?`).run(orderId, dayId);
+          db.prepare(
+            `INSERT INTO check_in_undos (id, event_id, order_id, day_id, checked_in_at, bib, bib_released, reason, undone_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ).run(newId('undo'), eventId, orderId, dayId, card.checkedInAt, card.bib, releaseBib ? 1 : 0, reason, t);
           return cardFor(eventId, orderId, dayId);
         })
         .immediate();

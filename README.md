@@ -45,7 +45,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Rider demo purchase flow (product.md 2a): browse events, demo rider picker, start-ordered schedule with conflict warnings, bundles, second-race discount, demo fees, emergency contact, typed-name waiver signature, error summaries, all-or-nothing 10-minute holds, "Complete simulated payment" with decline and retry | Implemented and tested in light and dark themes; usability test with people still open |
 | Confirmation with a check-in code and per-entry readiness; organizer Registrations queue with license review | Implemented and tested |
 | Registration open and close times enforced in the event's time zone (demo events can let testers register early, labeled "Demo mode") | Implemented and tested |
-| Race-day check-in: search by name, team, bib, or check-in code; ready/blocked result; bib ranges per event or day; bib history; repeat-safe check-in | Implemented; automated tests in CI; usability test with volunteers still open |
+| Race-day check-in: search by name, team, bib, or check-in code; ready/blocked result; bib ranges per event or day; bib history; repeat-safe check-in; undo a mistaken check-in with a reason | Implemented; automated tests in CI; usability test with volunteers still open |
 | Light and dark themes, following the system setting, with a header toggle | Implemented; contrast checked manually, no automated test yet |
 | Automated accessibility checks (WCAG 2.2 A and AA, axe-core) on the main screens in both themes | Implemented; run in CI. Keyboard, screen-reader, and real-phone passes not done |
 | CSV import and export of category schedules, with column matching and per-row errors ([format](docs/csv-category-format.md)) | Implemented and tested |

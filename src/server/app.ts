@@ -276,6 +276,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return checkIn.changeBib(p.id, p.orderId, body.dayId, body.bib, body.reason);
   });
 
+  app.post('/api/events/:id/check-in/:orderId/undo', async (req) => {
+    const p = z.object({ id: z.string().min(1).max(64), orderId: z.string().min(1).max(64) }).parse(req.params);
+    const body = z.object({ dayId: z.string().min(1).max(64), reason: z.string().trim().min(3, 'Say why the check-in is being undone.').max(200) }).parse(req.body);
+    return checkIn.undoCheckIn(p.id, p.orderId, body.dayId, body.reason);
+  });
+
   app.post('/api/events/:id/check-in-demo-riders', async (req, reply) => reply.status(201).send(checkIn.addDemoRiders(idParam.parse(req.params).id)));
 
   // Start lists and the sample timer export (prototype). No contact or payment data.
