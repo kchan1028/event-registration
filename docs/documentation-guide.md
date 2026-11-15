@@ -37,6 +37,7 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Writing rules, status vocabulary, glossary | This file | |
 | Setup and troubleshooting | [runbooks/](runbooks/local-setup.md) | Local setup and troubleshooting exist; race-day runbooks are planned |
 | Visual system of the interface | [DESIGN.md](../DESIGN.md) | Tokens, type, components; derived from the built interface |
+| Usability test plan, scripts, tasks, and results | [usability/](usability/README.md) | Kit implemented; results summaries are added after sessions, with participant codes only |
 | Demo and category configuration fixtures | [fixtures/](fixtures/README.md) | Fake, illustrative data only. Demo purchase flow fixtures exist; category configuration fixtures are planned |
 
 ### Repository structure
@@ -61,6 +62,7 @@ Current layout:
     ├── decisions/                Architecture decision records
     ├── fixtures/                 Fake demo purchase flow data and sample waiver text
     ├── runbooks/                 Local setup and troubleshooting
+    ├── usability/                Phase 1 usability test kit
     └── screenshots/              Images used in the README
 ```
 
