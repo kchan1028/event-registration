@@ -165,3 +165,12 @@ The next `npm run dev` (or `npm run seed:*`) creates the database again, empty, 
 ## Common problems
 
 See [troubleshooting.md](troubleshooting.md).
+
+
+## Automatic bib assignment after registration closes
+
+In **Race-day check-in → Bib ranges**, save the ranges, choose an automatic sort, and select **Enable after-close assignment**. This opts the event into one recorded allocation job. **Refresh automatic status** shows its current reason or result; **Cancel automatic assignment** stops a pending job without changing existing bibs.
+
+The running API checks once a minute and on startup. Every non-archived published category must have closed in the event time zone (or be explicitly closed), and active checkout holds must settle or expire. An unset closing time or the demo's registration-window bypass keeps the job waiting. Use fictional data while organizer MFA remains unbuilt. Range exhaustion leaves all days unchanged, and the job retries after the ranges are corrected. A completed job stays complete; later walk-ups use normal check-in assignment. Re-enabling creates another job, preserving the earlier history.
+
+The API must keep running for the close-time check. A restart catches up pending jobs. This is an in-process worker, not a provisioned cloud scheduler. Assignment reserves a number and never authorizes bib handoff while readiness is blocked.

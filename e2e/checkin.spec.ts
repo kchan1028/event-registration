@@ -175,3 +175,36 @@ test('an assigned bib stays visible when the following list refresh fails', asyn
   await expect(panel.getByRole('checkbox', { name: 'Alex Demo', exact: true })).toBeDisabled();
   await expect(panel.getByRole('row', { name: /Alex Demo/ })).toContainText('100');
 });
+
+for (const mobile of [false, true]) {
+  test(`automatic assignment is opt-in after registration close (${mobile ? 'mobile' : 'desktop'})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    const api = page.request;
+    const { eventId } = await (await api.post('/api/demo')).json();
+    await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+    await page.goto(`/#/events/${eventId}/check-in`);
+    await page.getByRole('button', { name: 'Bib ranges', exact: true }).click();
+    const panel = page.getByRole('region', { name: 'Automatic bib assignment', exact: true });
+    await expect(panel.getByText('Automatic assignment is off.', { exact: true })).toBeVisible();
+    await panel.getByRole('combobox', { name: 'Sort riders' }).selectOption('registration');
+    await panel.getByRole('button', { name: 'Enable after-close assignment', exact: true }).click();
+    await expect(panel.getByRole('button', { name: 'Cancel automatic assignment', exact: true })).toBeEnabled();
+    const jobs = await (await api.get(`/api/events/${eventId}/automatic-bibs`)).json();
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({ sort: 'registration', completedAt: null, cancelledAt: null });
+    await expect(panel).toContainText('after every published category closes');
+    expect((await new AxeBuilder({ page }).include('[aria-label="Automatic bib assignment"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: `test-results/automatic-bibs-${mobile ? 'mobile' : 'desktop'}.png`, fullPage: true, animations: 'disabled' });
+    if (mobile) {
+      await page.getByRole('button', { name: /Switch to dark/ }).click();
+      await page.screenshot({ path: 'test-results/automatic-bibs-mobile-dark.png', fullPage: true, animations: 'disabled' });
+      expect((await new AxeBuilder({ page }).include('[aria-label="Automatic bib assignment"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    }
+    await panel.getByRole('button', { name: 'Cancel automatic assignment', exact: true }).click();
+    await expect(panel.getByText('Automatic assignment is off.', { exact: true })).toBeVisible();
+    const cancelled = await (await api.get(`/api/events/${eventId}/automatic-bibs`)).json();
+    expect(cancelled[0].cancelledAt).not.toBeNull();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}

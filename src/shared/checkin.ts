@@ -152,3 +152,18 @@ export function bibBatchExclusion(rider: Pick<CheckInRider, 'payment' | 'entries
   if (rider.entries.length === 0) return 'No entry on this day';
   return null;
 }
+
+export const automaticBibInputSchema = z.object({ sort: bibBatchSchema.shape.sort.unwrap() });
+export type AutomaticBibInput = z.infer<typeof automaticBibInputSchema>;
+export interface AutomaticBibJob {
+  id: string;
+  sort: AutomaticBibInput['sort'];
+  configuredBy: string;
+  createdAt: string;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  cancelledBy: string | null;
+  lastAttemptAt: string | null;
+  message: string | null;
+  assigned: number | null;
+}

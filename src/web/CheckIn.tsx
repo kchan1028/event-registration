@@ -3,6 +3,7 @@ import { BIB_SCOPES, rangeFor, type BibSettings } from '../shared/checkin';
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
 import { can } from '../shared/roles';
+import { AutomaticBibs } from './AutomaticBibs';
 import { BibBatchPanel } from './BibBatchPanel';
 import { href } from './App';
 import { Icon, ThemeToggle } from './ui';
@@ -148,7 +149,10 @@ export function CheckIn({ eventId }: { eventId: string }) {
 
       {data && showBatch && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId} eventId={eventId} dayId={data.dayId} onChanged={() => refreshAfterBatch.current()} onClose={() => setShowBatch(false)} />}
 
-      {data && showBibs && <BibSettingsPanel data={data} onSaved={() => void load(q, dayId)} onClose={() => setShowBibs(false)} />}
+      {data && showBibs && can(data.roles, 'checkin.settings') && <>
+        <BibSettingsPanel data={data} onSaved={() => void load(q, dayId)} onClose={() => setShowBibs(false)} />
+        <AutomaticBibs key={eventId} eventId={eventId} />
+      </>}
 
       {data && (
         <>

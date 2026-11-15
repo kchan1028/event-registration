@@ -15,6 +15,7 @@ import { riderCorrectionSchema } from '../shared/lookup';
 import { changeImpact, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
 import { openDb } from './db';
+import { createAutomaticBibs, type AutomaticBibs } from './automaticBibs';
 import { createCheckIn } from './checkin';
 import { createCaseStudyFixtures } from './caseStudies';
 import { createIdentity } from './identity';
@@ -58,7 +59,7 @@ export interface AppOptions {
   appUrl?: string;
 }
 
-export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; orders: Orders; access: Access } {
+export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; orders: Orders; access: Access; automaticBibs: AutomaticBibs } {
   // Sign-in, payments, and the app URL are resolved from the environment here and nowhere else.
   // A missing or refused setting throws before anything is opened; src/server/index.ts prints it and exits.
   const provider = opts.auth ?? authProviderFromEnv();
@@ -76,6 +77,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const waitlist = createWaitlist(db, repo, clock);
   const caseStudies = createCaseStudyFixtures(db, repo, orders);
   const access = createAccess(db, provider, clock);
+  const automaticBibs = createAutomaticBibs(db, repo, checkIn, access, clock);
   const refunds = createRefunds(db, paymentProvider, clock);
   const payments = createPayments(db, orders, paymentProvider, clock, appUrl, refunds.onRefundEvent);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
@@ -91,6 +93,22 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const waitlistParams = z.object({ id: idStr, entryId: idStr });
   const checkInParams = z.object({ id: idStr, orderId: idStr });
   const raceParams = z.object({ id: idStr, raceId: idStr });
+  let stoppingBibWorker = false;
+  let bibTimer: ReturnType<typeof setTimeout> | undefined;
+  let bibWork: Promise<void> = Promise.resolve();
+  function pollAutomaticBibs() {
+    bibWork = automaticBibs.runDue().catch(() => {
+      app.log.error('Automatic bib worker failed; inspect automatic-bib job status and database availability.');
+    }).finally(() => {
+      if (!stoppingBibWorker) bibTimer = setTimeout(pollAutomaticBibs, 60_000);
+    });
+  }
+  app.addHook('onListen', async () => { pollAutomaticBibs(); });
+  app.addHook('preClose', async () => {
+    stoppingBibWorker = true;
+    clearTimeout(bibTimer);
+    await bibWork;
+  });
   app.addHook('onClose', async () => db.close());
 
   // Sign-in is required for every API route unless the route is marked public. Default deny:
@@ -553,6 +571,20 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return checkIn.undoCheckIn(p.id, p.orderId, body.dayId, body.reason);
   });
 
+  app.get('/api/events/:id/automatic-bibs', async (req) => {
+    const { id } = await onEvent(req, 'checkin.settings');
+    return automaticBibs.list(id);
+  });
+  app.post('/api/events/:id/automatic-bibs', async (req) => {
+    const { id } = await onEvent(req, 'checkin.settings');
+    return automaticBibs.enable(id, req.body, me(req));
+  });
+  app.delete('/api/events/:id/automatic-bibs', async (req) => {
+    const { id } = await onEvent(req, 'checkin.settings');
+    await automaticBibs.disable(id, me(req));
+    return { disabled: true };
+  });
+
   app.post('/api/events/:id/bibs/preview', async (req) => {
     await onEvent(req, 'checkin.settings');
     const body = bibBatchSchema.parse(req.body);
@@ -683,5 +715,5 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     });
   }
 
-  return { app, repo, orders, access };
+  return { app, repo, orders, access, automaticBibs };
 }
