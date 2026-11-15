@@ -79,7 +79,7 @@ Built November 14, 2026, on the stack in [ADR 0001](docs/decisions/0001-stack-fo
 
 **Change resolution workflow (added November 14, 2026):** publishing a change that touches paid entries opens one item per affected entry under **Changes to resolve** on Registrations, listing what changed. The organizer records the outcome (kept as is, transferred, or withdrawn), confirms the rider was told, and adds a note; the server refuses an outcome that does not match the entry (a withdrawal or transfer must have happened on the entry first). A later change to the same entry adds to its open item instead of opening another. Covered by API tests in `tests/resolutions.test.ts` (run in CI) and checked by hand in the browser. Contacting riders happens outside the app.
 
-**Not built yet (still required by product.md):** rider registration and checkout.
+**Not built yet (still required by product.md):** nothing beyond the hosted Phase 2 work; the local rider checkout is described under [Rider checkout prototype](#rider-checkout-prototype).
 
 **Pending external dependencies, shown as pending in the interface:** USA Cycling license and waiver checks, Stripe payments, and sign-in with required MFA. Until sign-in exists the app must not be hosted or shared.
 
@@ -221,6 +221,8 @@ Exit gate: Participants complete the core tasks without facilitator rescue; all 
 ## Phase 2 — Build the registration core
 
 Indicative effort: 5–7 weeks. Depends on Phase 1 and a settled payment model. Priority: P0.
+
+Decisions first (November 14, 2026): three decision records were drafted; 0003 and 0004 were accepted by the owner on November 14, 2026, and 0005 remains Proposed: [ADR 0003](docs/decisions/0003-sign-in-and-mfa.md) sign-in with required MFA (recommends a managed identity service), [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md) hosted stack and database (recommends keeping TypeScript and React, with managed PostgreSQL on a managed application platform), and [ADR 0005](docs/decisions/0005-merchant-and-settlement-model.md) merchant and settlement model (recommends each club as merchant through its own connected Stripe account). 0003 chose Clerk Pro with SMS off (a test-account spike is a follow-up); 0004 chose Render and Render Postgres on Pro (treasurer cost approval and legal review of minors' data are follow-ups before production). No live keys or live payments until 0005 is accepted. The Phase 1 exit gate is still open; starting Phase 2 decisions now is the owner's choice.
 
 Build:
 

@@ -76,7 +76,7 @@ These come from [product.md](../product.md) and apply whatever stack is chosen.
 
 ## Proposed logical components
 
-This is the target shape for the hosted product. Only the registration core rules and the organizer workspace exist today, running locally on one computer.
+This is the target shape for the hosted product. Only the registration core rules and the organizer workspace exist today, running locally on one computer. Accepted for the hosted product: sign-in through Clerk with required MFA and SMS off ([ADR 0003](decisions/0003-sign-in-and-mfa.md)), and the existing TypeScript app on Render with Render Postgres ([ADR 0004](decisions/0004-hosted-stack-and-database.md)).
 
 ```mermaid
 flowchart LR
@@ -138,12 +138,12 @@ Private pages must not be indexable by search engines. See [content-guide.md](co
 
 Each of these needs an ADR before implementation depends on it. Options and tradeoffs are in the [decision backlog](decisions/README.md#decision-backlog).
 
-1. Application stack (language, framework, front-end approach)
-2. Primary datastore and the capacity-locking approach
+1. Application stack (language, framework, front-end approach): decided in [ADR 0004](decisions/0004-hosted-stack-and-database.md)
+2. Primary datastore and the capacity-locking approach: decided in [ADR 0004](decisions/0004-hosted-stack-and-database.md) (PostgreSQL)
 3. Merchant-of-record and Stripe charge/transfer/settlement operating model (provider selected in ADR 0002)
 4. USA Cycling license and waiver path
-5. Hosting, backups, and monitoring
-6. Authentication for riders, guardians, and organizers (MFA is required for all accounts; the ADR chooses methods and recovery)
+5. Hosting, backups, and monitoring: decided in [ADR 0004](decisions/0004-hosted-stack-and-database.md) (Render)
+6. Authentication for riders, guardians, and organizers: decided in [ADR 0003](decisions/0003-sign-in-and-mfa.md) (Clerk, MFA required, SMS off)
 7. Transactional email provider
 8. Timer export formats
 9. Data retention and deletion periods

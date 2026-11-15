@@ -72,6 +72,9 @@ Roadmap impact (roadmap.md):
 |---|---|---|---|
 | [0001](0001-stack-for-category-builder-milestone.md) | Stack for the category builder milestone | Accepted | 2026-11-14 |
 | [0002](0002-stripe-payments.md) | Stripe for planned payments | Accepted | 2026-11-14 |
+| [0003](0003-sign-in-and-mfa.md) | Sign-in with required multi-factor authentication (Clerk Pro, SMS off) | Accepted | 2026-11-14 |
+| [0004](0004-hosted-stack-and-database.md) | Hosted stack and database (Render, Render Postgres) | Accepted | 2026-11-14 |
+| [0005](0005-merchant-and-settlement-model.md) | Merchant and settlement model for Stripe payments | Proposed | 2026-11-14 |
 
 ## Decision backlog
 
