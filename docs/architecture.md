@@ -148,7 +148,7 @@ Each of these needs an ADR before implementation depends on it. Options and trad
 4. USA Cycling license and waiver path
 5. Hosting, backups, and monitoring: decided in [ADR 0004](decisions/0004-hosted-stack-and-database.md) (Render)
 6. Authentication for riders, guardians, and organizers: decided in [ADR 0003](decisions/0003-sign-in-and-mfa.md) (Clerk; email sign-in for everyone, MFA for organizer roles before the live pilot, SMS off)
-7. Transactional email provider
+7. Transactional email provider: decided in [ADR 0006](decisions/0006-transactional-email-amazon-ses.md) (Amazon SES; sending not built)
 8. Timer export formats
 9. Data retention and deletion periods
 

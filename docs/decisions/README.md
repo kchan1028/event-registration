@@ -2,7 +2,7 @@
 
 An architecture decision record (ADR) is a short document that captures one significant decision: the context, the options considered, what was chosen, and the consequences. ADRs let a successor understand why the system looks the way it does without asking the person who built it.
 
-**Current state:** two ADRs are accepted. [0002](0002-stripe-payments.md) selects Stripe for Planned payments while leaving the merchant/settlement model open. The app stack is recorded in [0001](0001-stack-for-category-builder-milestone.md). The backlog below lists decisions still open, with known options and tradeoffs. Options listed in the backlog are not recommendations.
+**Current state:** five ADRs are accepted (0001 to 0004 and 0006) and one is Proposed (0005, merchant and settlement model). See the index below. The backlog below lists decisions still open, with known options and tradeoffs. Options listed in the backlog are not recommendations.
 
 ## Document maintenance rule (mandatory)
 
@@ -75,6 +75,7 @@ Roadmap impact (roadmap.md):
 | [0003](0003-sign-in-and-mfa.md) | Sign-in with required multi-factor authentication (amended 2026-11-15: email sign-in on Clerk's free plan; MFA on Clerk Pro, SMS off, for organizer roles only, before the live pilot) | Accepted | 2026-11-14 |
 | [0004](0004-hosted-stack-and-database.md) | Hosted stack and database (Render, Render Postgres) | Accepted | 2026-11-14 |
 | [0005](0005-merchant-and-settlement-model.md) | Merchant and settlement model for Stripe payments | Proposed | 2026-11-14 |
+| [0006](0006-transactional-email-amazon-ses.md) | Amazon SES for transactional email | Accepted | 2026-11-15 |
 
 ## Decision backlog
 
@@ -90,7 +91,7 @@ These are unresolved. They are ordered roughly by when the roadmap needs them. "
 | Hosting, backups, and monitoring | Phase 2 | Managed platform; self-managed cloud resources | Managed services cost more but need less volunteer expertise; restore must be demonstrated either way. Signals to monitor are in [operations.md](../operations.md#monitoring-and-alerts) |
 | Support coverage and incident response | Phase 3 exit | Volunteer support owner per event; paid support; a hybrid | Who answers on opening day and race morning, freeze lengths, and response targets. See [operations.md](../operations.md) |
 | Authentication | Phase 2 | First factor: email magic links, passwords, or third-party sign-in. Second factor (decided in ADR 0003: organizer roles only, before the live pilot; riders and guardians use email sign-in only): passkeys, authenticator apps, SMS fallback for riders and guardians only (never organizers) | MFA is required by [product.md](../../product.md#sign-in-and-account-security) before the live pilot; choose methods that occasional riders and guardians can complete, and phishing-resistant factors for organizers |
-| Transactional email provider | Phase 2 | To be compared | Delivery status and suppression handling are required |
+| Transactional email provider | Phase 2 | Decided in ADR 0006: Amazon SES. Marketing email later: see the [case study](../discovery/email-providers.md) | Delivery status and suppression handling are required |
 | Timer export format | Phase 1 (samples), Phase 3 (tested) | Whatever the actual timer accepts | Must be tested with the real timer; no assumed standard |
 | Data retention and deletion periods | Before the pilot | To be set with the club and federation requirements | Waiver and financial records may need long retention; other data should be kept as briefly as possible |
 | Product name | Before any public page | CycleReg (working name, availability not checked) | Trademark and domain availability |
