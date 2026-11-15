@@ -3,7 +3,8 @@ import { api } from '../api';
 import { useLoad } from '../useLoad';
 
 /**
- * Event totals at a glance: riders, entries, and orders that need a person. Roles that may download
+ * Event totals at a glance: riders, entries, and the work still open (license reviews, payment
+ * exceptions, waitlist). Roles that may download
  * the ledger also see the money, which adds up to the ledger CSV.
  */
 export function Summary({ eventId, refreshKey }: { eventId: string; refreshKey: unknown }) {
@@ -37,10 +38,23 @@ export function Summary({ eventId, refreshKey }: { eventId: string; refreshKey: 
           <dd>{s.orders.needsAttention}</dd>
         </div>
         <div>
+          <dt>License reviews to do</dt>
+          <dd>{s.licenseReviews}</dd>
+        </div>
+        <div>
+          <dt>Waitlist waiting</dt>
+          <dd>{s.waitlist.waiting}</dd>
+        </div>
+        <div>
           <dt>Withdrawn entries</dt>
           <dd>{s.entries.withdrawn}</dd>
         </div>
       </dl>
+      {(s.waitlist.offered > 0 || s.waitlist.expired > 0 || s.waitlist.accepted > 0) && (
+        <p className="small">
+          Waitlist offers: {s.waitlist.offered} open, {s.waitlist.expired} ran out, {s.waitlist.accepted} registered.
+        </p>
+      )}
       <p className="muted small">A rider with several entries counts once; separate orders count once only after they are linked as the same rider.</p>
       {m && (
         <div className="table-wrap" tabIndex={0} role="region" aria-label="Money">

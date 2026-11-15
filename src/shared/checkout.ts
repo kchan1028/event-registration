@@ -260,6 +260,11 @@ export function checkSelection(config: EventConfig, categoryIds: readonly string
   return { ok: problems.length === 0, problems, eligibility, conflicts, needsGuardian: needsGuardian(config, categoryIds, profile.racingAge) };
 }
 
+/** A paid entry still racing that no organizer has reviewed the license for. A withdrawn entry can never be reviewed. */
+export function awaitsLicenseReview(orderStatus: string, entry: { status: string; licenseReviewed: boolean }): boolean {
+  return orderStatus === 'confirmed' && entry.status === 'confirmed' && !entry.licenseReviewed;
+}
+
 export type ReadinessItem = { key: 'license' | 'waiver' | 'guardian'; label: string; state: 'done' | 'needs_review' | 'missing' };
 
 /** What a rider still needs before they are cleared to race. Paying never clears a rider by itself. */
