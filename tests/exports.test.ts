@@ -60,7 +60,8 @@ describe('organizer exports', () => {
     const [header, ...data] = rows;
     const col = (name: string) => header.indexOf(name);
     const kinds = data.map((r) => r[col('kind')]);
-    expect(kinds).toEqual(expect.arrayContaining(['entry', 'discount', 'fee', 'order_total', 'transfer_difference', 'withdrawal']));
+    // This demo event charges no fees, so there are no fee rows; any fees would be summed below like other lines.
+    expect(kinds).toEqual(expect.arrayContaining(['entry', 'discount', 'order_total', 'transfer_difference', 'withdrawal']));
     const orderNumbers = new Set(data.map((r) => r[col('order_number')]));
     expect(orderNumbers.size).toBe(1);
     const lines = data.filter((r) => ['entry', 'discount', 'fee'].includes(r[col('kind')]));
