@@ -3,6 +3,7 @@ import { Builder } from './Builder';
 import { CheckIn } from './CheckIn';
 import { Home } from './Home';
 import { OrderPage, Register, RegisterIndex } from './Register';
+import { Roster } from './Roster';
 
 export type Route =
   | { page: 'home' }
@@ -10,6 +11,7 @@ export type Route =
   | { page: 'events' }
   | { page: 'order'; orderId: string }
   | { page: 'checkin'; eventId: string }
+  | { page: 'roster'; eventId: string }
   | { page: 'event'; eventId: string; view: 'race'; raceId: string | null }
   | { page: 'event'; eventId: string; view: 'setup' | 'pools' | 'publish' | 'preview' | 'registrations' | 'import' | 'startlists' };
 
@@ -22,6 +24,7 @@ export function parseHash(hash: string): Route {
   const eventId = parts[1];
   const view = parts[2];
   if (view === 'check-in') return { page: 'checkin', eventId };
+  if (view === 'roster') return { page: 'roster', eventId };
   if (view === 'setup' || view === 'pools' || view === 'publish' || view === 'preview' || view === 'registrations' || view === 'import' || view === 'startlists') return { page: 'event', eventId, view };
   return { page: 'event', eventId, view: 'race', raceId: view === 'race' ? (parts[3] ?? null) : null };
 }
@@ -32,6 +35,7 @@ export function href(route: Route): string {
   if (route.page === 'events') return '#/register';
   if (route.page === 'order') return `#/orders/${route.orderId}`;
   if (route.page === 'checkin') return `#/events/${route.eventId}/check-in`;
+  if (route.page === 'roster') return `#/events/${route.eventId}/roster`;
   if (route.view === 'race') return `#/events/${route.eventId}${route.raceId ? `/race/${route.raceId}` : ''}`;
   return `#/events/${route.eventId}/${route.view}`;
 }
@@ -53,5 +57,6 @@ export function App() {
   if (route.page === 'events') return <RegisterIndex />;
   if (route.page === 'order') return <OrderPage key={route.orderId} orderId={route.orderId} />;
   if (route.page === 'checkin') return <CheckIn key={route.eventId} eventId={route.eventId} />;
+  if (route.page === 'roster') return <Roster key={route.eventId} eventId={route.eventId} />;
   return <Builder key={route.eventId} route={route} />;
 }
