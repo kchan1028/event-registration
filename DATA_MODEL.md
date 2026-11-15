@@ -2,7 +2,7 @@
 
 This describes the database the local prototype uses today. It covers tables, relationships, important fields, constraints, and what happens when data is removed. The intended product data model, including entities that are not built yet, is in [product.md](product.md#data-model) and [product.md](product.md#data-storage).
 
-**Status:** Implemented (local prototype). Describes schema version 7 (seven migrations) as of November 14, 2026.
+**Status:** Implemented (local prototype). Describes schema version 8 (eight migrations) as of November 14, 2026.
 
 **Source of truth:** the migrations in [src/server/db.ts](src/server/db.ts) and the event configuration schema in [src/shared/schema.ts](src/shared/schema.ts). If this file disagrees with them, the code wins; fix this file in the same change.
 
@@ -37,6 +37,7 @@ erDiagram
     orders ||--o{ check_ins : "checked in"
     orders ||--o{ check_in_undos : "undone check-ins"
     events ||--o{ start_list_snapshots : "start lists"
+    events ||--o{ start_list_locks : "locked start lists"
     events ||--o{ waitlist_entries : "waitlists"
     orders |o--o| waitlist_entries : "redeems offer"
     order_entries ||--o{ entry_changes : "transfers and withdrawals"
@@ -250,6 +251,18 @@ Organizer-managed waitlists (migration 5). A rider joins a full category whose w
 | `updated_at` | |
 
 Paying for the offer's order sets `status` to `accepted`. Removing a rider withdraws any open offer.
+
+### start_list_locks
+
+Start-list locks (migration 8). The organizer locks a race's start list when sending it to the timer. Locking saves a new `start_list_snapshots` row and records the lock against it. Changes after a lock are allowed and are shown as revisions against the locked snapshot. Locking again adds a new row; the most recent row is the current lock.
+
+| Column | Notes |
+|---|---|
+| `id` | Primary key |
+| `event_id` | References `events` |
+| `race_id` | Race ID inside the event configuration. Indexed with `event_id` and `locked_at` |
+| `snapshot_version` | The `start_list_snapshots.version` that was locked |
+| `locked_at` | |
 
 ## Event configuration (JSON)
 

@@ -121,7 +121,9 @@ Built November 14, 2026, building on the check-in prototype. It covers the Phase
 
 **Verified:** checked by hand in the browser. Automated tests in `tests/startlists.test.ts` cover CSV quoting and formula guarding, start order, the diff, confirmed-only rows, snapshots and later changes, CSV headers and stable IDs, and the absence of contact data; they run in CI.
 
-**Not built yet:** a format agreed with the actual timer and a round trip through timing software (the open research questions in [product.md](product.md#results-site-updates-research)); a start-list lock; the timer/export role and sign-in (anyone with the local app can download); rider identity across separate orders.
+**Start-list lock (added November 14, 2026):** **Lock start list** on a race saves a snapshot and marks it as the list sent to the timer, with a link to download that locked version. Policy (decided by the project owner, November 14, 2026): the organizer locks each race's list; changes after the lock (new entries, transfers, withdrawals, check-in bibs) are still allowed and appear as "Revisions since the lock" for the timer, never blocked. **Lock again at current list** moves the lock to a new snapshot. Covered by an API test in `tests/startlists.test.ts` (run in CI) and checked by hand in the browser (a check-in after the lock showed as a bib revision).
+
+**Not built yet:** a format agreed with the actual timer and a round trip through timing software (the open research questions in [product.md](product.md#results-site-updates-research)); the timer/export role and sign-in (anyone with the local app can download); rider identity across separate orders.
 
 ## Delivery approach
 
