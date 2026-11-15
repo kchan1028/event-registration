@@ -42,7 +42,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
     setBusy(true);
     setMsg(null);
     try {
-      const v = await draft.publish(ack);
+      const v = await draft.publish(ack, impactAck);
       setMsg({ tone: 'ok', text: `Published as version ${v}. The published version is frozen; later edits stay in the draft until you publish again.` });
       setAck(false);
       setImpactAck(false);

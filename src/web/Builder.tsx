@@ -28,7 +28,7 @@ export interface Draft {
   update: (fn: (c: EventConfig) => EventConfig) => void;
   addTestEntries: (categoryId: string, count: number) => Promise<TestEntryResult>;
   clearTestEntries: () => Promise<number>;
-  publish: (acknowledgeWarnings: boolean) => Promise<number>;
+  publish: (acknowledgeWarnings: boolean, acknowledgeImpact?: boolean) => Promise<number>;
   reload: () => void;
 }
 
@@ -135,9 +135,9 @@ function useDraft(eventId: string) {
   }, [eventId]);
 
   const publish = useCallback(
-    async (acknowledgeWarnings: boolean) => {
+    async (acknowledgeWarnings: boolean, acknowledgeImpact = false) => {
       if (!(await flush())) throw new ApiError(409, 'The latest changes could not be saved, so nothing was published.');
-      const payload = await api.publish(eventId, acknowledgeWarnings);
+      const payload = await api.publish(eventId, acknowledgeWarnings, acknowledgeImpact);
       setData(payload);
       return payload.publishedVersion;
     },

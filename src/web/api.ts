@@ -179,7 +179,8 @@ export const api = {
   createOmnium: () => request<{ organizationId: string; eventId: string }>('POST', '/api/demo/berkeley-omnium'),
   event: (id: string) => request<EventPayload>('GET', `/api/events/${id}`),
   saveConfig: (id: string, revision: number, config: EventConfig) => request<EventPayload>('PUT', `/api/events/${id}/config`, { revision, config }),
-  publish: (id: string, acknowledgeWarnings: boolean) => request<EventPayload & { publishedVersion: number }>('POST', `/api/events/${id}/publish`, { acknowledgeWarnings }),
+  publish: (id: string, acknowledgeWarnings: boolean, acknowledgeImpact = false) =>
+    request<EventPayload & { publishedVersion: number }>('POST', `/api/events/${id}/publish`, { acknowledgeWarnings, acknowledgeImpact }),
   addTestEntries: (id: string, categoryId: string, count: number) =>
     request<{ result: TestEntryResult; event: EventPayload }>('POST', `/api/events/${id}/test-entries`, { categoryId, count }),
   clearTestEntries: (id: string) => request<{ removed: number; event: EventPayload }>('DELETE', `/api/events/${id}/test-entries`),
