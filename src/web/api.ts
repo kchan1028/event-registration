@@ -8,13 +8,15 @@ import type { z } from 'zod';
 import type { couponInputSchema, CouponTerms } from '../shared/coupons';
 import type { OrderExtras } from '../shared/categoryExtras';
 import type { FieldChange, RiderCorrection } from '../shared/lookup';
-import type { BibSettings, checkInTiming, CheckInResult, PaymentState } from '../shared/checkin';
+import type { BibSettings, BibBatch, BibPlan, CheckInRider, CheckInList } from '../shared/checkin';
 import type { WaitlistJoin, WaitlistStatus } from '../shared/waitlist';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
 import type { Invitation, MembershipChange, Role } from '../shared/roles';
 
 /** simulated: the labeled demo button. stripe_test: Stripe hosted Checkout in test mode. */
+export type { CheckInRider, CheckInList } from '../shared/checkin';
+
 export type PaymentMode = 'simulated' | 'stripe_test';
 
 /** What an organizer sends to create a coupon code. */
@@ -304,34 +306,6 @@ export interface MemberList {
   history: MembershipChange[];
 }
 
-export interface CheckInRider {
-  orderId: string;
-  checkInCode: string | null;
-  name: string;
-  team: string;
-  racingAge: number;
-  payment: PaymentState;
-  entries: { id: string; categoryName: string; code: string; raceName: string; startTime: string | null }[];
-  readiness: ReadinessItem[];
-  result: CheckInResult;
-  bib: number | null;
-  bibHistory: { bib: number; assignedAt: string; releasedAt: string | null; reason: string | null }[];
-  checkedInAt: string | null;
-  undoneCheckIns: { checkedInAt: string; undoneAt: string; bib: number | null; bibReleased: boolean; reason: string }[];
-}
-
-export interface CheckInList {
-  eventId: string;
-  eventName: string;
-  isDemo: boolean;
-  published: boolean;
-  days: { id: string; label: string; date: string }[];
-  dayId: string;
-  settings: BibSettings;
-  summary: { riders: number; checkedIn: number; blocked: number; bibsIssued: number; timing: ReturnType<typeof checkInTiming> };
-  riders: CheckInRider[];
-}
-
 export interface StartListRace {
   raceId: string;
   raceName: string;
@@ -403,6 +377,8 @@ export const api = {
   reviewLicense: (entryId: string, note: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/license-review`, { note }),
   checkInList: (eventId: string, dayId: string | null, q: string) =>
     request<CheckInList>('GET', `/api/events/${eventId}/check-in?${new URLSearchParams({ ...(dayId ? { day: dayId } : {}), q })}`),
+  previewBibs: (eventId: string, batch: BibBatch) => request<BibPlan>('POST', `/api/events/${eventId}/bibs/preview`, batch),
+  applyBibs: (eventId: string, batch: BibBatch, fingerprint: string) => request<BibPlan & { applied: number }>('POST', `/api/events/${eventId}/bibs/apply`, { ...batch, fingerprint }),
   saveBibSettings: (eventId: string, settings: BibSettings) => request<BibSettings>('PUT', `/api/events/${eventId}/bib-settings`, settings),
   checkIn: (eventId: string, orderId: string, dayId: string, bib: number | null, durationMs: number | null = null) => request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}`, { dayId, bib, durationMs }),
   undoCheckIn: (eventId: string, orderId: string, dayId: string, reason: string) => request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}/undo`, { dayId, reason }),

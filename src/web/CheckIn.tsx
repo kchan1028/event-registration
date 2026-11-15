@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { BIB_SCOPES, rangeFor, type BibSettings } from '../shared/checkin';
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
+import { can } from '../shared/roles';
+import { BibBatchPanel } from './BibBatchPanel';
 import { href } from './App';
 import { Icon, ThemeToggle } from './ui';
 
@@ -16,6 +18,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
   const [data, setData] = useState<CheckInList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showBatch, setShowBatch] = useState(false);
   const [showBibs, setShowBibs] = useState(false);
   const [scanning, setScanning] = useState(false);
   const detailRef = useRef<HTMLElement>(null);
@@ -44,6 +47,9 @@ export function CheckIn({ eventId }: { eventId: string }) {
     const t = setTimeout(() => void load(q, dayId), q ? 150 : 0);
     return () => clearTimeout(t);
   }, [q, dayId, load]);
+
+  const refreshAfterBatch = useRef(() => {});
+  refreshAfterBatch.current = () => { void load(q, dayId); };
 
   const riders = data?.riders ?? [];
   const selected = riders.find((r) => r.orderId === selectedId) ?? null;
@@ -125,9 +131,10 @@ export function CheckIn({ eventId }: { eventId: string }) {
             ))}
           </div>
         )}
-        <button type="button" className="btn btn--secondary btn--small" aria-expanded={showBibs} onClick={() => setShowBibs((v) => !v)}>
+        {data && can(data.roles, 'checkin.settings') && <button type="button" className="btn btn--secondary btn--small" aria-expanded={showBatch} onClick={() => setShowBatch((v) => !v)}>Assign bibs</button>}
+        {data && can(data.roles, 'checkin.settings') && <button type="button" className="btn btn--secondary btn--small" aria-expanded={showBibs} onClick={() => setShowBibs((v) => !v)}>
           Bib ranges
-        </button>
+        </button>}
         <a className="btn btn--secondary btn--small" href={href({ page: 'roster', eventId })}>
           Fallback roster
         </a>
@@ -138,6 +145,8 @@ export function CheckIn({ eventId }: { eventId: string }) {
           <strong>Example data.</strong> Fictional riders, test payments, and simulated license reviews. Nothing here is a real entry or a real license check.
         </p>
       )}
+
+      {data && showBatch && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId} eventId={eventId} dayId={data.dayId} onChanged={() => refreshAfterBatch.current()} onClose={() => setShowBatch(false)} />}
 
       {data && showBibs && <BibSettingsPanel data={data} onSaved={() => void load(q, dayId)} onClose={() => setShowBibs(false)} />}
 

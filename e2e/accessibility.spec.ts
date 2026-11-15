@@ -11,6 +11,7 @@ import { expect, test, type Page } from './fixtures';
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 async function expectNoViolations(page: Page, screen: string) {
+  await expect(page.locator('.skeleton')).toHaveCount(0);
   const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
   const summary = violations.map((v) => `${v.id} (${v.impact}): ${v.help}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
   expect(summary, `Accessibility violations on ${screen}`).toEqual([]);
