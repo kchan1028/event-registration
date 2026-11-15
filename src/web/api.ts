@@ -12,7 +12,7 @@ import type { BibSettings, checkInTiming, CheckInResult, PaymentState } from '..
 import type { WaitlistJoin, WaitlistStatus } from '../shared/waitlist';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
-import type { MembershipChange, Role } from '../shared/roles';
+import type { Invitation, MembershipChange, Role } from '../shared/roles';
 
 /** simulated: the labeled demo button. stripe_test: Stripe hosted Checkout in test mode. */
 export type PaymentMode = 'simulated' | 'stripe_test';
@@ -299,7 +299,7 @@ export async function downloadFile(url: string): Promise<void> {
 
 export interface MemberList {
   members: { accountId: string; email: string; role: Role }[];
-  invitations: { email: string; role: Role }[];
+  invitations: Invitation[];
   /** The most recent role changes, newest first. */
   history: MembershipChange[];
 }

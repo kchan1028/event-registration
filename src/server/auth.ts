@@ -1,7 +1,7 @@
 import { createClerkClient, verifyToken } from '@clerk/backend';
 import type { FastifyRequest } from 'fastify';
 import { newId } from '../shared/factory';
-import { can, type MembershipAction, type MembershipChange, type Permission, type Role } from '../shared/roles';
+import { can, INVITATION_DAYS, type Invitation, type MembershipAction, type MembershipChange, type Permission, type Role } from '../shared/roles';
 import type { Db } from './db';
 import { HttpError } from './repo';
 
@@ -131,7 +131,7 @@ const HISTORY_LIMIT = 50;
 export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) {
   const nowIso = () => clock().toISOString();
 
-  /** Finds or creates the caller's account, then turns any invitations for their email into roles. */
+  /** Finds or creates the caller's account, then turns any open invitations for their email into roles and drops expired ones. */
   async function accountFor(signedIn: SignedIn): Promise<Account> {
     const existing = await db.get<Account>(`SELECT id, email FROM accounts WHERE provider_user_id = $1`, [signedIn.providerUserId]);
     if (existing) return existing;
@@ -146,13 +146,17 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
       const id = newId('acct');
       const t = nowIso();
       await db.run(`INSERT INTO accounts (id, provider_user_id, email, created_at) VALUES ($1, $2, $3, $4)`, [id, signedIn.providerUserId, email, t]);
-      const invitations = await db.all<{ organization_id: string; role: Role }>(`SELECT organization_id, role FROM organization_invitations WHERE email = $1`, [email]);
-      for (const i of invitations) await record(i.organization_id, 'invitation_accepted', email, i.role, id);
+      const invitations = await db.all<{ organization_id: string; role: Role; open: boolean }>(
+        `SELECT organization_id, role, expires_at > $2 AS open FROM organization_invitations WHERE email = $1`,
+        [email, t],
+      );
+      for (const i of invitations) await record(i.organization_id, i.open ? 'invitation_accepted' : 'invitation_expired', email, i.role, id);
       await db.run(
         `INSERT INTO organization_members (organization_id, account_id, role, granted_by, created_at)
-         SELECT organization_id, $1, role, invited_by, $2 FROM organization_invitations WHERE email = $3 ON CONFLICT DO NOTHING`,
+         SELECT organization_id, $1, role, invited_by, $2 FROM organization_invitations WHERE email = $3 AND expires_at > $2 ON CONFLICT DO NOTHING`,
         [id, t, email],
       );
+      // Every invitation for this email goes: the person now has an account, so an owner adds them directly.
       await db.run(`DELETE FROM organization_invitations WHERE email = $1`, [email]);
       return { id, email };
     });
@@ -255,7 +259,10 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
       `SELECT m.account_id, a.email, m.role FROM organization_members m JOIN accounts a ON a.id = m.account_id WHERE m.organization_id = $1 ORDER BY a.email, m.role`,
       [organizationId],
     );
-    const invitations = await db.all<{ email: string; role: Role }>(`SELECT email, role FROM organization_invitations WHERE organization_id = $1 ORDER BY email, role`, [organizationId]);
+    const invitations = await db.all<{ email: string; role: Role; expires_at: string }>(
+      `SELECT email, role, expires_at FROM organization_invitations WHERE organization_id = $1 ORDER BY email, role`,
+      [organizationId],
+    );
     const history = await db.all<{ action: MembershipAction; email: string; role: Role; actor_email: string | null; created_at: string }>(
       `SELECT c.action, c.email, c.role, a.email AS actor_email, c.created_at FROM membership_changes c LEFT JOIN accounts a ON a.id = c.actor_id
        WHERE c.organization_id = $1 ORDER BY c.created_at DESC, c.seq DESC LIMIT ${HISTORY_LIMIT}`,
@@ -263,25 +270,41 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
     );
     return {
       members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role })),
-      invitations,
+      invitations: invitations.map((i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at })),
       history: history.map((h): MembershipChange => ({ action: h.action, email: h.email, role: h.role, by: h.actor_email, at: h.created_at })),
     };
   }
 
-  /** Grants a role to an email: straight away when the person has an account, otherwise as an invitation. */
+  /**
+   * Grants a role to an email: straight away when the person has an account, otherwise as an
+   * invitation open for INVITATION_DAYS. Adding an invitation that already exists renews it,
+   * including one that has expired.
+   */
   async function addMember(organizationId: string, email: string, role: Role, by: Account | null) {
     const normalized = email.trim().toLowerCase();
     const target = await db.get<Account>(`SELECT id, email FROM accounts WHERE lower(email) = $1`, [normalized]);
     if (target) await grant(organizationId, target, role, by?.id ?? null);
     else {
-      const invited = await db.run(`INSERT INTO organization_invitations (organization_id, email, role, invited_by, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, [
+      const t = clock();
+      const expiresAt = new Date(t.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
+      const renewed = await db.run(`UPDATE organization_invitations SET expires_at = $4, invited_by = $5 WHERE organization_id = $1 AND email = $2 AND role = $3`, [
         organizationId,
         normalized,
         role,
+        expiresAt,
         by?.id ?? null,
-        nowIso(),
       ]);
-      if (invited) await record(organizationId, 'invited', normalized, role, by?.id ?? null);
+      const invited = renewed
+        ? 0
+        : await db.run(`INSERT INTO organization_invitations (organization_id, email, role, invited_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, [
+            organizationId,
+            normalized,
+            role,
+            by?.id ?? null,
+            t.toISOString(),
+            expiresAt,
+          ]);
+      if (renewed + invited) await record(organizationId, renewed ? 'invitation_renewed' : 'invited', normalized, role, by?.id ?? null);
     }
     return listMembers(organizationId);
   }

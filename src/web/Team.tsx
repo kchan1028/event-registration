@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ROLE_LABELS, ROLES, type MembershipChange, type Role } from '../shared/roles';
+import { INVITATION_DAYS, ROLE_LABELS, ROLES, type MembershipChange, type Role } from '../shared/roles';
 import { api, ApiError, type MemberList } from './api';
 import { formatDateTime } from './format';
 import { Field } from './ui';
@@ -21,8 +21,12 @@ function describeChange(c: MembershipChange): string {
       return `${by} gave ${c.email} the ${role} role`;
     case 'invited':
       return `${by} invited ${c.email} as ${role}`;
+    case 'invitation_renewed':
+      return `${by} renewed the ${role} invitation for ${c.email}`;
     case 'invitation_accepted':
       return `${c.email} signed in and took up the ${role} invitation`;
+    case 'invitation_expired':
+      return `${c.email} signed in after the ${role} invitation expired, so got no role`;
     case 'removed':
       return `${by} removed the ${role} role from ${c.email}`;
     case 'invitation_cancelled':
@@ -35,7 +39,8 @@ function describeChange(c: MembershipChange): string {
 /**
  * People and roles for one organization. Owners only; the server refuses everyone else.
  * Adding an email that has never signed in records an invitation that becomes a role the
- * first time that person signs in with the same email. An owner can hand ownership to a teammate
+ * first time that person signs in with the same email, if that is within INVITATION_DAYS.
+ * Renewing (adding it again) starts the period over. An owner can hand ownership to a teammate
  * who has signed in; every change appears under Recent changes with who made it.
  */
 export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }) {
@@ -124,20 +129,29 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
               </button>
             </li>
           ))}
-          {list.invitations.map((i) => (
-            <li key={`invite-${i.email}-${i.role}`}>
-              <span className="team__email">{i.email}</span>
-              <span className="tag">{ROLE_LABELS[i.role]}</span>
-              <span className="muted small">Not signed in yet</span>
-              <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.removeMember(orgId, i.email, i.role))}>
-                Cancel<span className="sr-only"> invitation for {i.email}</span>
-              </button>
-            </li>
-          ))}
+          {list.invitations.map((i) => {
+            const expired = new Date(i.expiresAt) <= new Date();
+            return (
+              <li key={`invite-${i.email}-${i.role}`}>
+                <span className="team__email">{i.email}</span>
+                <span className="tag">{ROLE_LABELS[i.role]}</span>
+                {expired && <span className="tag tag--error">Expired</span>}
+                <span className="muted small">
+                  {expired ? 'Ended' : 'Not signed in yet, open until'} <time dateTime={i.expiresAt}>{formatDateTime(i.expiresAt)}</time>
+                </span>
+                <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.addMember(orgId, i.email, i.role))}>
+                  Renew<span className="sr-only"> invitation for {i.email} for {INVITATION_DAYS} days</span>
+                </button>
+                <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.removeMember(orgId, i.email, i.role))}>
+                  Cancel<span className="sr-only"> invitation for {i.email}</span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
       <form className="team__add" onSubmit={add}>
-        <Field label="Email" hint="They sign in with this email to get the role.">
+        <Field label="Email" hint={`They sign in with this email within ${INVITATION_DAYS} days to get the role.`}>
           {(id, describedBy) => <input id={id} className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} aria-describedby={describedBy} required maxLength={254} />}
         </Field>
         <Field label="Role" hint={ROLE_HELP[role]}>
