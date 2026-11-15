@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Role } from './roles';
 import type { ReadinessItem } from './checkout';
 
 /**
@@ -90,4 +91,62 @@ export function checkInTiming(durationsMs: readonly number[]): { timed: number; 
   const rank = (p: number) => xs[Math.min(xs.length - 1, Math.ceil(p * xs.length) - 1)];
   const median = xs.length % 2 ? xs[(xs.length - 1) / 2] : (xs[xs.length / 2 - 1] + xs[xs.length / 2]) / 2;
   return { timed: xs.length, medianSeconds: Math.round(median / 1000), p95Seconds: Math.round(rank(0.95) / 1000) };
+}
+
+export interface CheckInRider {
+  orderId: string;
+  checkInCode: string | null;
+  name: string;
+  team: string;
+  racingAge: number;
+  payment: PaymentState;
+  entries: { id: string; categoryId: string; categoryName: string; code: string; raceName: string; startTime: string | null }[];
+  readiness: ReadinessItem[];
+  result: CheckInResult;
+  bib: number | null;
+  bibHistory: { bib: number; assignedAt: string; releasedAt: string | null; reason: string | null }[];
+  checkedInAt: string | null;
+  undoneCheckIns: { checkedInAt: string; undoneAt: string; bib: number | null; bibReleased: boolean; reason: string }[];
+}
+
+export interface CheckInList {
+  eventId: string;
+  eventName: string;
+  isDemo: boolean;
+  published: boolean;
+  days: { id: string; label: string; date: string }[];
+  dayId: string;
+  settings: BibSettings;
+  roles: Role[];
+  races: { id: string; name: string }[];
+  categories: { id: string; name: string; raceId: string }[];
+  summary: { riders: number; checkedIn: number; blocked: number; bibsIssued: number; timing: ReturnType<typeof checkInTiming> };
+  riders: CheckInRider[];
+}
+
+export const bibBatchSchema = z.object({
+  dayId: z.string().min(1).max(64),
+  orderIds: z.array(z.string().min(1).max(64)).min(1).max(1000),
+  raceId: z.string().min(1).max(64).optional(),
+  categoryId: z.string().min(1).max(64).optional(),
+  sort: z.enum(['name', 'registration', 'start']).optional(),
+});
+export type BibBatch = z.infer<typeof bibBatchSchema>;
+export interface BibPlan {
+  dayId: string;
+  raceId: string | null;
+  categoryId: string | null;
+  sort: NonNullable<BibBatch['sort']>;
+  scope: string;
+  assignments: { orderId: string; name: string; bib: number; range: { first: number; last: number } }[];
+  fingerprint: string;
+}
+
+/** Assignment reserves a number; it does not clear or check in a rider. */
+export function bibBatchExclusion(rider: Pick<CheckInRider, 'payment' | 'entries' | 'bib' | 'checkedInAt'>): string | null {
+  if (rider.bib !== null) return 'Already has a bib';
+  if (rider.checkedInAt !== null) return 'Already checked in';
+  if (rider.payment !== 'confirmed') return 'Entry not confirmed';
+  if (rider.entries.length === 0) return 'No entry on this day';
+  return null;
 }

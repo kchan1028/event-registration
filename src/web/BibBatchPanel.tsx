@@ -1,0 +1,128 @@
+import { useEffect, useRef, useState } from 'react';
+import { bibBatchExclusion, type BibBatch, type BibPlan, type CheckInList } from '../shared/checkin';
+import { api, type ApiError } from './api';
+
+/** Number allocation is a separate task from race-morning readiness and bib handoff. */
+export function BibBatchPanel({ eventId, dayId, onApplied, onClose }: { eventId: string; dayId: string; onApplied: () => void; onClose: () => void }) {
+  const [data, setData] = useState<CheckInList | null>(null);
+  const [raceId, setRaceId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [sort, setSort] = useState<NonNullable<BibBatch['sort']>>('name');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [preview, setPreview] = useState<{ batch: BibBatch; plan: BibPlan } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+  const active = useRef(true);
+
+  useEffect(() => {
+    active.current = true;
+    let ignore = false;
+    api.checkInList(eventId, dayId, '').then((result) => {
+      if (!ignore) setData(result);
+    }).catch((err: ApiError) => { if (!ignore) setError(err.message); });
+    return () => { ignore = true; active.current = false; };
+  }, [eventId, dayId]);
+
+  function invalidate() {
+    setPreview(null);
+    setError(null);
+    setMessage('');
+  }
+
+  async function allocate() {
+    setBusy(true);
+    setError(null);
+    setMessage('');
+    try {
+      if (preview) {
+        const result = await api.applyBibs(eventId, preview.batch, preview.plan.fingerprint);
+        if (!active.current) return;
+        setPreview(null);
+        setSelected([]);
+        setMessage(`${result.applied} ${result.applied === 1 ? 'bib' : 'bibs'} assigned. Readiness and check-in are unchanged.`);
+        onApplied();
+        setData(await api.checkInList(eventId, dayId, ''));
+      } else {
+        const batch: BibBatch = { dayId, orderIds: selected, sort, ...(raceId ? { raceId } : {}), ...(categoryId ? { categoryId } : {}) };
+        const plan = await api.previewBibs(eventId, batch);
+        if (active.current) setPreview({ batch, plan });
+      }
+    } catch (err) {
+      if (active.current) {
+        setPreview(null);
+        setError((err as ApiError).message);
+      }
+    } finally {
+      if (active.current) setBusy(false);
+    }
+  }
+
+  const categories = data?.categories.filter((c) => !raceId || c.raceId === raceId) ?? [];
+  const riders = data?.riders.filter((r) => r.entries.some((e) =>
+    (!categoryId || e.categoryId === categoryId) && (!raceId || data.categories.some((c) => c.id === e.categoryId && c.raceId === raceId)))) ?? [];
+  const selectable = riders.filter((r) => !bibBatchExclusion(r));
+
+  return (
+    <section className="ci-bibs ci-batch" aria-label="Bulk bib assignment" aria-busy={busy}>
+      <div className="ci-batch__heading">
+        <h2>Assign bibs in bulk</h2>
+        <button type="button" className="btn btn--ghost btn--small" disabled={busy} onClick={onClose}>Close assignment</button>
+      </div>
+      <p>Reserve numbers for confirmed riders before check-in. Existing bibs and checked-in riders stay unchanged. A number does not clear a rider or authorize bib handoff.</p>
+      {!data && !error && <p role="status">Loading riders…</p>}
+      {data && <>
+        <fieldset disabled={busy} className="ci-batch__controls">
+          <legend className="sr-only">Batch scope and order</legend>
+          <label>Race<select className="input" value={raceId} onChange={(e) => { setRaceId(e.target.value); setCategoryId(''); setSelected([]); invalidate(); }}>
+            <option value="">All races on this day</option>
+            {data.races.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select></label>
+          <label>Category<select className="input" value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setSelected([]); invalidate(); }}>
+            <option value="">All categories in scope</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select></label>
+          <label>Assign in order<select className="input" value={sort} onChange={(e) => { setSort(e.target.value as typeof sort); invalidate(); }}>
+            <option value="name">Surname, then given name</option>
+            <option value="registration">Registration time</option>
+            <option value="start">Category / start order</option>
+          </select></label>
+        </fieldset>
+        <p className="muted small">Ranges follow each rider’s earliest category with a range on this day, then the event/day range. Narrowing the selection does not override that range.</p>
+        <div className="ci-bib__actions">
+          <button type="button" className="btn btn--secondary btn--small" disabled={busy || !selectable.length || selectable.length > 1000} onClick={() => { setSelected(selectable.map((r) => r.orderId)); invalidate(); }}>Select all unassigned ({selectable.length})</button>
+          <button type="button" className="btn btn--ghost btn--small" disabled={busy || !selected.length} onClick={() => { setSelected([]); invalidate(); }}>Clear selection</button>
+          <span role="status">{selected.length} selected · maximum 1,000 per batch</span>
+        </div>
+        {!riders.length ? <p>No riders entered in this scope.</p> : <div className="table-wrap ci-batch__table" role="region" aria-label="Riders for bib assignment" tabIndex={0}>
+          <table>
+            <thead><tr><th scope="col">Select rider</th><th scope="col">Categories</th><th scope="col">Current bib</th><th scope="col">Allocation status</th></tr></thead>
+            <tbody>{riders.map((r) => {
+              const exclusion = bibBatchExclusion(r);
+              return <tr key={r.orderId}>
+                <th scope="row"><label className="ci-batch__choice"><input type="checkbox" disabled={busy || !!exclusion || (!selected.includes(r.orderId) && selected.length >= 1000)} checked={selected.includes(r.orderId)} onChange={(e) => { setSelected((ids) => e.target.checked ? [...ids, r.orderId] : ids.filter((id) => id !== r.orderId)); invalidate(); }} />{r.name}</label></th>
+                <td>{r.entries.map((e) => e.categoryName).join(', ')}</td><td>{r.bib ?? 'Unassigned'}</td>
+                <td>{exclusion ?? (r.result.ready ? 'Available for allocation' : 'Available; readiness blocked')}</td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>}
+        {preview && <div className="ci-batch__preview">
+          <h3>Review proposed numbers</h3>
+          <p>No numbers have been assigned yet. Apply assigns every number below together; a conflict requires a fresh preview.</p>
+          <div className="table-wrap" role="region" aria-label="Proposed bib assignments" tabIndex={0}>
+            <table><thead><tr><th scope="col">Rider</th><th scope="col">Current bib</th><th scope="col">Proposed bib</th><th scope="col">Range</th></tr></thead>
+              <tbody>{preview.plan.assignments.map((a) => <tr key={a.orderId}><th scope="row">{a.name}</th><td>Unassigned</td><td>{a.bib}</td><td>{a.range.first}–{a.range.last}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </div>}
+        <div className="ci-bib__actions">
+          <button type="button" className="btn btn--primary" disabled={busy || !selected.length} onClick={() => void allocate()}>{busy ? 'Working…' : preview ? `Apply ${preview.plan.assignments.length} bib ${preview.plan.assignments.length === 1 ? 'assignment' : 'assignments'}` : 'Preview bib assignments'}</button>
+          {preview && <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => setPreview(null)}>Discard preview</button>}
+        </div>
+      </>}
+      {message && <p role="status" className="text-ok">{message}</p>}
+      {error && <p role="alert" className="text-error">{error} {data ? 'Review the selection and request a new preview before applying.' : 'Close and reopen assignment to retry loading riders.'}</p>}
+    </section>
+  );
+}

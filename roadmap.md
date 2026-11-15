@@ -284,7 +284,7 @@ Exit gate: Sandbox money and entry states reconcile; no overselling or duplicate
 
 Indicative effort: 3–5 weeks. Depends on Phase 2; USAC acceptance gates live sanctioned use. Priority: P0.
 
-Early independent build: the local API can preview and atomically assign bibs to selected confirmed, unassigned riders on one day, optionally restricted to a race or category. It supports name, registration-time, or start-order sorting with an ID tie-breaker, rechecks the choices under the event lock, and refuses stale or exhausted batches. This is a partial Phase 3 implementation with fictional data; the organizer interface, automatic assignment, protected reassignment, and staff rehearsal remain open. Phase 3 has not passed its entry or exit gates.
+Early independent build: the local API can preview and atomically assign bibs to selected confirmed, unassigned riders on one day, optionally restricted to a race or category. It supports name, registration-time, or start-order sorting with an ID tie-breaker, rechecks the choices under the event lock, and refuses stale or exhausted batches. The check-in interface now lets owners and registration managers select unassigned confirmed riders by day/race/category, preview numbers and ranges, and apply the batch. Excluded riders show reasons; changed choices discard the preview, and server conflicts require a fresh preview. This is a partial Phase 3 implementation with fictional data; automatic assignment, protected reassignment, and staff rehearsal remain open. Phase 3 has not passed its entry or exit gates.
 
 Build:
 

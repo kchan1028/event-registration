@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 
 /*
@@ -61,4 +62,87 @@ test('fallback roster lists every rider and puts blocked riders on the exception
   await expect(day.locator('table').nth(1)).toContainText(blocked.name);
   await expect(page.getByRole('button', { name: 'Print roster' })).toBeEnabled();
   await expect(page.locator('body')).not.toContainText('@example.com');
+});
+
+for (const mobile of [false, true]) {
+  test(`bulk bib preview and apply preserves blocked readiness (${mobile ? 'mobile' : 'desktop'})`, async ({ page }) => {
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    const api = page.request;
+    const { eventId } = await (await api.post('/api/demo')).json();
+    await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+    await api.post(`/api/events/${eventId}/check-in-demo-riders`);
+    await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 299 }] } });
+    const original = await (await api.get(`/api/events/${eventId}/check-in`)).json();
+    const blocked = original.riders.find((r: { payment: string; result: { ready: boolean } }) => r.payment === 'confirmed' && !r.result.ready);
+    await page.goto(`/#/events/${eventId}/check-in`);
+    // Batch selection loads the whole day independently of the volunteer's search.
+    await page.getByRole('searchbox', { name: 'Find a rider' }).fill('Alex');
+    await page.getByRole('button', { name: 'Assign bibs', exact: true }).click();
+    const panel = page.getByRole('region', { name: 'Bulk bib assignment', exact: true });
+    await panel.getByRole('checkbox', { name: blocked.name }).check();
+    await panel.getByRole('button', { name: 'Preview bib assignments', exact: true }).click();
+    const preview = panel.getByRole('region', { name: 'Proposed bib assignments' });
+    await expect(preview).toContainText(blocked.name);
+    await expect(preview.getByRole('cell', { name: '100', exact: true })).toBeVisible();
+    await panel.getByLabel('Assign in order').selectOption('start');
+    await expect(preview).toHaveCount(0);
+    await panel.getByRole('button', { name: 'Preview bib assignments', exact: true }).click();
+    await panel.getByLabel('Category', { exact: true }).selectOption(blocked.entries[0].categoryId);
+    await expect(preview).toHaveCount(0);
+    await expect(panel.getByText('0 selected · maximum 1,000 per batch')).toBeVisible();
+    await panel.getByRole('checkbox', { name: blocked.name }).check();
+    await panel.getByRole('button', { name: 'Preview bib assignments', exact: true }).click();
+    if (mobile) {
+      await page.screenshot({ path: 'test-results/bib-batch-mobile-light.png', fullPage: true });
+      await page.getByRole('button', { name: /Switch to dark/ }).click();
+      await page.screenshot({ path: 'test-results/bib-batch-mobile-dark.png', fullPage: true });
+    } else {
+      await page.screenshot({ path: 'test-results/bib-batch-desktop.png', fullPage: true });
+    }
+    expect((await new AxeBuilder({ page }).include('.ci-batch').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    await panel.getByRole('button', { name: 'Apply 1 bib assignment', exact: true }).click();
+    await expect(panel.getByText('1 bib assigned. Readiness and check-in are unchanged.')).toBeVisible();
+    const updated = await (await api.get(`/api/events/${eventId}/check-in`)).json();
+    expect(updated.riders.find((r: { orderId: string }) => r.orderId === blocked.orderId)).toMatchObject({ bib: 100, checkedInAt: null, result: { ready: false } });
+    await expect(panel.getByRole('checkbox', { name: blocked.name })).toBeDisabled();
+    await expect(panel.getByRole('row', { name: new RegExp(blocked.name) })).toContainText('Already has a bib');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}
+
+test('a stale batch preview is refused and requires a new preview', async ({ page }) => {
+  const api = page.request;
+  const { eventId } = await (await api.post('/api/demo')).json();
+  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await api.post(`/api/events/${eventId}/check-in-demo-riders`);
+  await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 299 }] } });
+  const list = await (await api.get(`/api/events/${eventId}/check-in`)).json();
+  const alex = list.riders.find((r: Rider) => r.name.startsWith('Alex'));
+  const blake = list.riders.find((r: Rider) => r.name.startsWith('Blake'));
+  await page.goto(`/#/events/${eventId}/check-in`);
+  await page.getByRole('button', { name: 'Assign bibs', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Bulk bib assignment', exact: true });
+  await panel.getByRole('checkbox', { name: alex.name }).check();
+  await panel.getByRole('button', { name: 'Preview bib assignments', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Apply 1 bib assignment', exact: true })).toBeEnabled();
+  expect((await api.post(`/api/events/${eventId}/check-in/${blake.orderId}`, { data: { dayId: list.dayId, bib: 100 } })).ok()).toBe(true);
+  await panel.getByRole('button', { name: 'Apply 1 bib assignment', exact: true }).click();
+  await expect(panel.getByRole('alert')).toContainText('Bib preview changed');
+  await expect(panel.getByRole('region', { name: 'Proposed bib assignments' })).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Preview bib assignments', exact: true }).click();
+  await expect(panel.getByRole('region', { name: 'Proposed bib assignments' }).getByRole('cell', { name: '101', exact: true })).toBeVisible();
+});
+
+test('volunteers can check in riders but cannot open or call bulk assignment', async ({ page }) => {
+  const api = page.request;
+  const { eventId, organizationId } = await (await api.post('/api/demo')).json();
+  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  const email = 'bib-volunteer@example.test';
+  expect((await api.post(`/api/organizations/${organizationId}/members`, { data: { email, role: 'check_in_volunteer' } })).ok()).toBe(true);
+  await page.addInitScript((user) => sessionStorage.setItem('cyclereg.test-session', user), email);
+  await page.goto(`/#/events/${eventId}/check-in`);
+  await expect(page.getByRole('searchbox', { name: 'Find a rider' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Assign bibs', exact: true })).toHaveCount(0);
+  const refused = await api.post(`/api/events/${eventId}/bibs/preview`, { headers: { Authorization: `Bearer test:${email}` }, data: {} });
+  expect(refused.status()).toBe(403);
 });
