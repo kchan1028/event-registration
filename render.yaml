@@ -1,7 +1,7 @@
 # Render Blueprint for CycleReg (ADR 0004: Render web services and Render Postgres, Pro workspace).
 #
 # NOT APPLIED. Nothing here exists on Render. Do not create a Blueprint from this file until
-# sign-in with MFA (ADR 0003) ships: until then the server refuses HOST=0.0.0.0 at start-up
+# sign-in (ADR 0003) ships: until then the server refuses HOST=0.0.0.0 at start-up
 # (src/server/listen.ts), so a deploy would fail its health check by design.
 # Steps, costs, and approvals: docs/runbooks/deploy-render.md.
 #

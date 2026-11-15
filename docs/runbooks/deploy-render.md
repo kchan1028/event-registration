@@ -8,10 +8,11 @@ Status: Planned. Nothing is deployed and no Render account, Blueprint, service, 
 
 All of these must be true. Until then, do not create a Blueprint or any Render resource.
 
-1. Sign-in with required MFA ([ADR 0003](../decisions/0003-sign-in-and-mfa.md)) is built, and the listen guard in `src/server/listen.ts` is removed in that same change. Until then the server refuses `HOST=0.0.0.0` at start-up, so a deploy fails its health check by design.
+1. Sign-in ([ADR 0003](../decisions/0003-sign-in-and-mfa.md): email sign-in on Clerk's free plan) is built, and the listen guard in `src/server/listen.ts` is removed in that same change. Until then the server refuses `HOST=0.0.0.0` at start-up, so a deploy fails its health check by design.
 2. The treasurer has approved the monthly cost (ADR 0004 estimates about $75 a month on the Pro plan).
 3. Legal review of minors' data is done, if any riders are under 13 (ADR 0004 caveats).
-4. The project owner has said, in writing, to create the Render resources. Agents must not create accounts or cloud resources on their own (AGENTS.md boundaries).
+4. The project owner has said, in writing, to create the Render resources.
+5. Before production holds any real rider data or takes a live payment: MFA is required for every account (Phase 3, [product.md](../../product.md#sign-in-and-account-security)). Until then, hosted use is staging and rehearsals with fictional data only. Agents must not create accounts or cloud resources on their own (AGENTS.md boundaries).
 
 ## What the repository contains
 

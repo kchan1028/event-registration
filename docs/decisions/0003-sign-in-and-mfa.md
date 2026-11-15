@@ -1,6 +1,6 @@
 # 0003. Sign-in with required multi-factor authentication
 
-Status: Accepted
+Status: Accepted, amended 2026-11-15 (see [Amendment](#amendment-2026-11-15-email-sign-in-first-mfa-before-the-live-pilot))
 Date: 2026-11-14
 Deciders: Project owner (accepted 2026-11-14)
 Related: [Sign-in and account security](../../product.md#sign-in-and-account-security), [Phase 2](../../roadmap.md#phase-2--build-the-registration-core), [decision backlog](README.md#decision-backlog)
@@ -77,6 +77,20 @@ Key caveats:
 Sources: clerk.com/pricing; clerk.com/docs/guides/secure/reverification; clerk.com/changelog/2026-02-20-require-mfa; clerk.com/changelog/2026-10-29-passkey-second-factor; clerk.com/docs/guides/secure/user-lockout; clerk.com/docs/guides/dashboard/logs/application-logs; auth0.com/pricing; auth0.com/docs/secure/multi-factor-authentication/step-up-authentication; auth0.com/docs/secure/multi-factor-authentication/configure-recovery-codes-for-mfa; auth0.com/docs/api/management/v2/jobs/post-users-exports; stytch.com/pricing; stytch.com/docs/guides/mfa/overview; workos.com/pricing; workos.com/docs/authkit/mfa; supabase.com/pricing; supabase.com/docs/guides/auth/auth-mfa; supabase.com/docs/guides/auth/passkeys; firebase.google.com/docs/auth/web/multi-factor; firebase.google.com/pricing; better-auth.com/docs/plugins/2fa; keycloak.org/docs/latest/server_admin. The Identity Platform pricing page did not load, so its price above the free tier is not confirmed.
 
 Accepted by the project owner on 2026-11-14: Clerk Pro with SMS off. Follow-up before production use: a short spike on a test account confirms that "require MFA" blocks all pages for a magic-link sign-up and that SMS can be fully disabled. If it fails, revisit this ADR (Better Auth fallback).
+
+## Amendment (2026-11-15): email sign-in first, MFA before the live pilot
+
+Decided by the project owner on 2026-11-15.
+
+- **First release (Phase 2):** passwordless email sign-in (an emailed link or code) on **Clerk's free plan**. It is one factor: it proves the person controls the email inbox. A second emailed code is not used as a second factor, because it goes to the same inbox.
+- **MFA (Phase 3):** move to Clerk Pro (about $25 a month at 5,000 monthly active users) and require a passkey or authenticator app for every account, with SMS off, step-up re-verification, recovery codes, and factor-change notices, as decided above. MFA is a gate for the Phase 4 live pilot.
+- **Until MFA ships:** no real rider data and no live payments. Hosted use is limited to staging and rehearsals with fictional data. Every person still has their own account, and organizer roles still limit access.
+- The test-account spike moves with MFA: before Phase 3, confirm that Clerk Pro's "require MFA" blocks all pages for an email sign-up and that SMS can be fully disabled.
+
+Why: no monthly cost while there is no real rider data or money, and sign-in can be built and tested now. Risk accepted: in Phase 2, anyone who controls an account's email inbox can sign in as that account. That is acceptable only because the app then holds fictional data and takes no payments.
+
+Product impact (product.md): [Sign-in and account security](../../product.md#sign-in-and-account-security) is phased; the acceptance criteria split into email sign-in (Phase 2) and MFA (Phase 3).
+Roadmap impact (roadmap.md): Phase 2 builds email sign-in; Phase 3 builds MFA; the Phase 3 exit gate requires MFA before the Phase 4 pilot.
 
 ## Consequences
 

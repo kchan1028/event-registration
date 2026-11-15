@@ -72,7 +72,7 @@ Roadmap impact (roadmap.md):
 |---|---|---|---|
 | [0001](0001-stack-for-category-builder-milestone.md) | Stack for the category builder milestone | Accepted | 2026-11-14 |
 | [0002](0002-stripe-payments.md) | Stripe for planned payments | Accepted | 2026-11-14 |
-| [0003](0003-sign-in-and-mfa.md) | Sign-in with required multi-factor authentication (Clerk Pro, SMS off) | Accepted | 2026-11-14 |
+| [0003](0003-sign-in-and-mfa.md) | Sign-in with required multi-factor authentication (amended 2026-11-15: email sign-in on Clerk's free plan first; MFA on Clerk Pro, SMS off, before the live pilot) | Accepted | 2026-11-14 |
 | [0004](0004-hosted-stack-and-database.md) | Hosted stack and database (Render, Render Postgres) | Accepted | 2026-11-14 |
 | [0005](0005-merchant-and-settlement-model.md) | Merchant and settlement model for Stripe payments | Proposed | 2026-11-14 |
 
@@ -89,7 +89,7 @@ These are unresolved. They are ordered roughly by when the roadmap needs them. "
 | Primary datastore and capacity enforcement | Phase 2 | Decided in ADR 0004: PostgreSQL. The local build takes a per-event transaction lock (advisory lock) for capacity, holds, payments, and bibs. Earlier options: SQLite immediate transactions (ADR 0001), atomic conditional counters, a queue that serializes reservations | Correctness under concurrency first; then operational simplicity for a small team |
 | Hosting, backups, and monitoring | Phase 2 | Managed platform; self-managed cloud resources | Managed services cost more but need less volunteer expertise; restore must be demonstrated either way. Signals to monitor are in [operations.md](../operations.md#monitoring-and-alerts) |
 | Support coverage and incident response | Phase 3 exit | Volunteer support owner per event; paid support; a hybrid | Who answers on opening day and race morning, freeze lengths, and response targets. See [operations.md](../operations.md) |
-| Authentication | Phase 2 | First factor: email magic links, passwords, or third-party sign-in. Second factor (required for all accounts): passkeys, authenticator apps, SMS fallback for riders and guardians only (never organizers) | MFA is required by [product.md](../../product.md#sign-in-and-account-security); choose methods that occasional riders and guardians can complete, and phishing-resistant factors for organizers |
+| Authentication | Phase 2 | First factor: email magic links, passwords, or third-party sign-in. Second factor (required for all accounts before the live pilot; the Phase 2 first release is email sign-in only): passkeys, authenticator apps, SMS fallback for riders and guardians only (never organizers) | MFA is required by [product.md](../../product.md#sign-in-and-account-security) before the live pilot; choose methods that occasional riders and guardians can complete, and phishing-resistant factors for organizers |
 | Transactional email provider | Phase 2 | To be compared | Delivery status and suppression handling are required |
 | Timer export format | Phase 1 (samples), Phase 3 (tested) | Whatever the actual timer accepts | Must be tested with the real timer; no assumed standard |
 | Data retention and deletion periods | Before the pilot | To be set with the club and federation requirements | Waiver and financial records may need long retention; other data should be kept as briefly as possible |
