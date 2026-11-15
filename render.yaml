@@ -38,6 +38,13 @@ services:
         sync: false
       - key: CLERK_AUTHORIZED_PARTIES # the site's own origin, for example https://cyclereg.onrender.com
         sync: false
+      # Optional: Stripe test mode (ADR 0002). Live keys are refused until ADR 0005 is accepted.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PUBLIC_APP_URL # the site's own origin, required when Stripe is on
+        sync: false
 
   - type: web
     name: cyclereg-staging
@@ -64,6 +71,12 @@ services:
       - key: VITE_CLERK_PUBLISHABLE_KEY
         sync: false
       - key: CLERK_AUTHORIZED_PARTIES
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PUBLIC_APP_URL
         sync: false
 
 databases:
