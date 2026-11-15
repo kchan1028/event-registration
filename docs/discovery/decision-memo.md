@@ -1,6 +1,6 @@
 # Phase 0 decision memo
 
-Status: Not started. Fill this in at the end of Phase 0 and link it from the Phase 0 row in [roadmap.md](../../roadmap.md#delivery-status).
+Status: In progress. Evidence collection started November 14, 2026 with interview [D01](interviews/D01.md); no decision yet. Fill this in at the end of Phase 0 and link it from the Phase 0 row in [roadmap.md](../../roadmap.md#delivery-status).
 
 Decision: _Continue to Phase 1 / Improve the current workflow and stop the build_  
 Decided by: _product owner, role_  
@@ -25,12 +25,12 @@ The roadmap's [Phase 0 exit gate](../../roadmap.md#phase-0--establish-the-case-t
 
 | Deliverable | Status | Where |
 |---|---|---|
-| Interviews: race director, registration lead, treasurer, timer | | Interview codes and summary |
-| Interviews: at least five riders or parents | | Interview codes and summary |
+| Interviews: race director, registration lead, treasurer, timer | Partial: race director, registration lead, and treasurer answered by one person; timer not interviewed | [D01](interviews/D01.md) |
+| Interviews: at least five riders or parents | 1 of 5 | [D01](interviews/D01.md) (rider answers) |
 | Workflow observation | | Date and event |
-| Workflow map | | [workflow-map.md](workflow-map.md) |
-| Workload baseline | | [workload-baseline.md](workload-baseline.md) |
-| Options comparison | | [options-comparison.md](options-comparison.md) |
+| Workflow map | Partial, from D01 estimates | [workflow-map.md](workflow-map.md) |
+| Workload baseline | Partial, estimates only | [workload-baseline.md](workload-baseline.md) |
+| Options comparison | Evidence noted, not scored | [options-comparison.md](options-comparison.md#evidence-so-far-not-scored) |
 | USAC questions sent and answered | | [external-requirements.md](external-requirements.md#usa-cycling) |
 | Payment operating model assessed | | [external-requirements.md](external-requirements.md#payment-provider-operating-models) |
 | road-results.com path researched | | [timer-export-review.md](../timer-export-review.md) |

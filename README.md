@@ -2,7 +2,7 @@
 
 CycleReg (working name; availability not checked) is a proposed registration and race-day platform for volunteer-run U.S. bike races. Its first release targets road races, criteriums, and two-day road race plus criterium weekends. The goal is measurable: less volunteer time spent on setup, registration exceptions, check-in, and handing the event to next year's organizer.
 
-> **Status: local build of the organizer category builder, rider checkout, registration tools, and race-day check-in.** You can build a road race and criterium weekend, publish it, register as a rider for one day or both (bundle pricing, held places, and a **simulated** payment), manage entries, check riders in, and download start lists and CSV exports, all on your own computer. Real payments, USA Cycling license and waiver checks, and sign-in with MFA are **not built** and are shown as pending in the app. Do not host or share the app. Phase 0 discovery tools are written, but no interviews or measurements have been done.
+> **Status: local build of the organizer category builder, rider checkout, registration tools, and race-day check-in.** You can build a road race and criterium weekend, publish it, register as a rider for one day or both (bundle pricing, held places, and a **simulated** payment), manage entries, check riders in, and download start lists and CSV exports, all on your own computer. Real payments, USA Cycling license and waiver checks, and sign-in with MFA are **not built** and are shown as pending in the app. Do not host or share the app. Phase 0 discovery tools are written. One discovery interview has been run; no measurements have been done.
 
 ## Who it serves and the problem it solves
 
@@ -239,7 +239,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; used by the rider demo |
 | Timer export review packet | Implemented November 14, 2026; not yet sent. See [docs/timer-export-review.md](docs/timer-export-review.md) |
 | Phase 1 usability test kit | Implemented November 14, 2026; no sessions run yet. See [docs/usability/](docs/usability/README.md) |
-| Phase 0 discovery kit | Implemented November 14, 2026; no interviews, measurements, or external questions done yet. See [docs/discovery/](docs/discovery/README.md) |
+| Phase 0 discovery kit | Implemented November 14, 2026. One interview done ([D01](docs/discovery/interviews/D01.md)); no measurements or external questions done yet. See [docs/discovery/](docs/discovery/README.md) |
 | Stack | Chosen for the current local build only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
 | Real payments, USA Cycling checks, sign-in with MFA, hosting | Not built |
 
