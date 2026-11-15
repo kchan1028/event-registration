@@ -35,6 +35,19 @@ interface OrderRow {
   extras_json: OrderExtras | null;
 }
 
+interface ChangeRow {
+  order_id: string;
+  entry_id: string;
+  kind: 'transfer' | 'withdraw';
+  from_category_id: string;
+  to_category_id: string | null;
+  amount_paid_cents: number;
+  new_price_cents: number | null;
+  difference_cents: number | null;
+  reason: string;
+  created_at: string;
+}
+
 interface EntryRow {
   id: string;
   order_id: string;
@@ -46,6 +59,16 @@ interface EntryRow {
   license_reviewed: boolean;
   license_review_note: string | null;
   license_reviewed_at: string | null;
+}
+
+function groupBy<T extends { order_id: string }>(rows: T[]): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const r of rows) {
+    const list = out.get(r.order_id);
+    if (list) list.push(r);
+    else out.set(r.order_id, [r]);
+  }
+  return out;
 }
 
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -80,24 +103,51 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     return row.status;
   }
 
+  /**
+   * Views for many orders with a fixed number of queries: one per event for its versions, then
+   * every entry and change of the orders at once. Same result as building each order alone.
+   */
+  async function viewsOf(rows: OrderRow[]) {
+    if (rows.length === 0) return [];
+    const ids = rows.map((r) => r.id);
+    const configs = new Map<string, EventConfig>();
+    const latestByEvent = new Map<string, number | null>();
+    for (const eventId of new Set(rows.map((r) => r.event_id))) {
+      const latest = (await repo.getEvent(eventId)).publishedVersion;
+      latestByEvent.set(eventId, latest);
+      const wanted = rows.filter((r) => r.event_id === eventId).map((r) => r.published_version);
+      if (latest) wanted.push(latest);
+      for (const [v, cfg] of await repo.getVersions(eventId, wanted)) configs.set(`${eventId}:${v}`, cfg);
+    }
+    const entries = groupBy(await db.all<EntryRow>(`SELECT * FROM order_entries WHERE order_id = ANY($1) ORDER BY seq`, [ids]));
+    const changes = groupBy(
+      await db.all<ChangeRow>(
+        `SELECT order_id, entry_id, kind, from_category_id, to_category_id, amount_paid_cents, new_price_cents, difference_cents, reason, created_at FROM entry_changes WHERE order_id = ANY($1) ORDER BY created_at, seq`,
+        [ids],
+      ),
+    );
+    return rows.map((row) => {
+      const config = configs.get(`${row.event_id}:${row.published_version}`)!;
+      // A transfer can move an entry to a category added in a later published version.
+      const latestVersion = latestByEvent.get(row.event_id);
+      const latest = latestVersion ? configs.get(`${row.event_id}:${latestVersion}`)! : config;
+      return buildView(row, config, latest, entries.get(row.id) ?? [], changes.get(row.id) ?? []);
+    });
+  }
+
   async function view(id: string) {
     const row = await orderRow(id);
     if (!row) throw new HttpError(404, 'Order not found.');
-    const config = await repo.getVersion(row.event_id, row.published_version);
-    // A transfer can move an entry to a category added in a later published version.
-    const latestVersion = (await repo.getEvent(row.event_id)).publishedVersion;
-    const latest = latestVersion && latestVersion !== row.published_version ? await repo.getVersion(row.event_id, latestVersion) : config;
+    return (await viewsOf([row]))[0];
+  }
+
+  function buildView(row: OrderRow, config: EventConfig, latest: EventConfig, rows: EntryRow[], changes: ChangeRow[]) {
     const findCat = (id: string) => config.categories.find((c) => c.id === id) ?? latest.categories.find((c) => c.id === id);
-    const changes = await db.all<{ entry_id: string; kind: 'transfer' | 'withdraw'; from_category_id: string; to_category_id: string | null; amount_paid_cents: number; new_price_cents: number | null; difference_cents: number | null; reason: string; created_at: string }>(
-      `SELECT entry_id, kind, from_category_id, to_category_id, amount_paid_cents, new_price_cents, difference_cents, reason, created_at FROM entry_changes WHERE order_id = $1 ORDER BY created_at, seq`,
-      [id],
-    );
     const rider = row.rider_json;
     const waiver = row.waiver_json;
     const q = row.quote_json;
     const extras: OrderExtras = row.extras_json ?? EMPTY_EXTRAS;
     const status = effectiveStatus(row);
-    const rows = await entryRows(id);
     const guardianRequired = rows.some((e) => config.categories.find((c) => c.id === e.category_id)?.eligibility.guardianRequired);
     const entries = rows.map((e) => {
       const cat = findCat(e.category_id);
@@ -389,10 +439,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
 
     async listOrders(eventId: string) {
       await repo.getEvent(eventId);
-      const ids = await db.all<{ id: string }>(`SELECT id FROM orders WHERE event_id = $1 ORDER BY created_at DESC, seq`, [eventId]);
-      const out = [];
-      for (const r of ids) out.push(await view(r.id));
-      return out;
+      return viewsOf(await db.all<OrderRow>(`SELECT * FROM orders WHERE event_id = $1 ORDER BY created_at DESC, seq`, [eventId]));
     },
 
     /**

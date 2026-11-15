@@ -4,7 +4,7 @@ Use this sheet to measure what the current workflow costs, so a later pilot can 
 
 Event measured: Berkeley Omnium two-day road race and criterium weekend (estimates only, not yet measured)  
 Period covered: _from planning start to reconciliation complete_  
-Sources so far: [D01](interviews/D01.md), 2026-11-14
+Sources so far: [D01](interviews/D01.md), 2026-11-14, follow-ups 2026-11-15
 
 ## Rules
 
@@ -18,13 +18,13 @@ Sources so far: [D01](interviews/D01.md), 2026-11-14
 | Task | Role | Hours | Measured or estimate | Source |
 |---|---|---|---|---|
 | Event and category setup | Promoter | About 1 if only prices change; a few if fields, categories, or times change | Estimate | D01 |
-| Pricing, discounts, bundles | | | | |
+| Pricing, discounts, bundles | Promoter | Not given (discount codes needed for omnium, junior, collegiate, women's pricing) | Estimate | D01 |
 | Answering rider questions | Promoter | Not given (messages arrive weekly around an event) | Estimate | D01 |
 | Resolving exceptions before race day | | | | |
 | Start lists and timer handoff | Registration lead | 0.5 to 1 to configure the CSV; about 0.1 with a saved template | Estimate | D01 |
-| Race-day registration desk | | | | |
+| Race-day registration desk | Registration lead, volunteers | Not given (about 30 day-of registrations) | Estimate | D01 |
 | Refunds and transfers | | | | |
-| Reconciliation | Treasurer | About 8 | Estimate | D01 |
+| Reconciliation | Treasurer | About 8 (reports, refund matching, merchandise) | Estimate | D01 |
 | Handoff and documentation | | | | |
 | **Total** | | | | |
 
@@ -45,12 +45,12 @@ Count from the exception list, emails, and the race director's notes.
 | Error type | Count | Found when (before race day, race morning, after) | Time to fix (total) |
 |---|---|---|---|
 | Rider in wrong category | | | |
-| License could not be confirmed | Not given (named as a common problem by D01) | | |
+| License could not be confirmed | 0 (D01; a rider with an unconfirmed license cannot register) | Before race day | |
 | Missing junior waiver or guardian | | | |
-| Duplicate entry or charge | Not given (named as a common problem by D01) | | |
+| Duplicate entry or charge | 0 (D01) | | |
 | Field oversold | | | |
 | Wrong or missing rider on the start list | | | |
-| Bib error | None reported; assigning bibs across multiple fields is slow (D01) | | |
+| Bib error | None reported; assigning bibs across multiple fields takes about 1 hour (D01) | | |
 | Reconciliation difference | None reported; no disputes or chargebacks (D01) | | |
 | Other | | | |
 

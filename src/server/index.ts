@@ -12,3 +12,18 @@ app.listen({ port, host }).catch((err) => {
   app.log.error(err);
   process.exit(1);
 });
+
+// On SIGTERM (a platform redeploy or scale-down) or Ctrl+C: stop taking new requests, let
+// requests in progress finish, close the database pool, then exit.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, () => {
+    app.log.info(`${signal} received; shutting down.`);
+    app.close().then(
+      () => process.exit(0),
+      (err) => {
+        app.log.error(err);
+        process.exit(1);
+      },
+    );
+  });
+}

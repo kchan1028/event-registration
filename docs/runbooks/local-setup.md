@@ -69,7 +69,9 @@ Then open `http://127.0.0.1:3001/`.
 curl http://127.0.0.1:5273/api/health
 ```
 
-Expected output: `{"ok":true}`.
+Expected output: `{"ok":true}`. The health check also queries the database: if PostgreSQL is stopped while the app runs, it answers HTTP 503 with `{"ok":false,...}` (see [troubleshooting](troubleshooting.md#the-api-or-the-tests-cannot-connect-to-postgresql)).
+
+Stopping the app with Ctrl+C (or a `SIGTERM` from a hosting platform) lets requests in progress finish and closes the database connections before it exits.
 
 ## Run the checks
 

@@ -47,7 +47,7 @@ _The options comparison result, the recommendation, and the one reason that deci
 | Product owner | | |
 | Registration lead | | |
 | Developer or technical lead | | |
-| USAC contact owner | | |
+| USAC contact owner | KC (project owner) | Yes, 2026-11-15 |
 | Payments owner | | |
 | Pilot accountable organizer | | |
 | Pilot support owner | | |

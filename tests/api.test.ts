@@ -12,6 +12,15 @@ async function setupDemo(databaseUrl?: string) {
   return { app, eventId, event };
 }
 
+describe('health check', () => {
+  it('answers ok while the database is reachable', async () => {
+    const { app } = await testApp();
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+  });
+});
+
 describe('organizations and draft events', () => {
   it('creates an organization and a weekend draft, then reloads it from the database', async () => {
     const databaseUrl = await testDatabaseUrl();

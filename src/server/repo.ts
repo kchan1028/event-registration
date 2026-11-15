@@ -196,6 +196,14 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
       return eventConfigSchema.parse(row.config_json);
     },
 
+    /** Several published versions of one event in one query. Throws like getVersion if any is missing. */
+    async getVersions(id: string, versions: readonly number[]): Promise<Map<number, EventConfig>> {
+      const wanted = [...new Set(versions)];
+      const rows = await db.all<{ version: number; config_json: unknown }>(`SELECT version, config_json FROM event_versions WHERE event_id = $1 AND version = ANY($2)`, [id, wanted]);
+      if (rows.length !== wanted.length) throw new HttpError(404, 'Version not found.');
+      return new Map(rows.map((r) => [r.version, eventConfigSchema.parse(r.config_json)]));
+    },
+
     /**
      * Add simulated entries one at a time. The event lock is held while the
      * configuration and every existing entry are reread, so concurrent requests

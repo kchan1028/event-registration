@@ -16,13 +16,16 @@ Name the current provider and any alternative providers in the notes, with the d
 
 ## Evidence so far (not scored)
 
-Recorded 2026-11-14 from [D01](interviews/D01.md) only. Scoring waits for measured baseline numbers and interviews with people outside the project.
+Recorded 2026-11-14, with follow-ups 2026-11-15, from [D01](interviews/D01.md) only. Current tool: BikeReg. Scoring waits for measured baseline numbers and interviews with people outside the project.
 
 - D01 described rider registration on BikeReg as "simple and easy", with a clear total price and quick check-in. No race-weekend problem was traced back to registration.
-- The largest estimated cost is reconciliation (about 8 hours). Whether a software limit causes it, or reporting and analytics work that any tool would need, is not yet known.
-- Bib assignment across multiple fields is slow. Whether the current tool can do it faster with different setup is not yet known.
+- The largest estimated cost is reconciliation (about 8 hours): building reports, matching refunds, and merchandise sales (D01 follow-up, 2026-11-15). CycleReg has no merchandise requirement in product.md, so option C would not remove the merchandise part as planned.
+- Bib assignment across multiple fields takes about 1 hour, mostly planning a block per field. A saved block plan (option A) may cover much of it.
 - The start-list export cost mostly disappears with a saved template, which points to option A for that step.
-- D01 would not switch to anything that hurts the event's search visibility. This is a condition every option must meet.
+- D01 would not move to a platform riders don't know, because riders might not find or trust the event there. This favors A and B, and is a distribution risk for C.
+- Discounts (omnium package, junior, collegiate, women's entry) need generated discount codes in the current tool, which D01 finds hard.
+- Shared-field limits are enforced by a person, not BikeReg. If BikeReg cannot cap a combined field, this is a software limit that option C addresses (shared capacity pools exist in the local build). Not yet checked.
+- No license issues or duplicate entries per event (D01), so exception handling is not a measured cost for this event.
 
 ## Criteria
 

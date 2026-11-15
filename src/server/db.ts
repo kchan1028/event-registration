@@ -10,7 +10,7 @@ import pg from 'pg';
  * them as strings. JSON columns are jsonb; the driver returns parsed values.
  */
 
-export type Param = string | number | boolean | null;
+export type Param = string | number | boolean | null | readonly string[] | readonly number[];
 
 export interface Db {
   all<T>(sql: string, params?: readonly Param[]): Promise<T[]>;
