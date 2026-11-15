@@ -4,6 +4,7 @@ import { formatLength } from '../shared/format';
 import type { EventConfig } from '../shared/schema';
 import { diffRows, sortRows, toCsv, type StartListRow } from '../shared/startlist';
 import type { Db } from './db';
+import type { Identity } from './identity';
 import type { Orders } from './orders';
 import { HttpError, type Repo } from './repo';
 
@@ -12,7 +13,7 @@ import { HttpError, type Repo } from './repo';
  * sample CSV for the timer. Test entries are never exported (product.md 1a):
  * they live in their own table and are not orders, so they never appear here.
  */
-export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () => Date) {
+export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () => Date, identity: Identity) {
   const nowIso = () => clock().toISOString();
 
   function published(eventId: string): { config: EventConfig; version: number } {
@@ -41,6 +42,7 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
     const bibOf = db.prepare<[string, string, string], { bib: number }>(`SELECT bib FROM bib_assignments WHERE event_id = ? AND scope = ? AND order_id = ? AND released_at IS NULL`);
     const checkedIn = db.prepare<[string, string], { n: number }>(`SELECT COUNT(*) AS n FROM check_ins WHERE order_id = ? AND day_id = ?`);
     const rows: StartListRow[] = [];
+    const riderKey = identity.keyOf(eventId); // linked orders are one rider: same rider ID, bib, and check-in
     for (const o of orders.listOrders(eventId)) {
       if (o.status !== 'confirmed') continue;
       for (const e of o.entries) {
@@ -50,7 +52,7 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
         const sg = config.startGroups.find((g) => g.id === cat.startGroupId);
         rows.push({
           entryId: e.id,
-          riderId: o.id,
+          riderId: riderKey(o.id),
           raceId,
           raceName: race.name,
           raceDate: day?.date ?? '',
@@ -59,7 +61,7 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
           classificationCode: cat.classifications[0]?.code || cat.timingCode || '',
           categoryName: cat.name,
           raceLength: formatLength(cat.length),
-          bib: bibOf.get(eventId, scope, o.id)?.bib ?? null,
+          bib: bibOf.get(eventId, scope, riderKey(o.id))?.bib ?? null,
           firstName: o.rider.firstName,
           lastName: o.rider.lastName,
           team: o.rider.team,
@@ -67,7 +69,7 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
           racingAge: o.rider.racingAge,
           competitionClass: o.rider.competitionClass ?? '',
           licenseStatus: e.licenseReviewed ? 'reviewed' : 'needs_review',
-          checkedIn: (checkedIn.get(o.id, race.dayId)?.n ?? 0) > 0,
+          checkedIn: (checkedIn.get(riderKey(o.id), race.dayId)?.n ?? 0) > 0,
         });
       }
     }

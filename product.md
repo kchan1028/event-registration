@@ -289,6 +289,7 @@ Rules:
 - A weekend bundle reserves all its component entries together; never sell half a bundle silently.
 - Distinguish unique riders, race entries, and orders in every report.
 - Flag duplicate entries without preventing a rider from legitimately entering different races.
+  - Status: same-rider suggestions across orders, with organizer-confirmed linking (never automatic), are Implemented in the local prototype (see [roadmap.md](roadmap.md#check-in-prototype)).
 - First release supports organizer-managed waitlists. Automated promotion and charging follow later.
   - Waitlist policy (decided by the project owner, November 14, 2026): the organizer turns a waitlist on per category; it is off by default. While anyone is waiting or holds an offer, freed places go to the waitlist first and the category is not sold to the public. The organizer offers places in order; an offer reserves the place for 24 hours and the rider registers and pays through a private link. An unused offer expires and the organizer offers the next rider.
   - Status: Implemented in the local prototype (see [roadmap.md](roadmap.md#rider-checkout-prototype)). Offer links are copied by the organizer; no email is sent.

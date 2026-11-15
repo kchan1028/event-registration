@@ -45,7 +45,7 @@ The prototype exports one CSV per race, per saved snapshot, or for all races of 
 | `license_status` | Whether an organizer reviewed the license | `reviewed` or `needs_review` | `needs_review` |
 | `checked_in` | Checked in for that race day | `Y` or `N` | `Y` |
 | `entry_id` | Stable ID for this entry | Text | `oe_2ca41be52185` |
-| `rider_id` | Stable ID for this rider (one per order in the prototype) | Text | `ord_343502c91430` |
+| `rider_id` | Stable ID for this rider: the order ID, or for orders the organizer linked as one rider, the earliest of them. Linking two orders changes the later order's `rider_id`, which shows as a change in the start-list revisions | Text | `ord_343502c91430` |
 
 ## What the sample shows
 
