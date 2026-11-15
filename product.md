@@ -291,6 +291,8 @@ The local prototype stores data in a SQLite file on the developer's computer ([A
 | Existing registrations | Confirm export rights and mappings; never assume signatures or payment tokens transfer |
 | Results sites (road-results.com) | Research how results are updated and which registration fields (name, license number, team, category) a timer needs to build the upload file. See [Results site updates](#results-site-updates-research) |
 
+The questions to ask are packaged in [docs/usac-questions.md](docs/usac-questions.md) and [docs/payment-model-questions.md](docs/payment-model-questions.md); record the answers there.
+
 Until USAC integration is approved, prototypes may use clearly labeled simulated checks or an agreed manual-review process. A sanctioned-event pilot requires explicit acceptance of the chosen process by the relevant parties.
 
 ### Future USA Cycling waiver and license integration

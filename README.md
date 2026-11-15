@@ -47,6 +47,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Registration open and close times enforced in the event's time zone (demo events can let testers register early, labeled "Demo mode") | Implemented and tested |
 | Race-day check-in: search by name, team, bib, or check-in code; ready/blocked result; bib ranges per event or day; bib history; repeat-safe check-in | Implemented; automated tests in CI; usability test with volunteers still open |
 | Light and dark themes, following the system setting, with a header toggle | Implemented; contrast checked manually, no automated test yet |
+| Automated accessibility checks (WCAG 2.2 A and AA, axe-core) on the main screens in both themes | Implemented; run in CI. Keyboard, screen-reader, and real-phone passes not done |
 | CSV import and export of category schedules, with column matching and per-row errors ([format](docs/csv-category-format.md)) | Implemented and tested |
 | Start lists per race, numbered snapshots with changes since the last one, and a sample timer CSV (format not yet agreed with a timer) | Implemented; automated tests in CI |
 | Change-impact preview, real payments and refunds, QR scanning, an agreed timer format | Planned |
@@ -254,6 +255,8 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [docs/fixtures/README.md](docs/fixtures/README.md) | Fake demonstration data and sample waiver text used by the rider demo |
 | [docs/timer-export-review.md](docs/timer-export-review.md) | Sample start-list export, its columns, and the questions for the timer and officials |
 | [docs/discovery/README.md](docs/discovery/README.md) | Phase 0 discovery kit: interview guides, workflow map, workload baseline, options comparison, USAC and payment questions, pilot selection, and the exit-gate decision memo |
+| [docs/usac-questions.md](docs/usac-questions.md) | Questions for USA Cycling about waivers, licenses, one-day licenses, and reporting (Phase 0, not yet sent) |
+| [docs/payment-model-questions.md](docs/payment-model-questions.md) | Payment model options and the questions for the club and payment providers (Phase 0, not yet sent) |
 | [docs/usability/README.md](docs/usability/README.md) | Phase 1 usability test kit: recruiting, setup, facilitator script, tasks, scoring, and results summary |
 
 ## Contributing

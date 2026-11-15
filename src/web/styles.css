@@ -1224,6 +1224,11 @@ fieldset {
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
 }
+/* Focusable so keyboard users can scroll a wide table (WCAG 2.1.1). */
+.table-wrap:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
 .cat-table {
   width: 100%;
   border-collapse: collapse;
@@ -1273,7 +1278,7 @@ fieldset {
 }
 .order-btns .icon-btn {
   width: 28px;
-  height: 22px;
+  height: 24px; /* WCAG 2.2 minimum target size */
 }
 .cat-row {
   cursor: pointer;

@@ -103,7 +103,7 @@ export function StartLists({ draft }: { draft: Draft }) {
           {race.rows.length === 0 ? (
             <p className="note">No confirmed entries in this race yet.</p>
           ) : (
-            <div className="table-wrap">
+            <div className="table-wrap" role="region" aria-label={`${race.raceName} start list`} tabIndex={0}>
               <table className="mini-table sl-table">
                 <thead>
                   <tr>
