@@ -131,7 +131,7 @@ export function CsvImport({ draft }: { draft: Draft }) {
             <p className="import-summary">
               <span className="num">{plan.validCount}</span> ready to import · <span className={`num ${plan.errorCount ? 'text-error' : ''}`}>{plan.errorCount}</span> with errors
             </p>
-            <div className="table-wrap">
+            <div className="table-wrap" role="region" aria-label="Import preview, row by row" tabIndex={0}>
               <table className="mini-table import-table">
                 <thead>
                   <tr>
