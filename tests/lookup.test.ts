@@ -31,6 +31,8 @@ describe('matching a registration', () => {
 
   it('needs at least four characters to match by code, so short noise does not match everything', () => {
     expect(matchesRegistration(reg, 'D3')).toBe(false);
+    expect(matchesRegistration(reg, 'demo')).toBe(false); // every order number starts with DEMO-
+    expect(matchesRegistration(reg, 'DEMO-')).toBe(false);
     expect(matchesRegistration(reg, '')).toBe(true);
     expect(matchesRegistration({ ...reg, checkInCode: null }, 'K7M2P')).toBe(false);
   });

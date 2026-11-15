@@ -39,10 +39,10 @@ export function matchesRegistration(o: Searchable, query: string): boolean {
   if (q.split(' ').every((word) => name.includes(word))) return true;
   if (normalizeText(r.email).includes(q) || (r.guardian?.email && normalizeText(r.guardian.email).includes(q))) return true;
   if (r.team && normalizeText(r.team).includes(q)) return true;
-  const code = compact(q);
+  // Codes: the shared DEMO- prefix is dropped from both sides, so "demo" alone does not match every order.
+  const code = compact(q).replace(/^DEMO/, '');
   if (code.length >= 4) {
-    const orderNumber = compact(o.orderNumber);
-    if (orderNumber.includes(code) || orderNumber.replace(/^DEMO/, '').includes(code)) return true;
+    if (compact(o.orderNumber).replace(/^DEMO/, '').includes(code)) return true;
     if (o.checkInCode && compact(o.checkInCode).includes(code)) return true;
   }
   return false;
