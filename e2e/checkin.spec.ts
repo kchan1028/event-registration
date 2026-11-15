@@ -278,6 +278,8 @@ for (const mobile of [false, true]) {
     const swapped = await (await api.get(`/api/events/${eventId}/check-in`)).json();
     expect(swapped.riders.find((r: Rider) => r.orderId === alex.orderId)).toMatchObject({ bib: 101, checkedInAt: expect.any(String) });
     expect(swapped.riders.find((r: Rider) => r.orderId === blake.orderId)).toMatchObject({ bib: 100, checkedInAt: null });
+    await expect(panel.getByRole('checkbox', { name: 'I approve changing checked-in riders’ bibs. Select those riders individually.', exact: true })).not.toBeChecked();
+    await panel.getByRole('checkbox', { name: 'I approve changing checked-in riders’ bibs. Select those riders individually.', exact: true }).check();
     await panel.getByRole('combobox', { name: 'Replacement numbers', exact: true }).selectOption('sequence');
     await panel.getByRole('checkbox', { name: alex.name, exact: true }).check();
     await panel.getByRole('checkbox', { name: blake.name, exact: true }).check();

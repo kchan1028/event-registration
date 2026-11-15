@@ -120,9 +120,8 @@ describe('protected bib reassignment', () => {
     const allocation = { dayId: before.dayId, orderIds: [casey] };
     const free = (await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload: allocation })).json();
     await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/apply`, payload: { ...allocation, fingerprint: free.fingerprint } });
-    // Take a fresh preview after allocation; the unrelated check-in itself must not stale it.
     const fresh = (await preview(input)).json() as BibReassignmentPlan;
-    expect(fresh.fingerprint).not.toBe(plan.fingerprint);
+    expect(fresh.fingerprint).toBe(plan.fingerprint);
     expect((await checkIn(casey)).statusCode).toBe(200);
     expect((await apply(input, fresh.fingerprint)).statusCode).toBe(200);
   });

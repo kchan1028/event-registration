@@ -40,6 +40,7 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
   }
   function clearSelection() {
     setSelected([]);
+    setAcknowledgeCheckedIn(false);
     setNewBibs({});
     invalidate();
   }
@@ -64,6 +65,7 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
         if (!active.current) return;
         setPreview(null);
         setSelected([]);
+        setAcknowledgeCheckedIn(false);
         setNewBibs({});
         setMessage(`${result.applied} ${result.applied === 1 ? 'bib' : 'bibs'} ${reassigning ? 'changed; start-list revisions saved' : 'assigned'}. Readiness and check-in are unchanged.`);
         setData((current) => current && ({ ...current, riders: current.riders.map((r) => {

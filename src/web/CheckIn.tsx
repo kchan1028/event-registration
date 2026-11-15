@@ -362,6 +362,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
         setChanging(false);
         setNewBib('');
         setReason('');
+        setAcknowledgeCheckedIn(false);
         setBibPreview(null);
       } else {
         const input = { dayId, bib: Number(newBib), reason, acknowledgeCheckedIn };
@@ -513,7 +514,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
                   <button type="submit" className="btn btn--primary" disabled={busy || (!!bibPreview && !changedBibAssignments(bibPreview.plan).length)}>
                     {bibPreview ? 'Apply bib change' : 'Preview bib change'}
                   </button>
-                  <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => { setChanging(false); setBibPreview(null); }}>
+                  <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => { setChanging(false); setBibPreview(null); setAcknowledgeCheckedIn(false); }}>
                     Cancel
                   </button>
                 </div>

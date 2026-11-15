@@ -274,7 +274,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     });
     if (!input.acknowledgeCheckedIn && assignments.some((a) => a.currentBib !== a.bib && a.checkedInDays.length)) throw new HttpError(409, 'Acknowledge changes to checked-in riders before previewing.');
     const races = cfg.races.filter((r) => raceIds.has(r.id)).map((r) => ({ id: r.id, name: r.name }));
-    const fingerprint = createHash('sha256').update(JSON.stringify({ eventId, input, version, scope, settings: s, active: activeBibs.map((b) => [b.id, b.order_id, b.bib]).sort(), checks, assignments, races })).digest('hex');
+    const fingerprint = createHash('sha256').update(JSON.stringify({ eventId, input, version, scope, settings: s, checks, assignments, races })).digest('hex');
     return { dayId: day.id, scope, scopeLabel: s.scope === 'weekend' ? 'Whole event' : day.label, reason: input.reason, publishedVersion: version, races, assignments, fingerprint };
   }
 
