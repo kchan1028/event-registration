@@ -8,8 +8,24 @@ Use this kit to find out whether organizers, check-in volunteers, and riders or 
 |---|---|
 | [facilitator-script.md](facilitator-script.md) | What to say before, during, and after each session, and what counts as a rescue |
 | [tasks.md](tasks.md) | The tasks for each role, the starting state, what success looks like, and what to watch for |
-| [pilot-run-2026-11-14.md](pilot-run-2026-11-14.md) | A dry run of every task by the developer tools, before real sessions. Not gate evidence |
+| [pilot-run-2026-11-14.md](pilot-run-2026-11-14.md) | Historical developer-tools dry run plus the current Berkeley code-based expert review. Neither is participant gate evidence |
 | [observation-sheet.md](observation-sheet.md) | One printed sheet per session, plus the results summary that feeds the exit gate |
+
+## Berkeley weekend initial round
+
+Status: Planned, no participants recruited or sessions run. Start with **3–5 riders/parents and 2–3 organizers or volunteers** using the [Berkeley task module](tasks.md#berkeley-weekend-initial-round). Include a parent, a rider who enters multiple categories, and a beginner or uncertain-license rider; among staff include at least one setup role and one check-in role. Roles may overlap, but count each person's role and task attempts explicitly. Use fictional data and the existing consent/storage rules below. Do not contact anyone under this documentation task.
+
+This is an initial formative round to discover problems, not proof of the Phase 1 gate. The existing gate panel remains at least five riders/parents, two organizers, and two check-in volunteers. Expand recruitment or run a second round to meet that panel and re-test critical fixes with new participants. Do not use a small sample's percentage to claim statistical reliability.
+
+Use B1 for setup staff, B2–B5 for riders/parents, and B6 for check-in staff; assign both staff tasks when their experience permits. Record attempted/omitted tasks and reasons, not a fixed assumed denominator. Allow 45–60 minutes per rider and 60 per staff session. Counterbalance theme/order where practical; prepare separate full-category and blocked/ready-control states. Ask for unaided price and clearance explanations before follow-ups.
+
+The [code-based expert review](pilot-run-2026-11-14.md#berkeley-weekend-case-study-code-based-expert-review) predicts risks, not user reactions. Keep its execution evidence separate from the blank participant results template. The original dry run's historical waitlist limitation has since changed; current capability is summarized in [feature.md](../../feature.md).
+
+### Initial-round measures and decisions
+
+Use the existing S/SP/A/F definitions and critical-blocker rules, adding the [Berkeley observation fields](observation-sheet.md#berkeley-initial-round-addendum). Measure task completion, wrong choices/edits, validation and recovery errors, assistance/rescues, elapsed time, and unaided understanding of contents, savings, total, and registration versus clearance. Record screen-reader/keyboard access failures separately from price and capacity errors. Report counts and denominators per task and role, plus median and range of times; keep interrupted and abandoned attempts visible.
+
+No unsafe outcome is acceptable: believing an unresolved rider is cleared, issuing a bib while blocked, accepting a partial unwanted package, overselling, or accepting a missing guardian is a critical finding even once. An unavailable missing-waiver workflow is an expert-identified product gap, not a participant error. Record hypothesis confirmation/refutation only after observing behavior. Resolve and re-test critical findings before the larger gate round. Ready-control check-in's proposed median under 30 seconds is an early signal; blocked-desk resolution has no invented time target.
 
 ## Who to recruit
 

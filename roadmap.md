@@ -181,6 +181,20 @@ Exit gate: A specific, recurring problem has a measurable workload cost; a custo
 
 Tools: the [discovery kit](docs/discovery/README.md) has a file for each deliverable and a [decision memo](docs/discovery/decision-memo.md) that records the exit-gate evidence. Phase 0 is Verified only when the product owner signs that memo.
 
+## Berkeley weekend review priorities
+
+Status: Planned follow-up to the November 14, 2026 [code-based expert review](docs/usability/pilot-run-2026-11-14.md#berkeley-weekend-case-study-code-based-expert-review). Executed shared-rule probes and 85 existing pricing/eligibility/capacity/order/check-in/identity tests passed; no participant research, official Berkeley partnership, live payments, or federation approval was established. Existing phases and live-use gates remain in force.
+
+| Priority / placement | Work and dependencies | Completion evidence required |
+|---|---|---|
+| P0, before live minor registration | Close guardian bypass for minors in adult/open categories. Confirm age convention and accepted guardian policy; enforce consistently in browser, server, transfers, and readiness. | Tests for junior and adult/open categories, missing guardian and wrong signer; parent task succeeds with clear signer responsibility. No minor silently self-signs through an unflagged category. |
+| P0, Phase 1 correctness/recovery validation | Exercise package contents and server-side intent, split discount explanations, recovery versus overlap, final-place rollback, window/surcharge boundaries, decline/refresh/expiry recovery. Preserve accepted prices. Existing organizer-confirmed post-order links do not provide pre-admission identity, so do not deduplicate capacity across separate orders without a verified identity design. | [Product case criteria](product.md#berkeley-weekend-acceptance-criteria), technical concurrency/retry evidence, and participant teach-back of included races, savings, totals, and next steps. Price quote alone never authorizes an invalid selection. |
+| P0, Phase 1 formative study | Run [3–5 riders/parents and 2–3 staff](docs/usability/README.md#berkeley-weekend-initial-round), then fix/re-test critical findings and expand to the existing gate panel. No recruitment is performed by this docs change. | Task-level completion, errors, assistance, time, and price/clearance understanding; record missing-waiver probe as hypothetical, not UI completion. No invented feedback or gate pass. |
+| P0, Phase 0 decisions; Phase 2/3 implementation | Obtain USAC platform/electronic-waiver and guardian acceptance or an explicitly accepted paper/manual alternative; license access/freshness/fallback policy; Stripe merchant/settlement decision. Dependencies are tracked in existing [external requirements](docs/discovery/external-requirements.md) and [USAC questions](docs/usac-questions.md). | Written answers/acceptance with owner, source and date before sanctioned use. Implement/rehearse waiver resolution and independent readiness; sample signatures and license notes do not establish approval. |
+| P0, Phase 3 rehearsal | Demonstrate paid-but-blocked lookup, waiver/guardian and license resolution under accepted rules, safe bib issuance, repeat checks, and timer handoff. Depends on accepted verification process and access control. | No blocked rider receives a bib; every blocker has a next action. Ready-control median under 30 seconds is measured separately from exception handling; timer accepts exports and support/fallback owners are named. |
+| Required across UI changes | Apply [DESIGN.md](DESIGN.md): stable opaque forms/pricing/tables, selective glass, readable contrast, keyboard/mobile recovery, reduced motion/transparency. Correctness precedes visual refinements; keep current opaque UI until alternatives are verified. | Manual keyboard/screen-reader and safe real-device checks in both themes, 360px/200% zoom, composited contrast and fallback checks when glass is implemented. Automated checks alone do not verify these tasks. |
+| Later, existing Phase 5/6 sequence | Dedicated omnium/stage-race configuration, then separate-event/cross-organization packages or season passes. | Keep same-event demo packages distinct; do not expand before single-event correctness, sanctioned-use gates, and separate settlement decisions are satisfied. |
+
 ## Phase 1 — Test the experience without live money
 
 Indicative effort: 2–3 weeks. Depends on Phase 0. Priority: P0.
@@ -194,9 +208,9 @@ Deliverables:
 - Light and dark themes with a toggle that defaults to the system preference and remembers the choice. See [product.md](product.md#display-themes).
 - Draft category/start-group model, state transitions, and timer export samples.
 - Prototype explicit omnium/stage-race setup and review requirements for a TT component and overall participation; remain simulated and separate from results scoring.
-- Test with at least two organizers, two check-in volunteers, and five riders/parents. Participants may overlap with discovery.
+- Start with the Berkeley formative round (3–5 riders/parents and 2–3 organizers/volunteers), then expand to at least two organizers, two check-in volunteers, and five riders/parents for the exit gate. Participants may overlap with discovery; count role/task exposure explicitly.
 
-Exit gate: Participants complete the core tasks without facilitator rescue; all serious confusion is resolved; the timer accepts the proposed sample format; scope is small enough to operate with the identified team. Proposed usability threshold: at least 90% unassisted completion across the core tasks, with no unresolved critical blocker.
+Exit gate: Participants complete the core tasks without facilitator rescue; all serious confusion is resolved; the timer accepts the proposed sample format; scope is small enough to operate with the identified team. Proposed usability threshold: at least 90% unassisted completion across the core tasks, with no unresolved critical blocker. The smaller initial round and expert review do not satisfy this gate. Record exact task attempts, errors, assistance, times, and package/clearance teach-back. Every unsafe clearance, bib, guardian, capacity, or unintended-price outcome is critical even once; fix and re-test with a new participant. No manual accessibility or real-device pass is implied by automated tests.
 
 ## Phase 2 — Build the registration core
 
@@ -229,7 +243,7 @@ Verification:
 - Contrast and readability of text, forms, buttons, errors, and status indicators in both light and dark themes; theme choice persists without a flash of the wrong theme.
 - MFA enforcement for every account type, step-up prompts on sensitive organizer actions, recovery paths that cannot bypass MFA, and attempt rate limits.
 
-Exit gate: Sandbox money and entry states reconcile; no overselling or duplicate processing in concurrency/retry tests; core flows pass with realistic categories. No public paid launch yet.
+Exit gate: Sandbox money and entry states reconcile; no overselling or duplicate processing in concurrency/retry tests; core flows pass with realistic categories. Verify the Berkeley package, extra-entry, guardian-in-adult-category, and recovery criteria, with no partial package or silently repriced paid entry. Stripe sandbox evidence must cover authoritative notification/retry/refund reconciliation, not simulated app buttons. No public paid launch yet.
 
 ## Phase 3 — Make race day operable
 
@@ -256,7 +270,7 @@ Rehearsal:
 - Exercise a walk-up rider, a full field with a waitlist, a minor needing a guardian, failed payment, and repeated staff actions without duplicate charges or entries.
 - Reconcile the financial report with provider records and demonstrate backup recovery.
 
-Exit gate: Registration lead, timer, treasurer, and pilot organizer accept the workflow; all P0 defects are closed; contingency and support ownership are documented.
+Exit gate: Registration lead, timer, treasurer, and pilot organizer accept the workflow; all P0 defects are closed; contingency and support ownership are documented. Before sanctioned use, record explicit acceptance of the USAC platform/electronic-waiver path or approved alternative, guardian process, and license review/freshness fallback. Rehearse missing waiver and license blockers through accepted resolution, including server refusal to issue a bib while blocked; retain independent payment/entry/readiness evidence. Confirm live payment responsibilities and operating approval before Phase 4.
 
 ## Phase 4 — Run a controlled live pilot
 

@@ -202,3 +202,78 @@ Hand the participant Harper Demo's check-in code from setup, written or printed.
 **Success:** Correctly reads Harper as ready and Gray as not ready, in the theme set for the session. Note the theme, the light, and the screen brightness.
 
 **Volunteer debrief.** What would you do if the laptop stopped working? Is there anything on the screen you would not want a rider standing next to you to see? What would make a morning line move faster?
+
+## Berkeley weekend initial round
+
+Status: Planned formative module. Use this module **instead of** R1–R5/O1–O6/V1–V6 for the initial Berkeley round; do not mix denominators. The original tasks remain available for the later Phase 1 gate. The [expert review](pilot-run-2026-11-14.md#berkeley-weekend-case-study-code-based-expert-review) provides evidence and hypotheses, not expected participant reactions. Allow 45–60 minutes for riders and 60 minutes for organizer/volunteer sessions, with breaks or a second session if needed.
+
+### Facilitator setup and fictional data
+
+Create a fresh session database under the existing [local-only setup](README.md#set-up-the-computer-before-each-session). Use **Load Berkeley Omnium** on the home page, not the standalone Berkeley seed. This loader creates the combined draft with synthetic capacity usage. For rider/volunteer sessions, preview and publish it after recording warnings; for organizer tasks, leave it as a draft. Do not assume it is already published. Record the commit, local date, theme, viewport, published version, starting availability, and any preparation changes. Do not seed other example events into this session.
+
+| Fictional person | Profile / use |
+|---|---|
+| Emery Demo | Racing age 52, Cat 4, annual license, men, not collegiate. Weekend: RR-M50-34 + CR-M50-34; extra category CR-E4. |
+| Casey Demo / Jordan Demo | Casey racing age 13, Cat 5, annual license, men, not collegiate; Jordan is parent/guardian. Weekend: RR-JB1314 + CR-J1314. |
+| Taylor Demo | Racing age 16, Cat 4, annual license, men, not collegiate; CR-E4 minor-in-adult-category review probe. Do not describe this path as safe before the guardian gap is fixed. |
+| Morgan Demo | Adult age 52, Cat 4, annual license, men; manual-entry paid registration, no demo picker/license result, for outstanding-license check-in. |
+
+Use the person's lowercase first name plus `.demo@example.com` for email, “Demo Contact” with `2025550101` for an emergency contact, and “DEMO-STUDY” if a license label is needed. Use no real contact details or license numbers. Choose “None” in the demo rider picker and enter these fictional details manually so guardian and license-review questions are exposed. Racing age is supplied for the task, not calculated from a real birth date. All license results are unverified unless explicitly simulated.
+
+Default pre-race expectations: $130 for the weekend and $150 with the extra criterium category, including zero configured demo fees. On either race day, the configured $15 surcharge can change these totals. The facilitator records the quote date and calculates expected totals before the session; do not change the computer clock or silently disable price rules. Use a separate clean starting state for each rider task so previous holds do not consume test capacity.
+
+Prepare the full-category variant separately: in the combined draft set the Sunday Masters 35+/50+ 3/4 shared start limit to its existing synthetic usage (normally 57 = 38 + 19), verify zero remaining, then publish. Do not lower below existing usage or label a display header as the limit. For a live last-place variant instead, set the limit to usage + 1 and prepare two independent fictional orders; any concurrency observation is a technical rehearsal, not two participant completions.
+
+For check-in, create Morgan's paid simulated road entry through ordinary checkout with a sample signature, without selecting a pre-cleared fixture rider. Configure a weekend bib range 100–299 and leave the license unreviewed. Separately prepare a ready control by recording an explicitly simulated manual license review in a separate session/order. **Missing waiver variant:** ordinary checkout cannot create this state; read a scenario card saying “Entry confirmed, payment simulated complete, waiver missing, license needs review.” Ask what the volunteer should do, but record this as a comprehension probe, not observed UI task completion. No database editing or real waiver acceptance.
+
+### B1. Set up a weekend (organizer, core)
+
+**Read aloud:** “Prepare this demonstration weekend: road race Saturday and criterium Sunday. Offer $80 and $60 entries or $130 for both. The Sunday Masters 35+ and 50+ Cat 3/4 categories share a start with a field limit of 100 and separate classifications. Check eligibility, dates and times, then make the schedule ready for riders. Tell me what still needs an official decision.”
+
+**Success:** Correct same-event package includes both race IDs; prices, shared start, limits and classifications remain distinct; preview and publish completed, warnings considered, unresolved road starts/limits and rule provenance identified. No developer help or accidental capacity pool/display-header limit.
+
+**Observe/ask:** Which setting controls the combined field? What happens to previously paid entries after a price change? Which warnings would prevent real registration? Time setup and count incorrect edits, reversals, and assistance.
+
+### B2. Enter both days (rider, core)
+
+**Read aloud:** “You are Emery Demo and want to race the Masters 50+ Cat 3/4 events on both days, at the best price. Register using these fictional details. Tell me what you bought, what you saved, and whether you may race yet.”
+
+**Success:** Correct two entries and $130 pre-race total, $10 package saving, sample waiver and simulated payment; identifies license review as outstanding. Does not think the package awards a podium. Ask them first to choose Saturday only and explain what remains before continuing with both days; do not tell them which control to use.
+
+**Observe/ask:** Is package intent noticed? Do the $74.29/$55.71 allocated prices obscure savings? Does “You qualify” imply official verification? Record the unaided explanation of included races, total, savings, and next step before prompting.
+
+### B3. Add another criterium and recover (rider, core)
+
+**Read aloud:** “In a fresh attempt at Emery's weekend order, add the Elite 4 criterium. Decide whether the schedule works for you and explain the price. Also consider the Masters 35+ category. Keep only choices you can actually race. At payment, try the demo decline once, then finish.”
+
+**Success:** Weekend + CR-E4 quote $150 pre-race; understands $20 extra entry, $10 package saving, $40 extra-entry reduction. Distinguishes the 10-minute advisory recovery gap from the blocked simultaneous Masters categories; removes the conflicting choice without losing the valid entries. Decline/retry preserves details and yields one confirmed simulated order.
+
+**Observe/ask:** What would make you change your mind about a short recovery gap? What stayed reserved after decline and what happens when the hold expires? Record wrong selections, price misunderstandings, lost details, retry assistance, and end-to-end time. State reset between B2 and B3 is facilitator preparation, not participant recovery.
+
+### B4. Register a child (parent/rider, core)
+
+**Read aloud:** “You are Jordan Demo. Register Casey, age 13, for the junior road race and criterium. Use Casey's details for the rider and your fictional details for the parent. Explain who signs and what is still needed before racing.”
+
+**Success:** RR-JB1314 + CR-J1314, correct guardian details and guardian name/role on sample signature, $130 pre-race quote. Explains simulated payment, sample waiver, and unresolved license separately. Participant can correct a missing guardian or signature error without re-entering other details.
+
+**Observe/ask:** Whose email/name belongs where? Does a junior expect different fees? After the main task, ask how Taylor, age 16 in Elite 4, should be handled. Demonstrate the known missing guardian prompt only as an expert-led probe; do not count the unsafe behavior as successful task completion or an official rule.
+
+### B5. Full category (rider, core)
+
+**Read aloud:** “You want Emery's weekend package, but the Sunday Masters field has filled. Find out what you can do next without accidentally buying just Saturday.”
+
+**Success:** Recognizes the shared-start limit, no guaranteed Sunday place, and no complete package reservation. Finds a genuinely eligible available alternative or understands waitlist/contact next steps if no alternative is acceptable. A waitlist request is not described as an entry or a charge. Do not require joining a waitlist unless enabled in that variant.
+
+**Observe/ask:** Does the reason identify the limiting start? Does changing an option lose details? What would a waitlist offer guarantee, and when? Score a mistaken completed single-day purchase as an error, not success.
+
+### B6. Paid but blocked (volunteer/organizer, core)
+
+**Read aloud:** “Morgan Demo arrives for Saturday and shows a paid confirmation. Help Morgan collect a bib, or explain exactly what must happen first.”
+
+**Success:** Finds the correct entry/day, sees license review outstanding, issues no bib, and directs Morgan to the registration desk. Does not mark a real license verified just to finish. The facilitator may then record an explicitly simulated review and ask the participant to recheck, issue a bib, and repeat the lookup; the same active bib must remain.
+
+**Observe/ask:** Does payment overshadow the blocker? Is the next action visible without hovering or interpreting color? Time the blocked lookup separately from the ready control; measure the ready control from task readout to correct bib read aloud. Read the missing-waiver scenario card and ask what must happen; record comprehension only. A paper/electronic waiver resolution UI is a missing workflow, not a task the participant can complete today.
+
+### Accessibility and visual probes
+
+Across sessions cover light and dark themes, a 360px rider viewport, 200% zoom, keyboard-only operation, and a screen-reader pass with an appropriate tester. Observe hidden totals/errors, focus behind sticky controls, meaningful checkbox names, and focus recovery after errors. Do not infer real-phone or outdoor success from emulation. Liquid Glass is Planned: evaluate opaque current surfaces now; evaluate composited contrast, reduced transparency and reduced motion in a later implemented build. Never score an unavailable setting as a participant failure.
