@@ -40,7 +40,9 @@ Built November 14, 2026, on the stack in [ADR 0001](docs/decisions/0001-stack-fo
 
 **Implemented, not yet verified with organizers:** "Publish a weekend" and "Recreate a race schedule" pass end-to-end tests with example data, but the criteria require an organizer to do it with an approved schedule and no developer help. That is a Phase 1 usability test.
 
-**Not built yet (still required by product.md):** CSV import of category schedules; bundles and additional-race discounts; impact preview for changes after publishing; bulk edit and copy-day; category-specific questions, waivers, and bib ranges; waitlist policy; rider registration and checkout; exports.
+**CSV import and export (added November 14, 2026):** template download, column matching by name with manual override, per-row errors by line number, import of valid rows only after confirming the skipped ones, start and display groups matched or created, and an export in the same format. Eligibility comes only from explicit columns; a name that looks like a rule but has no license column gets a warning. Verified by unit tests (including a full export and re-import of the demonstration weekend) and a Playwright test. Format: [docs/csv-category-format.md](docs/csv-category-format.md).
+
+**Not built yet (still required by product.md):** impact preview for changes after publishing; bulk edit and copy-day; category-specific questions, waivers, and bib ranges; waitlist policy; rider registration and checkout; exports.
 
 **Pending external dependencies, shown as pending in the interface:** USA Cycling license and waiver checks, payments, and sign-in with required MFA. Until sign-in exists the prototype must not be hosted or shared.
 

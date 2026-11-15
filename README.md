@@ -46,7 +46,8 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Confirmation with a check-in code and per-entry readiness; organizer Registrations queue with license review | Implemented and tested |
 | Registration open and close times enforced in the event's time zone (demo events can let testers register early, labeled "Demo mode") | Implemented and tested |
 | Light and dark themes, following the system setting, with a header toggle | Implemented; contrast checked manually, no automated test yet |
-| CSV import, change-impact preview, real payments and refunds, check-in, exports | Planned |
+| CSV import and export of category schedules, with column matching and per-row errors ([format](docs/csv-category-format.md)) | Implemented and tested |
+| Change-impact preview, real payments and refunds, check-in, start-list exports | Planned |
 
 <details>
 <summary>More screens: category editor, rider preview, publishing, rider checkout, registrations, phone layouts</summary>
@@ -74,6 +75,8 @@ The category schedule lists what riders buy, grouped under display headers that 
 ![Confirmation with a demo order number, check-in code, readiness, and a watermarked demo receipt](docs/screenshots/15-registration-confirmed.png)
 
 ![Organizer Registrations view](docs/screenshots/16-organizer-registrations.png)
+
+![CSV import: two rows ready and one refused because P12 is not an explicit license category list](docs/screenshots/17-csv-import.png)
 
 </details>
 
@@ -231,6 +234,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [ACCESSIBILITY.md](ACCESSIBILITY.md) | Accessibility target, how it will be checked, and how to report a barrier |
 | [LICENSE.md](LICENSE.md) | MIT License |
 | [docs/architecture.md](docs/architecture.md) | What is built, the proposed target architecture, and open technical questions |
+| [docs/csv-category-format.md](docs/csv-category-format.md) | Columns and rules for importing and exporting category schedules |
 | [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md) | Install, run, and test the prototype; [troubleshooting](docs/runbooks/troubleshooting.md) |
 | [DESIGN.md](DESIGN.md) | Visual system of the organizer workspace |
 | [docs/coding-guide.md](docs/coding-guide.md) | Category and capacity modeling, eligibility, pricing, payments, privacy, accessibility, testing |

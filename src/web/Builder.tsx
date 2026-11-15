@@ -13,6 +13,7 @@ import { Pools } from './Pools';
 import { Preview } from './Preview';
 import { Publish } from './Publish';
 import { Registrations } from './Registrations';
+import { CsvImport } from './CsvImport';
 import { dayHue, Icon, Pending, ThemeToggle } from './ui';
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error' | 'conflict';
@@ -262,6 +263,7 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
           {route.view === 'pools' && <Pools draft={draft} />}
           {route.view === 'publish' && <Publish draft={draft} onOpenIssue={openIssue} />}
           {route.view === 'registrations' && <Registrations draft={draft} />}
+          {route.view === 'import' && <CsvImport draft={draft} />}
         </main>
         {selectedCategory && !wide && <div className="scrim" aria-hidden="true" onClick={() => setSelected(null)} />}
         <aside
@@ -370,6 +372,9 @@ function Rail({ draft, route, activeRaceId, errors, warnings }: { draft: Draft; 
       ))}
       <a className={`rail__item ${route.view === 'pools' ? 'is-active' : ''}`} href={href({ page: 'event', eventId: ev, view: 'pools' })} aria-current={route.view === 'pools' ? 'page' : undefined}>
         Shared capacity pools <span className="rail__count">{config.capacityPools.length}</span>
+      </a>
+      <a className={`rail__item ${route.view === 'import' ? 'is-active' : ''}`} href={href({ page: 'event', eventId: ev, view: 'import' })} aria-current={route.view === 'import' ? 'page' : undefined}>
+        Import and export
       </a>
       <a
         className={`rail__item ${route.view === 'registrations' ? 'is-active' : ''}`}

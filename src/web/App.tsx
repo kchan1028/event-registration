@@ -9,7 +9,7 @@ export type Route =
   | { page: 'events' }
   | { page: 'order'; orderId: string }
   | { page: 'event'; eventId: string; view: 'race'; raceId: string | null }
-  | { page: 'event'; eventId: string; view: 'setup' | 'pools' | 'publish' | 'preview' | 'registrations' };
+  | { page: 'event'; eventId: string; view: 'setup' | 'pools' | 'publish' | 'preview' | 'registrations' | 'import' };
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
@@ -19,7 +19,7 @@ export function parseHash(hash: string): Route {
   if (parts[0] !== 'events' || !parts[1]) return { page: 'home' };
   const eventId = parts[1];
   const view = parts[2];
-  if (view === 'setup' || view === 'pools' || view === 'publish' || view === 'preview' || view === 'registrations') return { page: 'event', eventId, view };
+  if (view === 'setup' || view === 'pools' || view === 'publish' || view === 'preview' || view === 'registrations' || view === 'import') return { page: 'event', eventId, view };
   return { page: 'event', eventId, view: 'race', raceId: view === 'race' ? (parts[3] ?? null) : null };
 }
 
