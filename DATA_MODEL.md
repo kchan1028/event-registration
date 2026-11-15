@@ -2,7 +2,7 @@
 
 This describes the database the local prototype uses today. It covers tables, relationships, important fields, constraints, and what happens when data is removed. The intended product data model, including entities that are not built yet, is in [product.md](product.md#data-model) and [product.md](product.md#data-storage).
 
-**Status:** Implemented (local prototype). Describes schema version 4 (four migrations) as of November 14, 2026.
+**Status:** Implemented (local prototype). Describes schema version 5 (five migrations) as of November 14, 2026.
 
 **Source of truth:** the migrations in [src/server/db.ts](src/server/db.ts) and the event configuration schema in [src/shared/schema.ts](src/shared/schema.ts). If this file disagrees with them, the code wins; fix this file in the same change.
 
@@ -36,6 +36,8 @@ erDiagram
     orders ||--o{ bib_assignments : "bib history"
     orders ||--o{ check_ins : "checked in"
     events ||--o{ start_list_snapshots : "start lists"
+    events ||--o{ waitlist_entries : "waitlists"
+    orders |o--o| waitlist_entries : "redeems offer"
 ```
 
 An organization owns events. Each event has one editable draft and any number of immutable published versions. Riders register through orders against one published version; each order holds one entry per category bought. Bibs, check-ins, and start-list snapshots belong to the event, and bibs and check-ins also point at the order (one order is one rider). `order_entries`, `bib_assignments`, and `check_ins` also carry `event_id` directly so they can be queried per event.
@@ -191,6 +193,26 @@ Numbered start lists per race. Immutable once saved; later changes show as a dif
 | `rows_json` | The start-list rows |
 | `created_at` | |
 
+### waitlist_entries
+
+Organizer-managed waitlists (migration 5). A rider joins a full category whose waitlist is turned on; the organizer offers places in order. Policy: [product.md](product.md#3-capacity-and-entry-integrity).
+
+| Column | Notes |
+|---|---|
+| `id` | Primary key |
+| `event_id` | References `events` |
+| `category_id` | Category ID inside the event configuration |
+| `rider_json` | Name, email, racing age, license category and type, competition class, collegiate division. No emergency contact or guardian |
+| `status` | `waiting`, `offered`, `accepted`, or `removed`. An `offered` row whose `offer_expires_at` has passed reads as `expired` (no background job) |
+| `offer_token` | Random private link token, set when offered; unique |
+| `offered_at` | When the organizer made the offer |
+| `offer_expires_at` | `offered_at` + 24 hours |
+| `order_id` | References `orders`; set when the rider starts checkout from the offer link |
+| `created_at` | Join time; sets the order of the list (index on `event_id`, `category_id`, `created_at`) |
+| `updated_at` | |
+
+Paying for the offer's order sets `status` to `accepted`. Removing a rider withdraws any open offer.
+
 ## Event configuration (JSON)
 
 `events.draft_json` and `event_versions.config_json` hold one document validated by `eventConfigSchema` in [src/shared/schema.ts](src/shared/schema.ts) (`schemaVersion: 1`). It contains:
@@ -204,7 +226,7 @@ Numbered start lists per race. Immutable once saved; later changes show as a dif
 | `races` | Up to 20 races, each on a day, road race or criterium |
 | `displayGroups` | Up to 40 headers that group categories for display; they never set limits |
 | `startGroups` | Up to 100, each in a race, with start and staging times and an optional field limit |
-| `categories` | Up to 300; each has eligibility paths, pricing and price changes, a registration window, race length, classifications, a start group, and a status of `active`, `closed`, or `archived` |
+| `categories` | Up to 300; each has eligibility paths, pricing and price changes, a registration window, race length, classifications, a start group, an optional `waitlistEnabled` flag (off when absent), and a status of `active`, `closed`, or `archived` |
 | `capacityPools` | Up to 50 shared limits over listed categories and start groups |
 
 The Berkeley demo seeds $80 road race and $60 criterium base prices and a fixed $130 bundle (`priceCents: 13000`, `discountCents: 0`); the fixed price takes precedence over a discount amount. Existing drafts and published orders are not migrated.
@@ -219,7 +241,8 @@ The configuration is validated on every save. A save is also refused if it would
 
 ## Capacity and concurrency
 
-- Places taken = test entries + confirmed order entries + held order entries whose order hold has not expired.
+- Places taken = test entries + confirmed order entries + held order entries whose order hold has not expired + live waitlist offers (`offered`, not expired) whose rider does not yet hold the place through a live order.
+- Waitlist first: while a category with its waitlist on has a `waiting` row or a live offer, checkout refuses that category except through the offer link, and the public page reports it as full.
 - Saving a draft, publishing, creating an order, and processing a payment each run in an immediate (write-locking) transaction. Two requests for the last place cannot both succeed; the second waits, then sees the place taken.
 
 ## Order lifecycle
@@ -258,4 +281,4 @@ The prototype does not delete records except simulated test entries.
 
 ## Not in the database yet
 
-These are in [product.md](product.md#data-model) but do not exist in the prototype: user accounts and sign-in factors, organizer roles and permissions, rider profiles separate from orders, guardian relationships as records, real payments and refunds, waitlists, USA Cycling license and waiver checks, and an audit log.
+These are in [product.md](product.md#data-model) but do not exist in the prototype: user accounts and sign-in factors, organizer roles and permissions, rider profiles separate from orders, guardian relationships as records, real payments and refunds, automated waitlist promotion, USA Cycling license and waiver checks, and an audit log.

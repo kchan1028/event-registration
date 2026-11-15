@@ -373,7 +373,9 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
     for (const id of draft.selected) {
       const cat = config.categories.find((c) => c.id === id);
       if (cat && checking && evaluateCategory(cat, draft.profile).status === 'ineligible') errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.ineligible}` });
-      if (cat && ev.remaining[id] === 0) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.full}` });
+      // A waitlist offer reserves this rider's place, so its category is not full for them.
+      const offeredHere = !!draft.offerToken && draft.offerCategoryId === id;
+      if (cat && ev.remaining[id] === 0 && !offeredHere) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.full}` });
       const wmsg = cat && ev.enforceWindows ? windowMessage(cat, windowState(cat, ev.nowLocal)) : null;
       if (wmsg) errs.push({ id: `opt-${id}`, message: wmsg });
     }
@@ -622,7 +624,7 @@ function RaceOption({
           </span>
           <span className="opt__elig">{summarizeEligibility(cat)}</span>
           <span className="opt__facts">
-            {formatLength(cat.length)} · {remaining === null ? 'Places open' : full ? 'No places left' : `${remaining} places left`}
+            {formatLength(cat.length)} · {offered ? 'Your place is held' : remaining === null ? 'Places open' : full ? 'No places left' : `${remaining} places left`}
           </span>
         </span>
         <span className="opt__price num">
