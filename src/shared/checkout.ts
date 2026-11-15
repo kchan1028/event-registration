@@ -89,6 +89,17 @@ export type WaiverAcceptance = z.infer<typeof waiverAcceptanceSchema>;
 
 const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
 
+/**
+ * Racing age is the rider's age on December 31 of the season, so a rider with racing age 18 can still be 17 on race day.
+ * A parent or guardian signs for every rider with racing age 18 or under, in any category (project owner, November 15, 2026).
+ * The federation's minor-signature policy is still open (product.md open question 9).
+ */
+export const GUARDIAN_MAX_RACING_AGE = 18;
+
+export function mayBeMinor(racingAge: number | null): boolean {
+  return racingAge !== null && racingAge <= GUARDIAN_MAX_RACING_AGE;
+}
+
 /** The signer is the guardian when any entry needs one, otherwise the rider; the typed name must match. */
 export function checkSignature(rider: Pick<RiderDetails, 'firstName' | 'lastName' | 'guardian'>, waiver: Pick<WaiverAcceptance, 'signatureName' | 'signerRole'>, needsGuardian: boolean): string | null {
   const role = needsGuardian ? 'guardian' : 'rider';
@@ -232,6 +243,7 @@ export function checkSelection(config: EventConfig, categoryIds: readonly string
     if (result.status === 'ineligible') problems.push(`You are not eligible for ${cat.name}: ${result.reasons.join('; ')}.`);
     if (cat.eligibility.guardianRequired) needsGuardian = true;
   }
+  if (mayBeMinor(profile.racingAge)) needsGuardian = true;
   const conflicts = findConflicts(config, categoryIds);
   for (const c of conflicts) if (c.level === 'block') problems.push(c.message);
   return { ok: problems.length === 0, problems, eligibility, conflicts, needsGuardian };
