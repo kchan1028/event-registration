@@ -478,7 +478,7 @@ Until USAC integration is approved, builds may use clearly labeled simulated che
 
 ### Future USA Cycling waiver and license integration
 
-Status: Planned. No USAC access exists, and nothing in this repository connects to USAC. Build it only after USAC grants access and approves the workflow.
+Status: Planned. No USAC access exists, and nothing in this repository connects to USAC. Build it only after USAC grants access and approves the workflow. Public research (November 15, 2026; see [USAC questions](docs/usac-questions.md#what-public-sources-already-say)) confirms that electronic waivers need a USA Cycling approved registration platform, that paper waivers are kept at least ten years, and that no public license lookup exists. Approval criteria for a platform are not published.
 
 When access is available, the application must be able to:
 
