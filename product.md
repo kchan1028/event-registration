@@ -439,7 +439,7 @@ Requirements:
 - Encryption at rest and in transit, with least-privilege access to contact, emergency, and minor riders' data.
 - Automated backups with a demonstrated restore, and retention and deletion rules agreed before the pilot (see [Quality requirements](#quality-requirements)).
 - Card details are never stored; keep only the payment provider's references.
-- Organizer exports (entries, start lists, ledger) come from the database, so a successor can take over without manual reconstruction.
+- Organizer exports (entries, start lists, ledger) come from the database, so a successor can take over without manual reconstruction. Status: entries, start-list, and simulated-ledger CSV exports are Implemented in the local prototype (see [roadmap.md](roadmap.md#rider-checkout-prototype)).
 
 The local prototype stores data in a SQLite file on the developer's computer ([ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md)). The hosted database engine and provider are an open decision; see the [decision backlog](docs/decisions/README.md).
 

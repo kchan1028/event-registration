@@ -9,6 +9,7 @@ import { buildDemoEvent } from '../shared/demo';
 import { configFromTemplate } from '../shared/factory';
 import { buildFixtureEvents, FIXTURE_ORG_NAME } from '../shared/fixtures';
 import { createEventInputSchema, eventConfigSchema } from '../shared/schema';
+import { entriesCsv, ledgerCsv } from '../shared/exports';
 import { changeImpact, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
 import { openDb } from './db';
@@ -315,6 +316,21 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/events/:id/start-lists/:raceId/lock', async (req, reply) => {
     const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
     return reply.status(201).send(startLists.lock(p.id, p.raceId));
+  });
+
+  // Organizer exports from the database: entries and a (simulated) ledger. No contact or emergency details.
+  app.get('/api/events/:id/exports/:kind', async (req, reply) => {
+    const p = z.object({ id: z.string().min(1).max(64), kind: z.enum(['entries.csv', 'ledger.csv']) }).parse(req.params);
+    const record = repo.getEvent(p.id);
+    const list = orders.listOrders(p.id).filter((o) => o.status !== 'cancelled' && o.status !== 'expired');
+    const slugName = record.config.event.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'event';
+    const demo = record.config.event.isDemo ? '-DEMO' : '';
+    const body = p.kind === 'entries.csv' ? entriesCsv(list, identity.keyOf(p.id)) : ledgerCsv(list);
+    return reply
+      .header('Content-Type', 'text/csv; charset=utf-8')
+      .header('Content-Disposition', `attachment; filename="${slugName}-${p.kind === 'entries.csv' ? 'entries' : 'ledger'}${demo}.csv"`)
+      .header('Cache-Control', 'no-store')
+      .send(body);
   });
 
   app.get('/api/events/:id/start-lists/:raceId/csv', async (req, reply) => {

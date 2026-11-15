@@ -66,9 +66,15 @@ export function Registrations({ draft }: { draft: Draft }) {
         <Pending>Payments are simulated. Sign-in and role-based access are not built, so anyone using this computer can see these registrations.</Pending>
       </div>
       {published ? (
-        <p>
+        <p className="row-actions">
           <a className="btn btn--secondary btn--small" href={href({ page: 'register', eventId })}>
             Open rider registration (version {draft.data.publishedVersion})
+          </a>
+          <a className="btn btn--ghost btn--small" href={`/api/events/${eventId}/exports/entries.csv`} download>
+            Download entries (CSV)
+          </a>
+          <a className="btn btn--ghost btn--small" href={`/api/events/${eventId}/exports/ledger.csv`} download>
+            Download ledger (CSV)
           </a>
         </p>
       ) : (
