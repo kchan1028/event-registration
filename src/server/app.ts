@@ -177,7 +177,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const body = z.object({ name: z.string().trim().min(1, 'Enter an organization name.').max(120) }).parse(req.body);
     const org = await db.transaction(async () => {
       const created = await repo.createOrganization(body.name);
-      await access.grant(created.id, me(req).id, 'owner', me(req).id);
+      await access.grant(created.id, me(req), 'owner', me(req).id);
       return created;
     });
     return reply.status(201).send(org);
@@ -200,7 +200,14 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = idParam.parse(req.params);
     await access.requireOrg(me(req), id, 'members.manage');
     const body = memberBody.parse(req.body);
-    return access.removeMember(id, body.email, body.role);
+    return access.removeMember(id, body.email, body.role, me(req));
+  });
+  // An owner hands their owner role to someone who has signed in. Recorded in the role history.
+  app.post('/api/organizations/:id/ownership-transfer', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrg(me(req), id, 'members.manage');
+    const body = memberBody.pick({ email: true }).parse(req.body);
+    return access.transferOwnership(id, body.email, me(req));
   });
 
   app.post('/api/organizations/:id/events', async (req, reply) => {
@@ -488,7 +495,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { orderId: id }, { permission: 'entries.manage' });
     const body = z.object({ changes: riderCorrectionSchema, reason: z.string().trim().min(3, 'Write why the details are being corrected.').max(300) }).parse(req.body);
-    return orders.correctRider(id, body.changes, body.reason);
+    return orders.correctRider(id, body.changes, body.reason, me(req).id);
   });
 
   // Organizer transfers and withdrawals of paid entries. A reason is required and logged.
@@ -631,7 +638,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
    * it, so each person who loads the shared demos can open them.
    */
   async function joinDemo(req: { account?: Account }, organizationId: string) {
-    await access.grant(organizationId, me(req).id, 'owner', null);
+    await access.grant(organizationId, me(req), 'owner', me(req).id);
   }
 
   async function seed(req: { account?: Account }, orgName: string, { config, entryPlan }: ReturnType<typeof buildDemoEvent>) {

@@ -1,7 +1,7 @@
 import { createClerkClient, verifyToken } from '@clerk/backend';
 import type { FastifyRequest } from 'fastify';
 import { newId } from '../shared/factory';
-import { can, type Permission, type Role } from '../shared/roles';
+import { can, type MembershipAction, type MembershipChange, type Permission, type Role } from '../shared/roles';
 import type { Db } from './db';
 import { HttpError } from './repo';
 
@@ -124,6 +124,9 @@ export function authProviderFromEnv(env: Record<string, string | undefined> = pr
   return clerkAuth({ secretKey, authorizedParties: parties.length ? parties : undefined });
 }
 
+/** How many of the most recent role changes the team panel shows. */
+const HISTORY_LIMIT = 50;
+
 /** Accounts, organization roles, and the checks every organizer route makes. */
 export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) {
   const nowIso = () => clock().toISOString();
@@ -143,6 +146,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
       const id = newId('acct');
       const t = nowIso();
       await db.run(`INSERT INTO accounts (id, provider_user_id, email, created_at) VALUES ($1, $2, $3, $4)`, [id, signedIn.providerUserId, email, t]);
+      const invitations = await db.all<{ organization_id: string; role: Role }>(`SELECT organization_id, role FROM organization_invitations WHERE email = $1`, [email]);
+      for (const i of invitations) await record(i.organization_id, 'invitation_accepted', email, i.role, id);
       await db.run(
         `INSERT INTO organization_members (organization_id, account_id, role, granted_by, created_at)
          SELECT organization_id, $1, role, invited_by, $2 FROM organization_invitations WHERE email = $3 ON CONFLICT DO NOTHING`,
@@ -151,6 +156,19 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
       await db.run(`DELETE FROM organization_invitations WHERE email = $1`, [email]);
       return { id, email };
     });
+  }
+
+  /** Appends one row to the organization's role history. */
+  async function record(organizationId: string, action: MembershipAction, email: string, role: Role, actorId: string | null) {
+    await db.run(`INSERT INTO membership_changes (id, organization_id, action, email, role, actor_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`, [
+      newId('mch'),
+      organizationId,
+      action,
+      email,
+      role,
+      actorId,
+      nowIso(),
+    ]);
   }
 
   async function rolesIn(accountId: string, organizationId: string): Promise<Role[]> {
@@ -220,14 +238,16 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
     return [...byOrg.values()];
   }
 
-  async function grant(organizationId: string, accountId: string, role: Role, grantedBy: string | null) {
-    await db.run(`INSERT INTO organization_members (organization_id, account_id, role, granted_by, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, [
+  /** Gives an account a role and records who granted it. Granting a role the account already holds changes nothing. */
+  async function grant(organizationId: string, target: Account, role: Role, grantedBy: string | null) {
+    const added = await db.run(`INSERT INTO organization_members (organization_id, account_id, role, granted_by, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, [
       organizationId,
-      accountId,
+      target.id,
       role,
       grantedBy,
       nowIso(),
     ]);
+    if (added) await record(organizationId, 'granted', target.email, role, grantedBy);
   }
 
   async function listMembers(organizationId: string) {
@@ -236,27 +256,38 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
       [organizationId],
     );
     const invitations = await db.all<{ email: string; role: Role }>(`SELECT email, role FROM organization_invitations WHERE organization_id = $1 ORDER BY email, role`, [organizationId]);
-    return { members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role })), invitations };
+    const history = await db.all<{ action: MembershipAction; email: string; role: Role; actor_email: string | null; created_at: string }>(
+      `SELECT c.action, c.email, c.role, a.email AS actor_email, c.created_at FROM membership_changes c LEFT JOIN accounts a ON a.id = c.actor_id
+       WHERE c.organization_id = $1 ORDER BY c.created_at DESC, c.seq DESC LIMIT ${HISTORY_LIMIT}`,
+      [organizationId],
+    );
+    return {
+      members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role })),
+      invitations,
+      history: history.map((h): MembershipChange => ({ action: h.action, email: h.email, role: h.role, by: h.actor_email, at: h.created_at })),
+    };
   }
 
   /** Grants a role to an email: straight away when the person has an account, otherwise as an invitation. */
   async function addMember(organizationId: string, email: string, role: Role, by: Account | null) {
     const normalized = email.trim().toLowerCase();
-    const target = await db.get<{ id: string }>(`SELECT id FROM accounts WHERE lower(email) = $1`, [normalized]);
-    if (target) await grant(organizationId, target.id, role, by?.id ?? null);
-    else
-      await db.run(`INSERT INTO organization_invitations (organization_id, email, role, invited_by, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, [
+    const target = await db.get<Account>(`SELECT id, email FROM accounts WHERE lower(email) = $1`, [normalized]);
+    if (target) await grant(organizationId, target, role, by?.id ?? null);
+    else {
+      const invited = await db.run(`INSERT INTO organization_invitations (organization_id, email, role, invited_by, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, [
         organizationId,
         normalized,
         role,
         by?.id ?? null,
         nowIso(),
       ]);
+      if (invited) await record(organizationId, 'invited', normalized, role, by?.id ?? null);
+    }
     return listMembers(organizationId);
   }
 
   /** Removes one role (or invitation). The last owner cannot be removed, so an organization is never orphaned. */
-  async function removeMember(organizationId: string, email: string, role: Role) {
+  async function removeMember(organizationId: string, email: string, role: Role, by: Account) {
     const normalized = email.trim().toLowerCase();
     return db.transaction(async () => {
       await db.lock(`org-members:${organizationId}`);
@@ -265,15 +296,38 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date) 
         const owners = await db.all<{ account_id: string }>(`SELECT account_id FROM organization_members WHERE organization_id = $1 AND role = 'owner'`, [organizationId]);
         if (owners.length === 1 && owners[0].account_id === target.id) throw new HttpError(409, 'An organization needs at least one owner. Add another owner first.');
       }
-      const removed =
-        (target ? await db.run(`DELETE FROM organization_members WHERE organization_id = $1 AND account_id = $2 AND role = $3`, [organizationId, target.id, role]) : 0) +
-        (await db.run(`DELETE FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3`, [organizationId, normalized, role]));
-      if (removed === 0) throw new HttpError(404, 'That person does not hold this role here.');
+      const removed = target ? await db.run(`DELETE FROM organization_members WHERE organization_id = $1 AND account_id = $2 AND role = $3`, [organizationId, target.id, role]) : 0;
+      const cancelled = await db.run(`DELETE FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3`, [organizationId, normalized, role]);
+      if (removed + cancelled === 0) throw new HttpError(404, 'That person does not hold this role here.');
+      if (removed) await record(organizationId, 'removed', normalized, role, by.id);
+      if (cancelled) await record(organizationId, 'invitation_cancelled', normalized, role, by.id);
       return listMembers(organizationId);
     });
   }
 
-  return { accountFor, requireOrg, requireEvent, requireOrderAccess, memberships, grant, listMembers, addMember, removeMember };
+  /**
+   * An owner hands their owner role to someone who has already signed in, in one step: the
+   * successor becomes an owner and the caller stops being one (other roles stay). Recorded as
+   * one change so the history shows who handed over to whom.
+   */
+  async function transferOwnership(organizationId: string, email: string, by: Account) {
+    const normalized = email.trim().toLowerCase();
+    return db.transaction(async () => {
+      await db.lock(`org-members:${organizationId}`);
+      // Checked again under the lock: a second hand-over sent at the same time finds the caller is no longer an owner.
+      if (!(await rolesIn(by.id, organizationId)).includes('owner')) throw new HttpError(403, 'Only an owner can hand over ownership.');
+      const target = await db.get<Account>(`SELECT id, email FROM accounts WHERE lower(email) = $1`, [normalized]);
+      if (!target) throw new HttpError(422, 'That person has not signed in yet. Ask them to sign in once with this email, then hand over ownership.');
+      if (target.id === by.id) throw new HttpError(422, 'Choose someone else to take ownership.');
+      if ((await rolesIn(target.id, organizationId)).includes('owner')) throw new HttpError(409, 'That person is already an owner. Remove your own owner role instead.');
+      await db.run(`INSERT INTO organization_members (organization_id, account_id, role, granted_by, created_at) VALUES ($1, $2, 'owner', $3, $4)`, [organizationId, target.id, by.id, nowIso()]);
+      await db.run(`DELETE FROM organization_members WHERE organization_id = $1 AND account_id = $2 AND role = 'owner'`, [organizationId, by.id]);
+      await record(organizationId, 'ownership_transferred', target.email, 'owner', by.id);
+      return listMembers(organizationId);
+    });
+  }
+
+  return { accountFor, requireOrg, requireEvent, requireOrderAccess, memberships, grant, listMembers, addMember, removeMember, transferOwnership };
 }
 
 export type Access = ReturnType<typeof createAccess>;

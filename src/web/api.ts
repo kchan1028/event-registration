@@ -12,7 +12,7 @@ import type { BibSettings, checkInTiming, CheckInResult, PaymentState } from '..
 import type { WaitlistJoin, WaitlistStatus } from '../shared/waitlist';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
-import type { Role } from '../shared/roles';
+import type { MembershipChange, Role } from '../shared/roles';
 
 /** simulated: the labeled demo button. stripe_test: Stripe hosted Checkout in test mode. */
 export type PaymentMode = 'simulated' | 'stripe_test';
@@ -177,7 +177,7 @@ export interface OrderView {
     licenseReviewNote: string | null;
     readiness: ReadinessItem[];
   }[];
-  corrections: { changes: FieldChange[]; licenseReviewsCleared: number; reason: string; at: string }[];
+  corrections: { changes: FieldChange[]; licenseReviewsCleared: number; reason: string; by: string | null; at: string }[];
 }
 
 export type CouponView = CouponTerms & {
@@ -300,6 +300,8 @@ export async function downloadFile(url: string): Promise<void> {
 export interface MemberList {
   members: { accountId: string; email: string; role: Role }[];
   invitations: { email: string; role: Role }[];
+  /** The most recent role changes, newest first. */
+  history: MembershipChange[];
 }
 
 export interface CheckInRider {
@@ -353,6 +355,7 @@ export const api = {
   members: (orgId: string) => request<MemberList>('GET', `/api/organizations/${orgId}/members`),
   addMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role }),
   removeMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members/remove`, { email, role }),
+  transferOwnership: (orgId: string, email: string) => request<MemberList>('POST', `/api/organizations/${orgId}/ownership-transfer`, { email }),
   organizations: () => request<OrganizationSummary[]>('GET', '/api/organizations'),
   createOrganization: (name: string) => request<{ id: string; name: string }>('POST', '/api/organizations', { name }),
   createEvent: (orgId: string, input: CreateEventInput) => request<EventPayload>('POST', `/api/organizations/${orgId}/events`, input),

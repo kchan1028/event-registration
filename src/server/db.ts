@@ -433,6 +433,25 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE provider_events ADD COLUMN payment_ref text;
   ALTER TABLE provider_events ADD COLUMN amount_cents integer;
   `,
+  `
+  -- Actor history (Phase 2 identity lifecycle). Who corrected a rider's details; null for
+  -- corrections made before this column existed.
+  ALTER TABLE rider_corrections ADD COLUMN corrected_by text REFERENCES accounts(id) ON DELETE SET NULL;
+  -- Append-only history of role and invitation changes in an organization. The actor is the
+  -- signed-in account that made the change: null for seed scripts, and for an accepted invitation
+  -- it is the person who signed in. The email is the person whose role changed.
+  CREATE TABLE membership_changes (
+    id text PRIMARY KEY,
+    seq bigint GENERATED ALWAYS AS IDENTITY,
+    organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    action text NOT NULL CHECK (action IN ('granted', 'invited', 'invitation_accepted', 'removed', 'invitation_cancelled', 'ownership_transferred')),
+    email text NOT NULL,
+    role text NOT NULL CHECK (role IN ('owner', 'registration_manager', 'check_in_volunteer', 'timer_export', 'finance')),
+    actor_id text REFERENCES accounts(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL
+  );
+  CREATE INDEX membership_changes_by_org ON membership_changes(organization_id, created_at);
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

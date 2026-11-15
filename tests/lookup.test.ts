@@ -99,7 +99,7 @@ type Order = {
   waiver: { signatureName: string };
   quote: unknown;
   entries: { id: string; licenseReviewed: boolean; amountPaidCents: number }[];
-  corrections: { changes: { field: string; before: string; after: string }[]; licenseReviewsCleared: number; reason: string; at: string }[];
+  corrections: { changes: { field: string; before: string; after: string }[]; licenseReviewsCleared: number; reason: string; by: string | null; at: string }[];
 };
 
 async function setup() {
@@ -147,6 +147,8 @@ describe('registration lookup and corrections API', () => {
     expect(second.entries.map((e) => e.amountPaidCents)).toEqual(o.entries.map((e) => e.amountPaidCents));
     expect(second.waiver.signatureName).toBe('Lee Sample');
     expect(second.corrections.map((c) => c.reason)).toEqual(['Rider emailed: name misspelled', 'Second fix after a call']);
+    // Each correction names the organizer who made it.
+    expect(second.corrections.map((c) => c.by)).toEqual(['organizer@example.test', 'organizer@example.test']);
     expect(second.corrections[0].changes).toEqual([
       { field: 'lastName', label: 'Last name', before: 'Sample', after: 'Samples' },
       { field: 'email', label: 'Email', before: 'lee.sample@example.test', after: 'lee.samples@example.test' },
