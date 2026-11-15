@@ -17,6 +17,7 @@ This is a feature summary, not a second requirements document or roadmap. [produ
 | Capacity rules | Implemented | Enforce category caps, start-group limits, and explicit shared pools; display headers never create limits |
 | Pricing and discounts | Implemented | Configure base prices, scheduled changes, day-of surcharges, bundles, extra-entry pricing, and demo fees |
 | Registration windows | Implemented | Enforce opening and closing times in the event's time zone; clearly labeled demo mode can bypass windows |
+| Passwordless sign-in and organization roles | Implemented locally | Require email sign-in before checkout or organizer tools; enforce owner, registration manager, check-in, timer/export, and finance access on the server. Real Clerk development-instance verification remains open |
 | Schedule CSV | Implemented | Import categories with column mapping and row errors; export the configured schedule |
 | Preview and publish | Implemented | Preview eligibility, block publishing on errors, acknowledge warnings, and retain immutable published versions |
 | Published change-impact preview | Implemented | Show affected categories, entries, riders, and orders; require acknowledgement while preserving accepted prices and rules |
@@ -24,6 +25,9 @@ This is a feature summary, not a second requirements document or roadmap. [produ
 | Organizer transfers and withdrawals | Implemented | Change paid entries with a reason and renewed eligibility/capacity checks; preserve the order total and log price differences for settlement outside the app |
 | Draft autosave | Implemented | Save locally with stale-save protection |
 | Registration queue | Implemented | Review simulated orders, outstanding readiness items, and manual license-review notes |
+| Registration lookup and corrections | Implemented | Find registrations by rider, guardian, email, team, order, or check-in code; preserve reasoned before/after correction history. Recording the signed-in actor remains Planned |
+| Basic coupons | Implemented | Configure event-scoped fixed or percentage codes with windows, category eligibility, and atomic total redemption caps; per-rider limits and combinability remain Planned |
+| Published-change resolution | Implemented | Resolve affected paid entries through organizer transfer, withdrawal, or unchanged acceptance while preserving accepted prices and an append-only history |
 | Same-rider linking | Implemented | Suggest likely matches across orders; link only when the organizer confirms |
 | Entries and ledger CSV | Implemented | Download one row per entry and a simulated ledger; contact, emergency, and license-number details are left out |
 
@@ -50,6 +54,7 @@ Details: [demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-
 |---|---|---|
 | Rider lookup | Implemented | Search fictional registrations by name, team, bib, or check-in code |
 | Ready or blocked check-in | Implemented | Show outstanding requirements before check-in; repeated check-in is safe; undo requires a reason and retains history |
+| QR check-in scanning | Implemented locally | Scan the confirmation QR code in Chrome or Edge and use the same repeat-safe check-in path; live camera and volunteer rehearsal remain open |
 | Bib assignment | Implemented | Assign bibs by event or day, prevent active collisions, and retain change history |
 | Printable fallback roster | Implemented | Print a race-day roster and blocked-rider checklist without private contact or payment details; real-printer and rehearsal checks remain open |
 | Start lists | Implemented | List confirmed entries by race, with numbered snapshots and changes between versions |
@@ -78,7 +83,7 @@ Status: Expert review, November 14, 2026; no participant results or official Ber
 |---|---|
 | $130 same-event weekend package; $20 additional criterium entry | Pre-race demo example is $150 for road + two nonconflicting criterium categories, with separate package/extra-entry reductions. Package pricing is automatic; the intent checkbox only helps browser completeness. Separate-event packages/season passes are not supported. |
 | Structured eligibility and schedule checks | Self-reported match is not license verification. Same-start/overlap blocks; short recovery warns. Draft source rules, road start/staging assumptions, and unset road field limits need organizer/official review. |
-| Junior guardian flow | Implemented for guardian-flagged categories; a minor entering an adult category can bypass guardian handling. Correctness gap, not live-ready minor protection. |
+| Junior guardian flow | Guardian details and signature are required for racing age 18 or under in every category. This is Implemented locally; federation acceptance of the age convention and guardian workflow remains open. |
 | Atomic holds, retries, full-category handling, waitlists | Local transactions and simulated payment only; no real Stripe settlement or automated offer delivery. Organizer-confirmed rider linking works after orders exist, but checkout cannot safely assume two separate orders are the same rider when enforcing capacity. |
 | Independent readiness and blocked bib issuance | Unreviewed license can remain outstanding after simulated payment. New checkout requires the sample waiver, so missing-waiver desk resolution cannot be rehearsed end-to-end with ordinary checkout; accepted electronic/paper workflow is still required. |
 | Responsive themes and error recovery | Automated checks are not participant evidence. Manual keyboard, screen-reader, real-phone, recovery, and sunlight checks remain open. Liquid Glass is Planned and must keep forms, prices, and tables opaque under [DESIGN.md](DESIGN.md). |
@@ -92,14 +97,12 @@ These are not available in the app. Phase order and dependencies remain in [road
 | Feature | Status | Requirement reference |
 |---|---|---|
 | Reusable organizer templates: event formats, category presets, guided starts, and saved setups | Planned enhancement; current format templates are structural only | [Organizer templates](product.md#reusable-organizer-templates); [six research cases](docs/case-studies/organizer-templates/README.md) |
-| Accounts with email sign-in, and organizer roles | Planned (Phase 2): a passwordless emailed link or code, on Clerk's free plan | [Sign-in and account security](product.md#sign-in-and-account-security) |
 | Multi-factor authentication for organizer roles (passkey or authenticator app) | Planned (Phase 3); required before the live pilot, before any real rider data or live payments. Riders and guardians keep email sign-in only | [Sign-in and account security](product.md#sign-in-and-account-security) |
 | Stripe hosted Checkout, refunds, payouts, and reconciliation | Planned; Stripe selected, operating model pending | [Money and reporting](product.md#6-money-and-reporting) |
 | Federation license and waiver verification | Planned; access and approval required | [Future USA Cycling integration](product.md#future-usa-cycling-waiver-and-license-integration) |
 | Rider self-service changes, withdrawals, and policy-governed transfers | Planned beyond existing organizer actions | [Rider self-service](product.md#rider-self-service) |
-| Guided resolution of published changes | Planned | [Changes after registration opens](product.md#changes-after-registration-opens) |
 | Automated waitlist promotion and offer-email delivery | Planned | [Capacity and entry integrity](product.md#3-capacity-and-entry-integrity) |
-| QR scanning and agreed timer export | Planned | [Race-day operations](product.md#5-race-day-operations) |
+| Timer-approved export and round-trip validation | Planned beyond the current sample CSV | [Race-day operations](product.md#5-race-day-operations) |
 | Confirmations, receipts, targeted operational email, and delivery tracking | Planned | [Communications](product.md#communications) |
 | Coupon/referral codes, redemption limits, and count-based pricing | Planned beyond current discounts | [Promotions](product.md#promotions) |
 | Participant workspace, reusable rider identity, saved filtered views, history, and safe bulk actions | Planned beyond event-level lookup | [Participant management](product.md#participant-management) |

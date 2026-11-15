@@ -48,6 +48,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Confirmation with a check-in code and per-entry readiness; organizer Registrations queue with license review | Implemented and tested |
 | Registration open and close times enforced in the event's time zone (demo events can let testers register early, labeled "Demo mode") | Implemented and tested |
 | Race-day check-in: search by name, team, bib, or check-in code; ready/blocked result; bib ranges per event or day; bib history; repeat-safe check-in; undo a mistaken check-in with a reason; measured check-in times | Implemented; automated tests in CI; usability test with volunteers still open |
+| Selected-rider bib preview and atomic apply API for confirmed, unassigned riders | Partly Implemented Phase 3 work; registration-manager permission required. Organizer UI, more sort/scope choices, automatic assignment, and rehearsal remain Planned |
 | Light and dark themes, following the system setting, with a header toggle | Implemented; contrast checked manually, no automated test yet |
 | Automated accessibility checks (WCAG 2.2 A and AA, axe-core) on the main screens in both themes | Implemented; run in CI. Keyboard, screen-reader, and real-phone passes not done |
 | CSV import and export of category schedules, with column matching and per-row errors ([format](docs/csv-category-format.md)) | Implemented and tested |
@@ -59,7 +60,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Category builder: copy a day's races to another day, bulk edit with before/after preview | Implemented; automated tests in CI |
 | Same-rider suggestions across orders, linked only when the organizer confirms | Implemented; automated tests in CI |
 | Organizer CSV exports: entries and a simulated ledger, without contact details | Implemented; automated tests in CI |
-| Registration lookup (name, email, team, order number, check-in code) and audited corrections of rider details with a required reason | Implemented; automated tests in CI. Who made a correction is not recorded yet |
+| Registration lookup (name, email, team, order number, check-in code) and audited corrections of rider details with a required reason | Implemented; automated tests in CI. Recording the authenticated actor for each correction remains Planned |
 | Coupon codes: percentage or fixed, validity window, eligible categories, total cap held atomically, one per order and never stacked on another discount | Implemented; automated tests in CI. Per-rider limits Planned |
 | Per-category rider questions, waiver addenda, and bib ranges | Implemented; automated tests in CI |
 | QR check-in code on the rider confirmation; camera scanning at check-in in Chrome and Edge | Implemented; live camera scan not yet checked |

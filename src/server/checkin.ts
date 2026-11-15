@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { bibScopeKey, bibSettingsSchema, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
 import { categoryBibRange } from '../shared/categoryExtras';
 import { checkSelection, needsGuardian, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
@@ -162,7 +162,59 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     return bib;
   }
 
+  /** Preview uses the same event lock and allocation rules as apply. No bib changes here. */
+  async function bibPlan(eventId: string, dayId: string, orderIds: string[]) {
+    const cfg = await config(eventId);
+    requireDay(cfg, dayId);
+    const s = await settings(eventId);
+    const scope = bibScopeKey(s, dayId);
+    const requested = new Set(orderIds);
+    if (requested.size !== orderIds.length) throw new HttpError(422, 'Select each rider only once.');
+    const all = await riders(eventId);
+    const byId = new Map(all.map((o) => [o.id, o]));
+    const key = await identity.keyOf(eventId);
+    if (orderIds.some((id) => key(id) !== id)) throw new HttpError(422, 'Select the rider shown on the check-in list, not a linked order.');
+    const state = await dayState(eventId, dayId, scope);
+    const taken = await takenBibs(eventId, scope);
+    const sorted = orderIds.map((id) => {
+      const o = byId.get(id);
+      if (!o) throw new HttpError(404, 'A selected rider was not found.');
+      const card = riderCard(o, dayId, state);
+      if (o.status !== 'confirmed' || card.entries.length === 0 || card.bib !== null) throw new HttpError(409, 'Select confirmed, unassigned riders entered on this day.');
+      return { o, card };
+    }).sort((a, b) => a.o.rider.lastName.localeCompare(b.o.rider.lastName) || a.o.rider.firstName.localeCompare(b.o.rider.firstName) || a.o.id.localeCompare(b.o.id));
+    const assignments = [];
+    for (const { o, card } of sorted) {
+      const catRange = categoryBibRange(card.entries.map((e) => ({ id: e.categoryId, bibRange: cfg.categories.find((c) => c.id === e.categoryId)?.bibRange ?? null, startTime: e.startTime })));
+      const range = catRange ? { scope, ...catRange } : rangeFor(s, dayId);
+      if (!range) throw new HttpError(409, 'Set a bib range before allocating.');
+      const bib = nextFreeBib(range, taken);
+      if (bib === null) throw new HttpError(409, `Not enough free bibs in ${range.first}–${range.last}; no assignments were made.`);
+      taken.add(bib);
+      assignments.push({ orderId: o.id, name: card.name, bib, range: { first: range.first, last: range.last } });
+    }
+    const fingerprint = createHash('sha256').update(JSON.stringify({ eventId, dayId, scope, settings: s, assigned: [...state.bibs.values()].flat().filter((b) => b.released_at === null).map((b) => [b.order_id, b.bib]).sort(), assignments })).digest('hex');
+    return { dayId, scope, assignments, fingerprint };
+  }
+
   return {
+    async previewBibs(eventId: string, dayId: string, orderIds: string[]) {
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        return bibPlan(eventId, dayId, orderIds);
+      });
+    },
+    async applyBibs(eventId: string, dayId: string, orderIds: string[], fingerprint: string) {
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        const plan = await bibPlan(eventId, dayId, orderIds);
+        if (plan.fingerprint !== fingerprint) throw new HttpError(409, 'Bib preview changed. Review a new preview before applying.');
+        for (const item of plan.assignments) {
+          await db.run(`INSERT INTO bib_assignments (id, event_id, scope, order_id, bib, assigned_at) VALUES ($1, $2, $3, $4, $5, $6)`, [newId('bib'), eventId, plan.scope, item.orderId, item.bib, nowIso()]);
+        }
+        return { ...plan, applied: plan.assignments.length };
+      });
+    },
     async list(eventId: string, dayId: string | undefined, q: string) {
       const { config: cfg, published } = await schedule(eventId);
       const day = dayId ? requireDay(cfg, dayId) : cfg.days[0];

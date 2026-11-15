@@ -352,6 +352,8 @@ Bib history. A changed bib is released with a reason, never deleted.
 
 Two partial unique indexes apply only to active rows (`released_at IS NULL`): a bib number is used once per event and scope (`bib_active_number`), and a rider has one active bib per event and scope (`bib_active_rider`).
 
+The Phase 3 selected-rider bib API reads active assignments and confirmed orders under the same per-event transaction lock used by check-in. Its preview fingerprint binds the selected day, bib settings, current assignments, and proposed numbers. Apply recomputes that plan before inserting every row in one transaction; a stale preview or exhausted range inserts none. It does not change entry, payment, waiver, license, or check-in state. No new table or migration is needed for this partial workflow.
+
 ### check_ins
 
 | Column | Notes |

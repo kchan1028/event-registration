@@ -311,7 +311,7 @@ Acceptance: two independent builds produce equal configurations and stable IDs; 
 - Search by rider, team, bib, license number, or order.
 - Filter incomplete signatures, license review, failed payments, duplicate entries, and pending changes.
 - Allow authorized corrections with a reason and an audit trail.
-  - Status (November 15, 2026): Implemented in the local build for one event's registrations (see [roadmap.md](roadmap.md#rider-checkout)). **Registrations** searches by rider or guardian name, email, team, order number, or check-in code. An organizer corrects a rider's name, email, phone, team, license number, or emergency contact with a required reason; every correction is kept with before and after values. Eligibility fields (racing age, license category and type, competition class, collegiate division) are not correctable there; changing them goes through a transfer or a new registration so eligibility is rechecked. Corrections never change the price, entries, or waiver signature. A new license number clears earlier license reviews on the order (product decision, November 15, 2026). Not built: bib and license-number search on Registrations (bib search exists at check-in), guardian corrections, and recording who made a correction (needs sign-in and roles).
+  - Status (November 15, 2026): Implemented in the local build for one event's registrations (see [roadmap.md](roadmap.md#rider-checkout)). **Registrations** searches by rider or guardian name, email, team, order number, or check-in code. An organizer corrects a rider's name, email, phone, team, license number, or emergency contact with a required reason; every correction is kept with before and after values. Eligibility fields (racing age, license category and type, competition class, collegiate division) are not correctable there; changing them goes through a transfer or a new registration so eligibility is rechecked. Corrections never change the price, entries, or waiver signature. A new license number clears earlier license reviews on the order (product decision, November 15, 2026). Not built: bib and license-number search on Registrations (bib search exists at check-in), guardian corrections, and recording the authenticated actor for each correction.
 - Record race-specific status separately from order/payment status.
 - Provide transactional confirmations and targeted operational messages. Marketing consent is separate.
 - Support owner, registration manager, check-in volunteer, timer/export, and finance roles. Owners can transfer responsibility to a successor.
@@ -344,7 +344,7 @@ Status: check-in search, ready/blocked result, bib ranges, bib history, repeat-s
 
 ### Automatic and bulk bib assignment
 
-Status: Planned beyond the Implemented check-in-time next-free/manual assignment, bib ranges, collision protection, and bib history.
+Status: Partly Implemented locally. Check-in-time assignment and a registration-manager API for previewing and atomically applying selected confirmed, unassigned riders for one day are available. The API uses surname/given-name/ID order and requires a fresh preview fingerprint. The organizer UI, other sort and selection scopes, automatic assignment on confirmation, and controlled reassignment remain Planned.
 
 - Configure allocation per event or day and map ranges explicitly to the applicable races/start groups/categories without allowing duplicate active numbers inside the configured collision scope. A shared start or multiple classifications must not accidentally allocate extra bibs to the same rider. Range/category overlap and invalid scope combinations produce actionable errors before use.
 - Offer opt-in automatic allocation after entry confirmation, not during an unpaid hold. Replayed confirmation or background retries reuse the same active assignment. Receiving a bib does not imply a waiver, verified license, or readiness clearance.
@@ -371,6 +371,19 @@ Status: Planned. Deliver registration confirmations, receipts, payment/refund up
 Use versioned templates, an audit trail, delivery/bounce status, safe retries, and suppression handling. A failed delivery appears in the organizer queue without changing entry or payment state. Sensitive data, waiver signatures, and emergency contacts stay out of message content and public links. Marketing messages require separate consent and an unsubscribe mechanism; an operational message must not silently become a marketing campaign. The email provider remains an open decision.
 
 Acceptance: payment confirmation triggers one logical confirmation despite repeated notifications; an offered waitlist place reaches the intended rider with its expiry and secure access; organizers can identify undelivered notices and retry safely.
+
+### Event and race cancellation
+
+Status: Planned. Cancelling an event, one race, or one day of a multi-race package is an organizer action distinct from withdrawing one rider. The organizer must preview the affected entries, packages, capacities, waitlists, start lists, communications, and financial allocations before confirming it.
+
+- Preserve every affected rider's accepted price, rules, entry state, and payment history. Never silently reprice the remaining component of a paid package.
+- Record who cancelled what, when, why, and which policy version applied. Require a second confirmation for an event or race with paid entries.
+- Calculate cash refund, credit, or no-refund outcomes from the published policy and show unresolved provider exceptions. Never return the same value as both cash and credit.
+- Release capacity and stop waitlist offers for a cancelled race. A partial event cancellation must not make unaffected entries disappear or become cleared automatically.
+- Produce an affected-rider list and a versioned communication preview. Delivery failure remains visible without changing financial or entry state.
+- Mark cancelled races in rider confirmation, organizer reports, start-list snapshots, and exports. Keep historical records available to authorized roles.
+
+Acceptance: cancelling one race in a paid two-race package produces a deterministic, auditable outcome for both component entries and the accepted total; repeated requests do not duplicate refunds, credits, messages, or capacity releases. A provider or email failure creates an actionable exception without reporting completion. The unaffected race remains usable, and every rider sees the outcome and next step.
 
 ### Promotions
 
@@ -553,6 +566,10 @@ To research before Phase 3:
 - Publish a support owner and escalation route for each event. Volunteers must know who handles a race-morning failure.
 - Load and recovery checks use twice the expected pilot opening peak, based on the organizer's historical data.
 
+Before a live pilot, record the expected opening peak, representative event size, and race-morning staff concurrency. Verify checkout, final-place reservation, sign-in, organizer search, QR check-in, exports, and provider retries at twice that baseline. Set measurable response-time and recovery thresholds from the rehearsal rather than treating a large fixture render as load evidence.
+
+Before storing real rider data, approve retention periods and deletion procedures for registrations, waiver evidence, minors, emergency contacts, exports, and audit records. Demonstrate a backup restore, account and organization access revocation, and an access-restricted export audit. Record the incident owner and escalation path. Automated tests with fictional data do not satisfy these operating approvals.
+
 ### Display themes
 
 Status: Implemented in the local build (organizer, rider, and check-in screens); signed-in sync is Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
@@ -577,6 +594,18 @@ Delivery is phased (decided November 15, 2026; [ADR 0003](docs/decisions/0003-si
 - **First release (Phase 2): email sign-in.** Every account signs in with a passwordless emailed link or code before reaching rider, guardian, or organizer pages. Sign-in attempts are rate-limited, every person has their own account (no shared organizer credentials), and organizer roles still control what each person can see and do. While this is the only factor, the app holds only fictional data and takes no live payments; hosted use is limited to staging and rehearsals. Status: Implemented in the local build on November 15, 2026 (Clerk free plan); not yet verified against a real Clerk development instance. The public event list and rider event pages stay open without sign-in; riders sign in before entering details, checking a coupon code, or holding places (no guest checkout). Owners give roles by email, and the server checks the role on every organizer action. Ownership transfer to a successor and an audit history of role changes are still Planned (see [Participant management](#participant-management)).
 - **Riders and guardians: email sign-in only, also after the pilot starts.** Riders turned down authenticator apps (D01, 2026-11-15), and checkout must stay quick on a phone. Their accounts are protected by rate limits, by seeing only their own and their juniors' registrations, and by a fresh emailed code before any change that moves money (a refund or paid difference) or hands an entry to someone else. Risk accepted by the owner: someone who controls a rider's or guardian's inbox can sign in as them and see that account's registrations, including juniors' and emergency-contact details.
 - **Organizer MFA (Phase 3, required before the live pilot in Phase 4).** The requirements below apply to organizer roles from then on. They are Planned.
+
+Account lifecycle requirements:
+
+- Verify sign-in, invitation acceptance, sign-out, session expiry, and role enforcement against a real Clerk development instance before hosted rehearsal. Local fake sessions are automated test evidence only.
+- Let an owner resend, revoke, or replace an invitation without creating two memberships. Expired and wrong-address invitations explain the next action without revealing whether another person's account exists.
+- Revoke active organizer access when a role is removed. Record invitation, role, ownership-transfer, factor, recovery, and access-revocation events with the authenticated actor and time.
+- Provide an ownership-transfer workflow that requires an active successor and leaves at least one owner. The former owner keeps only explicitly granted roles after transfer.
+- Represent guardian-to-junior access explicitly. A guardian sees only juniors they are authorized to manage; a rider reaching the applicable age does not silently retain or lose another person's access.
+- Define account email change, recovery, deletion, and support escalation. A recovery or email change cannot bypass authorization, payment history, waiver integrity, retention rules, or organizer MFA.
+- Measure delivery time and failure recovery for emailed codes on a phone. A delayed or bounced code must not cause duplicate accounts, orders, or invitations.
+
+Acceptance: in a real Clerk development instance, an invited organizer signs in, receives only the assigned organization roles, loses access when removed, and can take ownership through an audited transfer. A guardian can access an authorized junior but not another household's registration. Expired, resent, delayed, and bounced emails have a safe recovery path, and no test or support path bypasses server authorization.
 
 MFA requirements (organizer roles):
 

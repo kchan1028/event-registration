@@ -545,6 +545,18 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return checkIn.undoCheckIn(p.id, p.orderId, body.dayId, body.reason);
   });
 
+  const bibBatch = z.object({ dayId: z.string().min(1).max(64), orderIds: z.array(z.string().min(1).max(64)).min(1).max(1000) });
+  app.post('/api/events/:id/bibs/preview', async (req) => {
+    await onEvent(req, 'checkin.settings');
+    const body = bibBatch.parse(req.body);
+    return checkIn.previewBibs(idParam.parse(req.params).id, body.dayId, body.orderIds);
+  });
+  app.post('/api/events/:id/bibs/apply', async (req) => {
+    await onEvent(req, 'checkin.settings');
+    const body = bibBatch.extend({ fingerprint: z.string().regex(/^[a-f0-9]{64}$/) }).parse(req.body);
+    return checkIn.applyBibs(idParam.parse(req.params).id, body.dayId, body.orderIds, body.fingerprint);
+  });
+
   // Rider identity across orders: suggestions and organizer-confirmed links (src/server/identity.ts).
   app.get('/api/events/:id/rider-identity', async (req) => {
     return identity.overview((await onEvent(req, 'entries.manage')).id);

@@ -58,6 +58,32 @@ async function setup() {
 }
 
 describe('check-in API', () => {
+  it('previews a stable confirmed-rider bib batch and applies it without clearing readiness', async () => {
+    const { app, eventId, first, rider, setBibs, list } = await setup();
+    await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 102 }] });
+    const orderIds = [rider('Blake').orderId, rider('Alex').orderId];
+    const preview = await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload: { dayId: first.dayId, orderIds } });
+    expect(preview.statusCode).toBe(200);
+    const plan = preview.json() as { fingerprint: string; assignments: { orderId: string; bib: number }[] };
+    expect(plan.assignments.map((a) => a.bib)).toEqual([100, 101]);
+    expect((await list()).riders.find((r) => r.orderId === rider('Alex').orderId)?.bib).toBeNull();
+    const applied = await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/apply`, payload: { dayId: first.dayId, orderIds, fingerprint: plan.fingerprint } });
+    expect(applied.statusCode).toBe(200);
+    expect((await list()).riders.find((r) => r.orderId === rider('Alex').orderId)).toMatchObject({ bib: 100, checkedInAt: null });
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/apply`, payload: { dayId: first.dayId, orderIds, fingerprint: plan.fingerprint } })).statusCode).toBe(409);
+  });
+
+  it('rejects a stale or exhausted bib batch without partial assignments', async () => {
+    const { app, eventId, first, rider, setBibs, checkIn, list } = await setup();
+    await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 101 }] });
+    const orderIds = [rider('Alex').orderId, rider('Blake').orderId];
+    const payload = { dayId: first.dayId, orderIds };
+    const plan = (await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload })).json() as { fingerprint: string };
+    await checkIn(rider('Alex').orderId, 100);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/apply`, payload: { ...payload, fingerprint: plan.fingerprint } })).statusCode).toBe(409);
+    expect((await list()).riders.find((r) => r.orderId === rider('Blake').orderId)?.bib).toBeNull();
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload: { ...payload, orderIds: [rider('Blake').orderId, rider('Dana').orderId] } })).statusCode).toBe(409);
+  });
   it('seeds fictional riders with ready and blocked cases', async () => {
     const { seeded, first } = await setup();
     expect(seeded.statusCode).toBe(201);
