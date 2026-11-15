@@ -239,6 +239,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [LICENSE.md](LICENSE.md) | MIT License |
 | [docs/architecture.md](docs/architecture.md) | What is built, the proposed target architecture, and open technical questions |
 | [docs/csv-category-format.md](docs/csv-category-format.md) | Columns and rules for importing and exporting category schedules |
+| [SETUP.md](SETUP.md) | Quick start: install, run, and test the prototype |
 | [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md) | Install, run, and test the prototype; [troubleshooting](docs/runbooks/troubleshooting.md) |
 | [DESIGN.md](DESIGN.md) | Visual system of the organizer workspace |
 | [docs/coding-guide.md](docs/coding-guide.md) | Category and capacity modeling, eligibility, pricing, payments, privacy, accessibility, testing |
