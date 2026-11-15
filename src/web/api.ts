@@ -5,6 +5,7 @@ import type { ReadinessItem, RiderDetails, WaiverAcceptance } from '../shared/ch
 import type { Quote } from '../shared/pricing';
 import type { BibSettings, CheckInResult, PaymentState } from '../shared/checkin';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
+import type { ChangeImpact } from '../shared/impact';
 
 export interface PublicEvent {
   eventId: string;
@@ -201,5 +202,6 @@ export const api = {
   addCheckInDemoRiders: (eventId: string) => request<{ created: number }>('POST', `/api/events/${eventId}/check-in-demo-riders`),
   startLists: (eventId: string) => request<StartListOverview>('GET', `/api/events/${eventId}/start-lists`),
   snapshotStartList: (eventId: string, raceId: string) => request<{ version: number; riders: number }>('POST', `/api/events/${eventId}/start-lists/${raceId}/snapshots`),
+  changeImpact: (eventId: string) => request<{ publishedVersion: number | null; impact: ChangeImpact | null }>('GET', `/api/events/${eventId}/impact`),
   startListCsvUrl: (eventId: string, raceId: string, snapshot?: number) => `/api/events/${eventId}/start-lists/${raceId}/csv${snapshot ? `?snapshot=${snapshot}` : ''}`,
 };
