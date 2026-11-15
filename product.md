@@ -608,7 +608,7 @@ Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/R
 2. How are both days, multiple entries, shared fields, discounts, and bibs currently configured?
 3. Who will fund development and provide operational support after launch?
 4. Will USAC approve integration and the proposed license/waiver workflow?
-5. Stripe is selected. Which merchant, Connect charge/transfer, settlement, refund, dispute, and tax-responsibility model works for the club and multi-organization season passes?
+5. Stripe is selected. Which merchant, Connect charge/transfer, settlement, refund, dispute, and tax-responsibility model works for the club and multi-organization season passes? Public research (November 15, 2026, [payment model questions](docs/payment-model-questions.md#findings)) shows a single club account with hosted Checkout meets the Stripe-side needs and that nonprofit pricing does not apply to registration fees; the receiving entity is a nonprofit corporation with its own bank account, and the organizer would handle disputes. Who approves a switch and the corporation's 501(c) status are still unanswered.
 6. What timer formats, refund policies, retention periods, and organizer permissions are required?
 7. Which MFA methods and recovery process keep rider and guardian checkout usable, especially for occasional riders and race-morning registration? MFA itself is required; the methods are decided in the authentication ADR.
 8. How do results reach road-results.com for our events, and what should the timer export include to support it?
