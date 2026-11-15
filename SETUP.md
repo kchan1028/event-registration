@@ -8,7 +8,8 @@ The prototype has no sign-in. It listens only on `127.0.0.1` and must not be exp
 
 - Node.js 20 or later (`node -v`) and npm
 - Git
-- No database server, cloud account, or API key. Nothing connects to USA Cycling or a payment provider.
+- A database. The app stores user data (rider details, waivers), event data, registrations, bibs, check-ins, and start lists in it and does not run without one. Locally this is a SQLite file that the app creates and migrates on first start, so there is nothing to install. See [Database](#database).
+- No cloud account or API key. Nothing connects to USA Cycling or a payment provider.
 
 ## Run it
 
@@ -29,6 +30,16 @@ npm run seed:omnium
 ```
 
 `npm run seed:demo` loads the fictional example weekend.
+
+## Database
+
+- Default location: `data/cyclereg.sqlite`. Set `DB_PATH` to use a different file.
+- Created automatically by `npm run dev`, `npm start`, or a seed command. Pending migrations run on startup.
+- `better-sqlite3` (installed by `npm ci`) provides SQLite; no separate database server is needed for the local prototype.
+- The `data/` folder is ignored by Git. It can hold test registrations, so do not commit or share it.
+- To start over, stop the app and delete `data/cyclereg.sqlite`.
+
+Tables, relationships, and deletion behavior: [DATA_MODEL.md](DATA_MODEL.md). The hosted database for a real event is an open decision ([product.md](product.md#data-storage)).
 
 ## Check it
 
