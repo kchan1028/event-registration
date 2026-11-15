@@ -1,6 +1,6 @@
 # Questions for USA Cycling
 
-Status: Proposed, written November 14, 2026. Not yet sent. Owner: KC (project owner). Public research done November 15, 2026; see [What public sources already say](#what-public-sources-already-say). That research does not replace USA Cycling's own answers. Answers go in the table at the end of this page; the owner and status are tracked in the [Phase 0 discovery kit](discovery/external-requirements.md#status).
+Status: Proposed, written November 14, 2026. Sent by email to USA Cycling on November 15, 2026 by KC (project owner); waiting for an answer. Public research done November 15, 2026; see [What public sources already say](#what-public-sources-already-say). That research does not replace USA Cycling's own answers. Answers go in the table at the end of this page; the owner and status are tracked in the [Phase 0 discovery kit](discovery/external-requirements.md#status).
 
 USA Cycling's answers decide whether this product can handle waivers and license checks for sanctioned events at all, so they come before any choice of production stack or live pilot. This is a [Phase 0](../roadmap.md#phase-0--establish-the-case-to-build) deliverable and [open decision 4](../product.md#open-decisions) in product.md. Until the answers are in, the app keeps using simulated checks and organizer review only.
 
