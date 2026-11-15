@@ -1,6 +1,6 @@
 # Phase 0 discovery kit
 
-Status: Implemented (kit written November 14, 2026). No interviews, observations, or measurements have been done. Results become evidence for the [Phase 0 exit gate](../../roadmap.md#phase-0--establish-the-case-to-build) only after they are summarized in [decision-memo.md](decision-memo.md) and linked from `roadmap.md`.
+Status: Implemented (kit written November 14, 2026). One interview done: [D01](interviews/D01.md), November 14, 2026, the promoter answering as race director, registration lead, treasurer, and rider. No observations or measurements have been done. Results become evidence for the [Phase 0 exit gate](../../roadmap.md#phase-0--establish-the-case-to-build) only after they are summarized in [decision-memo.md](decision-memo.md) and linked from `roadmap.md`.
 
 Use this kit to decide whether CycleReg should be built at all. Phase 0 ends in one of two outcomes: a recorded decision to continue, with evidence, or a recommendation to improve the current registration workflow and stop the build. Both are successful outcomes.
 
@@ -16,6 +16,7 @@ The app already built does not count as Phase 0 evidence. It was built ahead of 
 | [options-comparison.md](options-comparison.md) | Comparing improving the current setup, buying more support, and building | Compare the three options |
 | [external-requirements.md](external-requirements.md) | Owners and status for the USA Cycling (USAC), payment-provider, and road-results.com questions, with links to the question packets | Contact USAC; assess payment models; research results uploads |
 | [pilot-selection.md](pilot-selection.md) | Choosing a smaller pilot event, its accountable organizer, and a support owner | Identify a pilot |
+| [interviews/](interviews/D01.md) | Anonymized interview summaries, one file per participant code | Observe and interview |
 | [decision-memo.md](decision-memo.md) | The exit-gate decision: continue or stop, with the evidence for each gate condition | Exit gate |
 
 ## Who does what

@@ -14,6 +14,16 @@ The comparison is honest only if the build option has to win on evidence. If imp
 
 Name the current provider and any alternative providers in the notes, with the date and source of every capability or fee claim. Do not present a competitor's capability as verified without that source.
 
+## Evidence so far (not scored)
+
+Recorded 2026-11-14 from [D01](interviews/D01.md) only. Scoring waits for measured baseline numbers and interviews with people outside the project.
+
+- D01 described rider registration on BikeReg as "simple and easy", with a clear total price and quick check-in. No race-weekend problem was traced back to registration.
+- The largest estimated cost is reconciliation (about 8 hours). Whether a software limit causes it, or reporting and analytics work that any tool would need, is not yet known.
+- Bib assignment across multiple fields is slow. Whether the current tool can do it faster with different setup is not yet known.
+- The start-list export cost mostly disappears with a saved template, which points to option A for that step.
+- D01 would not switch to anything that hurts the event's search visibility. This is a condition every option must meet.
+
 ## Criteria
 
 Score each option 1 (poor) to 5 (strong) per criterion, with a one-line reason that cites evidence (interview code, baseline row, or dated source).
