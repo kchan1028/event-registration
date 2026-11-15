@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { awaitsLicenseReview } from '../shared/checkout';
 import { matchesRegistration } from '../shared/lookup';
 import { can } from '../shared/roles';
 import { api, type OrderView } from './api';
@@ -23,9 +24,8 @@ const FILTERS = {
 } satisfies Record<string, { label: string; test: (o: OrderView) => boolean }>;
 type Filter = keyof typeof FILTERS;
 
-/** A paid order with an entry still racing whose license nobody has reviewed. A withdrawn entry can never be reviewed. */
 function needsLicenseReview(o: OrderView): boolean {
-  return o.status === 'confirmed' && o.entries.some((e) => e.status === 'confirmed' && !e.licenseReviewed);
+  return o.entries.some((e) => awaitsLicenseReview(o.status, e));
 }
 
 /** Registration exception queue: one list, filtered by what needs a person. Each section shows only for roles that can use it. */
@@ -117,7 +117,7 @@ export function Registrations({ draft }: { draft: Draft }) {
 
       {canManage && <SameRider eventId={eventId} onChanged={reload} />}
 
-      {canManage && <Waitlists draft={draft} />}
+      {canManage && <Waitlists draft={draft} onChanged={reload} />}
 
       {!draft.readOnly && <Coupons eventId={eventId} categories={draft.config.categories} races={draft.config.races} />}
 

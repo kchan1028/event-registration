@@ -8,7 +8,8 @@ import { useLoad } from '../useLoad';
 const WL_LABEL: Record<WaitlistEntryView['status'], string> = { waiting: 'Waiting', offered: 'Offer sent', expired: 'Offer expired', accepted: 'Registered', removed: 'Removed' };
 
 /** Organizer-managed waitlists: offer freed places in order. No email is sent; copy the offer link to the rider. */
-export function Waitlists({ draft }: { draft: Draft }) {
+/** `onChanged`: called after an offer or removal, so the page can refresh what depends on the waitlist. */
+export function Waitlists({ draft, onChanged }: { draft: Draft; onChanged: () => void }) {
   const eventId = draft.data.id;
   const { data, error, setError, reload } = useLoad(() => api.waitlist(eventId), [eventId]);
   const entries = data?.entries ?? null;
@@ -17,6 +18,7 @@ export function Waitlists({ draft }: { draft: Draft }) {
     try {
       await fn();
       reload();
+      onChanged();
     } catch (e) {
       setError((e as ApiError).message);
     }
