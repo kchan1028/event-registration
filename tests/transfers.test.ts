@@ -21,8 +21,12 @@ async function setup() {
   const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
   let n = 0;
   const buy = async (codes: string[]) => {
-    const o = (await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `req-${++n}-xxxxxxxx`, categoryIds: codes.map(code), rider: RIDER, waiver } })).json() as Order;
-    return (await app.inject({ method: 'POST', url: `/api/orders/${o.id}/payment`, payload: { attemptId: `att-${n}-x`, outcome: 'success' } })).json() as Order;
+    const created = await app.inject({ method: 'POST', url: `/api/public/events/${eventId}/orders`, payload: { clientRequestId: `req-${++n}-xxxxxxxx`, categoryIds: codes.map(code), rider: RIDER, waiver } });
+    expect(created.statusCode).toBe(201);
+    const o = created.json() as Order;
+    const paid = await app.inject({ method: 'POST', url: `/api/orders/${o.id}/payment`, payload: { attemptId: `attempt-${n}-xxxx`, outcome: 'success' } });
+    expect(paid.statusCode).toBe(200);
+    return paid.json() as Order;
   };
   const transfer = (entryId: string, to: string, reason = 'Moved at rider request') => app.inject({ method: 'POST', url: `/api/order-entries/${entryId}/transfer`, payload: { toCategoryId: code(to), reason } });
   const withdraw = (entryId: string, reason = 'Injured, asked to withdraw') => app.inject({ method: 'POST', url: `/api/order-entries/${entryId}/withdraw`, payload: { reason } });
