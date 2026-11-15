@@ -19,6 +19,7 @@ import { createCaseStudyFixtures } from './caseStudies';
 import { createIdentity } from './identity';
 import { createResolutions } from './resolutions';
 import { createStartLists } from './startlists';
+import { createCoupons } from './coupons';
 import { createOrders, type Orders } from './orders';
 import { createWaitlist } from './waitlist';
 import { createRepo, HttpError, type Repo } from './repo';
@@ -38,7 +39,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const db = openDb(opts.databaseUrl, (err) => app.log.error(err));
   const clock = opts.now ?? (() => new Date());
   const repo = createRepo(db, clock);
-  const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10));
+  const coupons = createCoupons(db, repo, clock);
+  const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10), coupons);
   const identity = createIdentity(db, orders, clock);
   const resolutions = createResolutions(db, orders, clock);
   const checkIn = createCheckIn(db, repo, orders, clock, identity);
@@ -253,9 +255,24 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
         waiver: z.unknown(),
         extras: z.unknown().optional(),
         offerToken: z.string().min(10).max(64).nullable().optional(),
+        couponCode: z.string().trim().min(1).max(32).nullable().optional(),
       })
       .parse(req.body);
     return reply.status(201).send(await orders.createOrder(id, body));
+  });
+
+  // Coupons (src/server/coupons.ts). Riders check a code; the order re-checks and counts it under the event lock.
+  app.post('/api/public/events/:id/coupons/check', async (req) => {
+    const { id } = idParam.parse(req.params);
+    const { code } = z.object({ code: z.string().trim().min(1).max(32) }).parse(req.body);
+    return coupons.check(id, code);
+  });
+  app.get('/api/events/:id/coupons', async (req) => coupons.list(idParam.parse(req.params).id));
+  app.post('/api/events/:id/coupons', async (req, reply) => reply.status(201).send(await coupons.create(idParam.parse(req.params).id, req.body)));
+  app.post('/api/events/:id/coupons/:couponId/active', async (req) => {
+    const p = z.object({ id: z.string().min(1).max(64), couponId: z.string().min(1).max(64) }).parse(req.params);
+    const { active } = z.object({ active: z.boolean() }).parse(req.body);
+    return coupons.setActive(p.id, p.couponId, active);
   });
 
   // Organizer-managed waitlists (src/server/waitlist.ts).

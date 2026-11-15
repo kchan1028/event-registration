@@ -3,6 +3,7 @@ import type { CreateEventInput, EventConfig, TestEntry } from '../shared/schema'
 import type { Issue } from '../shared/validation';
 import type { ReadinessItem, RiderDetails, WaiverAcceptance } from '../shared/checkout';
 import type { Quote } from '../shared/pricing';
+import type { CouponTerms } from '../shared/coupons';
 import type { BibSettings, CheckInResult, PaymentState } from '../shared/checkin';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
@@ -102,6 +103,7 @@ export interface OrderView {
   waiver: WaiverAcceptance;
   guardianRequired: boolean;
   quote: Quote;
+  couponCode: string | null;
   totalCents: number;
   holdExpiresAt: string;
   checkInCode: string | null;
@@ -118,6 +120,8 @@ export interface OrderView {
     startTime: string | null;
     status: 'held' | 'confirmed' | 'released' | 'withdrawn';
     amountPaidCents: number;
+    discountCents: number;
+    discountReason: string | null;
     withdrawnAt: string | null;
     changes: {
       kind: 'transfer' | 'withdraw';
@@ -134,6 +138,16 @@ export interface OrderView {
     readiness: ReadinessItem[];
   }[];
 }
+
+export type CouponView = CouponTerms & {
+  id: string;
+  validFrom: string | null;
+  validUntil: string | null;
+  maxRedemptions: number | null;
+  active: boolean;
+  createdAt: string;
+  redemptions: { confirmed: number; reserved: number };
+};
 
 export interface EventPayload {
   id: string;
@@ -273,8 +287,12 @@ export const api = {
   offerWaitlistPlace: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer`),
   removeFromWaitlist: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/remove`),
   publicEvent: (id: string) => request<PublicEvent>('GET', `/api/public/events/${id}`),
-  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null; extras?: { answers: Record<string, Record<string, string>>; addenda: string[] } }) =>
+  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null; extras?: { answers: Record<string, Record<string, string>>; addenda: string[] }; couponCode?: string | null }) =>
     request<OrderView>('POST', `/api/public/events/${eventId}/orders`, body),
+  checkCoupon: (eventId: string, code: string) => request<CouponTerms>('POST', `/api/public/events/${eventId}/coupons/check`, { code }),
+  coupons: (eventId: string) => request<CouponView[]>('GET', `/api/events/${eventId}/coupons`),
+  createCoupon: (eventId: string, body: Record<string, unknown>) => request<CouponView>('POST', `/api/events/${eventId}/coupons`, body),
+  setCouponActive: (eventId: string, couponId: string, active: boolean) => request<CouponView>('POST', `/api/events/${eventId}/coupons/${couponId}/active`, { active }),
   order: (id: string) => request<OrderView>('GET', `/api/orders/${id}`),
   pay: (id: string, attemptId: string, outcome: 'success' | 'failure') => request<OrderView>('POST', `/api/orders/${id}/payment`, { attemptId, outcome }),
   cancelOrder: (id: string) => request<OrderView>('POST', `/api/orders/${id}/cancel`),

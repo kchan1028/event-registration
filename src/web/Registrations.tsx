@@ -4,6 +4,7 @@ import type { Category } from '../shared/schema';
 import { api, ApiError, type OrderStatus, type OrderView, type ResolutionItem, type RiderIdentityOverview, type WaitlistEntryView } from './api';
 import { href } from './App';
 import type { Draft } from './Builder';
+import { Coupons } from './Coupons';
 import { Icon, Pending } from './ui';
 
 type Filter = 'all' | 'review' | 'attention' | 'unpaid';
@@ -108,6 +109,8 @@ export function Registrations({ draft }: { draft: Draft }) {
       <SameRider eventId={eventId} onChanged={load} />
 
       <Waitlists draft={draft} />
+
+      <Coupons eventId={eventId} categories={draft.config.categories} races={draft.config.races} />
 
       <ul className="orders">
         {shown.map((o) => (

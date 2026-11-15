@@ -4,10 +4,12 @@ import { evaluateCategory } from '../shared/eligibility';
 import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNow, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
+import { termsOf } from '../shared/coupons';
 import { categoryPrice, quote, todayIn, type Quote } from '../shared/pricing';
 import { checkExtras, describeAnswers, EMPTY_EXTRAS, orderExtrasSchema, pruneExtras, type OrderExtras } from '../shared/categoryExtras';
 import type { EventConfig } from '../shared/schema';
 import { blocksPublicSale, effectiveWaitlistStatus, type StoredWaitlistStatus } from '../shared/waitlist';
+import type { Coupons } from './coupons';
 import type { Db } from './db';
 import { eventLock, HttpError, type Repo } from './repo';
 
@@ -33,6 +35,7 @@ interface OrderRow {
   created_at: string;
   confirmed_at: string | null;
   extras_json: OrderExtras | null;
+  coupon_id: string | null;
 }
 
 interface ChangeRow {
@@ -80,7 +83,7 @@ function checkInCode(): string {
   return `${s.slice(0, 5)}-${s.slice(5)}`;
 }
 
-export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes: number) {
+export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes: number, coupons: Coupons) {
   const nowIso = () => clock().toISOString();
   const orderRow = (id: string) => db.get<OrderRow>(`SELECT * FROM orders WHERE id = $1`, [id]);
   const entryRows = (orderId: string) => db.all<EntryRow>(`SELECT * FROM order_entries WHERE order_id = $1 ORDER BY seq`, [orderId]);
@@ -168,6 +171,9 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         licenseReviewNote: e.license_review_note,
         /** What the rider paid for this entry at purchase (after discounts). Never changed by a transfer or withdrawal. */
         amountPaidCents: paidLine?.totalCents ?? 0,
+        /** The discount accepted on this entry at purchase, and why (bundle, additional race, or coupon). */
+        discountCents: paidLine?.discountCents ?? 0,
+        discountReason: paidLine?.discountReason ?? null,
         withdrawnAt: e.withdrawn_at,
         changes: changes
           .filter((c) => c.entry_id === e.id)
@@ -203,6 +209,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       waiver,
       guardianRequired,
       quote: q,
+      /** Coupon code accepted with the order, or null. */
+      couponCode: q.coupon && q.coupon.discountCents > 0 ? q.coupon.terms.code : null,
       totalCents: row.total_cents,
       holdExpiresAt: row.hold_expires_at,
       checkInCode: status === 'confirmed' ? row.check_in_code : null,
@@ -289,7 +297,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
      * Either all entries are held or none are. A repeated request with the
      * same client request ID returns the first order instead of a duplicate.
      */
-    async createOrder(eventId: string, input: { clientRequestId: string; categoryIds: string[]; rider?: unknown; waiver?: unknown; extras?: unknown; offerToken?: string | null }) {
+    async createOrder(eventId: string, input: { clientRequestId: string; categoryIds: string[]; rider?: unknown; waiver?: unknown; extras?: unknown; offerToken?: string | null; couponCode?: string | null }) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
         const existing = await db.get<{ id: string }>(`SELECT id FROM orders WHERE event_id = $1 AND client_request_id = $2`, [eventId, input.clientRequestId]);
@@ -340,13 +348,21 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const admitted = await admitAll(config, eventId, input.categoryIds, riderRef, offer ? [offer.id] : []);
         if (!admitted.ok) throw new HttpError(409, `${admitted.message} Nothing was held. Choose another race and try again.`, { categoryId: admitted.categoryId });
 
-        const q = quote(config, input.categoryIds, todayIn(config.event.timeZone, clock()));
+        // A coupon is checked and counted under the same lock that takes the places, so the cap holds.
+        const coupon = input.couponCode
+          ? await coupons.redeemable(eventId, input.couponCode, config.event.timeZone).catch((err: unknown) => {
+              if (err instanceof HttpError) throw new HttpError(err.status, `${err.message} Go back to Choose races and remove the code to continue. Nothing was held.`);
+              throw err;
+            })
+          : null;
+        const q = quote(config, input.categoryIds, todayIn(config.event.timeZone, clock()), coupon ? termsOf(coupon) : null);
+        if (q.coupon?.unappliedReason) throw new HttpError(422, `${q.coupon.unappliedReason} Go back to Choose races and remove the code to continue. Nothing was held.`);
         const t = nowIso();
         const expires = new Date(clock().getTime() + holdMinutes * 60_000).toISOString();
         await db.run(
-          `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json)
-           VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras)],
+          `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json, coupon_id)
+           VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null],
         );
         // Demo riders on demo events carry a simulated license result from the fixtures; everyone else needs review.
         const fixture = config.event.isDemo ? demoRider(rider.demoRiderId) : undefined;
@@ -404,7 +420,11 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
             !enforcesWindows(config) || ids.every((id) => { const c = config.categories.find((x) => x.id === id); return !c || windowState(c, nowLocal) === 'open'; });
           // A live offer behind this order reserves its own place; don't count it against the rider.
           const ownOffer = (await db.all<{ id: string }>(`SELECT id FROM waitlist_entries WHERE order_id = $1`, [orderId])).map((r) => r.id);
-          next = windowsOpen && (await admitAll(config, row.event_id, ids, riderRef, ownOffer)).ok ? 'confirmed' : 'needs_attention';
+          // The coupon's reservation ended with the hold; it confirms only if the cap still has room.
+          // The price accepted at the hold is kept, so a code turned off or past its window is still honored.
+          const couponRow = row.coupon_id ? await db.get<{ max_redemptions: number | null }>(`SELECT max_redemptions FROM coupons WHERE id = $1`, [row.coupon_id]) : undefined;
+          const couponRoom = !couponRow || couponRow.max_redemptions === null || (await coupons.usedCount(row.coupon_id!)) < couponRow.max_redemptions;
+          next = windowsOpen && couponRoom && (await admitAll(config, row.event_id, ids, riderRef, ownOffer)).ok ? 'confirmed' : 'needs_attention';
         }
 
         if (next !== row.status) {

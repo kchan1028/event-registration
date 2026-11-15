@@ -15,6 +15,9 @@ export interface ExportEntry {
   raceName: string;
   status: string;
   amountPaidCents: number;
+  /** Discount accepted on this entry at purchase (absent on older callers). */
+  discountCents?: number;
+  discountReason?: string | null;
   licenseReviewed: boolean;
   changes: { kind: 'transfer' | 'withdraw'; fromCategoryName: string; toCategoryName: string | null; amountPaidCents: number; newPriceCents: number | null; differenceCents: number | null; reason: string; at: string }[];
 }
@@ -29,6 +32,7 @@ export interface ExportOrder {
   waiver: { signatureName: string };
   quote: Quote;
   totalCents: number;
+  couponCode?: string | null;
   entries: ExportEntry[];
   /** Answers to per-category questions; exported on that category's entry row. */
   answers?: { categoryId: string; label: string; answer: string }[];
@@ -45,7 +49,7 @@ function toCsv(header: string[], rows: unknown[][]): string {
 
 const money = (cents: number) => Math.round(cents) / 100;
 
-export const ENTRY_COLUMNS = ['order_number', 'rider_id', 'last_name', 'first_name', 'team', 'racing_age', 'license_category', 'category_code', 'category', 'race', 'entry_status', 'order_status', 'amount_paid', 'license_reviewed', 'waiver_signed_by', 'category_answers'];
+export const ENTRY_COLUMNS = ['order_number', 'rider_id', 'last_name', 'first_name', 'team', 'racing_age', 'license_category', 'category_code', 'category', 'race', 'entry_status', 'order_status', 'amount_paid', 'license_reviewed', 'waiver_signed_by', 'category_answers', 'discount', 'discount_reason', 'coupon_code'];
 
 /** One row per entry. Sorted by rider, then race. */
 export function entriesCsv(orders: readonly ExportOrder[], riderKey: (orderId: string) => string): string {
@@ -72,6 +76,9 @@ export function entriesCsv(orders: readonly ExportOrder[], riderKey: (orderId: s
           .filter((a) => a.categoryId === e.categoryId)
           .map((a) => `${a.label}: ${a.answer}`)
           .join('; '),
+        money(e.discountCents ?? 0),
+        e.discountCents ? (e.discountReason ?? 'Discount') : '',
+        o.couponCode ?? '',
       ]);
     }
   }
@@ -83,7 +90,7 @@ export const LEDGER_COLUMNS = ['order_number', 'order_status', 'recorded_at', 'k
 
 /**
  * Ledger rows for orders where money arrived (confirmed, or arrived late and needs attention):
- * each entry price, its discount, each fee, and an order total that equals the sum of the rows above it.
+ * each entry price, its discount (a coupon discount reads "Coupon CODE"), each fee, and an order total that equals the sum of the rows above it.
  * Logged transfer differences and withdrawals follow, marked as not settled.
  */
 export function ledgerCsv(orders: readonly ExportOrder[]): string {

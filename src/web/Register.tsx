@@ -6,6 +6,7 @@ import { evaluateCategory, summarizeEligibility, type EligibilityResult, type Ri
 import { DEMO_RIDERS } from '../shared/fixtures';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories } from '../shared/format';
 import { categoryPrice, quote, type Quote } from '../shared/pricing';
+import type { CouponTerms } from '../shared/coupons';
 import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, type Category, type EventConfig } from '../shared/schema';
 import { api, ApiError, type OrderView, type PublicEvent, type PublicEventSummary, type WaitlistOffer } from './api';
 import { href, navigate } from './App';
@@ -41,6 +42,8 @@ interface Draft {
   offerCategoryId?: string | null;
   /** Answers to per-category questions and accepted category waiver addenda. */
   extras?: OrderExtras;
+  /** Coupon the server accepted for this event; priced in the browser with the shared rule and re-checked when places are held. */
+  coupon?: CouponTerms | null;
 }
 
 const EMPTY_PROFILE: RiderProfile = { racingAge: null, licenseCategory: null, licenseType: null, competitionClass: null, collegiateDivision: null };
@@ -341,7 +344,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
   const [trayOpen, setTrayOpen] = useState(false);
   const [errors, setErrors] = useState<{ id: string; message: string }[]>([]);
   const checking = Object.values(draft.profile).some((v) => v !== null);
-  const q = useMemo(() => quote(config, draft.selected, ev.today), [config, draft.selected, ev.today]);
+  const q = useMemo(() => quote(config, draft.selected, ev.today, draft.coupon ?? null), [config, draft.selected, ev.today, draft.coupon]);
   const conflicts = useMemo(() => findConflicts(config, draft.selected), [config, draft.selected]);
   const setProfile = (p: Partial<RiderProfile>) => update((d) => ({ ...d, profile: { ...d.profile, ...p } }));
   const toggle = (id: string) => update((d) => ({ ...d, selected: d.selected.includes(id) ? d.selected.filter((x) => x !== id) : [...d.selected, id] }));
@@ -387,6 +390,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
     if (intent && intentMissing.length) {
       errs.push({ id: 'tray-title', message: `The ${intent.name} needs one eligible race on each day. Add a race in ${intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.` });
     }
+    if (q.coupon?.unappliedReason) errs.push({ id: 'f-coupon', message: `${q.coupon.unappliedReason} Remove the code or change your races.` });
     setErrors(errs);
     if (errs.length === 0) update((d) => ({ ...d, step: 'details', reached: Math.max(d.reached, 1) }));
   };
@@ -548,6 +552,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
             <QuoteTable q={q} raceName={(id) => config.races.find((r) => r.id === id)?.name ?? ''} onRemove={(id) => toggle(id)} />
           )}
           <BundleHint config={config} selected={draft.selected} q={q} />
+          {draft.selected.length > 0 && <CouponField eventId={ev.eventId} draft={draft} update={update} q={q} />}
           <button className="btn btn--primary tray__cta" onClick={next}>
             Continue to racer details
           </button>
@@ -722,6 +727,75 @@ function QuoteTable({ q, raceName, onRemove }: { q: Quote; raceName: (raceId: st
       </p>
       {q.discountCents > 0 && <p className="quote__saved">You save {formatCents(q.discountCents)}. Each entry gets at most one discount.</p>}
     </div>
+  );
+}
+
+/** One coupon code per order. The server checks the code; the shared pricing rule shows its effect here. */
+function CouponField({ eventId, draft, update, q }: { eventId: string; draft: Draft; update: Update; q: Quote }) {
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const applied = draft.coupon ?? null;
+  const apply = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!code.trim()) return setError('Enter a code.');
+    setBusy(true);
+    setError(null);
+    try {
+      const terms = await api.checkCoupon(eventId, code.trim());
+      update((d) => ({ ...d, coupon: terms }));
+      setCode('');
+    } catch (err) {
+      setError((err as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (applied) {
+    const warn = q.coupon?.unappliedReason;
+    return (
+      <div className="coupon" id="f-coupon" tabIndex={-1}>
+        <p className="coupon__applied">
+          <span>
+            Code <code className="code">{applied.code}</code> · {applied.kind === 'percent' ? `${applied.percent}% off eligible entries` : `${formatCents(applied.amountCents)} off eligible entries`}
+          </span>
+          <button className="btn btn--ghost btn--small" onClick={() => update((d) => ({ ...d, coupon: null }))}>
+            Remove
+          </button>
+        </p>
+        {warn ? (
+          <p className="small text-warn" role="status">
+            {warn}
+          </p>
+        ) : (
+          <p className="muted small">A coupon only applies to entries without another discount.</p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <form className="coupon" onSubmit={apply} noValidate>
+      <Field label="Coupon code" id="f-coupon" error={error ?? undefined}>
+        {(id, describedBy) => (
+          <span className="coupon__row">
+            <input
+              id={id}
+              className="input"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              value={code}
+              aria-invalid={!!error}
+              aria-describedby={describedBy}
+              onChange={(e) => setCode(e.target.value)}
+            />
+            <button className="btn btn--secondary" type="submit" disabled={busy}>
+              {busy ? 'Checking…' : 'Apply'}
+            </button>
+          </span>
+        )}
+      </Field>
+    </form>
   );
 }
 
@@ -956,6 +1030,7 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
         waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: w.signatureName.trim(), signerRole: needsGuardian ? 'guardian' : 'rider' },
         offerToken: draft.offerToken ?? null,
         extras,
+        couponCode: draft.coupon?.code ?? null,
       });
       update((x) => ({ ...x, orderId: order.id, step: 'review', reached: Math.max(x.reached, 3) }));
     } catch (e) {
