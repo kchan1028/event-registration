@@ -29,6 +29,7 @@ import { createRefunds } from './refunds';
 import { createWaitlist } from './waitlist';
 import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
 import { createMailer, emailFromEnv, type EmailSender } from './email';
+import { createJuniors } from './juniors';
 import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
 import { bibBatchSchema } from '../shared/checkin';
 import { can, ROLES, type Permission, type Role } from '../shared/roles';
@@ -73,7 +74,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const clock = opts.now ?? (() => new Date());
   const repo = createRepo(db, clock);
   const coupons = createCoupons(db, repo, clock);
-  const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10), coupons);
+  const juniors = createJuniors(db, clock);
+  const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10), coupons, juniors);
   const identity = createIdentity(db, orders, clock);
   const resolutions = createResolutions(db, orders, clock);
   const checkIn = createCheckIn(db, repo, orders, clock, identity);
@@ -453,8 +455,19 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   // A rider sees their own orders; organizers who may see orders see their events' orders.
   app.get('/api/orders/:id', async (req) => {
     const { id } = idParam.parse(req.params);
-    await access.requireOrderAccess(me(req), { orderId: id }, { rider: true, permission: 'orders.view' });
+    await access.requireOrderAccess(me(req), { orderId: id }, { rider: true, juniorViewer: true, permission: 'orders.view' });
     return orders.getOrder(id);
+  });
+
+  // The signed-in person's own registrations, plus those of juniors who named them as their login.
+  app.get('/api/rider/registrations', async (req) => orders.listForAccount(me(req)));
+
+  // Juniors this guardian manages (one guardian per junior), and the junior's own login.
+  app.get('/api/rider/juniors', async (req) => juniors.list(me(req).id));
+  app.post('/api/rider/juniors/:id/viewer', async (req) => {
+    const { id } = idParam.parse(req.params);
+    const { email } = z.object({ email: z.string().trim().email('Enter the junior’s email.').max(254).nullable() }).parse(req.body);
+    return juniors.setViewer(me(req), id, email);
   });
 
   // Only the rider who placed an order pays for or cancels it.

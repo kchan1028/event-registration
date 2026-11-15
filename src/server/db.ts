@@ -509,6 +509,25 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX email_messages_by_org_ref ON email_messages(organization_id, ref, created_at);
   `,
+  `
+  -- Guardian access to juniors (owner decision 2026-11-15). One profile per guardian account and
+  -- junior name, created the first time that guardian registers the junior; one guardian per junior.
+  -- viewer_email: the junior's own login, which may view the junior's registrations read-only.
+  CREATE TABLE junior_profiles (
+    id text PRIMARY KEY,
+    seq bigint GENERATED ALWAYS AS IDENTITY,
+    guardian_account_id text NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    name_key text NOT NULL,
+    first_name text NOT NULL,
+    last_name text NOT NULL,
+    viewer_email text,
+    created_at timestamptz NOT NULL,
+    UNIQUE (guardian_account_id, name_key)
+  );
+  CREATE INDEX junior_profiles_by_viewer ON junior_profiles(viewer_email) WHERE viewer_email IS NOT NULL;
+  ALTER TABLE orders ADD COLUMN junior_profile_id text REFERENCES junior_profiles(id) ON DELETE SET NULL;
+  CREATE INDEX orders_by_junior ON orders(junior_profile_id) WHERE junior_profile_id IS NOT NULL;
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

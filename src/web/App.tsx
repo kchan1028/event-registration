@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { MyRegistrations } from './MyRegistrations';
 import { RequireSignIn } from './auth';
 import { Builder } from './Builder';
 import { CheckIn } from './CheckIn';
@@ -11,6 +12,7 @@ export type Route =
   | { page: 'register'; eventId: string }
   | { page: 'events' }
   | { page: 'order'; orderId: string }
+  | { page: 'my-registrations' }
   | { page: 'checkin'; eventId: string }
   | { page: 'roster'; eventId: string }
   | { page: 'event'; eventId: string; view: 'race'; raceId: string | null }
@@ -21,6 +23,7 @@ export function parseHash(hash: string): Route {
   if (parts[0] === 'register' && parts[1]) return { page: 'register', eventId: parts[1] };
   if (parts[0] === 'register') return { page: 'events' };
   if (parts[0] === 'orders' && parts[1]) return { page: 'order', orderId: parts[1] };
+  if (parts[0] === 'my-registrations') return { page: 'my-registrations' };
   if (parts[0] !== 'events' || !parts[1]) return { page: 'home' };
   const eventId = parts[1];
   const view = parts[2];
@@ -35,6 +38,7 @@ export function href(route: Route): string {
   if (route.page === 'register') return `#/register/${route.eventId}`;
   if (route.page === 'events') return '#/register';
   if (route.page === 'order') return `#/orders/${route.orderId}`;
+  if (route.page === 'my-registrations') return '#/my-registrations';
   if (route.page === 'checkin') return `#/events/${route.eventId}/check-in`;
   if (route.page === 'roster') return `#/events/${route.eventId}/roster`;
   if (route.view === 'race') return `#/events/${route.eventId}${route.raceId ? `/race/${route.raceId}` : ''}`;
@@ -62,6 +66,7 @@ export function App() {
 function signedInPage(route: Exclude<Route, { page: 'register' } | { page: 'events' }>) {
   if (route.page === 'home') return <Home />;
   if (route.page === 'order') return <OrderPage key={route.orderId} orderId={route.orderId} />;
+  if (route.page === 'my-registrations') return <MyRegistrations />;
   if (route.page === 'checkin') return <CheckIn key={route.eventId} eventId={route.eventId} />;
   if (route.page === 'roster') return <Roster key={route.eventId} eventId={route.eventId} />;
   return <Builder key={route.eventId} route={route} />;

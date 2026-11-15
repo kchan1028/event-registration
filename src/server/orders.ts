@@ -13,6 +13,7 @@ import type { EventConfig } from '../shared/schema';
 import { blocksPublicSale, effectiveWaitlistStatus, type StoredWaitlistStatus } from '../shared/waitlist';
 import { refundPolicyLines } from '../shared/refundPolicy';
 import type { Coupons } from './coupons';
+import type { Juniors } from './juniors';
 import type { Db } from './db';
 import { eventLock, HttpError, type Repo } from './repo';
 
@@ -50,6 +51,7 @@ interface OrderRow {
   confirmed_at: string | null;
   extras_json: OrderExtras | null;
   coupon_id: string | null;
+  account_id: string | null;
 }
 
 interface ChangeRow {
@@ -126,7 +128,7 @@ function checkInCode(): string {
   return `${s.slice(0, 5)}-${s.slice(5)}`;
 }
 
-export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes: number, coupons: Coupons) {
+export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes: number, coupons: Coupons, juniors: Juniors) {
   const nowIso = () => clock().toISOString();
   const orderRow = (id: string) => db.get<OrderRow>(`SELECT * FROM orders WHERE id = $1`, [id]);
   const entryRows = (orderId: string) => db.all<EntryRow>(`SELECT * FROM order_entries WHERE order_id = $1 ORDER BY seq`, [orderId]);
@@ -446,6 +448,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
            VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
           [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null, accountId],
         );
+        // A guardian registering a junior: the order belongs to that guardian's profile for the junior.
+        if (accountId && rider.guardian) await db.run(`UPDATE orders SET junior_profile_id = $1 WHERE id = $2`, [await juniors.profileFor(accountId, rider), id]);
         // Demo riders on demo events carry a simulated license result from the fixtures; everyone else needs review.
         const fixture = config.event.isDemo ? demoRider(rider.demoRiderId) : undefined;
         const simulatedValid = !!fixture && fixture.licenseCheck === 'simulated_valid' && fixture.licenseNumber === rider.licenseNumber;
@@ -558,6 +562,16 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     },
 
     /** Every order of the event, newest first. With `query`, only registrations it finds (see `matchesRegistration`). */
+    /** Orders the account placed, plus orders of juniors whose viewer email is the account's, newest first. */
+    async listForAccount(account: { id: string; email: string }) {
+      const rows = await db.all<OrderRow>(
+        `SELECT o.* FROM orders o LEFT JOIN junior_profiles j ON j.id = o.junior_profile_id WHERE o.account_id = $1 OR j.viewer_email = $2 ORDER BY o.created_at DESC, o.seq DESC`,
+        [account.id, account.email.toLowerCase()],
+      );
+      const views = await viewsOf(rows);
+      return views.map((v, i) => ({ ...v, placedByYou: rows[i].account_id === account.id }));
+    },
+
     async listOrders(eventId: string, query = '') {
       await repo.getEvent(eventId);
       const views = await viewsOf(await db.all<OrderRow>(`SELECT * FROM orders WHERE event_id = $1 ORDER BY created_at DESC, seq`, [eventId]));
