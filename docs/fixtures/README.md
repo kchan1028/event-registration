@@ -1,13 +1,13 @@
 # Fixtures
 
-Status: In use. The rider demo loads these fixtures (transcribed in `src/shared/fixtures.ts`), and `tests/pricing.test.ts` checks that file against this folder and reproduces every worked order total below. These files hold fake, illustrative data for prototypes and automated tests. No real rider data belongs in this folder. The fictional purchase-flow events use illustrative prices. Berkeley Omnium is a promoter-approved real event used in the demo with organizer-supplied pricing; see [events.md](events.md). These fixtures do not verify current USA Cycling rules. Never add real names, emails, birth dates, license numbers, or emergency contacts here.
+Status: In use. The rider demo loads these fixtures (transcribed in `src/shared/fixtures.ts`), and `tests/pricing.test.ts` checks that file against this folder and reproduces every worked order total below. These files hold fake, illustrative data for the local build and automated tests. No real rider data belongs in this folder. The fictional purchase-flow events use illustrative prices. Berkeley Omnium is a promoter-approved real event used in the demo with organizer-supplied pricing; see [events.md](events.md). These fixtures do not verify current USA Cycling rules. Never add real names, emails, birth dates, license numbers, or emergency contacts here.
 
 | File | Purpose |
 |---|---|
 | [events.md](events.md) | Readable event structure, pricing, packages, and expected totals, Standalone Berkeley Hills Road Race and Berkeley Streets Criterium data |
 | [demo-purchase-flow.yaml](demo-purchase-flow.yaml) | Events, races, registration categories, prices, fees, discounts, a bundle, demo riders, and validation messages for the [clickable demo purchase flow](../../product.md#2a-clickable-demo-purchase-flow--phase-1) |
 | [sample-waiver.md](sample-waiver.md) | Placeholder waiver text for the demo. Not the USA Cycling waiver and not legally valid |
-| [sample-start-list.csv](sample-start-list.csv) | Start list exported by the prototype for the fictional riders, for the [timer export review](../timer-export-review.md). IDs are examples |
+| [sample-start-list.csv](sample-start-list.csv) | Start list exported by the app for the fictional riders, for the [timer export review](../timer-export-review.md). IDs are examples |
 
 The YAML format is illustrative, not a schema. The real format is decided with the technology stack [ADR](../decisions/README.md). Money is integer cents, as the [pricing rules](../coding-guide.md#pricing) require.
 

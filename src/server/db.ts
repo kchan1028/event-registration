@@ -44,7 +44,7 @@ const MIGRATIONS: string[] = [
   CREATE INDEX test_entries_by_event ON test_entries(event_id);
   `,
   `
-  -- Rider orders in the checkout prototype. Payment is simulated; no money moves.
+  -- Rider orders. Payment is simulated; no money moves.
   CREATE TABLE orders (
     id TEXT PRIMARY KEY,
     event_id TEXT NOT NULL REFERENCES events(id),
@@ -85,7 +85,7 @@ const MIGRATIONS: string[] = [
   );
   `,
   `
-  -- Race-day check-in prototype.
+  -- Race-day check-in.
   CREATE TABLE bib_settings (
     event_id TEXT PRIMARY KEY REFERENCES events(id),
     settings_json TEXT NOT NULL,

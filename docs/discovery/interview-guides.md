@@ -2,7 +2,7 @@
 
 Use these guides to learn how registration works today and where it costs volunteer time. Each interview is 30 to 60 minutes. Ask about what happened at a recent event, not what people think they would want: "Tell me about the last time..." beats "Would you like...".
 
-Do not show the prototype during discovery interviews. Showing it turns the conversation toward the solution before the problem is clear. The prototype belongs in the [Phase 1 usability test](../usability/README.md).
+Do not show the app during discovery interviews. Showing it turns the conversation toward the solution before the problem is clear. The app belongs in the [Phase 1 usability test](../usability/README.md).
 
 ## Consent script
 

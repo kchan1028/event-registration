@@ -2,7 +2,7 @@
 
 Last verified: November 14, 2026 on macOS 26 (Apple silicon) with Node.js 20.19 and npm 10.8, by the technical lead.
 
-This runs the organizer workspace prototype on your own computer. It has no sign-in, so it listens only on `127.0.0.1` and must not be exposed to a network or deployed.
+This runs the organizer workspace on your own computer. It has no sign-in, so it listens only on `127.0.0.1` and must not be exposed to a network or deployed.
 
 For the two standalone Berkeley demo events, follow [Set up the Berkeley demo](../../SETUP.md). It seeds a separate database and publishes both events for rider testing.
 

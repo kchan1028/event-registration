@@ -20,7 +20,7 @@ export interface EligibilityResult {
   status: EligibilityStatus;
   /** Plain-English reasons, closest matching path first. */
   reasons: string[];
-  /** License data is never verified in this prototype. */
+  /** License data is never verified: no federation connection exists yet. */
   licenseVerification: 'pending';
 }
 

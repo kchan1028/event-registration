@@ -5,7 +5,7 @@ export const DEMO_NOTICE =
   'Demonstration data. These categories, prices, limits, and times are examples for trying the builder. They are not an approved race schedule and do not describe current USA Cycling eligibility rules.';
 
 export const SAMPLE_WAIVER =
-  'SAMPLE WAIVER FOR THE PROTOTYPE. This is not USA Cycling\'s waiver and has no legal effect. A sanctioned event must use the federation\'s approved waiver text and signing process, which this prototype does not connect to.\n\nI understand that bicycle racing involves risk of injury. I will follow the officials\' instructions, ride within my ability, and wear an approved helmet at all times on the course.';
+  'SAMPLE WAIVER FOR LOCAL TESTING. This is not USA Cycling\'s waiver and has no legal effect. A sanctioned event must use the federation\'s approved waiver text and signing process, which this app does not connect to yet.\n\nI understand that bicycle racing involves risk of injury. I will follow the officials\' instructions, ride within my ability, and wear an approved helmet at all times on the course.';
 
 type PathSpec = Partial<Omit<EligibilityPath, 'id'>>;
 

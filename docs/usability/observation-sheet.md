@@ -53,7 +53,7 @@ Fill this in once all sessions are done. This summary, with participant codes on
 
 ```text
 Sessions run: ____ riders/parents, ____ organizers, ____ check-in volunteers
-Dates: ______________     Prototype commit tested: ____________
+Dates: ______________     Commit tested: ____________
 ```
 
 ### Outcomes by task

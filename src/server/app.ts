@@ -68,7 +68,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       pending: {
         licenseVerification: 'USA Cycling license and category checks are not connected. Every license is unverified and needs review.',
         payments: 'Payments are not connected. Checkout uses a simulated payment and takes no money.',
-        signIn: 'Sign-in and required multi-factor authentication are not built yet. Run this prototype only on your own computer.',
+        signIn: 'Sign-in and required multi-factor authentication are not built yet. Until they are, run the app only on your own computer.',
       },
     };
   }
@@ -174,7 +174,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return { removed, event: eventPayload(id) };
   });
 
-  // Rider checkout (prototype). Uses the latest published version only.
+  // Rider checkout. Uses the latest published version only.
   app.get('/api/public/events', async () =>
     repo
       .listOrganizations()
@@ -270,7 +270,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return orders.reviewLicense(id, body.note);
   });
 
-  // Race-day check-in (prototype). Volunteers see readiness and bib only.
+  // Race-day check-in. Volunteers see readiness and bib only.
   app.get('/api/events/:id/check-in', async (req) => {
     const { id } = idParam.parse(req.params);
     const q = z.object({ day: z.string().max(64).optional(), q: z.string().max(80).default('') }).parse(req.query);
@@ -319,7 +319,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.post('/api/events/:id/check-in-demo-riders', async (req, reply) => reply.status(201).send(checkIn.addDemoRiders(idParam.parse(req.params).id)));
 
-  // Start lists and the sample timer export (prototype). No contact or payment data.
+  // Start lists and the sample timer export. No contact or payment data.
   app.get('/api/events/:id/start-lists', async (req) => startLists.overview(idParam.parse(req.params).id));
 
   app.post('/api/events/:id/start-lists/:raceId/snapshots', async (req, reply) => {

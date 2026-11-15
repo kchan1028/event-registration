@@ -52,7 +52,7 @@ export function Home() {
     <div className="home">
       <header className="home__bar">
         <span className="brand">CycleReg</span>
-        <span className="home__bar-note">Organizer workspace · local prototype</span>
+        <span className="home__bar-note">Organizer workspace · local build</span>
         <ThemeToggle />
       </header>
       <main className="home__main">
@@ -62,7 +62,7 @@ export function Home() {
             Set up road race and criterium categories, combine them into start groups, set shared field limits, and check the rider-facing schedule before you
             publish. Everything is saved on this computer.
           </p>
-          <ul className="pending-list" aria-label="Not connected in this prototype">
+          <ul className="pending-list" aria-label="Not connected yet">
             <li>
               <Pending>USA Cycling license checks: not connected</Pending>
             </li>

@@ -2,7 +2,7 @@
   "name": "cyclereg",
   "version": "0.1.0",
   "private": true,
-  "description": "Prototype organizer workspace for U.S. road race and criterium registration (category builder milestone).",
+  "description": "Registration and race-day operations for U.S. road races and criteriums.",
   "type": "module",
   "engines": {
     "node": ">=20"
