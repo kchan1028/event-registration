@@ -14,7 +14,7 @@ The prototype already built does not count as Phase 0 evidence. It was built ahe
 | [workflow-map.md](workflow-map.md) | Mapping how the current event is set up and run, step by step, with the tools and people involved | Map the setup, shared fields, discounts, changes, exceptions, check-in, and exports |
 | [workload-baseline.md](workload-baseline.md) | Measuring organizer hours, check-in times, errors, and support requests | Measure the baseline |
 | [options-comparison.md](options-comparison.md) | Comparing improving the current setup, buying more support, and building | Compare the three options |
-| [external-requirements.md](external-requirements.md) | USA Cycling (USAC) questions, payment-provider operating models, and the road-results.com research | Contact USAC; assess payment models; research results uploads |
+| [external-requirements.md](external-requirements.md) | Owners and status for the USA Cycling (USAC), payment-provider, and road-results.com questions, with links to the question packets | Contact USAC; assess payment models; research results uploads |
 | [pilot-selection.md](pilot-selection.md) | Choosing a smaller pilot event, its accountable organizer, and a support owner | Identify a pilot |
 | [decision-memo.md](decision-memo.md) | The exit-gate decision: continue or stop, with the evidence for each gate condition | Exit gate |
 
