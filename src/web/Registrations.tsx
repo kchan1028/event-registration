@@ -117,7 +117,7 @@ export function Registrations({ draft }: { draft: Draft }) {
 
       {canManage && <SameRider eventId={eventId} onChanged={reload} />}
 
-      {canManage && <Waitlists draft={draft} />}
+      {canManage && <Waitlists draft={draft} onChanged={reload} />}
 
       {!draft.readOnly && <Coupons eventId={eventId} categories={draft.config.categories} races={draft.config.races} />}
 
