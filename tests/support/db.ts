@@ -7,12 +7,11 @@ import { adminUrl } from './server';
 /**
  * Disposable PostgreSQL databases for API tests. Each call clones the migrated
  * template made in global-setup.ts, so every test starts empty, as `:memory:`
- * SQLite did. Apps are closed after each test; the file's databases are dropped
- * after the file.
+ * SQLite did. Apps are closed after each test; the run's databases are dropped
+ * when the run ends (global-setup.ts).
  */
 
 const { serverUrl, runId, template } = inject('testDb');
-const created: string[] = [];
 const open = new Set<FastifyInstance>();
 let admin: pg.Client | null = null;
 let counter = 0;
@@ -39,7 +38,6 @@ export async function testDatabaseUrl(): Promise<string> {
       await new Promise((r) => setTimeout(r, 50 + Math.random() * 100));
     }
   }
-  created.push(name);
   const url = new URL(serverUrl);
   url.pathname = `/${name}`;
   return url.toString();
@@ -59,9 +57,9 @@ afterEach(async () => {
   await Promise.all([...open].map((app) => app.close()));
 });
 
+// The databases are dropped once, in global-setup.ts teardown. Dropping them here, per file,
+// competes with other files' CREATE DATABASE and can exceed the hook timeout.
 afterAll(async () => {
-  if (!admin) return;
-  for (const name of created.splice(0)) await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
-  await admin.end();
+  await admin?.end();
   admin = null;
 });
