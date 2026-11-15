@@ -2,7 +2,7 @@
 
 CycleReg (working name; availability not checked) is a proposed registration and race-day platform for volunteer-run U.S. bike races. Its first release targets road races, criteriums, and two-day road race plus criterium weekends. The goal is measurable: less volunteer time spent on setup, registration exceptions, check-in, and handing the event to next year's organizer.
 
-> **Status: local build of the organizer category builder, rider checkout, registration tools, and race-day check-in.** You can build a road race and criterium weekend, publish it, register as a rider for one day or both (bundle pricing, held places, and a **simulated** payment), manage entries, check riders in, and download start lists and CSV exports, all on your own computer. Every organizer page and checkout requires passwordless email sign-in (Clerk), and each person's role in an organization (owner, registration manager, check-in volunteer, timer/export, finance) limits what they can see and change. Real payments, USA Cycling license and waiver checks, and multi-factor authentication (MFA) are **not built** and are shown as pending in the app. Until MFA ships, use fictional data only; the app is not deployed. Phase 0 discovery tools are written. One discovery interview has been run; no measurements have been done.
+> **Status: local build of the organizer category builder, rider checkout, registration tools, and race-day check-in.** You can build a road race and criterium weekend, publish it, register as a rider for one day or both (bundle pricing, held places, and a **simulated** payment), manage entries, check riders in, and download start lists and CSV exports, all on your own computer. Every organizer page and checkout requires passwordless email sign-in (Clerk), and each person's role in an organization (owner, registration manager, check-in volunteer, timer/export, finance) limits what they can see and change. Real payments, USA Cycling license and waiver checks, and multi-factor authentication (MFA) for organizer roles are **not built** and are shown as pending in the app. Until organizer MFA ships, use fictional data only; the app is not deployed. Phase 0 discovery tools are written. One discovery interview has been run; no measurements have been done.
 
 ## Who it serves and the problem it solves
 
@@ -58,6 +58,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Category builder: copy a day's races to another day, bulk edit with before/after preview | Implemented; automated tests in CI |
 | Same-rider suggestions across orders, linked only when the organizer confirms | Implemented; automated tests in CI |
 | Organizer CSV exports: entries and a simulated ledger, without contact details | Implemented; automated tests in CI |
+| Coupon codes: percentage or fixed, validity window, eligible categories, total cap held atomically, one per order and never stacked on another discount | Implemented; automated tests in CI. Per-rider limits Planned |
 | Per-category rider questions, waiver addenda, and bib ranges | Implemented; automated tests in CI |
 | QR check-in code on the rider confirmation; camera scanning at check-in in Chrome and Edge | Implemented; live camera scan not yet checked |
 | Change resolution workflow for paid entries affected by a published change | Implemented; automated tests in CI |

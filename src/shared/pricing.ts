@@ -1,3 +1,4 @@
+import type { CouponTerms } from './coupons';
 import type { Category, EventConfig } from './schema';
 
 /**
@@ -15,7 +16,13 @@ import type { Category, EventConfig } from './schema';
  *      a day that has two or more entries.
  * 2a. Before that, when sameRaceExtraEntryCents is set, every entry after the
  *    most expensive one in the same race (outside the bundle) costs that flat price.
- * 3. An entry receives at most one discount. Free entries receive none.
+ * 3. A coupon (one code per order) applies last, and only to entries in its eligible
+ *    categories that have no discount from steps 1 and 2. It never stacks on a bundle,
+ *    a same-race extra entry, or an additional-race discount, and never makes a price
+ *    negative. A percentage coupon takes that share of each such entry, rounded half
+ *    up to the cent. A fixed coupon takes its amount off the order, split across those
+ *    entries in proportion to price and capped at their total.
+ *    An entry receives at most one discount. Free entries receive none.
  * 4. Fees are added once per order after discounts: a flat platform fee and a
  *    processing fee as a percentage of the entries subtotal after discounts,
  *    rounded half up to the cent.
@@ -40,6 +47,16 @@ export interface QuoteFee {
   cents: number;
 }
 
+/** The coupon accepted with the order. `discountCents` is 0 when it saved nothing (see `unappliedReason`). */
+export interface QuoteCoupon {
+  terms: CouponTerms;
+  discountCents: number;
+  /** Categories whose entries received the coupon discount. */
+  appliedCategoryIds: string[];
+  /** Why the code saves nothing on this selection; null when it applied. */
+  unappliedReason: string | null;
+}
+
 export interface Quote {
   onDate: string;
   lines: QuoteLine[];
@@ -49,6 +66,8 @@ export interface Quote {
     categoryIds: string[];
     status: 'needs_review';
   } } | null;
+  /** Absent on orders placed before coupons existed. */
+  coupon?: QuoteCoupon | null;
   subtotalCents: number;
   discountCents: number;
   entriesTotalCents: number;
@@ -86,7 +105,7 @@ function allocate(lines: QuoteLine[], total: number, reason: string): number {
   return total - remaining;
 }
 
-export function quote(config: EventConfig, categoryIds: readonly string[], onDate: string): Quote {
+export function quote(config: EventConfig, categoryIds: readonly string[], onDate: string, coupon: CouponTerms | null = null): Quote {
   const settings = config.registration;
   const lines: QuoteLine[] = [];
   for (const id of categoryIds) {
@@ -175,6 +194,9 @@ export function quote(config: EventConfig, categoryIds: readonly string[], onDat
     }
   }
 
+  // 3. Coupon, only on entries with no discount yet.
+  const appliedCoupon = coupon ? applyCoupon(config, lines, inBundle, coupon) : null;
+
   for (const l of lines) l.totalCents = l.priceCents - l.discountCents;
   const subtotalCents = lines.reduce((s, l) => s + l.priceCents, 0);
   const discountCents = lines.reduce((s, l) => s + l.discountCents, 0);
@@ -187,7 +209,33 @@ export function quote(config: EventConfig, categoryIds: readonly string[], onDat
     fees.push({ key: 'processing', label: settings.processingFeeLabel, cents: Math.floor((entriesTotalCents * settings.processingFeeBasisPoints) / 10_000 + 0.5) });
   }
   const totalCents = entriesTotalCents + fees.reduce((s, f) => s + f.cents, 0);
-  return { onDate, lines, bundle: appliedBundle, subtotalCents, discountCents, entriesTotalCents, fees, totalCents };
+  return { onDate, lines, bundle: appliedBundle, coupon: appliedCoupon, subtotalCents, discountCents, entriesTotalCents, fees, totalCents };
+}
+
+function applyCoupon(config: EventConfig, lines: QuoteLine[], inBundle: ReadonlySet<QuoteLine>, terms: CouponTerms): QuoteCoupon {
+  const reason = `Coupon ${terms.code}`;
+  const inScope = lines.filter((l) => terms.categoryIds.length === 0 || terms.categoryIds.includes(l.categoryId));
+  const open = inScope.filter((l) => l.priceCents > 0 && l.discountCents === 0 && !inBundle.has(l));
+  let discountCents = 0;
+  if (terms.kind === 'percent') {
+    for (const l of open) {
+      l.discountCents = Math.min(l.priceCents, Math.floor((l.priceCents * terms.percent) / 100 + 0.5));
+      l.discountReason = reason;
+      discountCents += l.discountCents;
+    }
+  } else if (open.length > 0) {
+    discountCents = allocate(open, Math.min(terms.amountCents, open.reduce((s, l) => s + l.priceCents, 0)), reason);
+  }
+  let unappliedReason: string | null = null;
+  if (discountCents === 0) {
+    if (inScope.length === 0) {
+      const names = terms.categoryIds.map((id) => config.categories.find((c) => c.id === id)?.name).filter(Boolean);
+      unappliedReason = `${terms.code} applies only to ${names.length > 0 ? names.join(', ') : 'categories no longer offered'}.`;
+    } else {
+      unappliedReason = `${terms.code} does not apply: the eligible entries are free or already discounted. Each entry gets at most one discount.`;
+    }
+  }
+  return { terms, discountCents, appliedCategoryIds: open.filter((l) => l.discountCents > 0).map((l) => l.categoryId), unappliedReason };
 }
 
 export function todayIn(timeZone: string, now: Date = new Date()): string {

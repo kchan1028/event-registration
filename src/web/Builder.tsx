@@ -414,7 +414,7 @@ function Rail({ draft, route, activeRaceId, errors, warnings }: { draft: Draft; 
         <p className="rail__pending-title">Not connected yet</p>
         <Pending>USA Cycling license checks</Pending>
         <Pending>Real payments (checkout is simulated)</Pending>
-        <Pending>Multi-factor sign-in (email sign-in only)</Pending>
+        <Pending>Multi-factor sign-in for organizers</Pending>
       </div>
     </nav>
   );

@@ -168,3 +168,40 @@ test('with the demo setting off, categories outside their window cannot be chose
   await page.locator('.sched-day').first().evaluate((el) => el.scrollIntoView({ block: 'start' }));
   await page.screenshot({ path: 'test-results/windows-enforced.png' });
 });
+
+test('organizer creates a coupon code; the rider applies it at checkout and the redemption is counted', async ({ page }) => {
+  const eventId = await openEvent(page, 'Demo Valley Criterium');
+
+  await page.goto(`/#/events/${eventId}/registrations`);
+  const coupons = page.locator('section', { has: page.getByRole('heading', { name: 'Coupon codes' }) });
+  await coupons.getByRole('button', { name: 'Add a coupon code' }).click();
+  await coupons.getByRole('textbox', { name: 'Code', exact: true }).fill('e2e10');
+  await coupons.getByLabel('Percent off each eligible entry').fill('10');
+  await coupons.getByLabel('Total uses (optional)').fill('1');
+  await coupons.getByRole('button', { name: 'Save coupon code' }).click();
+  const row = coupons.getByRole('row', { name: /E2E10/ });
+  await expect(row).toContainText('10%');
+  await expect(row).toContainText('0 paid of 1');
+
+  await page.goto(`/#/register/${eventId}`);
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  const tray = page.locator('.tray');
+  await tray.getByLabel('Coupon code').fill('nope');
+  await tray.getByRole('button', { name: 'Apply' }).click();
+  await expect(tray).toContainText('NOPE is not a code for this event.');
+  await tray.getByLabel('Coupon code').fill('e2e10');
+  await tray.getByRole('button', { name: 'Apply' }).click();
+  await expect(tray.locator('.quote__discount')).toContainText('Coupon E2E10');
+
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.locator('.quote')).toContainText('Coupon E2E10');
+  await page.getByRole('button', { name: /Complete simulated payment/ }).click();
+  await expect(page.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
+  await expect(page.locator('.receipt')).toContainText('Coupon E2E10');
+
+  await page.goto(`/#/events/${eventId}/registrations`);
+  await expect(page.getByRole('row', { name: /E2E10/ })).toContainText('1 paid of 1');
+});

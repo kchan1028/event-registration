@@ -99,6 +99,7 @@ The event records the rule source and season in `ruleSet`; validation warns when
 - Prices are integers in minor units (cents) with a currency code. Never use floating-point numbers for money.
 - Price rules cover base price, free entry, scheduled price changes, day-of surcharge, additional-race discount, and bundle price.
 - Define discount precedence explicitly and prevent unintended stacking. A multi-race discount applies exactly once per qualifying purchase.
+- Coupons apply last, only to eligible entries no bundle or multi-race discount touched, and are counted against their cap under the event lock in the same transaction that holds the places (`src/shared/pricing.ts`, `src/server/coupons.ts`).
 - At checkout, show an itemized total, including every fee. On purchase, **snapshot** the accepted price and the rule versions on the order line. Later configuration changes never reprice a paid entry.
 - Fees are configured per event (`registration.platformFeeCents`, `registration.processingFeeBasisPoints`) and added once per order after discounts; the processing fee rounds half up to the cent (`src/shared/pricing.ts`).
 - Registration windows are stored as local date-times in the event's time zone. Compare them with `localNow(timeZone, clock)` from `src/shared/checkout.ts`, never with the server's own clock or UTC strings. Check windows when places are held; `enforcesWindows()` decides whether a demo event may skip them.

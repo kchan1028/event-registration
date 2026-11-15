@@ -76,7 +76,7 @@ These come from [product.md](../product.md) and apply whatever stack is chosen.
 
 ## Proposed logical components
 
-This is the target shape for the hosted product. Only the registration core rules and the organizer workspace exist today, running locally on one computer. Accepted for the hosted product: sign-in through Clerk (email sign-in on the free plan first; MFA on Clerk Pro with SMS off, required before the live pilot) ([ADR 0003](decisions/0003-sign-in-and-mfa.md)), and the existing TypeScript app on Render with Render Postgres ([ADR 0004](decisions/0004-hosted-stack-and-database.md)).
+This is the target shape for the hosted product. Only the registration core rules and the organizer workspace exist today, running locally on one computer. Accepted for the hosted product: sign-in through Clerk (email sign-in on the free plan; MFA on Clerk Pro with SMS off for organizer roles, required before the live pilot) ([ADR 0003](decisions/0003-sign-in-and-mfa.md)), and the existing TypeScript app on Render with Render Postgres ([ADR 0004](decisions/0004-hosted-stack-and-database.md)).
 
 ```mermaid
 flowchart LR
@@ -143,7 +143,7 @@ Each of these needs an ADR before implementation depends on it. Options and trad
 3. Merchant-of-record and Stripe charge/transfer/settlement operating model (provider selected in ADR 0002)
 4. USA Cycling license and waiver path
 5. Hosting, backups, and monitoring: decided in [ADR 0004](decisions/0004-hosted-stack-and-database.md) (Render)
-6. Authentication for riders, guardians, and organizers: decided in [ADR 0003](decisions/0003-sign-in-and-mfa.md) (Clerk; email sign-in first, MFA required before the live pilot, SMS off)
+6. Authentication for riders, guardians, and organizers: decided in [ADR 0003](decisions/0003-sign-in-and-mfa.md) (Clerk; email sign-in for everyone, MFA for organizer roles before the live pilot, SMS off)
 7. Transactional email provider
 8. Timer export formats
 9. Data retention and deletion periods

@@ -74,7 +74,7 @@ export function Home() {
               <Pending>Payments: simulated only, no money is charged</Pending>
             </li>
             <li>
-              <Pending>Sign-in: emailed code or link only. Multi-factor authentication is not built yet, so use fictional data only</Pending>
+              <Pending>Sign-in: emailed code or link only. Multi-factor sign-in for organizers is not built yet, so use fictional data only</Pending>
             </li>
           </ul>
         </section>

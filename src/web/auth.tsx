@@ -158,7 +158,7 @@ export function SignInPrompt({ title, children }: { title: string; children: Rea
         </button>
       )}
       <p className="signin-prompt__note">
-        <Pending>Emailed code or link only. Multi-factor authentication comes later, so use fictional details.</Pending>
+        <Pending>Emailed code or link only. Multi-factor sign-in for organizers comes later, so use fictional details.</Pending>
       </p>
     </section>
   );

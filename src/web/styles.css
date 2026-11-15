@@ -2509,6 +2509,31 @@ button.issue {
   color: var(--ok);
 }
 
+/* Coupon code in the checkout tray: one field and its button on a single row. */
+.coupon {
+  display: grid;
+  gap: var(--s-1);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--hairline);
+}
+.coupon__row {
+  display: flex;
+  gap: var(--s-2);
+}
+.coupon__row .input {
+  flex: 1;
+  min-width: 0;
+  text-transform: uppercase;
+}
+.coupon__applied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  font-size: 14px;
+  color: var(--ink);
+}
+
 .reg__panel {
   display: grid;
   gap: var(--s-4);
@@ -4061,4 +4086,42 @@ fieldset:disabled .field label {
   .account__email {
     display: none;
   }
+}
+
+/* Organizer coupon codes (Registrations). */
+.coupon-table {
+  width: 100%;
+}
+.coupon-table td {
+  vertical-align: middle;
+}
+.coupon-table__off {
+  margin-left: var(--s-2);
+}
+.coupon-form {
+  width: 100%;
+  display: grid;
+  gap: var(--s-3);
+}
+.coupon-form__code {
+  text-transform: uppercase;
+}
+.coupon-form__kind {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 5px;
+}
+.coupon-form__kind legend {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  padding: 0;
+  margin-bottom: 5px;
+}
+.coupon-form__cats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--s-1) var(--s-3);
 }
