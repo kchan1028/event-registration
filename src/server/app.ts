@@ -9,6 +9,7 @@ import { buildDemoEvent } from '../shared/demo';
 import { configFromTemplate } from '../shared/factory';
 import { buildFixtureEvents, FIXTURE_ORG_NAME } from '../shared/fixtures';
 import { createEventInputSchema, eventConfigSchema } from '../shared/schema';
+import { changeImpact, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
 import { openDb } from './db';
 import { createCheckIn } from './checkin';
@@ -92,10 +93,44 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.post('/api/events/:id/publish', async (req) => {
     const { id } = idParam.parse(req.params);
-    const body = z.object({ acknowledgeWarnings: z.boolean().default(false) }).parse(req.body ?? {});
+    const body = z.object({ acknowledgeWarnings: z.boolean().default(false), acknowledgeImpact: z.boolean().default(false) }).parse(req.body ?? {});
+    // A change that touches riders who already entered must be reviewed, like warnings.
+    const { impact } = impactFor(id);
+    if (impact && impact.categories.length > 0 && !body.acknowledgeImpact) {
+      const n = impact.categories.length;
+      throw new HttpError(422, `Review who the ${n} changed ${n === 1 ? 'category' : 'categories'} with entries affect before publishing.`, impact);
+    }
     const result = repo.publish(id, body.acknowledgeWarnings);
     return { ...eventPayload(id), publishedVersion: result.version };
   });
+
+  /**
+   * Change impact preview: what publishing the draft would change for riders who
+   * already entered (confirmed entries and unexpired holds) under the latest published version.
+   */
+  function impactFor(id: string) {
+    const record = repo.getEvent(id);
+    if (record.publishedVersion === null) return { publishedVersion: null, impact: null };
+    const published = repo.getVersion(id, record.publishedVersion);
+    const rows = db
+      .prepare<[string, string], { order_id: string; category_id: string; status: string; rider_json: string }>(
+        `SELECT oe.order_id, oe.category_id, oe.status, o.rider_json FROM order_entries oe JOIN orders o ON o.id = oe.order_id
+         WHERE oe.event_id = ? AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > ?))`,
+      )
+      .all(id, clock().toISOString());
+    const entries: ImpactEntry[] = rows.map((r) => {
+      const rider = JSON.parse(r.rider_json) as { firstName?: string; lastName?: string };
+      return {
+        orderId: r.order_id,
+        categoryId: r.category_id,
+        status: r.status === 'confirmed' ? 'confirmed' : 'held',
+        riderName: [rider.firstName, rider.lastName].filter(Boolean).join(' ') || 'Unnamed rider',
+      };
+    });
+    return { publishedVersion: record.publishedVersion, impact: changeImpact(published, record.config, entries) };
+  }
+
+  app.get('/api/events/:id/impact', async (req) => impactFor(idParam.parse(req.params).id));
 
   app.get('/api/events/:id/versions/:version', async (req) => {
     const p = z.object({ id: z.string(), version: z.coerce.number().int().min(1) }).parse(req.params);

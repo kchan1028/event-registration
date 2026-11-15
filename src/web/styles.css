@@ -3648,6 +3648,38 @@ fieldset:disabled .field label {
   flex-wrap: wrap;
 }
 
+/* Change impact preview on Review and publish. */
+.impact__loading {
+  height: 48px;
+}
+.impact__list {
+  list-style: none;
+  margin: var(--s-3) 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-3);
+}
+.impact__item {
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+}
+.impact__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-2);
+  font-weight: 600;
+}
+.impact__kinds {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+.impact__details {
+  margin: 0 0 var(--s-2);
+  padding-left: 1.25em;
 /* Printable fallback roster. Paper first: plain black on white when printed,
    real borders so blank cells can be written in, one race day per printed section. */
 .roster {
