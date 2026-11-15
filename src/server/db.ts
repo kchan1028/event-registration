@@ -114,6 +114,19 @@ const MIGRATIONS: string[] = [
     UNIQUE (event_id, order_id, day_id)
   );
   `,
+  `
+  -- Timestamped start-list snapshots per race. Immutable once saved; later changes show as a diff.
+  CREATE TABLE start_list_snapshots (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES events(id),
+    race_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    published_version INTEGER NOT NULL,
+    rows_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (event_id, race_id, version)
+  );
+  `,
 ];
 
 export function openDb(path: string): Db {

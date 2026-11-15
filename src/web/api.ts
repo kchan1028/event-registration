@@ -4,6 +4,7 @@ import type { Issue } from '../shared/validation';
 import type { ReadinessItem, RiderDetails, WaiverAcceptance } from '../shared/checkout';
 import type { Quote } from '../shared/pricing';
 import type { BibSettings, CheckInResult, PaymentState } from '../shared/checkin';
+import type { StartListDiff, StartListRow } from '../shared/startlist';
 
 export interface PublicEvent {
   eventId: string;
@@ -152,6 +153,23 @@ export interface CheckInList {
   riders: CheckInRider[];
 }
 
+export interface StartListRace {
+  raceId: string;
+  raceName: string;
+  date: string;
+  rows: StartListRow[];
+  snapshots: { version: number; createdAt: string; publishedVersion: number; riders: number; changesFromPrevious: StartListDiff | null }[];
+  changesSinceLastSnapshot: StartListDiff | null;
+}
+
+export interface StartListOverview {
+  eventId: string;
+  eventName: string;
+  isDemo: boolean;
+  publishedVersion: number;
+  races: StartListRace[];
+}
+
 export const api = {
   organizations: () => request<OrganizationSummary[]>('GET', '/api/organizations'),
   createOrganization: (name: string) => request<{ id: string; name: string }>('POST', '/api/organizations', { name }),
@@ -180,4 +198,7 @@ export const api = {
   changeBib: (eventId: string, orderId: string, dayId: string, bib: number, reason: string) =>
     request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}/bib`, { dayId, bib, reason }),
   addCheckInDemoRiders: (eventId: string) => request<{ created: number }>('POST', `/api/events/${eventId}/check-in-demo-riders`),
+  startLists: (eventId: string) => request<StartListOverview>('GET', `/api/events/${eventId}/start-lists`),
+  snapshotStartList: (eventId: string, raceId: string) => request<{ version: number; riders: number }>('POST', `/api/events/${eventId}/start-lists/${raceId}/snapshots`),
+  startListCsvUrl: (eventId: string, raceId: string, snapshot?: number) => `/api/events/${eventId}/start-lists/${raceId}/csv${snapshot ? `?snapshot=${snapshot}` : ''}`,
 };
