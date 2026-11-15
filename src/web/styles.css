@@ -497,6 +497,15 @@ textarea.input {
   gap: var(--s-2);
   align-items: center;
 }
+.copy-day {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.copy-day .input {
+  width: auto;
+}
 
 .check {
   display: flex;
@@ -1263,6 +1272,38 @@ fieldset {
   font-weight: 600;
   color: var(--ink);
   border-bottom: 1px solid var(--hairline-soft);
+}
+.col-pick {
+  width: 32px;
+  text-align: center;
+}
+/* Bulk edit panel above the category schedule. */
+.bulk {
+  display: grid;
+  gap: var(--s-2);
+  margin: var(--s-3) 0;
+  padding: var(--s-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+}
+.bulk h4 {
+  margin: 0;
+}
+.bulk__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+.bulk__controls label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.bulk__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
 }
 .col-order {
   width: 40px;
