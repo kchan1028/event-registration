@@ -120,7 +120,7 @@ export interface CheckInList {
   roles: Role[];
   races: { id: string; name: string }[];
   categories: { id: string; name: string; raceId: string }[];
-  summary: { riders: number; checkedIn: number; blocked: number; bibsIssued: number; timing: ReturnType<typeof checkInTiming> };
+  summary: { riders: number; checkedIn: number; blocked: number; bibsAssigned: number; timing: ReturnType<typeof checkInTiming> };
   riders: CheckInRider[];
 }
 
@@ -134,6 +134,11 @@ export const bibBatchSchema = z.object({
   sort: z.enum(['name', 'registration', 'start']).optional(),
 });
 export type BibBatch = z.infer<typeof bibBatchSchema>;
+export const BIB_SORT_LABELS = {
+  name: 'Surname, then given name',
+  registration: 'Registration time',
+  start: 'Category / start order',
+} as const;
 export interface BibPlan {
   dayId: string;
   raceId: string | null;
@@ -151,4 +156,19 @@ export function bibBatchExclusion(rider: Pick<CheckInRider, 'payment' | 'entries
   if (rider.payment !== 'confirmed') return 'Entry not confirmed';
   if (rider.entries.length === 0) return 'No entry on this day';
   return null;
+}
+
+export const automaticBibInputSchema = z.object({ sort: bibBatchSchema.shape.sort.unwrap() });
+export type AutomaticBibInput = z.infer<typeof automaticBibInputSchema>;
+export interface AutomaticBibJob {
+  id: string;
+  sort: AutomaticBibInput['sort'];
+  configuredBy: string;
+  createdAt: string;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  cancelledBy: string | null;
+  lastAttemptAt: string | null;
+  message: string | null;
+  assigned: number | null;
 }

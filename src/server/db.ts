@@ -464,6 +464,26 @@ export const MIGRATIONS: string[] = [
     CHECK (action IN ('granted', 'invited', 'invitation_renewed', 'invitation_accepted', 'invitation_expired', 'removed', 'invitation_cancelled', 'ownership_transferred'));
   `,
   `
+  -- One active opt-in post-close job per event; completed/cancelled jobs retain who configured them.
+  CREATE TABLE automatic_bib_jobs (
+    id text PRIMARY KEY,
+    event_id text NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    sort text NOT NULL CHECK (sort IN ('name', 'registration', 'start')),
+    configured_by text NOT NULL REFERENCES accounts(id),
+    created_at timestamptz NOT NULL,
+    completed_at timestamptz,
+    cancelled_at timestamptz,
+    cancelled_by text REFERENCES accounts(id),
+    last_attempt_at timestamptz,
+    message text,
+    assigned integer CHECK (assigned >= 0),
+    CHECK (completed_at IS NULL OR cancelled_at IS NULL)
+  );
+  ALTER TABLE bib_assignments ADD COLUMN automatic_job_id text REFERENCES automatic_bib_jobs(id);
+  CREATE UNIQUE INDEX automatic_bib_pending ON automatic_bib_jobs(event_id)
+    WHERE completed_at IS NULL AND cancelled_at IS NULL;
+  `,
+  `
   -- How many times one rider may use a coupon. Null: no per-rider limit. A rider is matched across
   -- orders by the same rule as same-rider suggestions (same license number, or same name and email).
   ALTER TABLE coupons ADD COLUMN max_per_rider integer CHECK (max_per_rider > 0);
