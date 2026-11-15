@@ -6,6 +6,7 @@ Status: In use. The rider demo loads these fixtures (transcribed in `src/shared/
 |---|---|
 | [demo-purchase-flow.yaml](demo-purchase-flow.yaml) | Events, races, registration categories, prices, fees, discounts, a bundle, demo riders, and validation messages for the [clickable demo purchase flow](../../product.md#2a-clickable-demo-purchase-flow--phase-1) |
 | [sample-waiver.md](sample-waiver.md) | Placeholder waiver text for the demo. Not the USA Cycling waiver and not legally valid |
+| [sample-start-list.csv](sample-start-list.csv) | Start list exported by the prototype for the fictional riders, for the [timer export review](../timer-export-review.md). IDs are examples |
 
 The YAML format is illustrative, not a schema. The real format is decided with the technology stack [ADR](../decisions/README.md). Money is integer cents, as the [pricing rules](../coding-guide.md#pricing) require.
 

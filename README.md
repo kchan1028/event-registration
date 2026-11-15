@@ -222,6 +222,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | Start lists and sample timer export | Implemented November 14, 2026; see [roadmap.md](roadmap.md#start-lists-and-timer-export) |
 | Race-day check-in prototype | Implemented November 14, 2026; see [roadmap.md](roadmap.md#check-in-prototype) |
 | Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; used by the rider demo |
+| Timer export review packet | Implemented November 14, 2026; not yet sent. See [docs/timer-export-review.md](docs/timer-export-review.md) |
 | Phase 1 usability test kit | Implemented November 14, 2026; no sessions run yet. See [docs/usability/](docs/usability/README.md) |
 | Stack | Chosen for the prototype only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
 | Real payments, USA Cycling checks, sign-in with MFA, hosting | Not built |
@@ -249,6 +250,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [docs/operations.md](docs/operations.md) | Proposed operating model: support owners, incident severity, freezes, monitoring, backups, and handoff |
 | [docs/decisions/README.md](docs/decisions/README.md) | Architecture decision records, including [0001](docs/decisions/0001-stack-for-category-builder-milestone.md), and the backlog of unresolved decisions |
 | [docs/fixtures/README.md](docs/fixtures/README.md) | Fake demonstration data and sample waiver text used by the rider demo |
+| [docs/timer-export-review.md](docs/timer-export-review.md) | Sample start-list export, its columns, and the questions for the timer and officials |
 | [docs/usability/README.md](docs/usability/README.md) | Phase 1 usability test kit: recruiting, setup, facilitator script, tasks, scoring, and results summary |
 
 ## Contributing

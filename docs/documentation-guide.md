@@ -37,6 +37,7 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Writing rules, status vocabulary, glossary | This file | |
 | Setup and troubleshooting | [runbooks/](runbooks/local-setup.md) | Local setup and troubleshooting exist; race-day runbooks are planned |
 | Visual system of the interface | [DESIGN.md](../DESIGN.md) | Tokens, type, components; derived from the built interface |
+| Timer export format review and answers | [timer-export-review.md](timer-export-review.md) | Proposed until the timer accepts the format |
 | Usability test plan, scripts, tasks, and results | [usability/](usability/README.md) | Kit implemented; results summaries are added after sessions, with participant codes only |
 | Demo and category configuration fixtures | [fixtures/](fixtures/README.md) | Fake, illustrative data only. Demo purchase flow fixtures exist; category configuration fixtures are planned |
 
@@ -58,7 +59,7 @@ Current layout:
 ├── e2e/                          Playwright browser tests and screenshot capture
 ├── .github/workflows/ci.yml      Automated checks on pushes and pull requests
 └── docs/
-    ├── architecture.md, coding-guide.md, content-guide.md, documentation-guide.md, operations.md
+    ├── architecture.md, coding-guide.md, content-guide.md, documentation-guide.md, operations.md, timer-export-review.md
     ├── decisions/                Architecture decision records
     ├── fixtures/                 Fake demo purchase flow data and sample waiver text
     ├── runbooks/                 Local setup and troubleshooting
