@@ -2792,6 +2792,28 @@ fieldset:disabled .field label {
   color: var(--muted);
 }
 
+/* CSV import -------------------------------------------------------------- */
+
+.map-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--s-3);
+}
+.import-summary {
+  font-size: 15px;
+}
+.import-table td {
+  vertical-align: top;
+}
+.import-table tr.is-error td:first-child {
+  color: var(--error);
+}
+.import-table .issue {
+  background: none;
+  padding: 2px 0;
+}
+
 /* Responsive ------------------------------------------------------------- */
 
 @media (max-width: 1280px) {

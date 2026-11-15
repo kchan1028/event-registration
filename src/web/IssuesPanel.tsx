@@ -50,7 +50,7 @@ export function IssuesPanel({ issues, config, onOpen, eventId }: { issues: Issue
         <>
           <p className="issues-panel__counts">
             <span className={errors ? 'text-error' : ''}>
-              <span className="num">{errors}</span> {errors === 1 ? 'error' : 'errors'} block publishing
+              <span className="num">{errors}</span> {errors === 1 ? 'error blocks' : 'errors block'} publishing
             </span>
             <span>
               <span className="num">{warnings}</span> {warnings === 1 ? 'warning' : 'warnings'} to acknowledge
