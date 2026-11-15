@@ -69,6 +69,7 @@ interface CorrectionRow {
   changes_json: FieldChange[];
   cleared_reviews_json: { categoryId: string; note: string | null; reviewedAt: string | null }[] | null;
   reason: string;
+  corrected_by_email: string | null;
   created_at: string;
 }
 
@@ -165,7 +166,11 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       ),
     );
     const corrections = groupByOrder(
-      await db.all<CorrectionRow>(`SELECT order_id, changes_json, cleared_reviews_json, reason, created_at FROM rider_corrections WHERE order_id = ANY($1) ORDER BY created_at, seq`, [ids]),
+      await db.all<CorrectionRow>(
+        `SELECT c.order_id, c.changes_json, c.cleared_reviews_json, c.reason, a.email AS corrected_by_email, c.created_at
+         FROM rider_corrections c LEFT JOIN accounts a ON a.id = c.corrected_by WHERE c.order_id = ANY($1) ORDER BY c.created_at, c.seq`,
+        [ids],
+      ),
     );
     // How each paid order was paid: the simulated button or Stripe test mode.
     const paidWith = new Map(
@@ -280,11 +285,12 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       answers: describeAnswers(latest, extras),
       addenda: extras.addenda.map((id) => ({ categoryId: id, title: findCat(id)?.addendum?.title ?? 'Category waiver addendum' })),
       entries,
-      /** Organizer corrections to rider details, oldest first. Each has its reason and before/after values. */
+      /** Organizer corrections to rider details, oldest first. Each has its reason, before/after values, and who made it (null before that was recorded). */
       corrections: corrections.map((c) => ({
         changes: c.changes_json,
         licenseReviewsCleared: c.cleared_reviews_json?.length ?? 0,
         reason: c.reason,
+        by: c.corrected_by_email,
         at: c.created_at,
       })),
     };
@@ -554,10 +560,10 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     /**
      * Organizer corrects rider details with a reason. Only contact and identity fields change
      * (see CORRECTABLE_FIELDS); the price, entries, and waiver signature never do. Each correction
-     * is appended to rider_corrections. A new license number clears earlier license reviews,
+     * is appended to rider_corrections with the account that made it. A new license number clears earlier license reviews,
      * because the review was of the old number.
      */
-    async correctRider(orderId: string, patch: RiderCorrection, reason: string) {
+    async correctRider(orderId: string, patch: RiderCorrection, reason: string, by: string) {
       return db.transaction(async () => {
         await lockEventOf(`SELECT event_id FROM orders WHERE id = $1`, orderId);
         const row = await orderRow(orderId);
@@ -574,8 +580,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         }
         await db.run(`UPDATE orders SET rider_json = $1, updated_at = $2 WHERE id = $3`, [JSON.stringify(parsed.data), t, orderId]);
         await db.run(
-          `INSERT INTO rider_corrections (id, event_id, order_id, changes_json, cleared_reviews_json, reason, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [newId('cor'), row.event_id, orderId, JSON.stringify(changes), cleared.length > 0 ? JSON.stringify(cleared) : null, reason, t],
+          `INSERT INTO rider_corrections (id, event_id, order_id, changes_json, cleared_reviews_json, reason, corrected_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [newId('cor'), row.event_id, orderId, JSON.stringify(changes), cleared.length > 0 ? JSON.stringify(cleared) : null, reason, by, t],
         );
         return view(orderId);
       });

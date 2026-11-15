@@ -207,6 +207,59 @@ describe('organizer roles', () => {
     expect(res.statusCode).toBe(409);
   });
 
+  it('records every role change with who made it, newest first', async () => {
+    const { call, valley } = await twoClubs();
+    const newcomer = 'newcomer@valley.test';
+    const manager = 'manager@valley.test';
+    await call(manager, 'GET', '/api/me');
+    await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: manager, role: 'registration_manager' });
+    await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: newcomer, role: 'finance' });
+    await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: newcomer, role: 'check_in_volunteer' });
+    await call(OWNER, 'POST', `/api/organizations/${valley}/members/remove`, { email: newcomer, role: 'finance' });
+    await call(newcomer, 'GET', '/api/me');
+    await call(OWNER, 'POST', `/api/organizations/${valley}/members/remove`, { email: manager, role: 'registration_manager' });
+    // Adding a role someone already holds records nothing.
+    await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: newcomer, role: 'check_in_volunteer' });
+    const { history } = (await call(OWNER, 'GET', `/api/organizations/${valley}/members`)).json() as { history: { action: string; email: string; role: string; by: string | null }[] };
+    expect(history.slice(0, 6).map(({ action, email, role, by }) => ({ action, email, role, by }))).toEqual([
+      { action: 'removed', email: manager, role: 'registration_manager', by: OWNER },
+      { action: 'invitation_accepted', email: newcomer, role: 'check_in_volunteer', by: newcomer },
+      { action: 'invitation_cancelled', email: newcomer, role: 'finance', by: OWNER },
+      { action: 'invited', email: newcomer, role: 'check_in_volunteer', by: OWNER },
+      { action: 'invited', email: newcomer, role: 'finance', by: OWNER },
+      { action: 'granted', email: manager, role: 'registration_manager', by: OWNER },
+    ]);
+    // Organizations are isolated: Hills sees none of Valley's history.
+    expect((await call(OTHER_OWNER, 'GET', `/api/organizations/${valley}/members`)).statusCode).toBe(404);
+  });
+
+  it('hands ownership to a signed-in teammate in one recorded step', async () => {
+    const { call, valley, eventId } = await twoClubs();
+    const successor = 'successor@valley.test';
+    const transfer = (by: string, email: string) => call(by, 'POST', `/api/organizations/${valley}/ownership-transfer`, { email });
+    // Someone who has never signed in cannot take ownership.
+    expect((await transfer(OWNER, successor)).statusCode).toBe(422);
+    await call(successor, 'GET', '/api/me');
+    await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: successor, role: 'finance' });
+    await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: OWNER, role: 'registration_manager' });
+    // Only an owner can hand over, and not to themselves.
+    expect((await transfer(successor, successor)).statusCode).toBe(403);
+    expect((await transfer(OWNER, OWNER)).statusCode).toBe(422);
+
+    const res = await transfer(OWNER, successor);
+    expect(res.statusCode).toBe(200);
+    const list = res.json() as { members: { email: string; role: string }[]; history: { action: string; email: string; by: string }[] };
+    expect(list.members.filter((m) => m.role === 'owner').map((m) => m.email)).toEqual([successor]);
+    expect(list.history[0]).toMatchObject({ action: 'ownership_transferred', email: successor, by: OWNER });
+    // The old owner keeps their other role but loses owner tools; the successor gains them.
+    expect((await call(OWNER, 'GET', `/api/organizations/${valley}/members`)).statusCode).toBe(403);
+    expect((await call(OWNER, 'GET', `/api/events/${eventId}/orders`)).statusCode).toBe(200);
+    expect((await call(successor, 'GET', `/api/organizations/${valley}/members`)).statusCode).toBe(200);
+    // The old owner cannot hand over again; another club's owner cannot see the organization.
+    expect((await transfer(OWNER, successor)).statusCode).toBe(403);
+    expect((await call(OTHER_OWNER, 'POST', `/api/organizations/${valley}/ownership-transfer`, { email: OTHER_OWNER })).statusCode).toBe(404);
+  });
+
   it('refuses an unknown role', async () => {
     const { call, valley } = await twoClubs();
     expect((await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: 'x@valley.test', role: 'admin' })).statusCode).toBe(400);

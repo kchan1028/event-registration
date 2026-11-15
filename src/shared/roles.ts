@@ -53,3 +53,16 @@ const GRANTS: Record<Role, readonly Permission[]> = {
 export function can(roles: readonly Role[], permission: Permission): boolean {
   return roles.some((r) => GRANTS[r].includes(permission));
 }
+
+/** One entry in an organization's role history (newest first in the team panel). */
+export type MembershipAction = 'granted' | 'invited' | 'invitation_accepted' | 'removed' | 'invitation_cancelled' | 'ownership_transferred';
+
+export interface MembershipChange {
+  action: MembershipAction;
+  /** The person whose role changed. */
+  email: string;
+  role: Role;
+  /** Who made the change; null when a seed script did. For an accepted invitation, the person who signed in. */
+  by: string | null;
+  at: string;
+}

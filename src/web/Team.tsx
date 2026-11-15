@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ROLE_LABELS, ROLES, type Role } from '../shared/roles';
+import { ROLE_LABELS, ROLES, type MembershipChange, type Role } from '../shared/roles';
 import { api, ApiError, type MemberList } from './api';
+import { formatDateTime } from './format';
 import { Field } from './ui';
 
 const ROLE_HELP: Record<Role, string> = {
@@ -11,10 +12,31 @@ const ROLE_HELP: Record<Role, string> = {
   finance: 'Registrations, refunds, and the ledger export',
 };
 
+/** One line of role history in plain words. A change with no actor was made by a setup script. */
+function describeChange(c: MembershipChange): string {
+  const by = c.by ?? 'A setup script';
+  const role = ROLE_LABELS[c.role];
+  switch (c.action) {
+    case 'granted':
+      return `${by} gave ${c.email} the ${role} role`;
+    case 'invited':
+      return `${by} invited ${c.email} as ${role}`;
+    case 'invitation_accepted':
+      return `${c.email} signed in and took up the ${role} invitation`;
+    case 'removed':
+      return `${by} removed the ${role} role from ${c.email}`;
+    case 'invitation_cancelled':
+      return `${by} cancelled the ${role} invitation for ${c.email}`;
+    case 'ownership_transferred':
+      return `${by} handed ownership to ${c.email}`;
+  }
+}
+
 /**
  * People and roles for one organization. Owners only; the server refuses everyone else.
  * Adding an email that has never signed in records an invitation that becomes a role the
- * first time that person signs in with the same email.
+ * first time that person signs in with the same email. An owner can hand ownership to a teammate
+ * who has signed in; every change appears under Recent changes with who made it.
  */
 export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }) {
   const [open, setOpen] = useState(false);
@@ -23,6 +45,9 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>('check_in_volunteer');
   const [busy, setBusy] = useState(false);
+  const [successor, setSuccessor] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (open && !list) api.members(orgId).then(setList).catch((e: ApiError) => setError(e.message));
@@ -42,10 +67,21 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
     }
   }
 
+  async function handOver() {
+    if (await run(() => api.transferOwnership(orgId, successor))) {
+      setNotice(`Ownership handed to ${successor}. You are no longer an owner here; your other roles stay.`);
+      setSuccessor('');
+      setConfirming(false);
+    }
+  }
+
   async function add(e: FormEvent) {
     e.preventDefault();
     if (await run(() => api.addMember(orgId, email.trim(), role))) setEmail('');
   }
+
+  // Signed-in teammates who are not owners yet. An invitation cannot take ownership.
+  const candidates = list ? [...new Set(list.members.map((m) => m.email))].filter((email) => !list.members.some((m) => m.email === email && m.role === 'owner')) : [];
 
   if (!open) {
     return (
@@ -66,6 +102,11 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
       {error && (
         <p className="alert alert--error" role="alert">
           {error}
+        </p>
+      )}
+      {notice && (
+        <p className="note note--ok" role="status">
+          {notice}
         </p>
       )}
       {!list && !error && <div className="skeleton" aria-label="Loading team" />}
@@ -114,6 +155,64 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
           Add to team
         </button>
       </form>
+      {list && (
+        <div className="team__handover">
+          <h5>Hand over ownership</h5>
+          {candidates.length === 0 ? (
+            <p className="muted small">Add your successor to the team first. They need to sign in once before they can take ownership.</p>
+          ) : (
+            <div className="team__add">
+              <Field label="New owner" hint="You stop being an owner. Any other roles you hold stay.">
+                {(id, describedBy) => (
+                  <select
+                    id={id}
+                    className="input"
+                    value={successor}
+                    onChange={(e) => {
+                      setSuccessor(e.target.value);
+                      setConfirming(false);
+                    }}
+                    aria-describedby={describedBy}
+                  >
+                    <option value="">Choose a teammate</option>
+                    {candidates.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+              {confirming ? (
+                <div className="team__confirm" role="group" aria-label="Confirm hand-over">
+                  <button className="btn btn--primary" type="button" disabled={busy} onClick={handOver}>
+                    Hand over to {successor}
+                  </button>
+                  <button className="link-btn" type="button" disabled={busy} onClick={() => setConfirming(false)}>
+                    Keep ownership
+                  </button>
+                </div>
+              ) : (
+                <button className="btn btn--secondary" type="button" disabled={busy || !successor} onClick={() => setConfirming(true)}>
+                  Hand over ownership
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {list && list.history.length > 0 && (
+        <details className="team__history">
+          <summary className="small">Recent changes ({list.history.length})</summary>
+          <ol>
+            {list.history.map((c, i) => (
+              <li key={i} className="small">
+                <time dateTime={c.at}>{formatDateTime(c.at)}</time> · {describeChange(c)}
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
     </section>
   );
 }

@@ -208,7 +208,7 @@ function RiderCorrections({ order, canManage, onChange }: { order: OrderView; ca
           {order.corrections.map((c, i) => (
             <li key={i} className="order__entry order__change">
               <span className="small">
-                <strong>Details corrected</strong> · {formatDateTime(c.at)} · Reason: {c.reason}
+                <strong>Details corrected</strong> · {formatDateTime(c.at)}{c.by && ` · by ${c.by}`} · Reason: {c.reason}
                 <br />
                 {c.changes.map((x) => `${x.label}: “${x.before || 'blank'}” to “${x.after || 'blank'}”`).join('; ')}.
                 {c.licenseReviewsCleared > 0 && ' The license number changed, so the earlier license review was cleared and the license needs review again.'}
