@@ -292,6 +292,11 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return reply.status(201).send(startLists.snapshot(p.id, p.raceId));
   });
 
+  app.post('/api/events/:id/start-lists/:raceId/lock', async (req, reply) => {
+    const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
+    return reply.status(201).send(startLists.lock(p.id, p.raceId));
+  });
+
   app.get('/api/events/:id/start-lists/:raceId/csv', async (req, reply) => {
     const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
     const q = z.object({ snapshot: z.coerce.number().int().min(1).optional() }).parse(req.query);
