@@ -121,7 +121,7 @@ Implemented in the local build (November 15, 2026): `GET /api/health` runs a dat
 
 ## Access and secrets
 
-- Every person uses their own account (with MFA from Phase 3, before the live pilot), including on shared check-in tablets ([product.md](../product.md#sign-in-and-account-security)).
+- Every person uses their own account (organizers with MFA from Phase 3, before the live pilot), including on shared check-in tablets ([product.md](../product.md#sign-in-and-account-security)).
 - Give each role the least access its job needs. Remove access when a volunteer's event ends.
 - Secrets live in the hosting platform's secret store, never in the repository or in chat. Rotate them when someone with access leaves, and after any suspected exposure.
 - Access to restricted data (emergency contacts, license numbers, payment references, audit history) is logged.
