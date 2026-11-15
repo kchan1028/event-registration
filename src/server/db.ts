@@ -484,6 +484,11 @@ export const MIGRATIONS: string[] = [
     WHERE completed_at IS NULL AND cancelled_at IS NULL;
   `,
   `
+  -- How many times one rider may use a coupon. Null: no per-rider limit. A rider is matched across
+  -- orders by the same rule as same-rider suggestions (same license number, or same name and email).
+  ALTER TABLE coupons ADD COLUMN max_per_rider integer CHECK (max_per_rider > 0);
+  `,
+  `
   CREATE TABLE bib_reassignments (
     id text PRIMARY KEY,
     event_id text NOT NULL REFERENCES events(id) ON DELETE CASCADE,

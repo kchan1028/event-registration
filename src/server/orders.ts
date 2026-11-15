@@ -430,7 +430,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
 
         // A coupon is checked and counted under the same lock that takes the places, so the cap holds.
         const coupon = input.couponCode
-          ? await coupons.redeemable(eventId, input.couponCode, config.event.timeZone).catch((err: unknown) => {
+          ? await coupons.redeemable(eventId, input.couponCode, config.event.timeZone, rider).catch((err: unknown) => {
               if (err instanceof HttpError) throw new HttpError(err.status, `${err.message} Go back to Choose races and remove the code to continue. Nothing was held.`);
               throw err;
             })
@@ -510,10 +510,15 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
             !enforcesWindows(config) || ids.every((id) => { const c = config.categories.find((x) => x.id === id); return !c || windowState(c, nowLocal) === 'open'; });
           // A live offer behind this order reserves its own place; don't count it against the rider.
           const ownOffer = (await db.all<{ id: string }>(`SELECT id FROM waitlist_entries WHERE order_id = $1`, [orderId])).map((r) => r.id);
-          // The coupon's reservation ended with the hold; it confirms only if the cap still has room.
+          // The coupon's reservation ended with the hold; it confirms only if the cap and the rider's limit still have room.
           // The price accepted at the hold is kept, so a code turned off or past its window is still honored.
-          const couponRow = row.coupon_id ? await db.get<{ max_redemptions: number | null }>(`SELECT max_redemptions FROM coupons WHERE id = $1`, [row.coupon_id]) : undefined;
-          const couponRoom = !couponRow || couponRow.max_redemptions === null || (await coupons.usedCount(row.coupon_id!)) < couponRow.max_redemptions;
+          const couponRow = row.coupon_id
+            ? await db.get<{ max_redemptions: number | null; max_per_rider: number | null }>(`SELECT max_redemptions, max_per_rider FROM coupons WHERE id = $1`, [row.coupon_id])
+            : undefined;
+          const couponRoom =
+            !couponRow ||
+            ((couponRow.max_redemptions === null || (await coupons.usedCount(row.coupon_id!)) < couponRow.max_redemptions) &&
+              (couponRow.max_per_rider === null || (await coupons.riderUsedCount(row.coupon_id!, row.rider_json, orderId)) < couponRow.max_per_rider));
           next = windowsOpen && couponRoom && (await admitAll(config, row.event_id, ids, riderRef, ownOffer)).ok ? 'confirmed' : 'needs_attention';
         }
 
