@@ -39,10 +39,12 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
     const race = requireRace(config, raceId);
     const day = config.days.find((d) => d.id === race.dayId);
     const scope = bibScopeKey(await bibSettings(eventId), race.dayId);
-    const bibOf = async (orderId: string) =>
-      (await db.get<{ bib: number }>(`SELECT bib FROM bib_assignments WHERE event_id = $1 AND scope = $2 AND order_id = $3 AND released_at IS NULL`, [eventId, scope, orderId]))?.bib ?? null;
-    const checkedIn = async (orderId: string) =>
-      ((await db.get<{ n: number }>(`SELECT COUNT(*)::int AS n FROM check_ins WHERE order_id = $1 AND day_id = $2`, [orderId, race.dayId]))?.n ?? 0) > 0;
+    const activeBibs = new Map(
+      (await db.all<{ order_id: string; bib: number }>(`SELECT order_id, bib FROM bib_assignments WHERE event_id = $1 AND scope = $2 AND released_at IS NULL`, [eventId, scope])).map((r) => [r.order_id, r.bib]),
+    );
+    const checkedInIds = new Set(
+      (await db.all<{ order_id: string }>(`SELECT order_id FROM check_ins WHERE event_id = $1 AND day_id = $2`, [eventId, race.dayId])).map((r) => r.order_id),
+    );
     const rows: StartListRow[] = [];
     const riderKey = await identity.keyOf(eventId); // linked orders are one rider: same rider ID, bib, and check-in
     for (const o of await orders.listOrders(eventId)) {
@@ -63,7 +65,7 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
           classificationCode: cat.classifications[0]?.code || cat.timingCode || '',
           categoryName: cat.name,
           raceLength: formatLength(cat.length),
-          bib: await bibOf(riderKey(o.id)),
+          bib: activeBibs.get(riderKey(o.id)) ?? null,
           firstName: o.rider.firstName,
           lastName: o.rider.lastName,
           team: o.rider.team,
@@ -71,7 +73,7 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
           racingAge: o.rider.racingAge,
           competitionClass: o.rider.competitionClass ?? '',
           licenseStatus: e.licenseReviewed ? 'reviewed' : 'needs_review',
-          checkedIn: await checkedIn(riderKey(o.id)),
+          checkedIn: checkedInIds.has(riderKey(o.id)),
         });
       }
     }
