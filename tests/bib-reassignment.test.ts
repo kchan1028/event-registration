@@ -42,7 +42,7 @@ describe('protected bib reassignment', () => {
     expect(planResponse.statusCode).toBe(200);
     const plan = planResponse.json() as BibReassignmentPlan;
     expect(plan).toMatchObject({ scope: 'weekend', reason: swap.reason });
-    expect((await list(before.days[1].id)).riders.find((r) => r.orderId === alex)?.checkedInScope).toBe(true);
+    expect((await list(before.days[1].id)).checkedInScope).toContain(alex);
     expect(plan.assignments).toEqual(expect.arrayContaining([expect.objectContaining({ orderId: alex, currentBib: 100, bib: 101, checkedInDays: [before.days[0].label] }), expect.objectContaining({ orderId: blake, currentBib: 101, bib: 100, checkedInDays: [] })]));
     expect((await list()).riders.map((r) => [r.orderId, r.bib])).toEqual(original.riders.map((r) => [r.orderId, r.bib]));
     const result = await apply(swap, plan.fingerprint);

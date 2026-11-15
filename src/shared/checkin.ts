@@ -122,7 +122,8 @@ export interface CheckInList {
   races: { id: string; name: string }[];
   categories: { id: string; name: string; raceId: string }[];
   summary: { riders: number; checkedIn: number; blocked: number; bibsAssigned: number; timing: ReturnType<typeof checkInTiming> };
-  riders: (CheckInRider & { checkedInScope: boolean })[];
+  checkedInScope: string[];
+  riders: CheckInRider[];
 }
 
 export const MAX_BIB_BATCH_SIZE = 1000;

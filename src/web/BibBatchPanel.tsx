@@ -101,7 +101,7 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
   const categories = data?.categories.filter((c) => !raceId || c.raceId === raceId) ?? [];
   const riders = data?.riders.filter((r) => r.entries.some((e) =>
     (!categoryId || e.categoryId === categoryId) && (!raceId || data.categories.some((c) => c.id === e.categoryId && c.raceId === raceId)))) ?? [];
-  const selectable = riders.filter((r) => !bibBatchExclusion(r, mode) && !r.checkedInScope);
+  const selectable = riders.filter((r) => !bibBatchExclusion(r, mode) && !data!.checkedInScope.includes(r.orderId));
   const changeCount = preview?.kind === 'reassign' ? changedBibAssignments(preview.plan).length : preview?.plan.assignments.length ?? 0;
   const noun = reassigning ? 'changes' : 'assignments';
 
@@ -144,7 +144,7 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
               <th scope="row"><label className="ci-batch__choice"><input type="checkbox" disabled={busy || !!exclusion || (!selected.includes(r.orderId) && selected.length >= MAX_BIB_BATCH_SIZE)} checked={selected.includes(r.orderId)} onChange={(e) => { setSelected((ids) => e.target.checked ? [...ids, r.orderId] : ids.filter((id) => id !== r.orderId)); invalidate(); }} />{r.name}</label></th>
               <td>{r.entries.map((e) => e.categoryName).join(', ')}</td><td>{r.bib ?? 'Unassigned'}</td>
               {reassigning && choice === 'manual' && <td><input className="input ci-batch__number" inputMode="numeric" aria-label={`New bib for ${r.name}`} disabled={busy || !selected.includes(r.orderId)} value={newBibs[r.orderId] ?? ''} onChange={(e) => { setNewBibs((bibs) => ({ ...bibs, [r.orderId]: e.target.value.replace(/\D/g, '') })); invalidate(); }} /></td>}
-              <td>{exclusion ?? (reassigning ? r.checkedInScope ? 'Checked in; explicit approval required' : 'Existing assignment' : r.result.ready ? 'Available for allocation' : 'Available; readiness blocked')}</td>
+              <td>{exclusion ?? (reassigning ? data.checkedInScope.includes(r.orderId) ? 'Checked in; explicit approval required' : 'Existing assignment' : r.result.ready ? 'Available for allocation' : 'Available; readiness blocked')}</td>
             </tr>;
           })}</tbody></table>
       </div>}

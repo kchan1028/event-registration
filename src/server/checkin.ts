@@ -350,7 +350,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const s = await settings(eventId);
       const state = await dayState(eventId, day.id, bibScopeKey(s, day.id));
       const checkedInScope = new Set((await db.all<{ order_id: string }>(`SELECT DISTINCT order_id FROM check_ins WHERE event_id = $1 AND day_id = ANY($2::text[])`, [eventId, cfg.days.filter((d) => bibScopeKey(s, d.id) === bibScopeKey(s, day.id)).map((d) => d.id)])).map((r) => r.order_id));
-      const all = (await riders(eventId)).map((o) => ({ ...riderCard(o, day.id, state), checkedInScope: checkedInScope.has(o.id) })).sort((a, b) => a.name.localeCompare(b.name));
+      const all = (await riders(eventId)).map((o) => riderCard(o, day.id, state)).sort((a, b) => a.name.localeCompare(b.name));
       const enteredToday = all.filter((c) => c.entries.length > 0);
       // A search also finds riders with no entry today, so the volunteer sees why; the plain list shows only today's riders.
       const cards = q.trim() ? all.filter((c) => matches(c, q)) : enteredToday;
@@ -376,6 +376,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         categories: cfg.categories.filter((c) => cfg.races.some((r) => r.id === c.raceId && r.dayId === day.id)).map((c) => ({ id: c.id, name: c.name, raceId: c.raceId })),
         settings: s,
         summary,
+        checkedInScope: [...checkedInScope],
         riders: q.trim() ? cards.slice(0, 50) : cards,
       };
     },
