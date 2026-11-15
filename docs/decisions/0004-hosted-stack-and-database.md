@@ -43,7 +43,45 @@ Recommend **Option A**: keep the TypeScript, Node.js, and React application and 
 5. A region and data-processing terms acceptable for U.S. rider and minor data.
 6. Total monthly cost recorded and approved by the treasurer.
 
-No specific vendors are chosen here, and nothing in this ADR authorizes creating cloud resources. Before acceptance, compare at least two platform and database providers against the six requirements, with dated prices, and record them here.
+### Recommended providers (from the comparison below)
+
+**Render for the app and Render Postgres for the database, on the Pro workspace plan: about $75 a month** ($25 Pro, about $21 for two small production instances and one staging instance, $19 for a 1 GB production database, $6 for a staging database, about $3 storage). Pro gives 7-day point-in-time restore (Hobby gives 3 days) and autoscaling. One vendor, a data-processing agreement on every plan, health checks built in, and restores go to a new database, which makes rehearsals safe. This is the simplest option for volunteers.
+
+**Alternative: Render or Fly.io for the app with Neon Launch for the database, about $25 to $50 a month.** It's the cheapest pairing that still has point-in-time restore (up to 7 days on Launch), and Neon branches give cheap staging databases and restore rehearsals. Budget for Neon Scale if a SOC 2 report is needed.
+
+Nothing in this ADR authorizes creating accounts or cloud resources.
+
+## Provider comparison (sources retrieved 2026-11-14)
+
+Prices change often; recheck before budgeting. "NC" means not confirmed.
+
+| App platform | Fit against requirements 2 to 6 | 2 production + 1 staging instance | Notes |
+|---|---|---|---|
+| Render | Environments (2 on Hobby, unlimited on Pro), manual scaling on paid plans, health-check path, DPA and SOC 2 on all plans | About $21 (+$25 for Pro) | A service with a persistent disk can't run more than one instance; our app keeps no disk |
+| Fly.io | Cheap US regions; DPA through support (community source only) | About $11 | Paid support from $29/mo |
+| Railway | Replicas, logs 7 to 30 days, self-serve DPA | Usage-based, NC | Its Postgres has no point-in-time restore, so it fails requirement 1 |
+| Google Cloud Run | Request-based billing, autoscaling, US regions | NC (pricing page didn't load fully) | Would pair with Cloud SQL, not compared |
+| AWS App Runner | Closed to new customers since 2026-04-30 | n/a | Do not choose |
+| DigitalOcean App Platform | $5 smallest container; DPA published | NC (conflicting multi-instance rules) | Dev database has no backups |
+
+| PostgreSQL | Point-in-time restore | Backups | Smallest suitable cost | DPA | Notes |
+|---|---|---|---|---|---|
+| Render Postgres | Paid instances: 3 days Hobby, 7 days Pro | Logical backups 7 days | $19 (1 GB) + storage; $6 for staging | Yes | Restores to a new database |
+| Neon | Paid plans; Launch up to 7 days, Scale up to 30 | Restore history window | About $5 to $25 (usage-based estimate) | Yes | Branches for staging; SOC 2 on Scale only |
+| DigitalOcean Managed PG | Last 7 days | Daily plus write-ahead log | $15.15 | Yes | Standby price NC |
+| Supabase (database only) | Paid add-on, 7 days about $100/mo | 7 days on Pro | About $125 | Yes | Expensive for this need |
+| Crunchy Bridge | Within a 10-day window | 10 days | $70 (Hobby not for production) | NC | High availability doubles the price |
+| Fly Managed Postgres | Yes (v2 clusters) | NC | $38 + storage | See Fly | High availability included |
+| AWS RDS | Within configured retention | NC | NC (pricing didn't load) | AWS DPA | Most setup work for volunteers |
+
+Caveats:
+- None of the DPAs checked mention children. If any riders are under 13, COPPA obligations fall on the club, and a standard DPA does not cover them. Get legal review before collecting junior data in production.
+- Each staging database roughly doubles database cost; Neon branches avoid most of that.
+- Fly's restore retention and DigitalOcean's multi-instance rules are unconfirmed; ask the vendor before choosing either.
+
+Sources: render.com/pricing; render.com/docs/scaling; render.com/docs/postgresql-backups; docs.fly.io/about/pricing; docs.fly.io/mpg/overview; community.fly.io (DPA thread); fly.io/changelog/managed-postgres-point-in-time-restore; railway.com/pricing; docs.railway.com/reference/backups; railway.com/legal/dpa; cloud.google.com/run/pricing; aws.amazon.com/apprunner; AWS RDS automated backups guide; aws.amazon.com/rds/postgresql/pricing; digitalocean.com/pricing/app-platform; DigitalOcean App Platform limits; DigitalOcean PostgreSQL features; digitalocean.com/pricing/managed-databases; digitalocean.com/legal/data-processing-agreement; neon.com/pricing; neon.com/docs/introduction/branching; neon.com/dpa; supabase.com/pricing; supabase.com/docs/guides/platform/backups; supabase.com/legal/dpa; docs.crunchybridge.com plans and backups pages.
+
+Before acceptance: the treasurer approves the monthly cost, and legal review covers minors' data.
 
 ## Consequences
 
