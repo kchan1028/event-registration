@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
 import { checkSignature, findConflicts, formatLocalDateTime, MESSAGES, riderDetailsSchema, windowMessage, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
 import { evaluateCategory, summarizeEligibility, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
@@ -37,6 +38,8 @@ interface Draft {
   /** Private link token from a waitlist offer; lets this rider take the reserved place. */
   offerToken?: string | null;
   offerCategoryId?: string | null;
+  /** Answers to per-category questions and accepted category waiver addenda. */
+  extras?: OrderExtras;
 }
 
 const EMPTY_PROFILE: RiderProfile = { racingAge: null, licenseCategory: null, licenseType: null, competitionClass: null, collegiateDivision: null };
@@ -766,14 +769,25 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
   const g = d.guardian ?? { name: '', relationship: '', email: '', phone: '' };
   const setG = (p: Partial<typeof g>) => set({ guardian: { ...g, ...p } });
 
+  const extras = draft.extras ?? EMPTY_EXTRAS;
+  const questionCats = draft.selected.map((id) => config.categories.find((c) => c.id === id)).filter((c): c is NonNullable<typeof c> => !!c && (c.questions ?? []).length > 0);
+  const setAnswer = (catId: string, qId: string, value: string) =>
+    update((x) => {
+      const ex = x.extras ?? EMPTY_EXTRAS;
+      return { ...x, extras: { ...ex, answers: { ...ex.answers, [catId]: { ...(ex.answers[catId] ?? {}), [qId]: value } } } };
+    });
+
   const submit = () => {
     const parsed = riderDetailsSchema.safeParse(riderFrom(draft, needsGuardian));
+    const errs: Record<string, string> = {};
     if (!parsed.success) {
-      const errs: Record<string, string> = {};
       for (const i of parsed.error.issues) {
         const k = i.path.join('.');
         if (!errs[k]) errs[k] = i.message;
       }
+    }
+    for (const p of checkExtras(config, draft.selected, extras).filter((x) => x.field.startsWith('q-'))) if (!errs[p.field]) errs[p.field] = p.message;
+    if (Object.keys(errs).length > 0) {
       setErrors(errs);
       return;
     }
@@ -781,7 +795,7 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
     update((x) => ({ ...x, step: 'waiver', reached: Math.max(x.reached, 2) }));
   };
 
-  const summary = Object.entries(errors).map(([k, message]) => ({ id: FIELD_IDS[k] ?? 'f-first-name', message }));
+  const summary = Object.entries(errors).map(([k, message]) => ({ id: FIELD_IDS[k] ?? (k.startsWith('q-') ? k : 'f-first-name'), message }));
 
   return (
     <form
@@ -818,6 +832,33 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
           {(id, dsc) => <input id={id} aria-describedby={dsc} className="input input--code" value={d.licenseNumber} onChange={(e) => set({ licenseNumber: e.target.value })} />}
         </Field>
       </div>
+      {questionCats.map((cat) => (
+        <fieldset className="subfields" key={cat.id}>
+          <legend>Questions for {cat.name}</legend>
+          {(cat.questions ?? []).map((q) => {
+            const fid = `q-${cat.id}-${q.id}`;
+            const value = extras.answers[cat.id]?.[q.id] ?? '';
+            return (
+              <Field key={q.id} label={`${q.label}${q.required ? ' (required)' : ' (optional)'}`} id={fid} error={errors[fid]}>
+                {(id, dsc) =>
+                  q.options.length > 0 ? (
+                    <select id={id} aria-describedby={dsc} aria-invalid={!!errors[fid] || undefined} className="input" value={value} onChange={(e) => setAnswer(cat.id, q.id, e.target.value)}>
+                      <option value="">Choose…</option>
+                      {q.options.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input id={id} aria-describedby={dsc} aria-invalid={!!errors[fid] || undefined} className="input" maxLength={500} value={value} onChange={(e) => setAnswer(cat.id, q.id, e.target.value)} />
+                  )
+                }
+              </Field>
+            );
+          })}
+        </fieldset>
+      ))}
       <div className="summary-line">
         <p>
           Racing age <strong className="num">{draft.profile.racingAge}</strong> · License{' '}
@@ -888,8 +929,17 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
     if (el && el.scrollHeight <= el.clientHeight + 4) setW({ read: true }); // nothing to scroll
   }, []);
 
+  const extras = draft.extras ?? EMPTY_EXTRAS;
+  const addendumCats = draft.selected.map((id) => config.categories.find((c) => c.id === id)).filter((c): c is NonNullable<typeof c> => !!c?.addendum);
+  const toggleAddendum = (catId: string, on: boolean) =>
+    update((x) => {
+      const ex = x.extras ?? EMPTY_EXTRAS;
+      return { ...x, extras: { ...ex, addenda: on ? [...new Set([...ex.addenda, catId])] : ex.addenda.filter((a) => a !== catId) } };
+    });
+
   const hold = async () => {
     const errs: { id: string; message: string }[] = [];
+    for (const p of checkExtras(config, draft.selected, extras).filter((x) => x.field.startsWith('addendum-'))) errs.push({ id: p.field, message: p.message });
     if (!w.read) errs.push({ id: 'f-waiver-read', message: MESSAGES.waiverRead });
     if (!w.signatureName.trim()) errs.push({ id: 'f-signature', message: MESSAGES.waiverSignature });
     else if (checkSignature(draft.details, { signatureName: w.signatureName, signerRole: needsGuardian ? 'guardian' : 'rider' }, needsGuardian)) errs.push({ id: 'f-signature', message: MESSAGES.signatureMismatch });
@@ -904,6 +954,7 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
         rider: riderFrom(draft, needsGuardian) as RiderDetails,
         waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: w.signatureName.trim(), signerRole: needsGuardian ? 'guardian' : 'rider' },
         offerToken: draft.offerToken ?? null,
+        extras,
       });
       update((x) => ({ ...x, orderId: order.id, step: 'review', reached: Math.max(x.reached, 3) }));
     } catch (e) {
@@ -936,6 +987,18 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
       <label className="check">
         <input id="f-waiver-read" type="checkbox" checked={w.read} onChange={(e) => setW({ read: e.target.checked })} />I have read the whole waiver
       </label>
+      {addendumCats.map((cat) => (
+        <fieldset className="subfields" key={cat.id}>
+          <legend>
+            {cat.addendum!.title} ({cat.name})
+          </legend>
+          <p className="small addendum-text">{cat.addendum!.text}</p>
+          <label className="check">
+            <input id={`addendum-${cat.id}`} type="checkbox" checked={extras.addenda.includes(cat.id)} onChange={(e) => toggleAddendum(cat.id, e.target.checked)} />
+            {needsGuardian ? 'As parent or guardian, I accept this for the rider' : 'I accept this'}
+          </label>
+        </fieldset>
+      ))}
       <fieldset className="subfields" disabled={!w.read}>
         <legend>{needsGuardian ? 'Signature of parent or guardian' : 'Your signature'}</legend>
         {!w.read && <p className="muted small">Scroll to the end of the waiver, or tick the box above, to sign.</p>}

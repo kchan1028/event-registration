@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { usageForCategory } from '../shared/capacity';
 import { summarizePath } from '../shared/eligibility';
-import { blankPath, duplicateCategory, updateCategory } from '../shared/factory';
+import { blankPath, duplicateCategory, newId, updateCategory } from '../shared/factory';
 import { formatTime } from '../shared/format';
 import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, type Category, type EligibilityPath, type RaceLength } from '../shared/schema';
 import { ApiError } from './api';
@@ -240,6 +240,76 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
         </label>
         <CapacityUsage draft={draft} categoryId={cat.id} />
         <TestEntries draft={draft} categoryId={cat.id} disabled={cat.status !== 'active'} />
+      </section>
+
+      <section className="editor__section" aria-labelledby={`${cat.id}-extras`}>
+        <h3 id={`${cat.id}-extras`}>Rider questions, waiver addendum, bib range</h3>
+        <p className="editor__help">Asked or applied only for riders entering this category.</p>
+        {(cat.questions ?? []).map((q, i) => (
+          <div className="extra-q" key={q.id}>
+            <Field label={`Question ${i + 1}`}>
+              {(id) => (
+                <input id={id} className="input" value={q.label} maxLength={120} placeholder="For example: Club or school" onChange={(e) => set((c) => ({ ...c, questions: (c.questions ?? []).map((x) => (x.id === q.id ? { ...x, label: e.target.value } : x)) }))} />
+              )}
+            </Field>
+            <Field label="Answers to choose from" hint="Comma-separated. Leave blank for a free-text answer.">
+              {(id, d) => (
+                <input
+                  id={id}
+                  aria-describedby={d}
+                  className="input"
+                  defaultValue={q.options.join(', ')}
+                  onBlur={(e) => {
+                    const options = [...new Set(e.target.value.split(',').map((x) => x.trim()).filter(Boolean))].slice(0, 10);
+                    set((c) => ({ ...c, questions: (c.questions ?? []).map((x) => (x.id === q.id ? { ...x, options } : x)) }));
+                  }}
+                />
+              )}
+            </Field>
+            <label className="check">
+              <input type="checkbox" checked={q.required} onChange={(e) => set((c) => ({ ...c, questions: (c.questions ?? []).map((x) => (x.id === q.id ? { ...x, required: e.target.checked } : x)) }))} />
+              Required
+            </label>
+            <button className="btn btn--ghost btn--small" onClick={() => set((c) => ({ ...c, questions: (c.questions ?? []).filter((x) => x.id !== q.id) }))}>
+              <Icon name="trash" /> Remove question
+            </button>
+          </div>
+        ))}
+        {(cat.questions ?? []).length < 5 && (
+          <button className="btn btn--ghost btn--small" onClick={() => set((c) => ({ ...c, questions: [...(c.questions ?? []), { id: newId('q'), label: '', required: false, options: [] }] }))}>
+            <Icon name="plus" /> Add a rider question
+          </button>
+        )}
+
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={!!cat.addendum}
+            onChange={(e) => set((c) => ({ ...c, addendum: e.target.checked ? { title: 'Category rules', text: 'Riders in this category agree to the following:' } : null }))}
+          />
+          Riders must accept a waiver addendum for this category
+        </label>
+        {cat.addendum && (
+          <>
+            <Field label="Addendum title">
+              {(id) => <input id={id} className="input" value={cat.addendum!.title} maxLength={80} onChange={(e) => set((c) => ({ ...c, addendum: { ...c.addendum!, title: e.target.value } }))} />}
+            </Field>
+            <Field label="Addendum text" hint="Shown on the waiver step; the rider ticks a box to accept it.">
+              {(id, d) => <textarea id={id} aria-describedby={d} className="input" rows={4} maxLength={4000} value={cat.addendum!.text} onChange={(e) => set((c) => ({ ...c, addendum: { ...c.addendum!, text: e.target.value } }))} />}
+            </Field>
+          </>
+        )}
+
+        <div className="form-row form-row--tight">
+          <Field label="Bib range: first" hint="Blank: use the event or day range.">
+            {(id, d) => (
+              <IntInput id={id} describedBy={d} value={cat.bibRange?.first ?? null} min={1} max={99999} onCommit={(v) => set((c) => ({ ...c, bibRange: v === null ? null : { first: v, last: c.bibRange?.last ?? v + 99 } }))} />
+            )}
+          </Field>
+          <Field label="Bib range: last">
+            {(id) => <IntInput id={id} value={cat.bibRange?.last ?? null} min={1} max={99999} onCommit={(v) => set((c) => ({ ...c, bibRange: v === null ? null : { first: c.bibRange?.first ?? Math.max(1, v - 99), last: v } }))} />}
+          </Field>
+        </div>
       </section>
 
       <section className="editor__section" aria-labelledby={`${cat.id}-class`}>

@@ -72,6 +72,8 @@ export interface PublicEventSummary {
 }
 
 export interface OrderView {
+  answers: { categoryId: string; category: string; label: string; answer: string }[];
+  addenda: { categoryId: string; title: string }[];
   id: string;
   orderNumber: string;
   eventId: string;
@@ -251,7 +253,7 @@ export const api = {
   offerWaitlistPlace: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer`),
   removeFromWaitlist: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/remove`),
   publicEvent: (id: string) => request<PublicEvent>('GET', `/api/public/events/${id}`),
-  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null }) =>
+  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null; extras?: { answers: Record<string, Record<string, string>>; addenda: string[] } }) =>
     request<OrderView>('POST', `/api/public/events/${eventId}/orders`, body),
   order: (id: string) => request<OrderView>('GET', `/api/orders/${id}`),
   pay: (id: string, attemptId: string, outcome: 'success' | 'failure') => request<OrderView>('POST', `/api/orders/${id}/payment`, { attemptId, outcome }),

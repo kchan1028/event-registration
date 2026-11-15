@@ -70,6 +70,15 @@ export const categorySchema = z.object({
   startGroupId: id.nullable(),
   /** Organizer-managed waitlist when the category is full (product.md capacity rules). Off unless set. */
   waitlistEnabled: z.boolean().optional(),
+  /** Extra questions riders in this category answer at checkout. Free text when there are no options. */
+  questions: z
+    .array(z.object({ id, label: z.string().max(120), required: z.boolean(), options: z.array(z.string().trim().min(1).max(60)).max(10) }))
+    .max(5)
+    .optional(),
+  /** Category waiver addendum riders accept on top of the event waiver (for example junior gear rules). */
+  addendum: z.object({ title: z.string().max(80), text: z.string().max(4000) }).nullable().optional(),
+  /** Bib range for this category; overrides the event or day range at check-in. */
+  bibRange: z.object({ first: z.number().int().min(1).max(99999), last: z.number().int().min(1).max(99999) }).nullable().optional(),
   classifications: z.array(z.object({ code: z.string().max(24), label: z.string().max(80) })).max(4),
   dualScoringApproved: z.boolean(),
   prizeText: z.string().max(500),

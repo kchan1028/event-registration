@@ -158,6 +158,17 @@ export function validateConfig(config: EventConfig, entries: readonly TestEntry[
       const used = distinctRiders(entries, [cat.id]).size;
       if (cat.cap < used) add('error', `cat.${cat.id}.below-entries`, `${name}: cap ${cat.cap} is below the ${used} riders already entered.`, t);
     }
+
+    if (cat.addendum && (!cat.addendum.title.trim() || !cat.addendum.text.trim())) add('error', `cat.${cat.id}.addendum`, `${name}: the waiver addendum needs a title and text.`, t);
+    if (cat.bibRange) {
+      if (cat.bibRange.first > cat.bibRange.last) add('error', `cat.${cat.id}.bib-range`, `${name}: bib range starts at ${cat.bibRange.first}, after it ends at ${cat.bibRange.last}.`, t);
+      const overlap = active.find((o) => o.id !== cat.id && o.bibRange && o.bibRange.first <= cat.bibRange!.last && cat.bibRange!.first <= o.bibRange.last);
+      if (overlap && cat.id < overlap.id) add('warning', `cat.${cat.id}.bib-overlap`, `${name}: bib range overlaps ${overlap.name || 'another category'}. Riders in both share one pool of numbers.`, t);
+    }
+    for (const q of cat.questions ?? []) {
+      if (!q.label.trim()) add('error', `cat.${cat.id}.q-label.${q.id}`, `${name}: a rider question has no wording.`, t);
+      if (q.options.length === 1) add('warning', `cat.${cat.id}.q-one-option.${q.id}`, `${name}: question "${q.label}" has only one answer to choose.`, t);
+    }
   }
 
   // Registration settings: bundles, rider policies

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { bibScopeKey, bibSettingsSchema, checkInResult, checkInTiming, DEFAULT_BIB_SETTINGS, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
+import { categoryBibRange } from '../shared/categoryExtras';
 import { checkSelection, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { evaluateCategory } from '../shared/eligibility';
 import { newId } from '../shared/factory';
@@ -73,7 +74,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       team: o.rider.team,
       racingAge: o.rider.racingAge,
       payment,
-      entries: today.map((e) => ({ id: e.id, categoryName: e.categoryName, code: e.code, raceName: e.raceName, startTime: e.startTime })),
+      entries: today.map((e) => ({ id: e.id, categoryId: e.categoryId, categoryName: e.categoryName, code: e.code, raceName: e.raceName, startTime: e.startTime })),
       readiness,
       result,
       bib: activeBib(o.eventId, scope, o.id),
@@ -128,9 +129,17 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   }
 
   /** Assign a bib inside the configured range without colliding with an active one. */
+  /** The category bib range for the rider's races that day (earliest start first), if any category sets one. */
+  function categoryRange(eventId: string, orderId: string, dayId: string) {
+    const cfg = config(eventId);
+    const card = cardFor(eventId, orderId, dayId);
+    return categoryBibRange(card.entries.map((e) => ({ id: e.categoryId, bibRange: cfg.categories.find((c) => c.id === e.categoryId)?.bibRange ?? null, startTime: e.startTime })));
+  }
+
   function assign(eventId: string, orderId: string, dayId: string, s: BibSettings, requested: number | null): number {
     const scope = bibScopeKey(s, dayId);
-    const range = rangeFor(s, dayId);
+    const catRange = categoryRange(eventId, orderId, dayId);
+    const range = catRange ? { scope, ...catRange } : rangeFor(s, dayId);
     if (!range) throw new HttpError(409, 'No bib range is set for this day. Set bib ranges before checking riders in.');
     const taken = takenBibs(eventId, scope);
     let bib: number | null = requested;

@@ -2,7 +2,7 @@
 
 This describes the database the local prototype uses today. It covers tables, relationships, important fields, constraints, and what happens when data is removed. The intended product data model, including entities that are not built yet, is in [product.md](product.md#data-model) and [product.md](product.md#data-storage).
 
-**Status:** Implemented (local prototype). Describes schema version 10 (ten migrations) as of November 14, 2026.
+**Status:** Implemented (local prototype). Describes schema version 11 (eleven migrations) as of November 14, 2026.
 
 **Source of truth:** the migrations in [src/server/db.ts](src/server/db.ts) and the event configuration schema in [src/shared/schema.ts](src/shared/schema.ts). If this file disagrees with them, the code wins; fix this file in the same change.
 
@@ -114,6 +114,7 @@ A rider's checkout in the prototype. Payment is simulated; no money moves.
 | `rider_json` | Rider details: name, email, phone, team, racing age, license category, type and number, competition class, collegiate division, emergency contact, and optional guardian. This is the only place rider personal data is stored |
 | `waiver_json` | Waiver version, read and agreed flags, typed signature name, and whether the rider or a guardian signed |
 | `quote_json` | Price breakdown shown at checkout, so the accepted price stays on record |
+| `extras_json` | Migration 11. Answers to per-category questions (`answers`: category ID → question ID → text) and the category IDs whose waiver addendum the rider accepted (`addenda`). Null on older orders, read as none |
 | `total_cents` | Order total |
 | `hold_expires_at` | When held places are released (default 10 minutes after the order; `HOLD_MINUTES` overrides) |
 | `check_in_code` | Set when the order is confirmed |
@@ -296,7 +297,7 @@ Suggested matches the organizer marked as different riders (migration 10), so th
 | `races` | Up to 20 races, each on a day, road race or criterium |
 | `displayGroups` | Up to 40 headers that group categories for display; they never set limits |
 | `startGroups` | Up to 100, each in a race, with start and staging times and an optional field limit |
-| `categories` | Up to 300; each has eligibility paths, pricing and price changes, a registration window, race length, classifications, a start group, an optional `waitlistEnabled` flag (off when absent), and a status of `active`, `closed`, or `archived` |
+| `categories` | Up to 300; each has eligibility paths, pricing and price changes, a registration window, race length, classifications, a start group, an optional `waitlistEnabled` flag (off when absent), optional `questions` (up to 5: wording, required, and answer choices or free text), an optional `addendum` (title and text the rider accepts), an optional `bibRange` (first and last, used at check-in instead of the event or day range), and a status of `active`, `closed`, or `archived` |
 | `capacityPools` | Up to 50 shared limits over listed categories and start groups |
 
 The Berkeley demo seeds $80 road race and $60 criterium base prices and a fixed $130 bundle (`priceCents: 13000`, `discountCents: 0`); the fixed price takes precedence over a discount amount. Existing drafts and published orders are not migrated.
