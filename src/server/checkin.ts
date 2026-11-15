@@ -163,9 +163,14 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   }
 
   /** Preview uses the same event lock and allocation rules as apply. No bib changes here. */
-  async function bibPlan(eventId: string, dayId: string, orderIds: string[]) {
+  type BibBatch = { dayId: string; orderIds: string[]; raceId?: string; categoryId?: string; sort?: 'name' | 'registration' | 'start' };
+  async function bibPlan(eventId: string, batch: BibBatch) {
+    const { dayId, orderIds, raceId, categoryId } = batch;
+    const sort = batch.sort ?? 'name';
     const cfg = await config(eventId);
     requireDay(cfg, dayId);
+    if (raceId && !cfg.races.some((r) => r.id === raceId && r.dayId === dayId)) throw new HttpError(422, 'The selected race is not on this day.');
+    if (categoryId && !cfg.categories.some((c) => c.id === categoryId && (!raceId || c.raceId === raceId) && cfg.races.some((r) => r.id === c.raceId && r.dayId === dayId))) throw new HttpError(422, 'The selected category is not in this race day and scope.');
     const s = await settings(eventId);
     const scope = bibScopeKey(s, dayId);
     const requested = new Set(orderIds);
@@ -181,8 +186,20 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       if (!o) throw new HttpError(404, 'A selected rider was not found.');
       const card = riderCard(o, dayId, state);
       if (o.status !== 'confirmed' || card.entries.length === 0 || card.bib !== null) throw new HttpError(409, 'Select confirmed, unassigned riders entered on this day.');
+      if (categoryId && !card.entries.some((e) => e.categoryId === categoryId)) throw new HttpError(409, 'A selected rider is not entered in the chosen category.');
+      if (raceId && !card.entries.some((e) => cfg.categories.some((c) => c.id === e.categoryId && c.raceId === raceId))) throw new HttpError(409, 'A selected rider is not entered in the chosen race.');
       return { o, card };
-    }).sort((a, b) => a.o.rider.lastName.localeCompare(b.o.rider.lastName) || a.o.rider.firstName.localeCompare(b.o.rider.firstName) || a.o.id.localeCompare(b.o.id));
+    }).sort((a, b) => {
+      const byName = () => a.o.rider.lastName.localeCompare(b.o.rider.lastName) || a.o.rider.firstName.localeCompare(b.o.rider.firstName);
+      const firstStart = (card: typeof a.card) => card.entries
+        .filter((e) => !categoryId || e.categoryId === categoryId)
+        .filter((e) => !raceId || cfg.categories.some((c) => c.id === e.categoryId && c.raceId === raceId))
+        .map((e) => `${e.startTime ?? '99:99'}\u0000${e.code}`)
+        .sort()[0] ?? '';
+      const byStart = () => firstStart(a.card).localeCompare(firstStart(b.card)) || byName();
+      const primary = sort === 'registration' ? a.o.createdAt.localeCompare(b.o.createdAt) : sort === 'start' ? byStart() : byName();
+      return primary || a.o.id.localeCompare(b.o.id);
+    });
     const assignments = [];
     for (const { o, card } of sorted) {
       const catRange = categoryBibRange(card.entries.map((e) => ({ id: e.categoryId, bibRange: cfg.categories.find((c) => c.id === e.categoryId)?.bibRange ?? null, startTime: e.startTime })));
@@ -193,21 +210,21 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       taken.add(bib);
       assignments.push({ orderId: o.id, name: card.name, bib, range: { first: range.first, last: range.last } });
     }
-    const fingerprint = createHash('sha256').update(JSON.stringify({ eventId, dayId, scope, settings: s, assigned: [...state.bibs.values()].flat().filter((b) => b.released_at === null).map((b) => [b.order_id, b.bib]).sort(), assignments })).digest('hex');
-    return { dayId, scope, assignments, fingerprint };
+    const fingerprint = createHash('sha256').update(JSON.stringify({ eventId, dayId, raceId, categoryId, sort, scope, settings: s, assigned: [...state.bibs.values()].flat().filter((b) => b.released_at === null).map((b) => [b.order_id, b.bib]).sort(), assignments })).digest('hex');
+    return { dayId, raceId: raceId ?? null, categoryId: categoryId ?? null, sort, scope, assignments, fingerprint };
   }
 
   return {
-    async previewBibs(eventId: string, dayId: string, orderIds: string[]) {
+    async previewBibs(eventId: string, batch: BibBatch) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
-        return bibPlan(eventId, dayId, orderIds);
+        return bibPlan(eventId, batch);
       });
     },
-    async applyBibs(eventId: string, dayId: string, orderIds: string[], fingerprint: string) {
+    async applyBibs(eventId: string, batch: BibBatch, fingerprint: string) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
-        const plan = await bibPlan(eventId, dayId, orderIds);
+        const plan = await bibPlan(eventId, batch);
         if (plan.fingerprint !== fingerprint) throw new HttpError(409, 'Bib preview changed. Review a new preview before applying.');
         for (const item of plan.assignments) {
           await db.run(`INSERT INTO bib_assignments (id, event_id, scope, order_id, bib, assigned_at) VALUES ($1, $2, $3, $4, $5, $6)`, [newId('bib'), eventId, plan.scope, item.orderId, item.bib, nowIso()]);

@@ -84,6 +84,45 @@ describe('check-in API', () => {
     expect((await list()).riders.find((r) => r.orderId === rider('Blake').orderId)?.bib).toBeNull();
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload: { ...payload, orderIds: [rider('Blake').orderId, rider('Dana').orderId] } })).statusCode).toBe(409);
   });
+
+  it('binds race/category and sort choices to the preview', async () => {
+    const { app, eventId, first, rider, setBibs } = await setup();
+    await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
+    const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: { categories: { id: string; raceId: string }[] } };
+    const alex = rider('Alex').orderId;
+    const card = first.riders.find((r) => r.orderId === alex) as Card & { entries: { categoryId: string }[] };
+    const categoryId = card.entries[0].categoryId;
+    const raceId = event.config.categories.find((c) => c.id === categoryId)!.raceId;
+    const payload = { dayId: first.dayId, orderIds: [alex], categoryId, raceId, sort: 'registration' };
+    const preview = await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload });
+    expect(preview.statusCode).toBe(200);
+    const plan = preview.json() as { fingerprint: string; categoryId: string; raceId: string; sort: string };
+    expect(plan).toMatchObject({ categoryId, raceId, sort: 'registration' });
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/apply`, payload: { ...payload, sort: 'start', fingerprint: plan.fingerprint } })).statusCode).toBe(409);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload: { ...payload, categoryId: 'cat_missing' } })).statusCode).toBe(422);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/apply`, payload: { ...payload, fingerprint: plan.fingerprint } })).statusCode).toBe(200);
+  });
+  it('orders a multi-rider batch by name, registration, or start time', async () => {
+    const { app, eventId, first, rider, setBibs } = await setup();
+    await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
+    const alex = rider('Alex').orderId;
+    const blake = rider('Blake').orderId;
+    const orderIds = [blake, alex];
+    for (const [sort, expected] of [
+      ['name', [alex, blake]],
+      // The fixture clock is fixed, so registration timestamps tie.
+      ['registration', [...orderIds].sort()],
+      // Blake starts at 08:05; Alex starts at 09:30.
+      ['start', [blake, alex]],
+    ] as const) {
+      const response = await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload: { dayId: first.dayId, orderIds, sort } });
+      expect(response.statusCode).toBe(200);
+      const plan = response.json() as { assignments: { orderId: string; bib: number }[] };
+      expect(plan.assignments.map((a) => a.orderId)).toEqual(expected);
+      expect(plan.assignments.map((a) => a.bib)).toEqual([100, 101]);
+    }
+  });
+
   it('seeds fictional riders with ready and blocked cases', async () => {
     const { seeded, first } = await setup();
     expect(seeded.statusCode).toBe(201);
