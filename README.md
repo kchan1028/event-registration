@@ -222,10 +222,11 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | Start lists and sample timer export | Implemented November 14, 2026; see [roadmap.md](roadmap.md#start-lists-and-timer-export) |
 | Race-day check-in prototype | Implemented November 14, 2026; see [roadmap.md](roadmap.md#check-in-prototype) |
 | Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; used by the rider demo |
+| Phase 1 usability test kit | Implemented November 14, 2026; no sessions run yet. See [docs/usability/](docs/usability/README.md) |
 | Stack | Chosen for the prototype only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
-| Rider checkout, payments, USA Cycling checks, sign-in with MFA, hosting | Not built |
+| Real payments, USA Cycling checks, sign-in with MFA, hosting | Not built |
 
-**Next milestone: Phase 0 exit gate, plus the rest of Phase 1.** Phase 0 shows whether a recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup; if not, the roadmap says to stop the build. The remaining Phase 1 work is a clickable rider checkout and check-in prototype, sample timer exports, and a usability test where the registration lead recreates an anonymized real schedule in the category builder. The first actions are in [roadmap.md](roadmap.md#next-actions).
+**Next milestone: Phase 0 exit gate, plus the rest of Phase 1.** Phase 0 shows whether a recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup; if not, the roadmap says to stop the build. Every Phase 1 prototype is built. What remains for the Phase 1 exit gate is running the usability tests with the [test kit](docs/usability/README.md) and getting the timer to accept the sample export format. The first actions are in [roadmap.md](roadmap.md#next-actions).
 
 ## Documentation
 
@@ -246,7 +247,8 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [docs/content-guide.md](docs/content-guide.md) | Rules for future public pages, including SEO, answer engines, and structured data |
 | [docs/operations.md](docs/operations.md) | Proposed operating model: support owners, incident severity, freezes, monitoring, backups, and handoff |
 | [docs/decisions/README.md](docs/decisions/README.md) | Architecture decision records, including [0001](docs/decisions/0001-stack-for-category-builder-milestone.md), and the backlog of unresolved decisions |
-| [docs/fixtures/README.md](docs/fixtures/README.md) | Fake demonstration data and sample waiver text for the planned Phase 1 demo purchase flow |
+| [docs/fixtures/README.md](docs/fixtures/README.md) | Fake demonstration data and sample waiver text used by the rider demo |
+| [docs/usability/README.md](docs/usability/README.md) | Phase 1 usability test kit: recruiting, setup, facilitator script, tasks, scoring, and results summary |
 
 ## Contributing
 
