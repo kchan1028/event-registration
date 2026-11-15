@@ -67,6 +67,21 @@ Details: [check-in status](roadmap.md#check-in-prototype) and [start-list status
 
 An event package contains entries in several races within one event, such as an omnium or stage race. A Planned bundle / season pass spans selected events and can include different organizations. The current UI and schema call same-event packages “bundles”; they do not support season passes. No implementation or database migration is implied by this terminology change.
 
+## Berkeley weekend expert review
+
+Status: Expert review, November 14, 2026; no participant results or official Berkeley partnership. The [code-based case study](docs/usability/pilot-run-2026-11-14.md#berkeley-weekend-case-study-code-based-expert-review) traces organizer setup, both-day entry, a second criterium category, a parent/junior, full capacity, and blocked check-in. The [initial study](docs/usability/README.md#berkeley-weekend-initial-round) is Planned.
+
+| Capability | Current limitation or gap |
+|---|---|
+| $130 same-event weekend package; $20 additional criterium entry | Pre-race demo example is $150 for road + two nonconflicting criterium categories, with separate package/extra-entry reductions. Package pricing is automatic; the intent checkbox only helps browser completeness. Separate-event packages/season passes are not supported. |
+| Structured eligibility and schedule checks | Self-reported match is not license verification. Same-start/overlap blocks; short recovery warns. Draft source rules, road start/staging assumptions, and unset road field limits need organizer/official review. |
+| Junior guardian flow | Implemented for guardian-flagged categories; a minor entering an adult category can bypass guardian handling. Correctness gap, not live-ready minor protection. |
+| Atomic holds, retries, full-category handling, waitlists | Local transactions and simulated payment only; no real Stripe settlement or automated offer delivery. Organizer-confirmed rider linking works after orders exist, but checkout cannot safely assume two separate orders are the same rider when enforcing capacity. |
+| Independent readiness and blocked bib issuance | Unreviewed license can remain outstanding after simulated payment. New checkout requires the sample waiver, so missing-waiver desk resolution cannot be rehearsed end-to-end with ordinary checkout; accepted electronic/paper workflow is still required. |
+| Responsive themes and error recovery | Automated checks are not participant evidence. Manual keyboard, screen-reader, real-phone, recovery, and sunlight checks remain open. Liquid Glass is Planned and must keep forms, prices, and tables opaque under [DESIGN.md](DESIGN.md). |
+
+Priorities and measurable gates belong in the [roadmap](roadmap.md#berkeley-weekend-review-priorities), and requirements in the [product acceptance criteria](product.md#berkeley-weekend-acceptance-criteria). USAC platform/waiver acceptance, license access or accepted manual fallback, and real payment operations are external dependencies, not features enabled by the demo.
+
 ## Planned features
 
 These are not available in the prototype. Phase order and dependencies remain in [roadmap.md](roadmap.md).

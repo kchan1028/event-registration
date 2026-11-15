@@ -105,3 +105,46 @@ Phase 1 usability part of the exit gate:  met / not met
 Remaining for the exit gate: timer accepts the sample format (yes / no), scope fits the team (yes / no)
 Signed off by (role): ______________     Date: __________
 ```
+
+## Berkeley initial-round addendum
+
+Status: Blank template for the Planned initial round; no participant results. Use the existing consent, outcome, prompt/rescue, and critical-blocker fields. Keep named contact lists and completed sheets outside the repository.
+
+```text
+Module: Berkeley initial round     Commit/version: _______________
+Task/state variant: B___ / standard | full | blocked | ready control
+Quote date / time zone: ___________   Expected total: _____________
+Prepared capacity and price changes: _____________________________
+Outcome S/SP/A/F: ____   Attempted / omitted (reason): ____________
+Start: ______  End: ______  Elapsed seconds: ______
+Interruption seconds and reason: _________________________________
+Wrong categories/edits: ___  Validation errors: ___  Retry errors: ___
+Neutral prompts: ___  Rescues: ___  Unresolved errors at end: ___
+Details or selections lost? ______________________________________
+Keyboard / screen-reader / zoom access failure: ___________________
+Unaided teach-back (record exact answer before prompting):
+  Included races/dates: ____________ Correct / incorrect / not asked
+  Total and fees: __________________ Correct / incorrect / not asked
+  Package versus extra-entry saving: _ Correct / incorrect / not asked
+  Registration/payment versus clearance: Correct / incorrect / not asked
+  Outstanding action and responsible role: _________________________
+Known unavailable workflow encountered (not participant error): ___
+Missing-waiver card: comprehension only, never UI completion: ______
+Hypothesis supported / contradicted / unresolved, with behavior: ___
+```
+
+### Initial-round summary template
+
+Do not fill with expert predictions. Use participant codes and aggregate counts after sessions only. Report this separately from the Phase 1 gate table above.
+
+| Task | Role | Attempts / omitted | S | SP | A | F | Wrong actions / errors | Prompts / rescues | Median / range seconds | Correct price teach-back / asked | Correct clearance teach-back / asked |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| B1 Setup | Staff | | | | | | | | | | |
+| B2 Both days | Rider | | | | | | | | | | |
+| B3 Extra category / recovery | Rider | | | | | | | | | | |
+| B4 Parent / junior | Rider/parent | | | | | | | | | | |
+| B5 Full field | Rider | | | | | | | | | | |
+| B6 Blocked check-in | Staff | | | | | | | | | | |
+| B6 Ready control | Staff | | | | | | | | | | |
+
+Record panel composition, unique participants, devices/themes, assistive settings, interruptions, and state differences. List the hypothetical missing-waiver answers separately. Report failures and assisted attempts as well as successes; do not calculate successful-task times as if they represent all attempts. Use the critical-blocker table above for every unsafe misunderstanding and its later fix/re-test. The initial round can guide priorities; it cannot itself mark Phase 1 Verified.

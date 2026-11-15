@@ -408,6 +408,24 @@ Acceptance: a walk-up rider can register, satisfy or be routed for required chec
 | Switch display theme | First visit follows the device's light or dark setting; the rider or volunteer can switch with a visible toggle; the choice persists on that device; text, form fields, buttons, focus indicators, errors, and status indicators meet contrast targets in both themes |
 | Sign in with MFA | No account of any type reaches signed-in pages without completing a second factor; organizer sensitive actions prompt re-verification; recovery without recovery codes is audited and cannot be self-served by the first factor alone |
 
+### Berkeley weekend acceptance criteria
+
+Status: Planned acceptance refinements from the [code-based expert review](docs/usability/pilot-run-2026-11-14.md#berkeley-weekend-case-study-code-based-expert-review), not participant findings. Berkeley is a reference scenario, not an official partnership or approved race schedule. Riders need correct choices and a predictable total; parents need clear signer responsibility; organizers need correct shared fields; volunteers need an unmistakable reason and next step when a paid rider cannot race.
+
+| Workflow | Measurable acceptance requirement |
+|---|---|
+| Configure Saturday road / Sunday criterium | Without developer intervention, configure structured eligibility, dates, time zone, separate staging/start times, category caps, shared start limits, and $80/$60 demo prices with a $130 event package. Preview both days and publish only after errors are fixed and warnings acknowledged. Display groups create no limit. Missing official times, limits, and ambiguous eligibility stay explicitly unresolved. |
+| Choose both days | For the pre-race, zero-fee fixture, eligible RR-M50-34 + CR-M50-34 quotes $140 base, $10 saving, $130 total. Show included races/dates, category choices, fees, missing choices, and independent eligibility/review state before reservation. Package intent must not silently turn into an unwanted single-day purchase. Server validation must preserve that intent in the future; it currently is browser-only. |
+| Add a criterium entry | RR-M50-34 + CR-M50-34 + CR-E4 quotes $150 before day-of changes, with $10 package and $40 extra-entry savings, each applied once. Show the 10-minute recovery warning; do not call it a blocking overlap. CR-M35-34 + CR-M50-34 must be rejected as a shared start regardless of the quote. Server repeats selection checks. |
+| Parent and minor | Guardian details and matching guardian acceptance are required for every minor, including minors in adult/open categories, as well as any category with an explicit guardian requirement. Category flags alone are insufficient. Confirm the governing age convention and accepted guardian workflow before sanctioned use. Missing guardian or wrong signer blocks checkout; never describe a sample signature as a legally accepted waiver. |
+| Full category and last place | Show which category or shared start is full and the available next step. If any required package place is unavailable, reserve none. Two concurrent final-place requests cannot both succeed. A waitlist request/offer is not a confirmed entry; offer acceptance rechecks eligibility, windows, and capacity. Count a rider once per shared limit within an order. Organizer-confirmed post-order links must not be described as pre-checkout identity or capacity deduplication across separate orders. |
+| Recover checkout | Keep fictional details and unaffected selections after a field error, Back, same-tab refresh, simulated decline, or recoverable server failure; focus an error summary linking to the affected field/action. Retry creates no duplicate confirmed entries. Expired holds explicitly recheck all places or go to an exception, never silently sell a partial package. Production draft storage/retention and hosted-return behavior require separate validation. |
+| Confirm and check in | Show entry, payment, waiver/guardian, and license states separately, with a next action for every blocker. Paid + missing waiver, guardian acceptance, or unresolved license must block bib issuance server-side. Repeat check-in retains the same active bib. A waiver-resolution workflow must record the accepted version, signer/role, source, and date under an approved electronic or paper process before readiness changes; this is Planned beyond sample checkout. |
+| Accessible task completion | Both themes meet normal text 4.5:1, large text 3:1, and essential UI/focus 3:1 contrast against composited backgrounds. At 360px, 200% zoom, keyboard-only, and screen-reader use, labels, totals, errors, and focused actions remain available. Use 44px effective mobile targets. Glass is limited to navigation/overlay frames; forms, totals, and tables stay opaque. Reduced transparency and reduced motion retain all information and operation. See [DESIGN.md](DESIGN.md) for review checks; future glass alternatives are not implemented yet. |
+| Validate with people | Run the initial 3–5 rider/parent and 2–3 organizer/volunteer round using the existing kit, report task-level completion/errors/help/time and price/clearance teach-back, and resolve safety-critical misunderstandings. This formative round does not replace the larger Phase 1 panel or its 90% gate. No participant findings may be inferred from expert review or automated tests. |
+
+Live sanctioned use depends on explicit USAC platform/waiver acceptance or an approved alternative, license access or an accepted manual process with freshness rules, and payment/settlement readiness under [Integrations and dependencies](#integrations-and-dependencies). These are release gates, not optional polish. A same-event package is distinct from a purchase spanning separate events/organizations, which remains Planned.
+
 ## Data model
 
 Organization → Event weekend → Race day → Race → Registration categories / start groups.
@@ -574,6 +592,9 @@ Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/R
 6. What timer formats, refund policies, retention periods, and organizer permissions are required?
 7. Which MFA methods and recovery process keep rider and guardian checkout usable, especially for occasional riders and race-morning registration? MFA itself is required; the methods are decided in the authentication ADR.
 8. How do results reach road-results.com for our events, and what should the timer export include to support it?
+
+9. For minors entering adult/open categories, which age convention determines guardian acceptance, and who confirms the applicable policy? Do not infer legal minor status solely from racing-age/category labels.
+10. Who owns the initial Berkeley reference study and approved schedule review, and which safe local-device arrangement supports phone/screen-reader testing? Confirm participants and session availability before scheduling; no outreach has occurred.
 
 ## Research baseline
 

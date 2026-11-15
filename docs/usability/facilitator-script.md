@@ -8,7 +8,7 @@ Two people run a session: a **facilitator** who talks with the participant, and 
 
 "Thanks for helping. We're building a prototype for race registration and race-day check-in, and we want to see where it's confusing before anyone relies on it. We're testing the software, not you. If something is hard, that's exactly what we need to find."
 
-"Everything you'll see is made up: the events, the riders, the prices. Please don't type any real personal information. If a screen asks for something, use the fake details we give you or invent them."
+"The riders and contact details are fictional. Berkeley is a reference event name; its demonstration schedule and prices are not an approved current offering. Please don't type any real personal information. If a screen asks for something, use the fake details we give you or invent them."
 
 "Nothing you do here registers anyone or moves any money. Payment is simulated."
 
@@ -71,6 +71,12 @@ Ask these, then any role-specific debrief questions from [tasks.md](tasks.md):
 4. "If you could change one thing, what would it be?"
 
 Close: "Thank you. This really helps. We'll use what you found to fix the confusing parts before anyone uses this for a real race."
+
+## Berkeley module introduction
+
+“This prototype is not an official Berkeley Omnium registration service or a USAC-approved platform. Nothing here registers you for a real race or moves money. Please use only the fictional details on your task card. Some workflows are incomplete; if you reach one, explain what you expected and we will record that limitation.”
+
+Do not teach the meaning of individual statuses or explain pricing before the participant attempts the task. Ask “What does this mean to you?” before targeted follow-ups. For the missing-waiver card, say explicitly that it is a hypothetical state, not a working desk waiver screen. Record known gaps separately from participant mistakes.
 
 ## After the participant leaves
 
