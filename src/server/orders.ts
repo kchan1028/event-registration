@@ -11,6 +11,7 @@ import { categoryPrice, quote, todayIn, type Quote } from '../shared/pricing';
 import { checkExtras, describeAnswers, EMPTY_EXTRAS, orderExtrasSchema, pruneExtras, type OrderExtras } from '../shared/categoryExtras';
 import type { EventConfig } from '../shared/schema';
 import { blocksPublicSale, effectiveWaitlistStatus, type StoredWaitlistStatus } from '../shared/waitlist';
+import { refundPolicyLines } from '../shared/refundPolicy';
 import type { Coupons } from './coupons';
 import type { Db } from './db';
 import { eventLock, HttpError, type Repo } from './repo';
@@ -279,7 +280,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       checkInCode: status === 'confirmed' ? row.check_in_code : null,
       createdAt: row.created_at,
       confirmedAt: row.confirmed_at,
-      refundPolicy: config.registration.refundPolicy,
+      /** The refund rules and notes of the version this order was sold under, as sentences. */
+      refundPolicy: refundPolicyLines(config),
       /** Answers to per-category questions and accepted category waiver addenda. */
       extras,
       answers: describeAnswers(latest, extras),

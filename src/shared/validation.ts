@@ -181,7 +181,9 @@ export function validateConfig(config: EventConfig, entries: readonly CapacityEn
     if (b.priceCents === null && b.discountCents === 0) add('warning', `bundle.${b.id}.zero`, `${label} has no discount, so riders gain nothing from it.`, t);
   }
   if (!config.registration.waiverText.trim()) add('warning', 'event.waiver', 'No waiver text is set, so riders will see an empty waiver step.', { kind: 'event' });
-  if (!config.registration.refundPolicy.trim()) add('warning', 'event.refund', 'No refund policy is set. Riders should see it before they pay.', { kind: 'event' });
+  const refundDays = config.registration.refundRules?.tiers.map((t) => t.daysBefore) ?? [];
+  if (new Set(refundDays).size !== refundDays.length) add('error', 'event.refund-steps', 'Two refund steps have the same number of days. Give each step a different deadline.', { kind: 'event' });
+  if (!config.registration.refundRules && !config.registration.refundPolicy.trim()) add('warning', 'event.refund', 'No refund policy is set. Riders should see it before they pay.', { kind: 'event' });
 
   // Capacity pools
   for (const pool of config.capacityPools) {

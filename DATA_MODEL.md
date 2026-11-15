@@ -528,7 +528,7 @@ Resolution items for paid entries affected by a published change (migration 12).
 |---|---|
 | `event` | Name, time zone, venue, demo flag and notice |
 | `ruleSet` | Rule source and season |
-| `registration` | Bundles, discounts, fees, and related settings |
+| `registration` | Bundles, discounts, fees, and related settings, including `refundRules` (refund and credit steps, how withdrawals are paid back, and what riders get when the organizer cancels; null when none are set) and `refundPolicy` (extra notes). Orders keep the rules of the version they were sold under because they point at that version |
 | `days` | 1 to 7 race days |
 | `races` | Up to 20 races, each on a day, road race or criterium |
 | `displayGroups` | Up to 40 headers that group categories for display; they never set limits |

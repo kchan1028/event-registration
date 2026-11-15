@@ -2421,8 +2421,25 @@ button.issue {
   font-weight: 500;
   color: var(--ink);
 }
-.tray__policy p {
-  margin-top: 6px;
+.tray__policy-lines {
+  margin: 6px 0 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: 4px;
+}
+.refund-rules__tier {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--s-3);
+}
+.refund-rules__preview {
+  margin: var(--s-3) 0 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  max-width: 72ch;
 }
 .quote {
   display: grid;
