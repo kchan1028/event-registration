@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDb, type Db } from '../src/server/db';
+import type { EventConfig } from '../src/shared/schema';
 import type { BibReassignment, BibReassignmentPlan, BibReassignmentResult, CheckInList } from '../src/shared/checkin';
 import { as } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
@@ -33,6 +34,64 @@ async function setup() {
 }
 
 describe('protected bib reassignment', () => {
+  it('uses the shared weekend overlap for manual and sequenced corrections and refuses disjoint ranges atomically', async () => {
+    const { app, eventId, alex, preview, apply, swap, list, db } = await setup();
+    const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
+    for (const category of event.config.categories) {
+      const dayId = event.config.races.find((r) => r.id === category.raceId)!.dayId;
+      category.bibRange = dayId === swap.dayId ? { first: 120, last: 180 } : { first: 150, last: 199 };
+    }
+    expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { config: event.config, revision: event.revision } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    const manual: BibReassignment = { ...swap, mode: 'manual', assignments: [{ orderId: alex, bib: 140 }] };
+    expect((await preview(manual)).statusCode).toBe(422);
+    const valid = { ...manual, assignments: [{ orderId: alex, bib: 160 }] };
+    const plan = (await preview(valid)).json() as BibReassignmentPlan;
+    expect(plan.assignments[0].range).toEqual({ first: 150, last: 180 });
+    expect((await apply(valid, plan.fingerprint)).statusCode).toBe(200);
+    const sequence: BibReassignment = { mode: 'sequence', dayId: swap.dayId, reason: 'Use the common weekend range', acknowledgeCheckedIn: true, orderIds: [alex], sort: 'name' };
+    const sequenced = (await preview(sequence)).json() as BibReassignmentPlan;
+    expect(sequenced.assignments[0].bib).toBe(150);
+    expect((await apply(sequence, sequenced.fingerprint)).statusCode).toBe(200);
+    for (const category of event.config.categories) if (event.config.races.find((r) => r.id === category.raceId)!.dayId !== swap.dayId) category.bibRange = { first: 181, last: 199 };
+    const current = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { revision: number };
+    expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { config: event.config, revision: current.revision } })).statusCode).toBe(200);
+    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    const count = (await db.all(`SELECT id FROM bib_assignments`)).length;
+    expect((await preview(valid)).statusCode).toBe(409);
+    expect((await preview(sequence)).statusCode).toBe(409);
+    expect((await list()).riders.find((r) => r.orderId === alex)?.bib).toBe(150);
+    expect(await db.all(`SELECT id FROM bib_assignments`)).toHaveLength(count);
+  });
+
+  it('corrects an issued bib after refund and withdrawal without restoring entries, refunds or readiness', async () => {
+    const { app, db, eventId, alex, before, list } = await setup();
+    type Order = { status: string; entries: { id: string; status: string }[]; refunds: unknown[] };
+    const original = (await app.inject({ method: 'GET', url: `/api/orders/${alex}` })).json() as Order;
+    expect((await app.inject({ method: 'POST', url: `/api/orders/${alex}/refunds`, payload: { amountCents: 100, reason: 'Demo rider refund' } })).statusCode).toBe(200);
+    for (const e of original.entries) expect((await app.inject({ method: 'POST', url: `/api/order-entries/${e.id}/withdraw`, payload: { reason: 'Demo rider withdrew' } })).statusCode).toBe(200);
+    const state = (await app.inject({ method: 'GET', url: `/api/orders/${alex}` })).json() as Order;
+    // Preserve a cancelled historical order with an issued bib as well as the normal withdrawn-entry case.
+    for (const cancelled of [false, true]) {
+      if (cancelled) await db.run(`UPDATE orders SET status = 'cancelled' WHERE id = $1`, [alex]);
+      const found = (await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in?q=Alex` })).json() as CheckInList;
+      const card = found.riders.find((r) => r.orderId === alex)!;
+      expect(card).toMatchObject({ result: { ready: false }, checkedInAt: expect.any(String) });
+      const input = { dayId: before.dayId, bib: cancelled ? 131 : 130, reason: 'Replace an issued demo bib', acknowledgeCheckedIn: true };
+      const route = `/api/events/${eventId}/check-in/${alex}/bib`;
+      expect((await app.inject({ method: 'POST', url: `${route}/preview`, payload: { ...input, acknowledgeCheckedIn: false } })).statusCode).toBe(409);
+      const plan = (await app.inject({ method: 'POST', url: `${route}/preview`, payload: input })).json() as BibReassignmentPlan;
+      const result = await app.inject({ method: 'POST', url: route, payload: { ...input, fingerprint: plan.fingerprint } });
+      expect(result.statusCode).toBe(200);
+      expect(result.json()).toMatchObject({ bib: input.bib, result: { ready: false }, checkedInAt: card.checkedInAt });
+      const after = (await app.inject({ method: 'GET', url: `/api/orders/${alex}` })).json() as Order;
+      expect(after.entries).toEqual(state.entries);
+      expect(after.refunds).toEqual(state.refunds);
+      expect(after.status).toBe(cancelled ? 'cancelled' : state.status);
+      expect((await list()).riders.find((r) => r.orderId === alex)).toBeUndefined();
+    }
+  });
+
   it('previews and atomically swaps checked-in and preassigned riders, audits the actor, and revises locked lists across the weekend', async () => {
     const { app, db, eventId, before, list, alex, blake, dana, preview, apply, swap } = await setup();
     const races = (await app.inject({ method: 'GET', url: `/api/events/${eventId}/start-lists` })).json() as { races: { raceId: string }[] };

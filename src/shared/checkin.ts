@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { bibNumberSchema } from './schema';
+import { bibNumberSchema, type EventConfig } from './schema';
+import { categoryBibRange } from './categoryExtras';
 import type { Role } from './roles';
 import type { ReadinessItem } from './checkout';
 
@@ -38,6 +39,16 @@ export function bibScopeKey(settings: BibSettings, dayId: string): string {
 export function rangeFor(settings: BibSettings, dayId: string): BibRange | null {
   const key = bibScopeKey(settings, dayId);
   return settings.ranges.find((r) => r.scope === key) ?? null;
+}
+
+/** Applicable category ranges replace the configured fallback for that entry; shared bibs use their overlap. */
+export function bibRangeForEntries(config: EventConfig, entries: readonly { dayId: string; categoryId: string }[], settings: BibSettings, dayId: string): BibRange | null {
+  const scope = bibScopeKey(settings, dayId);
+  const applicable = entries.filter((e) => bibScopeKey(settings, e.dayId) === scope);
+  const ranges = applicable.map((e) => ({ bibRange: config.categories.find((c) => c.id === e.categoryId)?.bibRange ?? rangeFor(settings, e.dayId) }));
+  if (ranges.some((r) => !r.bibRange)) return null;
+  const range = categoryBibRange(ranges) ?? rangeFor(settings, dayId);
+  return range ? { scope, ...range } : null;
 }
 
 /** Lowest free bib in the range, or null when the range is full. */
@@ -152,7 +163,8 @@ export interface BibPlan {
 }
 
 /** Assignment reserves a number; it does not clear or check in a rider. */
-export function bibBatchExclusion(rider: Pick<CheckInRider, 'payment' | 'entries' | 'bib' | 'checkedInAt'>, operation: 'unassigned' | 'reassign'): string | null {
+export function bibBatchExclusion(rider: Pick<CheckInRider, 'payment' | 'entries' | 'bib' | 'checkedInAt'>, operation: 'unassigned' | 'reassign' | 'individual'): string | null {
+  if (operation === 'individual') return rider.bib === null ? 'No existing bib to correct' : null;
   if (rider.payment !== 'confirmed') return 'Entry not confirmed';
   if (rider.entries.length === 0) return 'No entry on this day';
   if (operation === 'reassign') return rider.bib === null ? 'No existing bib; use Assign bibs' : null;
@@ -175,7 +187,6 @@ export interface AutomaticBibJob {
   message: string | null;
   assigned: number | null;
 }
-
 
 export const bibFingerprintSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const bibChangeSchema = z.object({

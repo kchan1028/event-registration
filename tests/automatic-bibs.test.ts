@@ -24,6 +24,28 @@ async function setup() {
 }
 
 describe('post-close automatic bib allocation', () => {
+  it.each([false, true])('uses all weekend ranges and rolls back a disjoint allocation (disjoint=%s)', async (disjoint) => {
+    const { app, eventId, config, advance, enable, jobs, run, list } = await setup();
+    for (const c of config.categories) c.bibRange = config.races.find((r) => r.id === c.raceId)!.dayId === config.days[0].id ? { first: 100, last: 180 } : { first: disjoint ? 181 : 150, last: 199 };
+    const current = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { revision: number };
+    expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { config, revision: current.revision } })).statusCode).toBe(200);
+    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    await enable();
+    advance('2027-03-01T18:11:00Z');
+    await run();
+    const riders = (await list()).riders;
+    if (disjoint) {
+      expect(riders.every((r) => r.bib === null)).toBe(true);
+      expect((await jobs())[0]).toMatchObject({ completedAt: null, message: expect.stringContaining('do not overlap') });
+    } else {
+      expect((await jobs())[0].completedAt).not.toBeNull();
+      for (const r of riders.filter((r) => r.payment === 'confirmed')) {
+        expect(r.bib).toBeGreaterThanOrEqual(150);
+        expect(r.bib).toBeLessThanOrEqual(180);
+      }
+    }
+  });
+
   it('waits for close in the event time zone and active holds, preserves issued bibs, and runs once', async () => {
     const { app, eventId, advance, enable, jobs, run, list } = await setup();
     const before = await list();

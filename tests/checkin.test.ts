@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
-import { checkInResult, checkInTiming, mergeReadiness, nextFreeBib } from '../src/shared/checkin';
+import { buildDemoEvent } from '../src/shared/demo';
+import { bibRangeForEntries, checkInResult, checkInTiming, mergeReadiness, nextFreeBib } from '../src/shared/checkin';
+import type { EventConfig } from '../src/shared/schema';
 import type { ReadinessItem } from '../src/shared/checkout';
 
 const done = (key: ReadinessItem['key']): ReadinessItem => ({ key, label: key, state: 'done' });
@@ -34,6 +36,19 @@ describe('check-in rules', () => {
     expect(checkInTiming([0, 15_000, 11 * 60_000])).toEqual({ timed: 1, medianSeconds: 15, p95Seconds: 15 });
   });
 
+  it('uses entry-specific fallbacks without capping explicit category ranges', () => {
+    const { config } = buildDemoEvent();
+    const rr = config.categories.find((c) => c.timingCode === 'RR-M35-34')!;
+    const cr = config.categories.find((c) => c.timingCode === 'CR-M35-34')!;
+    rr.bibRange = { first: 100, last: 180 };
+    cr.bibRange = null;
+    const entry = (c: typeof rr) => ({ categoryId: c.id, dayId: config.races.find((r) => r.id === c.raceId)!.dayId });
+    const settings = { scope: 'weekend' as const, ranges: [{ scope: 'weekend', first: 150, last: 199 }] };
+    expect(bibRangeForEntries(config, [entry(rr)], settings, entry(rr).dayId)).toEqual({ scope: 'weekend', first: 100, last: 180 });
+    expect(bibRangeForEntries(config, [entry(rr), entry(cr)], settings, entry(rr).dayId)).toEqual({ scope: 'weekend', first: 150, last: 180 });
+    expect(bibRangeForEntries(config, [entry(rr), entry(cr)], { scope: 'weekend', ranges: [] }, entry(rr).dayId)).toBeNull();
+  });
+
   it('finds the lowest free bib and reports a full range', () => {
     expect(nextFreeBib({ scope: 'weekend', first: 10, last: 12 }, new Set([10, 12]))).toBe(11);
     expect(nextFreeBib({ scope: 'weekend', first: 10, last: 11 }, new Set([10, 11]))).toBeNull();
@@ -58,6 +73,23 @@ async function setup() {
 }
 
 describe('check-in API', () => {
+  it('uses the same weekend overlap for desk and bulk assignment while day-scoped bibs stay independent', async () => {
+    const { app, eventId, first, rider, checkIn, setBibs } = await setup();
+    const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
+    for (const c of event.config.categories) c.bibRange = event.config.races.find((r) => r.id === c.raceId)!.dayId === first.dayId ? { first: 100, last: 180 } : { first: 150, last: 199 };
+    await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { config: event.config, revision: event.revision } });
+    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
+    expect((await checkIn(rider('Alex').orderId, 120)).statusCode).toBe(422);
+    expect((await checkIn(rider('Alex').orderId)).json()).toMatchObject({ bib: 150 });
+    const batch = { dayId: first.dayId, orderIds: [rider('Blake').orderId] };
+    const plan = (await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload: batch })).json();
+    expect(plan.assignments[0]).toMatchObject({ bib: 151, range: { first: 150, last: 180 } });
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/apply`, payload: { ...batch, fingerprint: plan.fingerprint } })).statusCode).toBe(200);
+    await setBibs({ scope: 'day', ranges: first.days.map((d) => ({ scope: d.id, first: 100, last: 199 })) });
+    expect((await checkIn(rider('Casey').orderId, 120)).statusCode).toBe(200);
+  });
+
   it('previews a stable confirmed-rider bib batch and applies it without clearing readiness', async () => {
     const { app, eventId, first, rider, setBibs, list } = await setup();
     await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 102 }] });
