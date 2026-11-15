@@ -171,15 +171,14 @@ describe('flat price for an extra entry in the same race (Berkeley Omnium: secon
   it('charges the second criterium entry $20 and leaves the first at full price', () => {
     const c = omnium();
     const q = quote(c, [id(c, 'CR-M35-34'), id(c, 'CR-E4')], '2027-03-15');
-    expect(q.lines.map((l) => l.totalCents).sort((a, b) => b - a)).toEqual([5000, 2000]);
+    expect(q.lines.map((l) => l.totalCents).sort((a, b) => b - a)).toEqual([6000, 2000]);
     expect(q.lines.filter((l) => l.discountReason === 'Extra entry in the same race')).toHaveLength(1);
   });
 
-  it('does not touch entries in different races, or a cheaper extra entry', () => {
+  it('keeps a cheaper extra entry at its base price', () => {
     const c = omnium();
-    expect(quote(c, [id(c, 'RR-M35-34'), id(c, 'CR-M35-34')], '2027-03-15').totalCents).toBe(6000 + 5000);
     c.registration.sameRaceExtraEntryCents = 9000;
-    expect(quote(c, [id(c, 'CR-M35-34'), id(c, 'CR-E4')], '2027-03-15').totalCents).toBe(10000);
+    expect(quote(c, [id(c, 'CR-M35-34'), id(c, 'CR-E4')], '2027-03-15').totalCents).toBe(12000);
   });
 });
 
@@ -219,5 +218,25 @@ describe('registration windows', () => {
     expect(r.ok).toBe(false);
     expect(r.problems[0]).toMatch(/opens Feb 1, 2027, 9:00 AM/);
     expect(checkSelection(c, [id(c, 'RR-M35-34')], rider, { nowLocal: '2027-03-01T12:00' }).ok).toBe(true);
+  });
+});
+
+
+describe('Berkeley Omnium package', () => {
+  it('discounts both races and nominates exactly the bundled entries for podium review', () => {
+    const c = buildBerkeleyOmniumEvent().config;
+    const ids = [id(c, 'RR-M35-34'), id(c, 'CR-M35-34')];
+    const q = quote(c, ids, '2027-03-15');
+    expect([q.subtotalCents, q.discountCents, q.totalCents]).toEqual([14000, 1000, 13000]);
+    expect(q.bundle?.omnium).toEqual({ code: 'BERKELEY-OMNIUM', label: 'Berkeley Omnium podium', categoryIds: ids, status: 'needs_review' });
+    for (const categoryId of ids) {
+      const single = quote(c, [categoryId], '2027-03-15');
+      expect(single.bundle).toBeNull();
+      expect(single.discountCents).toBe(0);
+    }
+    const extra = quote(c, [...ids, id(c, 'CR-E4')], '2027-03-15');
+    expect(extra.totalCents).toBe(15000);
+    expect(extra.bundle?.omnium?.categoryIds).toHaveLength(2);
+    expect(extra.lines.find((l) => l.categoryId === id(c, 'CR-E4'))?.totalCents).toBe(2000);
   });
 });

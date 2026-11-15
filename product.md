@@ -110,6 +110,8 @@ CSV import of category schedules is P0: provide a template, map columns, validat
 - Show an itemized preview of additional-race discounts, bundle pricing, and fees. Define discount precedence and prevent unintended stacking.
 - Discount precedence (decided November 14, 2026): at most one bundle applies per order, the one saving the most whose races all have an entry; it covers one entry per bundle race and either takes a fixed discount or sets a fixed bundle price. The additional-race discount then applies outside the bundle in one of two organizer-chosen ways: to every entry after the first full-price entry, or once per order when two or more entries share a day (the demo fixtures use this). An entry never receives two discounts, and free entries receive none. Fees (a flat platform fee and a percentage processing fee on the entries subtotal after discounts, rounded half up to the cent) are added once per order after discounts and shown before payment.
 
+Berkeley Omnium demo package (November 14, 2026): one independently eligible category in Berkeley Hills Road Race and one in Berkeley Streets Criterium cost $130 as a fixed-price package. The organizer set individual entry prices at $80 for the road race and $60 for the criterium across all demo categories, so the package saves $10 before any configured fees. The applied bundle records one omnium podium nomination with the two selected category IDs and a `needs_review` status in the order quote. This is separate from each race's classifications and creates no third race entry or capacity consumption. A nomination on a held order is provisional; only confirmed orders represent entered packages. The organizer must approve award categories, cross-day category combinations, participation requirements, and final eligibility. Points, results, podium calculation, and nomination approval tools are not built. These prices were supplied by the organizer for the local prototype; purchases remain simulated. Existing seeded events and published orders are unchanged; load a new Berkeley demo to use this package.
+
 #### Registration windows
 
 Decided November 14, 2026:
@@ -146,6 +148,16 @@ These are illustrative product fixtures, not an approved BHRR schedule or statem
 | Rider entering two criteriums | Two valid entries and an additional-race discount, with schedule conflict checks |
 | Weekend entry with different day categories | One order, independently validated category selections, atomic reservation across both days |
 
+### Standalone Berkeley demo events
+
+Implemented local demo: Berkeley Hills Road Race and Berkeley Streets Criterium can be seeded as separate published events, each with its own race day, race, categories, and capacity usage. Base prices are $80 and $60 respectively. These fixtures contain no package or podium nomination, no prefilled entries, zero fees and surcharges, and no extra-entry discount. Demo mode permits testing outside registration windows. The seed creates both events atomically and reruns preserve event IDs, edits, and published versions without deleting other local data. See [demo setup](SETUP.md) and [event reference](docs/fixtures/events.md).
+
+### Planned three-day series demo
+
+The previously requested Demo Three-Day Series uses Berkeley Omnium's category definitions as draft reference data: Friday time trial $50, Saturday road race $80, and Sunday criterium $60. A fixed $160 package includes one independently eligible entry in all three races, saving $30 against the $190 base total. Reservation must be all or nothing. Two-day selections receive no series package discount. The TT category set copies the road-race category definitions for review; this is not approval of TT eligibility rules.
+
+Status: Planned documentation only. The current prototype does not support time trials or load this series. Dates, TT scheduling and capacity, fees, additional discounts, and series awards remain unset. This demo specification does not expand first-release live scope or add points/results scoring.
+
 ### 2. Rider registration
 
 - Mobile-friendly entry with reusable rider details and secure access to receipts and registrations.
@@ -178,7 +190,7 @@ Rules:
 - **Validation.** Required fields are marked. Errors appear next to the field when the rider tries to continue, say what is wrong and how to fix it, are summarized at the top of the step, and are announced to screen readers. See the [accessibility rules](docs/coding-guide.md#accessibility-and-mobile-usability).
 - **Simulation labeling.** Every demo screen shows a persistent, readable "Demo" label. The order review, payment step, confirmation, and receipt also state "Simulated payment: no money is charged". Buttons say "Complete simulated payment", never "Pay" or "Buy". The receipt is watermarked as a demo.
 - **Separate states.** Entry, payment, and readiness states stay independent in the demo, as in the product. A simulated paid entry is not shown as cleared to race.
-- **Fake rider data only.** Demo riders, prices, fees, and the sample waiver are fictional fixtures in [docs/fixtures/](docs/fixtures/README.md), which also lists the worked orders and totals a demo must reproduce. Never use real rider data or present demo prices and fees as real ones. The one real event allowed is the Berkeley Omnium, which its promoter has approved as demo event data: its fields, distances, times, and field limits come from the published race information, while its entries stay simulated and its fees stay placeholders until the promoter sets them.
+- **Fake rider data only.** Demo riders, prices, fees, and the sample waiver are fictional fixtures in [docs/fixtures/](docs/fixtures/README.md), which also lists the worked orders and totals a demo must reproduce. Never use real rider data or present demo prices and fees as real ones. The one real event allowed is the Berkeley Omnium, which its promoter has approved as demo event data: its fields, distances, times, and field limits come from the published race information, while its entries stay simulated and its base fees are promoter-set at $80 for the road race, $60 for the criterium, and $130 for the package.
 
 ### 3. Capacity and entry integrity
 

@@ -95,7 +95,9 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5273/` and select **Load Berkeley Omnium** (the 2026 fields and times, dated for 2027, with placeholder fees), or create your own organization. To try the rider demo, select **Open the rider demo** on the home page; it loads the fictional events, riders, and fees from `docs/fixtures`. Any event you publish also appears in the rider event list. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
+For two standalone Berkeley events ($80 road race, $60 criterium), follow [demo setup](SETUP.md) and run `npm run seed:berkeley` with the documented database path.
+
+Open `http://127.0.0.1:5273/` and select **Load Berkeley Omnium** (the 2026 fields and times, dated for 2027, with organizer-set $80 road race and $60 criterium fees and a $130 two-race package including a podium nomination subject to organizer review), or create your own organization. To try the rider demo, select **Open the rider demo** on the home page; it loads the fictional events, riders, and fees from `docs/fixtures`. Any event you publish also appears in the rider event list. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
 
 ## How it is meant to work
 

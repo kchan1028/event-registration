@@ -85,6 +85,8 @@ export const registrationSettingsSchema = z.object({
         discountCents: cents,
         /** When set, the bundle's entries cost this fixed price instead of taking a discount. */
         priceCents: cents.nullable().default(null),
+        /** Nomination only. Award eligibility and grouping need organizer review. */
+        omnium: z.object({ code: z.string().min(1).max(24), label: z.string().min(1).max(80) }).optional(),
       }),
     )
     .max(10),

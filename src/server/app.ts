@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z, ZodError } from 'zod';
+import { BERKELEY_DEMO_ORG, buildBerkeleyEvents } from '../shared/berkeleyEvents';
 import { buildBerkeleyOmniumEvent, OMNIUM_ORG_NAME } from '../shared/berkeleyOmnium';
 import { buildDemoEvent } from '../shared/demo';
 import { configFromTemplate } from '../shared/factory';
@@ -238,6 +239,22 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     for (const p of entryPlan) repo.addTestEntries(record.id, p.categoryId, p.count);
     return { organizationId: org.id, eventId: record.id };
   }
+
+  /** Seeds two published standalone events once, without touching other local data. */
+  app.post('/api/demo/berkeley-events', async (_req, reply) => {
+    const result = db.transaction(() => {
+      const existing = repo.listOrganizations().find((o) => o.name === BERKELEY_DEMO_ORG);
+      if (existing) return { created: false, organizationId: existing.id, eventIds: existing.events.map((e) => e.id) };
+      const org = repo.createOrganization(BERKELEY_DEMO_ORG);
+      const eventIds = buildBerkeleyEvents().map((config) => {
+        const event = repo.createEvent(org.id, config);
+        repo.publish(event.id, true);
+        return event.id;
+      });
+      return { created: true, organizationId: org.id, eventIds };
+    }).immediate();
+    return reply.status(result.created ? 201 : 200).send(result);
+  });
 
   /** Creates the labeled fictional demonstration organization and event. */
   app.post('/api/demo', async (_req, reply) => reply.status(201).send(seed('Example Cycling Club (demonstration)', buildDemoEvent())));

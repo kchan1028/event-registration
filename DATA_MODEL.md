@@ -207,7 +207,15 @@ Numbered start lists per race. Immutable once saved; later changes show as a dif
 | `categories` | Up to 300; each has eligibility paths, pricing and price changes, a registration window, race length, classifications, a start group, and a status of `active`, `closed`, or `archived` |
 | `capacityPools` | Up to 50 shared limits over listed categories and start groups |
 
+The Berkeley demo seeds $80 road race and $60 criterium base prices and a fixed $130 bundle (`priceCents: 13000`, `discountCents: 0`); the fixed price takes precedence over a discount amount. Existing drafts and published orders are not migrated.
+
+Bundles may carry optional `omnium` metadata (`code`, `label`). When such a bundle applies, `orders.quote_json.bundle.omnium` snapshots those values, the two bundled category IDs, and `status: needs_review`. This records a podium nomination, not an awarded classification, additional entry, or clearance. It is provisional until the order is confirmed; cancelled, expired, or released orders do not represent entered packages. No nomination approval or results storage exists. Older bundles and quotes omit this optional metadata. Existing databases need no SQL migration.
+
 The configuration is validated on every save. A save is also refused if it would make existing entries invalid, for example a cap lowered below the places already taken.
+
+## Standalone Berkeley demo seed
+
+`npm run seed:berkeley` uses the existing tables and schema. It creates the `Berkeley standalone events (local demo)` organization and two events, each with an immutable published version. Each event contains only its own race, day, categories, display groups, and start groups. No orders, rider records, test entries, or bundles are seeded. Prices are $80 for the road race and $60 for the criterium, with zero fees and surcharges. The organization and both published events are created in one immediate transaction. Reruns identify this organization by its reserved demo name and return its existing events without overwriting drafts or publishing new versions. Other data is preserved. No SQL migration is needed.
 
 ## Capacity and concurrency
 

@@ -68,6 +68,8 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 | Multi-race discount | Two non-conflicting criteriums get the additional-race discount exactly once and stay distinct entries |
 | Mixed-category weekend bundle | Each day's category passes its own rules; if any place is full, nothing is held |
 
+**Berkeley Omnium package (added November 14, 2026):** implemented demo bundle for both races at an organizer-set fixed price of $130 ($80 road race + $60 criterium separately, saving $10), with a separate podium nomination saved in the accepted order quote. Nomination remains subject to organizer review. Pricing and order snapshot tests cover both-day pricing, single-day exclusion, an extra criterium entry, and simulated confirmation. Award rules, approval tools, and points/results calculation remain unbuilt.
+
 **Registration windows (added November 14, 2026):** checkout refuses categories outside their opening and closing times, read in the event's time zone; a hold taken while a window is open can still be paid within the hold, and a late payment after the window closed goes to the organizer's queue. Demo events can let testers register at any time; the rider page then says "Demo mode" and when real registration opens. Verified by unit, API, and Playwright tests.
 
 **Not built yet:** real payments, refunds, and payouts; rider accounts and access to past receipts; category transfers and withdrawals; waitlists; emergency contact collection (deferred until role-based access exists); email receipts. (Check-in and bib assignment: see [Check-in prototype](#check-in-prototype); start lists and exports: see [Start lists and timer export](#start-lists-and-timer-export).)
@@ -86,6 +88,10 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 | Uncertain license is paid but not cleared | API and Playwright tests |
 
 **Still open for 2a:** the "without facilitator help" part needs a usability test with people. Display themes come from the shared theme work (PR #11) and the rider screens now carry the same header toggle.
+
+**Three-day series demo specification (November 14, 2026):** Previously requested Planned fixture using Berkeley category definitions with a Friday TT ($50), Saturday road race ($80), Sunday criterium ($60), and a $160 all-three package. No executable fixture exists. Time-trial model and scheduling support, approved category rules, dates, fees, and award requirements must be resolved before implementation. This adds no live series capability or change to phase priority. The current [events.md reference](docs/fixtures/events.md) lists only standalone Berkeley road race and criterium examples; the series is not part of that reference.
+
+**Standalone Berkeley local demo (November 14, 2026):** implemented dedicated seed for separate published road-race ($80) and criterium ($60) events, with no package, fees, surcharges, or prefilled entries. Unit/API tests cover category references, prices, persistence, and safe reruns. [Demo setup](SETUP.md) documents a dedicated local database. Existing sample loaders remain available; no live capability or phase priority changes.
 
 ## Check-in prototype
 
