@@ -81,7 +81,7 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 
 ## Check-in prototype
 
-Built November 14, 2026, on the same stack and stacked on the rider checkout prototype. It covers the Phase 1 deliverable "check-in prototype showing ready/blocked states and bib assignment" and part of [product.md section 5](product.md#5-race-day-operations). Fake riders only; open it from the builder rail under **Race-day check-in**.
+Built November 14, 2026, on the same stack, building on the rider checkout prototype. It covers the Phase 1 deliverable "check-in prototype showing ready/blocked states and bib assignment" and part of [product.md section 5](product.md#5-race-day-operations). Fake riders only; open it from the builder rail under **Race-day check-in**.
 
 **Implemented:** search by name, team, bib, or check-in code (with or without the dash; a code that matches one rider opens it on Enter); a ready/blocked result that needs a confirmed simulated payment and every readiness item for that day's entries, so an unreviewed license blocks and paying alone never clears a rider; blockers that tell the volunteer to send the rider to the registration desk rather than override; bib ranges for the whole event or per race day; the next free bib or a chosen one, with no two active riders on the same bib in a range (enforced by a database index); repeat check-in returns the first time and bib; bib changes need a reason and keep the history; a day summary (riders, checked in, blocked, bibs issued); fictional demo riders for a published demo event. Volunteers see name, team, racing age, entries, readiness, and bib only: no email, phone, emergency contact, license number, or payment amount.
 
