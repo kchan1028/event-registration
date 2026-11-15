@@ -12,7 +12,7 @@ import type { Db } from './db';
 import { HttpError, type Repo } from './repo';
 
 /**
- * Checkout prototype: atomic holds, simulated payment, and organizer review.
+ * Checkout: atomic holds, simulated payment, and organizer review.
  * Payment is simulated. Nothing is charged and no provider is called.
  */
 

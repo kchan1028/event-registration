@@ -1,5 +1,5 @@
 /**
- * Start lists and the sample timer export (prototype).
+ * Start lists and the sample timer export.
  *
  * The column set is a SAMPLE for discussion with the timer and officials, not an
  * agreed format (product.md, section 5). Rows carry stable IDs so a timer can
@@ -9,7 +9,7 @@
 
 export interface StartListRow {
   entryId: string; // stable per entry
-  riderId: string; // stable per rider (order) in this prototype
+  riderId: string; // stable per rider (order) until reusable identity exists
   raceId: string;
   raceName: string;
   raceDate: string;

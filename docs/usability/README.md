@@ -2,7 +2,7 @@
 
 Status: Implemented (kit written November 14, 2026). No sessions have been run. Results become evidence for the [Phase 1 exit gate](../../roadmap.md#phase-1--test-the-experience-without-live-money) only after they are summarized and linked from `roadmap.md`.
 
-Use this kit to find out whether organizers, check-in volunteers, and riders or parents can complete the core prototype tasks on their own. The Phase 1 exit gate needs at least 90% unassisted completion across the core tasks and no unresolved critical blocker.
+Use this kit to find out whether organizers, check-in volunteers, and riders or parents can complete the core tasks on their own. The Phase 1 exit gate needs at least 90% unassisted completion across the core tasks and no unresolved critical blocker.
 
 | File | Use it for |
 |---|---|
@@ -34,7 +34,7 @@ The roadmap asks for at least two organizers, two check-in volunteers, and five 
 | Role | Count | Good candidates | Session length |
 |---|---|---|---|
 | Organizer | 2 or more | A race director and a registration lead who have set up a road race or criterium | 60 minutes |
-| Check-in volunteer | 2 or more | People who have staffed a registration tent; at least one who has never used this prototype | 30 minutes |
+| Check-in volunteer | 2 or more | People who have staffed a registration tent; at least one who has never used this app | 30 minutes |
 | Rider or parent | 5 or more | At least one beginner (Cat 5 or one-day license), one masters racer, one parent of a junior, one rider who races both days | 30 minutes |
 
 Include at least one participant who prefers a keyboard or uses a screen reader, magnification, or large text if you can. The [accessibility rules](../coding-guide.md#accessibility-and-mobile-usability) apply to every screen in the test.
@@ -50,7 +50,7 @@ Nobody enters real personal information. Every task uses the fictional demo ride
 
 ## Set up the computer before each session
 
-The prototype runs only on the facilitator's computer and listens only on `127.0.0.1`. Follow [local-setup.md](../runbooks/local-setup.md) once, then give every session its own database file so each participant starts clean and their session stays available for review.
+The app runs only on the facilitator's computer and listens only on `127.0.0.1`. Follow [local-setup.md](../runbooks/local-setup.md) once, then give every session its own database file so each participant starts clean and their session stays available for review.
 
 1. Start the app with a fresh database named for the session:
 
@@ -68,7 +68,7 @@ To look at a past session again, start the app with that session's `DB_PATH`.
 
 ### Phone-sized sessions
 
-A real phone cannot reach the prototype, because it must not be exposed to a network (see the [local setup warning](../runbooks/local-setup.md)). For rider sessions that need a phone-sized screen, narrow the laptop browser window to about 375 pixels wide or use the browser's device toolbar, and note this on the observation sheet. Testing on a real phone needs a decision from the technical lead about a safe way to reach the prototype; that question is open.
+A real phone cannot reach the app, because it must not be exposed to a network (see the [local setup warning](../runbooks/local-setup.md)). For rider sessions that need a phone-sized screen, narrow the laptop browser window to about 375 pixels wide or use the browser's device toolbar, and note this on the observation sheet. Testing on a real phone needs a decision from the technical lead about a safe way to reach the app; that question is open.
 
 ## Score the sessions
 
@@ -90,7 +90,7 @@ Score each core task with one outcome code. The definitions of a prompt and a re
 
 Every critical blocker must be fixed and re-tested with at least one new participant before the exit gate is marked Verified. Record the fix and the re-test in the results summary.
 
-Also time the standard check-in task (V1). [product.md](../../product.md#success-measures) proposes a median under 30 seconds; the prototype result is an early signal, not the pilot measurement.
+Also time the standard check-in task (V1). [product.md](../../product.md#success-measures) proposes a median under 30 seconds; a local test result is an early signal, not the pilot measurement.
 
 ## After the sessions
 

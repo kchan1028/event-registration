@@ -21,7 +21,7 @@ The guide's extracted PDF metadata misleadingly names an older year; the inspect
 | 5 | Configure the public criterium from an approved category schedule | Allow eligible additional entries without enrolling the rider in the professional competition |
 | 6 | Link overall-participation identifiers to the approved program | Results/GC calculation remains with officials/timing systems |
 
-For a paper example, keep an invited professional program and a public amateur criterium as separate registration scopes under one presentation grouping. The current prototype cannot implement the professional team-registration workflow or all its race formats. A template picker should mark those modules unsupported rather than imply that a generic stage-race package is sufficient.
+For a paper example, keep an invited professional program and a public amateur criterium as separate registration scopes under one presentation grouping. The current app cannot implement the professional team-registration workflow or all its race formats. A template picker should mark those modules unsupported rather than imply that a generic stage-race package is sufficient.
 
 ## Reusable lesson
 

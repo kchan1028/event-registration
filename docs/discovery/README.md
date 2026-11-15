@@ -4,7 +4,7 @@ Status: Implemented (kit written November 14, 2026). No interviews, observations
 
 Use this kit to decide whether CycleReg should be built at all. Phase 0 ends in one of two outcomes: a recorded decision to continue, with evidence, or a recommendation to improve the current registration workflow and stop the build. Both are successful outcomes.
 
-The prototype already built does not count as Phase 0 evidence. It was built ahead of this gate at the owner's request.
+The app already built does not count as Phase 0 evidence. It was built ahead of this gate at the owner's request.
 
 ## What is in the kit
 

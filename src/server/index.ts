@@ -1,7 +1,7 @@
 import { buildApp } from './app';
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001);
-// Bind to localhost only: this prototype has no sign-in and must not be exposed.
+// Bind to localhost only: the app has no sign-in yet and must not be exposed.
 const host = '127.0.0.1';
 const dbPath = process.env.DB_PATH ?? 'data/cyclereg.sqlite';
 

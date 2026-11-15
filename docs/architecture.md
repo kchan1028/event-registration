@@ -1,6 +1,6 @@
 # Architecture
 
-**Status: partly implemented.** The [local category builder prototype](#what-exists-today-implemented) is built on the stack in [ADR 0001](decisions/0001-stack-for-category-builder-milestone.md). Everything under [Proposed logical components](#proposed-logical-components) beyond that prototype is still proposed. Components become decided only through accepted [architecture decision records](decisions/README.md).
+**Status: partly implemented.** The [local category builder](#what-exists-today-implemented) is built on the stack in [ADR 0001](decisions/0001-stack-for-category-builder-milestone.md). Everything under [Proposed logical components](#proposed-logical-components) beyond that build is still proposed. Components become decided only through accepted [architecture decision records](decisions/README.md).
 
 The short version: CycleReg needs one source of truth with strong consistency for capacity and money, a clear boundary between public schedule pages and private organizer and rider data, and replaceable connections to Stripe (selected in [ADR 0002](decisions/0002-stripe-payments.md), integration Planned), an email provider, timer files, and (if approved) USA Cycling. The production stack stays open until Phase 0 answers the federation and payment questions, as [roadmap.md](../roadmap.md#next-actions) requires.
 
@@ -76,7 +76,7 @@ These come from [product.md](../product.md) and apply whatever stack is chosen.
 
 ## Proposed logical components
 
-This is the target shape for the hosted product. Only the registration core rules and the organizer workspace exist today, in prototype form.
+This is the target shape for the hosted product. Only the registration core rules and the organizer workspace exist today, running locally on one computer.
 
 ```mermaid
 flowchart LR

@@ -100,9 +100,9 @@ Racing age uses the governing body's approved discipline/season rule, not an ass
 6. Preview the rider-facing schedule and simulate representative rider profiles, including riders eligible for multiple races.
 7. Review validation errors and warnings, then publish a versioned configuration.
 
-The schedule table must show category, eligibility summary, start/staging time, distance or duration, price, category cap, shared-field usage, and status. Drafts autosave. Duplicate category and copy-day actions generate new IDs and require review of inherited times, prices, rules, and capacity links. Bulk changes show a before/after preview. Status: duplicate, copy-day, and bulk edit with preview are Implemented in the local prototype (see [roadmap.md](roadmap.md#category-builder-milestone)). Per-category rider questions, waiver addenda, and bib ranges are Implemented too.
+The schedule table must show category, eligibility summary, start/staging time, distance or duration, price, category cap, shared-field usage, and status. Drafts autosave. Duplicate category and copy-day actions generate new IDs and require review of inherited times, prices, rules, and capacity links. Bulk changes show a before/after preview. Status: duplicate, copy-day, and bulk edit with preview are Implemented in the local build (see [roadmap.md](roadmap.md#category-builder-milestone)). Per-category rider questions, waiver addenda, and bib ranges are Implemented too.
 
-CSV import of category schedules is P0: provide a template, map columns, validate into a draft, and show errors per row before saving. (Implemented as a prototype November 14, 2026: an import only adds categories to the draft, rows with errors are skipped only after the organizer confirms it, and the format is documented in [docs/csv-category-format.md](docs/csv-category-format.md).) Never silently interpret a label as a federation rule. Export the configured schedule and rules for review; importing competitor exports does not imply access to their private systems or automatic equivalence of their rules.
+CSV import of category schedules is P0: provide a template, map columns, validate into a draft, and show errors per row before saving. (Implemented November 14, 2026: an import only adds categories to the draft, rows with errors are skipped only after the organizer confirms it, and the format is documented in [docs/csv-category-format.md](docs/csv-category-format.md).) Never silently interpret a label as a federation rule. Export the configured schedule and rules for review; importing competitor exports does not imply access to their private systems or automatic equivalence of their rules.
 
 #### Rider-facing behavior
 
@@ -113,7 +113,7 @@ CSV import of category schedules is P0: provide a template, map columns, validat
 - Show an itemized preview of additional-race discounts, bundle pricing, and fees. Define discount precedence and prevent unintended stacking.
 - Current same-event package discount precedence (the code calls a package a bundle; decided November 14, 2026): at most one bundle applies per order, the one saving the most whose races all have an entry; it covers one entry per bundle race and either takes a fixed discount or sets a fixed bundle price. The additional-race discount then applies outside the bundle in one of two organizer-chosen ways: to every entry after the first full-price entry, or once per order when two or more entries share a day (the demo fixtures use this). An entry never receives two discounts, and free entries receive none. Fees (a flat platform fee and a percentage processing fee on the entries subtotal after discounts, rounded half up to the cent) are added once per order after discounts and shown before payment.
 
-Berkeley Omnium demo package (November 14, 2026): one independently eligible category in Berkeley Hills Road Race and one in Berkeley Streets Criterium cost $130 as a fixed-price package. The organizer set individual entry prices at $80 for the road race and $60 for the criterium across all demo categories, so the package saves $10 before any configured fees. The applied bundle records one omnium podium nomination with the two selected category IDs and a `needs_review` status in the order quote. This is separate from each race's classifications and creates no third race entry or capacity consumption. A nomination on a held order is provisional; only confirmed orders represent entered packages. The organizer must approve award categories, cross-day category combinations, participation requirements, and final eligibility. Points, results, podium calculation, and nomination approval tools are not built. These prices were supplied by the organizer for the local prototype; purchases remain simulated. Existing seeded events and published orders are unchanged; load a new Berkeley demo to use this package.
+Berkeley Omnium demo package (November 14, 2026): one independently eligible category in Berkeley Hills Road Race and one in Berkeley Streets Criterium cost $130 as a fixed-price package. The organizer set individual entry prices at $80 for the road race and $60 for the criterium across all demo categories, so the package saves $10 before any configured fees. The applied bundle records one omnium podium nomination with the two selected category IDs and a `needs_review` status in the order quote. This is separate from each race's classifications and creates no third race entry or capacity consumption. A nomination on a held order is provisional; only confirmed orders represent entered packages. The organizer must approve award categories, cross-day category combinations, participation requirements, and final eligibility. Points, results, podium calculation, and nomination approval tools are not built. These prices were supplied by the organizer for the local build; purchases remain simulated. Existing seeded events and published orders are unchanged; load a new Berkeley demo to use this package.
 
 #### Registration windows
 
@@ -213,7 +213,7 @@ Implemented local demo: Berkeley Hills Road Race and Berkeley Streets Criterium 
 
 The previously requested Demo Three-Day Series uses Berkeley Omnium's category definitions as draft reference data: Friday time trial $50, Saturday road race $80, and Sunday criterium $60. A fixed $160 package includes one independently eligible entry in all three races, saving $30 against the $190 base total. Reservation must be all or nothing. Two-day selections receive no series package discount. The TT category set copies the road-race category definitions for review; this is not approval of TT eligibility rules.
 
-Status: Planned documentation only. The current prototype does not support time trials or load this series. Dates, TT scheduling and capacity, fees, additional discounts, and series awards remain unset. This specification feeds the Planned stage-race setup workflow after the initial pilot; it adds no points/results scoring.
+Status: Planned documentation only. The current app does not support time trials or load this series. Dates, TT scheduling and capacity, fees, additional discounts, and series awards remain unset. This specification feeds the Planned stage-race setup workflow after the initial pilot; it adds no points/results scoring.
 
 ### 2. Rider registration
 
@@ -224,11 +224,11 @@ Status: Planned documentation only. The current prototype does not support time 
 - Display waiver version and signature status. Payment success alone does not mean cleared to race.
 - Confirm entries only after authoritative payment confirmation. Handle delayed or failed payments explicitly.
 - Permit organizer-configured changes, withdrawals, and refund requests. Show policy before checkout.
-  - Status: organizer transfers and withdrawals of paid entries are Implemented in the local prototype (see [roadmap.md](roadmap.md#rider-checkout-prototype)). A transfer rechecks eligibility, capacity, the waitlist, schedule conflicts, and the guardian waiver; the price paid is kept and any difference is recorded as owed or due. Rider-initiated change requests and real refunds are Planned.
+  - Status: organizer transfers and withdrawals of paid entries are Implemented in the local build (see [roadmap.md](roadmap.md#rider-checkout)). A transfer rechecks eligibility, capacity, the waitlist, schedule conflicts, and the guardian waiver; the price paid is kept and any difference is recorded as owed or due. Rider-initiated change requests and real refunds are Planned.
 
 ### Rider self-service
 
-Status: Planned; organizer transfers and withdrawals already exist in the local prototype.
+Status: Planned; organizer transfers and withdrawals already exist in the local build.
 
 After MFA sign-in, riders can view their registrations, receipts, waiver/readiness requirements, waitlist offers, and pending changes. Policies determine whether a change can be completed directly or requires organizer approval. Category-change previews must recheck eligibility, capacity, schedule conflicts, waivers, overall-participation rules, and package/pass effects, and show any charge or refund before submission. Transfers to another person require an explicit event policy, separate recipient consent and eligibility, and new required waivers; a signature is never transferred. Changes are reasoned, audited, and notified to affected parties. No rider can access another rider's private registration by guessing an order ID.
 
@@ -260,7 +260,7 @@ Acceptance: an eligible rider can defer under the published policy with one trac
 
 ### 2a. Clickable demo purchase flow — Phase 1
 
-Status: Implemented as a local prototype using the fake fixtures in [docs/fixtures/](docs/fixtures/README.md); automated tests cover the acceptance criterion below, including both display themes, except testing with real people (see [roadmap.md](roadmap.md#rider-checkout-prototype)). The demo is a Phase 1 prototype for usability testing, not a working checkout.
+Status: Implemented locally using the fake fixtures in [docs/fixtures/](docs/fixtures/README.md); automated tests cover the acceptance criterion below, including both display themes, except testing with real people (see [roadmap.md](roadmap.md#rider-checkout)). The demo uses simulated payment for usability testing; it is not a live checkout.
 
 A rider can click through the whole purchase from start to finish using fake demonstration data only. The demo keeps the project's chosen visual design (set in `DESIGN.md` once one exists) and supports both [display themes](#display-themes).
 
@@ -289,10 +289,10 @@ Rules:
 - A weekend bundle reserves all its component entries together; never sell half a bundle silently.
 - Distinguish unique riders, race entries, and orders in every report.
 - Flag duplicate entries without preventing a rider from legitimately entering different races.
-  - Status: same-rider suggestions across orders, with organizer-confirmed linking (never automatic), are Implemented in the local prototype (see [roadmap.md](roadmap.md#check-in-prototype)).
+  - Status: same-rider suggestions across orders, with organizer-confirmed linking (never automatic), are Implemented in the local build (see [roadmap.md](roadmap.md#check-in)).
 - First release supports organizer-managed waitlists. Automated promotion and charging follow later.
   - Waitlist policy (decided by the project owner, November 14, 2026): the organizer turns a waitlist on per category; it is off by default. While anyone is waiting or holds an offer, freed places go to the waitlist first and the category is not sold to the public. The organizer offers places in order; an offer reserves the place for 24 hours and the rider registers and pays through a private link. An unused offer expires and the organizer offers the next rider.
-  - Status: Implemented in the local prototype (see [roadmap.md](roadmap.md#rider-checkout-prototype)). Offer links are copied by the organizer; no email is sent.
+  - Status: Implemented in the local build (see [roadmap.md](roadmap.md#rider-checkout)). Offer links are copied by the organizer; no email is sent.
 
 ### 4. Organizer workspace
 
@@ -318,7 +318,7 @@ Acceptance: an authorized organizer finds one rider's multiple race entries with
 
 ### 5. Race-day operations
 
-Status: check-in search, ready/blocked result, bib ranges, bib history, repeat-safe check-in, undoing a mistaken check-in with a reason, and measured check-in times (median and 95th percentile per day) are Implemented in the local prototype on fake data (see [roadmap.md](roadmap.md#check-in-prototype)). Start-list snapshots with recorded changes, an organizer start-list lock whose later changes show as revisions, and a sample CSV export are Implemented too (see [roadmap.md](roadmap.md#start-lists-and-timer-export)); the CSV format is not yet agreed with a timer. A printable fallback roster with an exception checklist is Implemented (see [roadmap.md](roadmap.md#check-in-prototype)). QR check-in codes on the confirmation and camera scanning at check-in (Chrome and Edge) are Implemented; an agreed export format with a tested round trip is Planned.
+Status: check-in search, ready/blocked result, bib ranges, bib history, repeat-safe check-in, undoing a mistaken check-in with a reason, and measured check-in times (median and 95th percentile per day) are Implemented in the local build on fake data (see [roadmap.md](roadmap.md#check-in)). Start-list snapshots with recorded changes, an organizer start-list lock whose later changes show as revisions, and a sample CSV export are Implemented too (see [roadmap.md](roadmap.md#start-lists-and-timer-export)); the CSV format is not yet agreed with a timer. A printable fallback roster with an exception checklist is Implemented (see [roadmap.md](roadmap.md#check-in)). QR check-in codes on the confirmation and camera scanning at check-in (Chrome and Edge) are Implemented; an agreed export format with a tested round trip is Planned.
 
 - Search or scan a check-in code; codes identify entries and contain no sensitive rider details.
 - Show readiness, missing requirements, race/category, and bib assignment clearly.
@@ -368,7 +368,7 @@ Acceptance: an eligible code applies once with the advertised saving; expired, e
 
 ### Reporting
 
-Status: Planned reporting workspace; prototype start lists, snapshots, sample timer CSV, and organizer entries and simulated-ledger CSV exports already exist (see [roadmap.md](roadmap.md#rider-checkout-prototype)). Provide role-restricted event/day/race/category counts, unique riders versus entries versus orders, revenue and discount breakdowns, fees, refunds, issued/redeemed/expired/outstanding credit balances, deferrals, payment exceptions, outstanding readiness items, and waitlist activity. Count credit liability separately from cash receipts and avoid counting a deferral as new cash revenue. Finance reports link entry allocations to Stripe payment, refund, transfer, and payout references. Export totals reconcile exactly, including per-organization season-pass allocations.
+Status: Planned reporting workspace; start lists, snapshots, sample timer CSV, and organizer entries and simulated-ledger CSV exports already exist (see [roadmap.md](roadmap.md#rider-checkout)). Provide role-restricted event/day/race/category counts, unique riders versus entries versus orders, revenue and discount breakdowns, fees, refunds, issued/redeemed/expired/outstanding credit balances, deferrals, payment exceptions, outstanding readiness items, and waitlist activity. Count credit liability separately from cash receipts and avoid counting a deferral as new cash revenue. Finance reports link entry allocations to Stripe payment, refund, transfer, and payout references. Export totals reconcile exactly, including per-organization season-pass allocations.
 
 After reusable rider identity and organization permissions exist, support cross-event participant search, registration-history lookup, and prior-year registration pace comparisons within authorized data. Seasonal reports expose each organization's own entries and allocations; the coordinating organization receives only the approved aggregate view. Avoid expanding personal-data collection solely for analytics.
 
@@ -457,9 +457,9 @@ Requirements:
 - Encryption at rest and in transit, with least-privilege access to contact, emergency, and minor riders' data.
 - Automated backups with a demonstrated restore, and retention and deletion rules agreed before the pilot (see [Quality requirements](#quality-requirements)).
 - Card details are never stored; keep only the payment provider's references.
-- Organizer exports (entries, start lists, ledger) come from the database, so a successor can take over without manual reconstruction. Status: entries, start-list, and simulated-ledger CSV exports are Implemented in the local prototype (see [roadmap.md](roadmap.md#rider-checkout-prototype)).
+- Organizer exports (entries, start lists, ledger) come from the database, so a successor can take over without manual reconstruction. Status: entries, start-list, and simulated-ledger CSV exports are Implemented in the local build (see [roadmap.md](roadmap.md#rider-checkout)).
 
-The local prototype stores data in a SQLite file on the developer's computer ([ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md)). The hosted database engine and provider are an open decision; see the [decision backlog](docs/decisions/README.md).
+The local build stores data in a SQLite file on the developer's computer ([ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md)). The hosted database engine and provider are an open decision; see the [decision backlog](docs/decisions/README.md).
 
 ## Integrations and dependencies
 
@@ -474,7 +474,7 @@ The local prototype stores data in a SQLite file on the developer's computer ([A
 
 The questions to ask are packaged in [docs/usac-questions.md](docs/usac-questions.md) and [docs/payment-model-questions.md](docs/payment-model-questions.md); record the answers there.
 
-Until USAC integration is approved, prototypes may use clearly labeled simulated checks or an agreed manual-review process. A sanctioned-event pilot requires explicit acceptance of the chosen process by the relevant parties.
+Until USAC integration is approved, builds may use clearly labeled simulated checks or an agreed manual-review process. A sanctioned-event pilot requires explicit acceptance of the chosen process by the relevant parties.
 
 ### Future USA Cycling waiver and license integration
 
@@ -525,7 +525,7 @@ To research before Phase 3:
 
 ### Display themes
 
-Status: Implemented in the local prototype (organizer, rider, and check-in screens); signed-in sync is Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
+Status: Implemented in the local build (organizer, rider, and check-in screens); signed-in sync is Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
 
 - Default to the device's system preference (light or dark) on first visit.
 - Provide a visible, keyboard-accessible light/dark toggle on every screen, with an accessible name that states the current theme.

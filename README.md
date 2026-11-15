@@ -2,7 +2,7 @@
 
 CycleReg (working name; availability not checked) is a proposed registration and race-day platform for volunteer-run U.S. bike races. Its first release targets road races, criteriums, and two-day road race plus criterium weekends. The goal is measurable: less volunteer time spent on setup, registration exceptions, check-in, and handing the event to next year's organizer.
 
-> **Status: local prototype of the organizer category builder, rider checkout, registration tools, and race-day check-in.** You can build a road race and criterium weekend, publish it, register as a rider for one day or both (bundle pricing, held places, and a **simulated** payment), manage entries, check riders in, and download start lists and CSV exports, all on your own computer. Real payments, USA Cycling license and waiver checks, and sign-in with MFA are **not built** and are shown as pending in the app. Do not host or share the prototype. Phase 0 discovery tools are written, but no interviews or measurements have been done.
+> **Status: local build of the organizer category builder, rider checkout, registration tools, and race-day check-in.** You can build a road race and criterium weekend, publish it, register as a rider for one day or both (bundle pricing, held places, and a **simulated** payment), manage entries, check riders in, and download start lists and CSV exports, all on your own computer. Real payments, USA Cycling license and waiver checks, and sign-in with MFA are **not built** and are shown as pending in the app. Do not host or share the app. Phase 0 discovery tools are written, but no interviews or measurements have been done.
 
 ## Who it serves and the problem it solves
 
@@ -111,7 +111,7 @@ Open `http://127.0.0.1:5273/` and select **Load Berkeley Omnium** (the 2026 fiel
 
 ## How it is meant to work
 
-The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented as a prototype with **simulated** payment; real payment confirmation and the race-day scan are planned. In the organizer workflow, the "Before registration opens" steps are implemented except category questions; the exception queue, check-in, start-list snapshots, and sample timer export are prototypes; QR scanning, an agreed timer format, and the after-event stages are planned.
+The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented with **simulated** payment; real payment confirmation and the race-day scan are planned. In the organizer workflow, the "Before registration opens" steps are implemented except category questions; the exception queue, check-in, start-list snapshots, and sample timer export are implemented; QR scanning, an agreed timer format, and the after-event stages are planned.
 
 ### 1. Rider registration journey
 
@@ -200,7 +200,7 @@ erDiagram
     BUNDLE_COMPONENT }o--|| RACE : "one entry in"
 ```
 
-This is the conceptual model. It is implemented in the prototype's configuration document ([src/shared/schema.ts](src/shared/schema.ts)); bundles cover same-event packages only, and multi-event season passes are planned. An organization runs event weekends; each weekend has race days, and each day has races. Within a race, six concepts stay separate so that one setting never changes another by accident:
+This is the conceptual model. It is implemented in the app's configuration document ([src/shared/schema.ts](src/shared/schema.ts)); bundles cover same-event packages only, and multi-event season passes are planned. An organization runs event weekends; each weekend has race days, and each day has races. Within a race, six concepts stay separate so that one setting never changes another by accident:
 
 - Registration category: what a rider buys, such as Masters 35+ Cat 3/4, with its own eligibility and price.
 - Start group: the categories that start together under one field limit.
@@ -230,19 +230,19 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 |---|---|
 | Product brief and roadmap | Drafted; proposed, not approved |
 | Repository and contributor documentation | Implemented November 14, 2026 |
-| Category builder milestone (local organizer prototype) | Implemented November 14, 2026; shared-cap, eligibility, and fixture criteria verified by automated tests. See [roadmap.md](roadmap.md#category-builder-milestone) |
-| Rider checkout prototype (simulated payment) | Implemented November 14, 2026; buy-both-days, payment retry, license uncertainty, multi-race discount, and bundle criteria verified by automated tests. See [roadmap.md](roadmap.md#rider-checkout-prototype) |
+| Category builder milestone (local organizer build) | Implemented November 14, 2026; shared-cap, eligibility, and fixture criteria verified by automated tests. See [roadmap.md](roadmap.md#category-builder-milestone) |
+| Rider checkout (simulated payment) | Implemented November 14, 2026; buy-both-days, payment retry, license uncertainty, multi-race discount, and bundle criteria verified by automated tests. See [roadmap.md](roadmap.md#rider-checkout) |
 | Start lists and sample timer export | Implemented November 14, 2026; see [roadmap.md](roadmap.md#start-lists-and-timer-export) |
-| Race-day check-in prototype | Implemented November 14, 2026; see [roadmap.md](roadmap.md#check-in-prototype) |
-| Organizer registration tools: waitlists, transfers and withdrawals, same-rider linking, entries and ledger CSV exports | Implemented November 14, 2026; automated tests in CI. See [checkout](roadmap.md#rider-checkout-prototype) and [check-in](roadmap.md#check-in-prototype) in roadmap.md |
+| Race-day check-in | Implemented November 14, 2026; see [roadmap.md](roadmap.md#check-in) |
+| Organizer registration tools: waitlists, transfers and withdrawals, same-rider linking, entries and ledger CSV exports | Implemented November 14, 2026; automated tests in CI. See [checkout](roadmap.md#rider-checkout) and [check-in](roadmap.md#check-in) in roadmap.md |
 | Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; used by the rider demo |
 | Timer export review packet | Implemented November 14, 2026; not yet sent. See [docs/timer-export-review.md](docs/timer-export-review.md) |
 | Phase 1 usability test kit | Implemented November 14, 2026; no sessions run yet. See [docs/usability/](docs/usability/README.md) |
 | Phase 0 discovery kit | Implemented November 14, 2026; no interviews, measurements, or external questions done yet. See [docs/discovery/](docs/discovery/README.md) |
-| Stack | Chosen for the prototype only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
+| Stack | Chosen for the current local build only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
 | Real payments, USA Cycling checks, sign-in with MFA, hosting | Not built |
 
-**Next milestone: Phase 0 exit gate, plus the rest of Phase 1.** Phase 0 shows whether a recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup; if not, the roadmap says to stop the build. Every Phase 1 prototype is built. What remains for the Phase 1 exit gate is running the usability tests with the [test kit](docs/usability/README.md) and getting the timer to accept the sample export format. The first actions are in [roadmap.md](roadmap.md#next-actions).
+**Next milestone: Phase 0 exit gate, plus the rest of Phase 1.** Phase 0 shows whether a recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup; if not, the roadmap says to stop the build. Every Phase 1 deliverable is built. What remains for the Phase 1 exit gate is running the usability tests with the [test kit](docs/usability/README.md) and getting the timer to accept the sample export format. The first actions are in [roadmap.md](roadmap.md#next-actions).
 
 ## Documentation
 
@@ -257,8 +257,8 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [DATA_MODEL.md](DATA_MODEL.md) | Current database: tables, relationships, constraints, and deletion behavior |
 | [docs/architecture.md](docs/architecture.md) | What is built, the proposed target architecture, and open technical questions |
 | [docs/csv-category-format.md](docs/csv-category-format.md) | Columns and rules for importing and exporting category schedules |
-| [SETUP.md](SETUP.md) | Quick start: install, run, and test the prototype |
-| [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md) | Install, run, and test the prototype; [troubleshooting](docs/runbooks/troubleshooting.md) |
+| [SETUP.md](SETUP.md) | Quick start: install, run, and test the app |
+| [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md) | Install, run, and test the app; [troubleshooting](docs/runbooks/troubleshooting.md) |
 | [DESIGN.md](DESIGN.md) | Visual system of the organizer workspace |
 | [docs/coding-guide.md](docs/coding-guide.md) | Category and capacity modeling, eligibility, pricing, payments, privacy, accessibility, testing |
 | [docs/documentation-guide.md](docs/documentation-guide.md) | How docs are organized, status vocabulary, glossary, and setup and troubleshooting templates |

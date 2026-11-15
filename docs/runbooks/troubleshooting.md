@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Problems you may hit running the organizer workspace prototype locally. Each entry starts with what you see. Setup steps are in [local-setup.md](local-setup.md).
+Problems you may hit running the organizer workspace locally. Each entry starts with what you see. Setup steps are in [local-setup.md](local-setup.md).
 
 ## "Port 5273 is already in use" when running `npm run dev`
 

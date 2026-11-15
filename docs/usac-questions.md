@@ -2,11 +2,11 @@
 
 Status: Proposed, written November 14, 2026. Not yet sent. Answers go in the table at the end of this page; the owner and status are tracked in the [Phase 0 discovery kit](discovery/external-requirements.md#status).
 
-USA Cycling's answers decide whether this product can handle waivers and license checks for sanctioned events at all, so they come before any choice of production stack or live pilot. This is a [Phase 0](../roadmap.md#phase-0--establish-the-case-to-build) deliverable and [open decision 4](../product.md#open-decisions) in product.md. Until the answers are in, the prototype keeps using simulated checks and organizer review only.
+USA Cycling's answers decide whether this product can handle waivers and license checks for sanctioned events at all, so they come before any choice of production stack or live pilot. This is a [Phase 0](../roadmap.md#phase-0--establish-the-case-to-build) deliverable and [open decision 4](../product.md#open-decisions) in product.md. Until the answers are in, the app keeps using simulated checks and organizer review only.
 
 ## Who should send it
 
-The club's race director or another officer who already holds a USA Cycling organizer account for the event, because USAC deals with sanctioning organizers. Copy the technical lead so technical follow-ups reach the right person. Do not describe the prototype as an approved or integrated platform.
+The club's race director or another officer who already holds a USA Cycling organizer account for the event, because USAC deals with sanctioning organizers. Copy the technical lead so technical follow-ups reach the right person. Do not describe the app as an approved or integrated platform.
 
 ## What to send
 
@@ -14,7 +14,7 @@ The club's race director or another officer who already holds a USA Cycling orga
 
 ## Context USA Cycling may ask for
 
-- **What exists today.** A prototype that runs on one computer with fictional riders. It does not connect to USA Cycling, take real payments, or collect real waivers.
+- **What exists today.** An app that runs on one computer with fictional riders. It does not connect to USA Cycling, take real payments, or collect real waivers.
 - **Planned design.** License and waiver checks sit behind one interface that can use organizer review, an approved file import, or a live USA Cycling connection. Unknown or failed checks always leave the rider "needs review", never cleared. See [product.md](../product.md#future-usa-cycling-waiver-and-license-integration).
 - **First use.** A smaller pilot event before the Berkeley Omnium, which stays on its current system until the [launch criteria](../product.md#launch-criteria) are met.
 

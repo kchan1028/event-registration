@@ -6,7 +6,7 @@ Two people run a session: a **facilitator** who talks with the participant, and 
 
 ## Before the session
 
-"Thanks for helping. We're building a prototype for race registration and race-day check-in, and we want to see where it's confusing before anyone relies on it. We're testing the software, not you. If something is hard, that's exactly what we need to find."
+"Thanks for helping. We're building an app for race registration and race-day check-in, and we want to see where it's confusing before anyone relies on it. We're testing the software, not you. If something is hard, that's exactly what we need to find."
 
 "The riders and contact details are fictional. Berkeley is a reference event name; its demonstration schedule and prices are not an approved current offering. Please don't type any real personal information. If a screen asks for something, use the fake details we give you or invent them."
 
@@ -74,7 +74,7 @@ Close: "Thank you. This really helps. We'll use what you found to fix the confus
 
 ## Berkeley module introduction
 
-“This prototype is not an official Berkeley Omnium registration service or a USAC-approved platform. Nothing here registers you for a real race or moves money. Please use only the fictional details on your task card. Some workflows are incomplete; if you reach one, explain what you expected and we will record that limitation.”
+“This app is not an official Berkeley Omnium registration service or a USAC-approved platform. Nothing here registers you for a real race or moves money. Please use only the fictional details on your task card. Some workflows are incomplete; if you reach one, explain what you expected and we will record that limitation.”
 
 Do not teach the meaning of individual statuses or explain pricing before the participant attempts the task. Ask “What does this mean to you?” before targeted follow-ups. For the missing-waiver card, say explicitly that it is a hypothetical state, not a working desk waiver screen. Record known gaps separately from participant mistakes.
 
