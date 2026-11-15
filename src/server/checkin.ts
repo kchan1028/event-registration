@@ -38,8 +38,8 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   }
 
   /**
-   * One rider made from linked orders (rider identity): the earliest live order's details and the persisted rider key, every
-   * order's entries, and paid only when every linked order is paid. An unlinked order is unchanged.
+   * One rider made from linked orders: use live orders when present, otherwise retained historical orders.
+   * Keep the persisted rider key, the selected group's entries, and confirmed payment only when the whole group is confirmed.
    */
   type Rider = OrderView & { checkInCodes: string[] };
   function mergeRider(group: OrderView[], riderKey: string): Rider {
