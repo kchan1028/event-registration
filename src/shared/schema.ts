@@ -91,6 +91,8 @@ export const registrationSettingsSchema = z.object({
   additionalRaceDiscountCents: cents,
   /** each_additional_entry: every entry after the first; once_same_day: once per order when two or more entries share a day. */
   additionalRaceDiscountMode: z.enum(['each_additional_entry', 'once_same_day']).default('each_additional_entry'),
+  /** When set, each entry after the first in the same race costs this flat price (e.g. a second criterium category). */
+  sameRaceExtraEntryCents: cents.nullable().default(null),
   platformFeeCents: cents.default(0),
   platformFeeLabel: z.string().max(60).default('Platform fee'),
   /** Percentage of the entries subtotal after discounts, in basis points (300 = 3%). */
@@ -111,6 +113,7 @@ export const DEFAULT_REGISTRATION_SETTINGS: z.infer<typeof registrationSettingsS
   bundles: [],
   additionalRaceDiscountCents: 0,
   additionalRaceDiscountMode: 'each_additional_entry',
+  sameRaceExtraEntryCents: null,
   platformFeeCents: 0,
   platformFeeLabel: 'Platform fee',
   processingFeeBasisPoints: 0,
