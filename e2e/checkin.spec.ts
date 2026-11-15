@@ -215,3 +215,99 @@ for (const mobile of [false, true]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }
+
+for (const mobile of [false, true]) {
+  test(`protected bib changes offer explicit numbers and resequencing (${mobile ? 'mobile' : 'desktop'})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    const api = page.request;
+    const { eventId } = await (await api.post('/api/demo')).json();
+    await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+    await api.post(`/api/events/${eventId}/check-in-demo-riders`);
+    await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });
+    const initial = await (await api.get(`/api/events/${eventId}/check-in`)).json();
+    const alex = initial.riders.find((r: Rider) => r.name.startsWith('Alex'));
+    const blake = initial.riders.find((r: Rider) => r.name.startsWith('Blake'));
+    const batch = { dayId: initial.dayId, orderIds: [alex.orderId, blake.orderId] };
+    const allocation = await (await api.post(`/api/events/${eventId}/bibs/preview`, { data: batch })).json();
+    expect((await api.post(`/api/events/${eventId}/bibs/apply`, { data: { ...batch, fingerprint: allocation.fingerprint } })).ok()).toBe(true);
+    expect((await api.post(`/api/events/${eventId}/check-in/${alex.orderId}`, { data: { dayId: initial.dayId } })).ok()).toBe(true);
+    const lists = await (await api.get(`/api/events/${eventId}/start-lists`)).json();
+    for (const race of lists.races) await api.post(`/api/events/${eventId}/start-lists/${race.raceId}/lock`);
+    await page.goto(`/#/events/${eventId}/check-in`);
+    await page.getByRole('button', { name: 'Reassign bibs', exact: true }).click();
+    const panel = page.getByRole('region', { name: 'Bulk bib reassignment', exact: true });
+    await panel.getByRole('checkbox', { name: alex.name, exact: true }).check();
+    await panel.getByRole('checkbox', { name: blake.name, exact: true }).check();
+    await panel.getByRole('textbox', { name: 'Reason for bib changes' }).fill('Swap demo numbers for the timer handoff');
+    await panel.getByRole('textbox', { name: `New bib for ${alex.name}`, exact: true }).fill('101');
+    await panel.getByRole('textbox', { name: `New bib for ${blake.name}`, exact: true }).fill('100');
+    await panel.getByRole('button', { name: 'Preview bib changes', exact: true }).click();
+    const preview = panel.getByRole('region', { name: 'Proposed bib changes', exact: true });
+    await expect(preview.getByRole('row', { name: new RegExp(alex.name) })).toContainText('Saturday');
+    await expect(panel).toContainText('Whole event');
+    await expect(panel).toContainText('Sunday criterium');
+    await panel.getByRole('combobox', { name: 'Replacement numbers', exact: true }).selectOption('sequence');
+    await expect(preview).toHaveCount(0);
+    await panel.getByRole('button', { name: 'Preview bib changes', exact: true }).click();
+    await expect(panel.getByText('The numbers already match this selection and order. No changes are needed.', { exact: true })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Apply 0 bib changes', exact: true })).toBeDisabled();
+    await panel.getByRole('combobox', { name: 'Replacement numbers', exact: true }).selectOption('manual');
+    await panel.getByRole('button', { name: 'Preview bib changes', exact: true }).click();
+    expect((await new AxeBuilder({ page }).include('[aria-label="Bulk bib reassignment"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: `test-results/bib-reassignment-${mobile ? 'mobile' : 'desktop'}.png`, fullPage: true, animations: 'disabled' });
+    if (mobile) {
+      await page.getByRole('button', { name: /Switch to dark/ }).click();
+      await page.screenshot({ path: 'test-results/bib-reassignment-mobile-dark.png', fullPage: true, animations: 'disabled' });
+      expect((await new AxeBuilder({ page }).include('[aria-label="Bulk bib reassignment"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    }
+    await panel.getByRole('button', { name: 'Apply 2 bib changes', exact: true }).click();
+    await expect(panel.getByText('2 bibs changed; start-list revisions saved. Readiness and check-in are unchanged.', { exact: true })).toBeVisible();
+    const swapped = await (await api.get(`/api/events/${eventId}/check-in`)).json();
+    expect(swapped.riders.find((r: Rider) => r.orderId === alex.orderId)).toMatchObject({ bib: 101, checkedInAt: expect.any(String) });
+    expect(swapped.riders.find((r: Rider) => r.orderId === blake.orderId)).toMatchObject({ bib: 100, checkedInAt: null });
+    await panel.getByRole('combobox', { name: 'Replacement numbers', exact: true }).selectOption('sequence');
+    await panel.getByRole('checkbox', { name: alex.name, exact: true }).check();
+    await panel.getByRole('checkbox', { name: blake.name, exact: true }).check();
+    await panel.getByRole('textbox', { name: 'Reason for bib changes' }).fill('Restore the demo field to name order');
+    await panel.getByRole('button', { name: 'Preview bib changes', exact: true }).click();
+    await panel.getByRole('button', { name: 'Apply 2 bib changes', exact: true }).click();
+    await expect(panel.getByText('2 bibs changed; start-list revisions saved. Readiness and check-in are unchanged.', { exact: true })).toBeVisible();
+    const ordered = await (await api.get(`/api/events/${eventId}/check-in`)).json();
+    expect(ordered.riders.find((r: Rider) => r.orderId === alex.orderId)?.bib).toBe(100);
+    expect(ordered.riders.find((r: Rider) => r.orderId === blake.orderId)?.bib).toBe(101);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}
+
+test('individual correction previews a preassigned number without checking the rider in', async ({ page }) => {
+  const api = page.request;
+  const { eventId } = await (await api.post('/api/demo')).json();
+  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await api.post(`/api/events/${eventId}/check-in-demo-riders`);
+  await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });
+  const initial = await (await api.get(`/api/events/${eventId}/check-in`)).json();
+  const alex = initial.riders.find((r: Rider) => r.name.startsWith('Alex'));
+  const batch = { dayId: initial.dayId, orderIds: [alex.orderId] };
+  const plan = await (await api.post(`/api/events/${eventId}/bibs/preview`, { data: batch })).json();
+  await api.post(`/api/events/${eventId}/bibs/apply`, { data: { ...batch, fingerprint: plan.fingerprint } });
+  await page.goto(`/#/events/${eventId}/check-in`);
+  const search = page.getByRole('searchbox', { name: 'Find a rider' });
+  await search.fill(alex.name);
+  await search.press('Enter');
+  const detail = page.getByRole('region', { name: 'Rider check-in', exact: true });
+  await expect(detail.getByText('Assigned bib (before check-in)', { exact: true })).toBeVisible();
+  await detail.getByRole('button', { name: 'Change bib', exact: true }).click();
+  const form = detail.getByRole('form', { name: 'Change rider bib', exact: true });
+  await form.getByRole('textbox', { name: 'New bib', exact: true }).fill('130');
+  await form.getByRole('textbox', { name: 'Reason', exact: true }).fill('Replace a damaged demo number');
+  await form.getByRole('button', { name: 'Preview bib change', exact: true }).click();
+  await expect(form.getByRole('region', { name: 'Proposed bib changes', exact: true })).toContainText('130');
+  await form.getByRole('textbox', { name: 'Reason', exact: true }).fill('Use a fresh demo bib after checking the range');
+  await expect(form.getByRole('region', { name: 'Proposed bib changes', exact: true })).toHaveCount(0);
+  await form.getByRole('button', { name: 'Preview bib change', exact: true }).click();
+  await form.getByRole('button', { name: 'Apply bib change', exact: true }).click();
+  await expect(detail.locator('.ci-bib__number')).toHaveText('130');
+  const after = await (await api.get(`/api/events/${eventId}/check-in`)).json();
+  expect(after.riders.find((r: Rider) => r.orderId === alex.orderId)).toMatchObject({ bib: 130, checkedInAt: null });
+});

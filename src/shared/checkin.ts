@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { bibNumberSchema } from './schema';
 import type { Role } from './roles';
 import type { ReadinessItem } from './checkout';
 
@@ -15,8 +16,8 @@ export const BIB_SCOPES = ['weekend', 'day'] as const;
 export const bibRangeSchema = z
   .object({
     scope: z.string().min(1).max(64), // "weekend" or a race day ID
-    first: z.number().int().min(1).max(99999),
-    last: z.number().int().min(1).max(99999),
+    first: bibNumberSchema,
+    last: bibNumberSchema,
   })
   .refine((r) => r.first <= r.last, { message: 'The first bib must not be higher than the last bib.' });
 export type BibRange = z.infer<typeof bibRangeSchema>;
@@ -150,11 +151,12 @@ export interface BibPlan {
 }
 
 /** Assignment reserves a number; it does not clear or check in a rider. */
-export function bibBatchExclusion(rider: Pick<CheckInRider, 'payment' | 'entries' | 'bib' | 'checkedInAt'>): string | null {
-  if (rider.bib !== null) return 'Already has a bib';
-  if (rider.checkedInAt !== null) return 'Already checked in';
+export function bibBatchExclusion(rider: Pick<CheckInRider, 'payment' | 'entries' | 'bib' | 'checkedInAt'>, operation: 'unassigned' | 'reassign'): string | null {
   if (rider.payment !== 'confirmed') return 'Entry not confirmed';
   if (rider.entries.length === 0) return 'No entry on this day';
+  if (operation === 'reassign') return rider.bib === null ? 'No existing bib; use Assign bibs' : null;
+  if (rider.bib !== null) return 'Already has a bib';
+  if (rider.checkedInAt !== null) return 'Already checked in';
   return null;
 }
 
@@ -171,4 +173,38 @@ export interface AutomaticBibJob {
   lastAttemptAt: string | null;
   message: string | null;
   assigned: number | null;
+}
+
+
+export const bibFingerprintSchema = z.string().regex(/^[a-f0-9]{64}$/);
+export const bibChangeSchema = z.object({
+  dayId: bibBatchSchema.shape.dayId,
+  bib: bibNumberSchema,
+  reason: z.string().trim().min(3, 'Say why the bib changed.').max(200),
+});
+export type BibChange = z.infer<typeof bibChangeSchema>;
+const reassignmentScope = bibBatchSchema.pick({ dayId: true, raceId: true, categoryId: true }).extend({ reason: bibChangeSchema.shape.reason });
+export const bibReassignmentSchema = z.discriminatedUnion('mode', [
+  reassignmentScope.extend({ mode: z.literal('manual'), assignments: z.array(z.object({ orderId: bibBatchSchema.shape.orderIds.element, bib: bibNumberSchema })).min(1).max(MAX_BIB_BATCH_SIZE) }),
+  reassignmentScope.extend({ mode: z.literal('sequence'), orderIds: bibBatchSchema.shape.orderIds, sort: bibBatchSchema.shape.sort.unwrap() }),
+]);
+export type BibReassignment = z.infer<typeof bibReassignmentSchema>;
+export interface BibReassignmentPlan {
+  dayId: string;
+  scope: string;
+  scopeLabel: string;
+  reason: string;
+  publishedVersion: number;
+  races: { id: string; name: string }[];
+  assignments: { orderId: string; name: string; currentBib: number; bib: number; previousAssignmentId: string; range: { first: number; last: number }; checkedInDays: string[] }[];
+  fingerprint: string;
+}
+export interface BibReassignmentResult extends BibReassignmentPlan {
+  id: string | null;
+  applied: number;
+  snapshots: { raceId: string; version: number }[];
+}
+
+export function changedBibAssignments(plan: Pick<BibReassignmentPlan, 'assignments'>) {
+  return plan.assignments.filter((a) => a.currentBib !== a.bib);
 }

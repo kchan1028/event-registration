@@ -138,14 +138,14 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
     async lock(eventId: string, raceId: string) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
-        const snap = await this.snapshot(eventId, raceId);
+        const snap = await this.snapshot(eventId, raceId, null);
         const t = nowIso();
         await db.run(`INSERT INTO start_list_locks (id, event_id, race_id, snapshot_version, locked_at) VALUES ($1, $2, $3, $4, $5)`, [newId('lock'), eventId, raceId, snap.version, t]);
         return { ...snap, lockedAt: t };
       });
     },
 
-    async snapshot(eventId: string, raceId: string) {
+    async snapshot(eventId: string, raceId: string, reassignmentId: string | null) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
         const loaded = await load(eventId);
@@ -153,7 +153,7 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
         const rows = currentRows(loaded, raceId);
         const max = await db.get<{ v: number | null }>(`SELECT MAX(version) AS v FROM start_list_snapshots WHERE event_id = $1 AND race_id = $2`, [eventId, raceId]);
         const next = (max?.v ?? 0) + 1;
-        await db.run(`INSERT INTO start_list_snapshots (id, event_id, race_id, version, published_version, rows_json, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`, [
+        await db.run(`INSERT INTO start_list_snapshots (id, event_id, race_id, version, published_version, rows_json, created_at, reassignment_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [
           newId('sls'),
           eventId,
           raceId,
@@ -161,6 +161,7 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
           version,
           JSON.stringify(rows),
           nowIso(),
+          reassignmentId,
         ]);
         return { version: next, riders: rows.length };
       });
