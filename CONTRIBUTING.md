@@ -2,7 +2,7 @@
 
 Thanks for helping. This guide explains how to propose a change, make it, and get it reviewed. It is written for new contributors and for a race organizer taking over the project from someone else.
 
-The project has its source documents and a local organizer prototype (the category builder milestone). Useful contributions now are discovery notes, requirement clarifications, decision records, and code that closes gaps listed in [roadmap.md](roadmap.md#category-builder-milestone). To run the code, follow [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
+The project has its source documents and a local prototype covering the category builder, rider checkout with simulated payment, registration tools, check-in, and start lists. Useful contributions now are discovery notes, requirement clarifications, decision records, and code that closes gaps listed in [roadmap.md](roadmap.md#delivery-status). To run the code, follow [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
 
 ## The one rule that applies to every change
 
