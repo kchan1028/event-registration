@@ -24,6 +24,8 @@ Recorded 2026-11-14, with follow-ups 2026-11-15, from [D01](interviews/D01.md) o
 - The start-list export cost mostly disappears with a saved template, which points to option A for that step.
 - D01 would not move to a platform riders don't know, because riders might not find or trust the event there. This favors A and B, and is a distribution risk for C.
 - Discounts (omnium package, junior, collegiate, women's entry) need generated discount codes in the current tool, which D01 finds hard.
+- Shared-field limits are enforced by a person, not BikeReg. If BikeReg cannot cap a combined field, this is a software limit that option C addresses (shared capacity pools exist in the local build). Not yet checked.
+- No license issues or duplicate entries per event (D01), so exception handling is not a measured cost for this event.
 
 ## Criteria
 

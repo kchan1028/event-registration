@@ -39,7 +39,7 @@ Start groups that share a field limit, category caps, what happens when a field 
 
 | Step | Who | Tool | Time | Problems | Software limit? |
 |---|---|---|---|---|---|
-| Decide which fields to combine and whether to score them separately; limits of 75 for Novice and 100 for other fields | Promoter | Registration system | Included above | Many combined Masters fields (for example 35+ Cat 3/4, 35+ Cat 1/2/3). Who or what enforces a shared limit not yet known | Unsure |
+| Decide which fields to combine and whether to score them separately; limits of 75 for Novice and 100 for other fields | Promoter | Registration system | Included above | Many combined Masters fields (for example 35+ Cat 3/4, 35+ Cat 1/2/3). A person enforces the shared limit, not BikeReg (D01) | Unsure: not yet checked whether BikeReg can cap a combined field |
 
 ### 3. Prices, discounts, and bundles
 
@@ -63,7 +63,7 @@ License problems, junior waivers, wrong category, duplicates, missing informatio
 
 | Step | Who | Tool | Time | Problems | Software limit? |
 |---|---|---|---|---|---|
-| Handle license issues and duplicate entries; a rider with an unconfirmed license cannot register (D01 cites a USAC rule) | Registration lead (same person) | BikeReg | Not given | Counts not given | No (rule, not tool) |
+| License issues and duplicate entries: none per event (D01). A rider with an unconfirmed license cannot register | Registration lead (same person) | BikeReg | None | None reported | No |
 
 ### 6. Check-in and bibs
 
