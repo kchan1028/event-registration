@@ -52,17 +52,13 @@ Nobody enters real personal information. Every task uses the fictional demo ride
 
 The app runs only on the facilitator's computer and listens only on `127.0.0.1`. Follow [local-setup.md](../runbooks/local-setup.md) once, then give every session its own database so each participant starts clean and their session stays available for review.
 
-1. Create a database named for the session, then start the app with it:
-
-   ```bash
-   docker exec cyclereg-postgres createdb -U cyclereg cyclereg_usability_p01
-   ```
+1. Start the app with a database named for the session. The app creates it on your local PostgreSQL the first time:
 
    ```bash
    DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_usability_p01 npm run dev
    ```
 
-   Expected result: the API logs `Server listening at http://127.0.0.1:3001` and Vite prints `Local: http://127.0.0.1:5273/`. The new database starts empty; the app creates its tables on start.
+   Expected result: the API logs `Server listening at http://127.0.0.1:3001` and Vite prints `Local: http://127.0.0.1:5273/`. The API also logs `Created local database cyclereg_usability_p01.` the first time. The new database starts empty; the app creates its tables on start.
 
 2. Open `http://127.0.0.1:5273/` and prepare the starting state for the role, as listed under each role in [tasks.md](tasks.md).
 3. Set the display theme the participant will use (the sun or moon button in the header). Run at least one volunteer session in the dark theme and at least one in bright daylight, because [product.md](../../product.md#display-themes) requires the check-in result to read in sunlight.

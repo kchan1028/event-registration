@@ -66,8 +66,9 @@ Last confirmed: November 15, 2026
 
 ## `database "cyclereg_berkeley" does not exist`
 
-Who sees it: anyone using a separate database for the Berkeley demo or a usability session.
-Fix: create it first, for example `docker exec cyclereg-postgres createdb -U cyclereg cyclereg_berkeley`. Only the default `cyclereg` database is created with the container.
+Who sees it: anyone pointing `DATABASE_URL` at a database that does not exist on a PostgreSQL server that is not on this computer.
+Cause: the dev server, `npm run seed:*`, and `npm run seed:cases` create a missing database only when the host is `localhost`, `127.0.0.1`, or `::1`. They never create one anywhere else.
+Fix: for a local database, check the host in `DATABASE_URL`. For another server, create the database there yourself, for example `createdb -h <host> -U <user> cyclereg_berkeley`.
 Last confirmed: November 15, 2026
 
 ## End-to-end test says the browser is missing

@@ -313,6 +313,34 @@ const MIGRATION_LOCK = 4_241_017;
 
 export const DEFAULT_DATABASE_URL = 'postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg';
 
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+/**
+ * Local development only: creates the database named in the URL when it does not exist
+ * yet, so a separate demo or session database needs no manual `createdb`. Returns true
+ * when it created one. A database on any other host is never created (returns false).
+ */
+export async function ensureLocalDatabase(connectionString: string): Promise<boolean> {
+  const url = new URL(connectionString);
+  if (!LOCAL_HOSTS.has(url.hostname)) return false;
+  const name = decodeURIComponent(url.pathname.slice(1));
+  if (!/^[a-z0-9_]+$/.test(name)) throw new Error(`Use a database name of lowercase letters, digits, and underscores (got "${name}").`);
+  url.pathname = '/postgres';
+  const admin = new pg.Client({ connectionString: url.toString(), connectionTimeoutMillis: 10_000 });
+  await admin.connect();
+  try {
+    const existing = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [name]);
+    if (existing.rowCount) return false;
+    await admin.query(`CREATE DATABASE "${name}"`);
+    return true;
+  } catch (err) {
+    if ((err as { code?: string }).code === '42P04') return false; // created by another process just now
+    throw err;
+  } finally {
+    await admin.end();
+  }
+}
+
 async function applyMigrations(pool: pg.Pool): Promise<void> {
   const client = await pool.connect();
   try {
