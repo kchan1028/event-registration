@@ -1,4 +1,4 @@
-import { formatTime } from './format';
+import { formatDollars, formatTime } from './format';
 import type { Category, EventConfig } from './schema';
 
 /**
@@ -38,7 +38,6 @@ export interface ChangeImpact {
 }
 
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-const dollars = (c: number) => `$${(c / 100).toFixed(2).replace(/\.00$/, '')}`;
 const limitText = (n: number | null) => (n === null ? 'no limit' : String(n));
 const STATUS: Record<Category['status'], string> = { active: 'open', closed: 'closed', archived: 'archived' };
 
@@ -100,7 +99,7 @@ function categoryChanges(before: EventConfig, after: EventConfig, b: Category, a
 
   if (!sameJson(b.pricing, a.pricing)) {
     kinds.add('price');
-    const base = b.pricing.baseCents !== a.pricing.baseCents ? ` Base price ${dollars(b.pricing.baseCents)} → ${dollars(a.pricing.baseCents)}.` : '';
+    const base = b.pricing.baseCents !== a.pricing.baseCents ? ` Base price ${formatDollars(b.pricing.baseCents)} → ${formatDollars(a.pricing.baseCents)}.` : '';
     details.push(`Price changed.${base} Paid entries keep the price they paid; only new entries use the new price.`);
   }
 

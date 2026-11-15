@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
 import { parseCsv } from '../src/shared/csv';
 import { entriesCsv, ledgerCsv, type ExportOrder } from '../src/shared/exports';
+import { eventSummary } from '../src/shared/reports';
 import type { EventConfig } from '../src/shared/schema';
 
 /* Organizer exports: entries and a ledger (simulated or Stripe test-mode payments, refunds), from the database. */
@@ -152,5 +153,45 @@ describe('entries and ledger CSV builders', () => {
 
     const simulated = table(ledgerCsv([order()]));
     expect(simulated.every((r) => r.note === 'Simulated payment: no money moved')).toBe(true);
+  });
+});
+
+describe('event summary', () => {
+  it('adds up to the ledger rows by kind and counts riders once', () => {
+    const confirmed = order({
+      quote: { ...order().quote, fees: [{ key: 'processing', label: 'Processing fee', cents: 300 }], totalCents: 8800 },
+      totalCents: 8800,
+      refunds: [
+        { entryId: 'ent_1', amountCents: 2000, status: 'succeeded', at: '2027-03-02T10:00:00.000Z' },
+        { entryId: 'ent_1', amountCents: 900, status: 'failed', at: '2027-03-02T11:00:00.000Z' },
+        { entryId: null, amountCents: 8800, status: 'succeeded', at: '2027-03-02T12:00:00.000Z', duplicateCharge: true },
+      ],
+    });
+    const sameRider = order({ id: 'ord_2', orderNumber: 'DEMO-BBBB2222' });
+    const withdrawn = order({ id: 'ord_3', orderNumber: 'DEMO-CCCC3333', entries: order().entries.map((e) => ({ ...e, status: 'withdrawn' })) });
+    const late = order({ id: 'ord_4', orderNumber: 'DEMO-DDDD4444', status: 'needs_attention' });
+    const held = order({ id: 'ord_5', orderNumber: 'DEMO-EEEE5555', status: 'held', confirmedAt: null, paidWith: null, entries: order().entries.map((e) => ({ ...e, status: 'held' })) });
+    const all = [confirmed, sameRider, withdrawn, late, held];
+    // ord_2 is linked to ord_1 as the same rider.
+    const s = eventSummary(all, (id) => (id === 'ord_2' ? 'ord_1' : id), true);
+
+    expect(s.riders).toBe(1);
+    expect(s.orders).toEqual({ confirmed: 3, held: 1, paymentFailed: 0, needsAttention: 1 });
+    expect(s.entries).toEqual({ confirmed: 4, held: 2, withdrawn: 2 });
+    expect(s.byCategory.map((c) => [c.code, c.entries])).toEqual([
+      ['CR-B', 2],
+      ['RR-A', 2],
+    ]);
+
+    const cents = (kind: string) => table(ledgerCsv(all)).filter((r) => r.kind === kind && r.amount !== '').reduce((t, r) => t + Math.round(Number(r.amount) * 100), 0);
+    const m = s.money!;
+    expect(m.entryPriceCents).toBe(cents('entry'));
+    expect(-m.discountCents).toBe(cents('discount'));
+    expect(m.feeCents).toBe(cents('fee'));
+    expect(m.receivedCents).toBe(cents('order_total'));
+    expect(-(m.refundedCents + m.duplicateChargeRefundedCents)).toBe(cents('refund'));
+    expect(m).toMatchObject({ refundedCents: 2000, duplicateChargeRefundedCents: 8800, netCents: m.receivedCents - 2000, needsAttention: { orders: 1, cents: 8500 } });
+
+    expect(eventSummary(all, (id) => id, false).money).toBeNull();
   });
 });

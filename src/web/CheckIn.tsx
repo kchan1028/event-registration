@@ -156,7 +156,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
 
       {data && (
         <>
-          <dl className="ci__summary" aria-label={`${day?.label ?? 'Today'} at a glance`}>
+          <dl className="stat-grid" aria-label={`${day?.label ?? 'Today'} at a glance`}>
             <div>
               <dt>Riders</dt>
               <dd>{data.summary.riders}</dd>
