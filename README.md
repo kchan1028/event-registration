@@ -2,7 +2,7 @@
 
 CycleReg (working name; availability not checked) is a proposed registration and race-day platform for volunteer-run U.S. bike races. Its first release targets road races, criteriums, and two-day road race plus criterium weekends. The goal is measurable: less volunteer time spent on setup, registration exceptions, check-in, and handing the event to next year's organizer.
 
-> **Status: local prototype of the organizer category builder and rider checkout.** You can build a road race and criterium weekend, publish it, and register as a rider for one day or both, with bundle pricing, held places, and a **simulated** payment, all on your own computer. Real payments, USA Cycling license and waiver checks, and sign-in with MFA are **not built** and are shown as pending in the app. Do not host or share the prototype. Phase 0 discovery tools are written, but no interviews or measurements have been done.
+> **Status: local prototype of the organizer category builder, rider checkout, registration tools, and race-day check-in.** You can build a road race and criterium weekend, publish it, register as a rider for one day or both (bundle pricing, held places, and a **simulated** payment), manage entries, check riders in, and download start lists and CSV exports, all on your own computer. Real payments, USA Cycling license and waiver checks, and sign-in with MFA are **not built** and are shown as pending in the app. Do not host or share the prototype. Phase 0 discovery tools are written, but no interviews or measurements have been done.
 
 ## Who it serves and the problem it solves
 
@@ -109,7 +109,7 @@ Open `http://127.0.0.1:5273/` and select **Load Berkeley Omnium** (the 2026 fiel
 
 ## How it is meant to work
 
-The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented as a prototype with **simulated** payment; real payment confirmation and the race-day scan are planned. In the organizer workflow, the "Before registration opens" steps are implemented except CSV import, category questions, and bib ranges; the exception queue is a prototype; race day and after-event stages are planned.
+The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented as a prototype with **simulated** payment; real payment confirmation and the race-day scan are planned. In the organizer workflow, the "Before registration opens" steps are implemented except category questions; the exception queue, check-in, start-list snapshots, and sample timer export are prototypes; QR scanning, an agreed timer format, and the after-event stages are planned.
 
 ### 1. Rider registration journey
 
@@ -198,7 +198,7 @@ erDiagram
     BUNDLE_COMPONENT }o--|| RACE : "one entry in"
 ```
 
-This is the conceptual model. Everything except bundles is implemented in the prototype's configuration document ([src/shared/schema.ts](src/shared/schema.ts)); bundles are planned. An organization runs event weekends; each weekend has race days, and each day has races. Within a race, six concepts stay separate so that one setting never changes another by accident:
+This is the conceptual model. It is implemented in the prototype's configuration document ([src/shared/schema.ts](src/shared/schema.ts)); bundles cover same-event packages only, and multi-event season passes are planned. An organization runs event weekends; each weekend has race days, and each day has races. Within a race, six concepts stay separate so that one setting never changes another by accident:
 
 - Registration category: what a rider buys, such as Masters 35+ Cat 3/4, with its own eligibility and price.
 - Start group: the categories that start together under one field limit.
@@ -232,6 +232,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | Rider checkout prototype (simulated payment) | Implemented November 14, 2026; buy-both-days, payment retry, license uncertainty, multi-race discount, and bundle criteria verified by automated tests. See [roadmap.md](roadmap.md#rider-checkout-prototype) |
 | Start lists and sample timer export | Implemented November 14, 2026; see [roadmap.md](roadmap.md#start-lists-and-timer-export) |
 | Race-day check-in prototype | Implemented November 14, 2026; see [roadmap.md](roadmap.md#check-in-prototype) |
+| Organizer registration tools: waitlists, transfers and withdrawals, same-rider linking, entries and ledger CSV exports | Implemented November 14, 2026; automated tests in CI. See [checkout](roadmap.md#rider-checkout-prototype) and [check-in](roadmap.md#check-in-prototype) in roadmap.md |
 | Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; used by the rider demo |
 | Timer export review packet | Implemented November 14, 2026; not yet sent. See [docs/timer-export-review.md](docs/timer-export-review.md) |
 | Phase 1 usability test kit | Implemented November 14, 2026; no sessions run yet. See [docs/usability/](docs/usability/README.md) |

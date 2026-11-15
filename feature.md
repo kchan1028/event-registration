@@ -24,6 +24,8 @@ This is a feature summary, not a second requirements document or roadmap. [produ
 | Organizer transfers and withdrawals | Implemented | Change paid entries with a reason and renewed eligibility/capacity checks; preserve the order total and log price differences for settlement outside the app |
 | Draft autosave | Implemented | Save locally with stale-save protection |
 | Registration queue | Implemented | Review simulated orders, outstanding readiness items, and manual license-review notes |
+| Same-rider linking | Implemented | Suggest likely matches across orders; link only when the organizer confirms |
+| Entries and ledger CSV | Implemented | Download one row per entry and a simulated ledger; contact, emergency, and license-number details are left out |
 
 Details and limits: [category builder](product.md#1a-road-race-and-criterium-category-builder--p0) and [organizer prototype status](roadmap.md#category-builder-milestone).
 
@@ -101,7 +103,7 @@ These are not available in the prototype. Phase order and dependencies remain in
 | Participant workspace, reusable rider identity, saved filtered views, history, and safe bulk actions | Planned beyond event-level lookup | [Participant management](product.md#participant-management) |
 | Automatic confirmed-entry bib assignment and previewed bulk allocation | Planned beyond check-in-time assignment | [Automatic and bulk bib assignment](product.md#automatic-and-bulk-bib-assignment) |
 | Reusable credits, partial redemption, and policy-controlled deferrals | Planned; same-organization first | [Credits and deferrals](product.md#reusable-credits-and-deferrals) |
-| Operational/finance dashboards, scoped exports, and cross-event history | Planned beyond start-list exports | [Reporting](product.md#reporting) |
+| Operational/finance dashboards, role-scoped exports, and cross-event history | Planned beyond start-list, entries, and ledger exports | [Reporting](product.md#reporting) |
 | Walk-up/mobile/kiosk race-day registration | Planned beyond check-in | [Race-day registration](product.md#race-day-registration) |
 | Dedicated omnium/stage-race setup, TT, pricing, and overall participation | Planned beyond existing package pricing | [Competition setup](product.md#omnium-and-stage-race-setup) |
 | Multi-event, multi-organization bundles / season passes | Planned | [Season passes](product.md#cross-organization-bundles-and-season-passes) |
