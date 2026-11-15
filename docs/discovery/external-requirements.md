@@ -8,7 +8,7 @@ Nothing has been sent. The packets include draft messages for the owner to adapt
 
 | Question area | Owner | Sent | Answer received | Outcome |
 |---|---|---|---|---|
-| USAC integration and accepted license and waiver processes | KC (project owner), assigned 2026-11-15 | No | No | |
+| USAC integration and accepted license and waiver processes | KC (project owner), assigned 2026-11-15 | No | No | Public research recorded 2026-11-15 in [USAC questions](../usac-questions.md#what-public-sources-already-say); not an answer from USAC |
 | Payment-provider operating model | Not assigned | No | No | |
 | Results path to road-results.com | Not assigned | No | No | See the [timer export review](../timer-export-review.md) |
 
