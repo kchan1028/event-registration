@@ -1,24 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { describe, expect, it } from 'vitest';
+import { testApp, testDatabaseUrl } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
-
-const dirs: string[] = [];
-function tempDb(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'cyclereg-test-'));
-  dirs.push(dir);
-  return join(dir, 'test.sqlite');
-}
-afterEach(() => {
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
-});
 
 type Payload = { id: string; revision: number; config: EventConfig; entries: { categoryId: string }[]; issues: { level: string; key: string }[]; publishedVersion: number | null };
 
-async function setupDemo(dbPath = ':memory:') {
-  const { app } = buildApp({ dbPath });
+async function setupDemo(databaseUrl?: string) {
+  const { app } = await testApp({ databaseUrl });
   const res = await app.inject({ method: 'POST', url: '/api/demo' });
   const { eventId } = res.json() as { eventId: string };
   const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as Payload;
@@ -26,9 +13,9 @@ async function setupDemo(dbPath = ':memory:') {
 }
 
 describe('organizations and draft events', () => {
-  it('creates an organization and a weekend draft, then reloads it from disk', async () => {
-    const dbPath = tempDb();
-    const { app } = buildApp({ dbPath });
+  it('creates an organization and a weekend draft, then reloads it from the database', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl });
     const org = (await app.inject({ method: 'POST', url: '/api/organizations', payload: { name: 'Valley Bicycle Club' } })).json() as { id: string };
     const created = await app.inject({
       method: 'POST',
@@ -40,7 +27,7 @@ describe('organizations and draft events', () => {
     expect(ev.config.races).toHaveLength(2);
     await app.close();
 
-    const again = buildApp({ dbPath }).app;
+    const again = (await testApp({ databaseUrl })).app;
     const loaded = (await again.inject({ method: 'GET', url: `/api/events/${ev.id}` })).json() as Payload;
     expect(loaded.config.event.name).toBe('Valley Weekend');
     const orgs = (await again.inject({ method: 'GET', url: '/api/organizations' })).json() as { name: string; events: unknown[] }[];
@@ -50,7 +37,7 @@ describe('organizations and draft events', () => {
   });
 
   it('rejects invalid input with a readable message', async () => {
-    const { app } = buildApp({ dbPath: ':memory:' });
+    const { app } = await testApp();
     const res = await app.inject({ method: 'POST', url: '/api/organizations', payload: { name: '   ' } });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBeTruthy();
@@ -110,9 +97,9 @@ describe('shared capacity through the API', () => {
   });
 
   it('two buyers racing for the last shared place: exactly one succeeds, across two connections', async () => {
-    const dbPath = tempDb();
-    const { app: a, eventId, event } = await setupDemo(dbPath);
-    const { app: b } = buildApp({ dbPath });
+    const databaseUrl = await testDatabaseUrl();
+    const { app: a, eventId, event } = await setupDemo(databaseUrl);
+    const { app: b } = await testApp({ databaseUrl });
     const m60 = event.config.categories.find((c) => c.timingCode === 'RR-M60')!;
     await a.inject({ method: 'POST', url: `/api/events/${eventId}/test-entries`, payload: { categoryId: m60.id, count: 24 } }); // 59 of 60
     const race = await Promise.all([
@@ -164,7 +151,7 @@ describe('publishing', () => {
 
 describe('Berkeley Omnium demo', () => {
   it('seeds both races with every 2026 field and no publish-blocking errors', async () => {
-    const { app } = buildApp({ dbPath: ':memory:' });
+    const { app } = await testApp();
     const res = await app.inject({ method: 'POST', url: '/api/demo/berkeley-omnium' });
     expect(res.statusCode).toBe(201);
     const { eventId } = res.json() as { eventId: string };

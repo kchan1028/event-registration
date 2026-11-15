@@ -43,7 +43,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Category caps, start group field limits, and shared capacity pools, with a rider counted once | Implemented and tested, including two simultaneous requests for the last place |
 | Rider-facing schedule preview with an eligibility checker | Implemented |
 | Validation that blocks publishing on errors; warnings need acknowledgement; immutable published versions | Implemented and tested |
-| Autosave to a local SQLite database, safe against stale saves | Implemented and tested |
+| Autosave to a local PostgreSQL database, safe against stale saves | Implemented and tested |
 | Rider demo purchase flow (product.md 2a): browse events, demo rider picker, start-ordered schedule with conflict warnings, bundles, second-race discount, demo fees, emergency contact, typed-name waiver signature, error summaries, all-or-nothing 10-minute holds, "Complete simulated payment" with decline and retry | Implemented and tested in light and dark themes; usability test with people still open |
 | Confirmation with a check-in code and per-entry readiness; organizer Registrations queue with license review | Implemented and tested |
 | Registration open and close times enforced in the event's time zone (demo events can let testers register early, labeled "Demo mode") | Implemented and tested |
@@ -96,7 +96,11 @@ The category schedule lists what riders buy, grouped under display headers that 
 
 ### Try it locally
 
-You need Node.js 20 or later. Full steps and troubleshooting: [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
+You need Node.js 20 or later and a local PostgreSQL 17 database (Docker is the simplest way). Full steps and troubleshooting: [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
+
+```bash
+docker run -d --name cyclereg-postgres -e POSTGRES_USER=cyclereg -e POSTGRES_PASSWORD=cyclereg -e POSTGRES_DB=cyclereg -p 127.0.0.1:5432:5432 postgres:17
+```
 
 ```bash
 npm ci
@@ -106,7 +110,7 @@ npm ci
 npm run dev
 ```
 
-For two standalone Berkeley events ($80 road race, $60 criterium), follow [demo setup](SETUP.md) and run `npm run seed:berkeley` with the documented database path.
+For two standalone Berkeley events ($80 road race, $60 criterium), follow [demo setup](SETUP.md) and run `npm run seed:berkeley` with the documented separate database.
 
 Open `http://127.0.0.1:5273/` and select **Load Berkeley Omnium** (the 2026 fields and times, dated for 2027, with organizer-set $80 road race and $60 criterium fees and a $130 two-race package including a podium nomination subject to organizer review), or create your own organization. To try the rider demo, select **Open the rider demo** on the home page; it loads the fictional events, riders, and fees from `docs/fixtures`. Any event you publish also appears in the rider event list. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
 

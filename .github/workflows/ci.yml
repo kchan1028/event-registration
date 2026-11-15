@@ -8,10 +8,29 @@ on:
 permissions:
   contents: read
 
+# Both jobs use a throwaway PostgreSQL service (ADR 0004). The credentials are test-only values for that container.
+env:
+  TEST_DATABASE_URL: postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg
+  E2E_DATABASE_URL: postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_e2e
+
 jobs:
   check:
     name: Typecheck, unit and API tests, build
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cyclereg
+          POSTGRES_PASSWORD: cyclereg
+          POSTGRES_DB: cyclereg
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cyclereg"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,6 +46,20 @@ jobs:
     name: End-to-end browser test
     runs-on: ubuntu-latest
     needs: check
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cyclereg
+          POSTGRES_PASSWORD: cyclereg
+          POSTGRES_DB: cyclereg
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cyclereg"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

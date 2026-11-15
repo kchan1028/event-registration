@@ -22,7 +22,8 @@ import { createWaitlist } from './waitlist';
 import { createRepo, HttpError, type Repo } from './repo';
 
 export interface AppOptions {
-  dbPath: string;
+  /** PostgreSQL connection string (ADR 0004). */
+  databaseUrl: string;
   serveWeb?: boolean;
   logger?: boolean;
   /** Injectable clock for tests of hold expiry. */
@@ -32,7 +33,7 @@ export interface AppOptions {
 }
 
 export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; orders: Orders } {
-  const db = openDb(opts.dbPath);
+  const db = openDb(opts.databaseUrl, (err) => app.log.error(err));
   const clock = opts.now ?? (() => new Date());
   const repo = createRepo(db, clock);
   const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10));
@@ -43,6 +44,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const waitlist = createWaitlist(db, repo, clock);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
+  // Migrations run once before the server accepts requests (listen, or the first inject in tests).
+  app.addHook('onReady', async () => db.migrate());
   app.addHook('onClose', async () => db.close());
 
   app.setErrorHandler((err, _req, reply) => {
@@ -57,13 +60,13 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   const idParam = z.object({ id: z.string().min(1).max(64) });
 
-  function eventPayload(id: string) {
-    const record = repo.getEvent(id);
-    const entries = repo.entries(id);
+  async function eventPayload(id: string) {
+    const record = await repo.getEvent(id);
+    const entries = await repo.entries(id);
     return {
       ...record,
       entries,
-      versions: repo.listVersions(id),
+      versions: await repo.listVersions(id),
       issues: validateConfig(record.config, entries),
       pending: {
         licenseVerification: 'USA Cycling license and category checks are not connected. Every license is unverified and needs review.',
@@ -79,14 +82,14 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.post('/api/organizations', async (req, reply) => {
     const body = z.object({ name: z.string().trim().min(1, 'Enter an organization name.').max(120) }).parse(req.body);
-    return reply.status(201).send(repo.createOrganization(body.name));
+    return reply.status(201).send(await repo.createOrganization(body.name));
   });
 
   app.post('/api/organizations/:id/events', async (req, reply) => {
     const { id } = idParam.parse(req.params);
     const input = createEventInputSchema.parse(req.body);
-    const record = repo.createEvent(id, configFromTemplate(input));
-    return reply.status(201).send(eventPayload(record.id));
+    const record = await repo.createEvent(id, configFromTemplate(input));
+    return reply.status(201).send(await eventPayload(record.id));
   });
 
   app.get('/api/events/:id', async (req) => eventPayload(idParam.parse(req.params).id));
@@ -94,7 +97,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.put('/api/events/:id/config', async (req) => {
     const { id } = idParam.parse(req.params);
     const body = z.object({ revision: z.number().int(), config: eventConfigSchema }).parse(req.body);
-    repo.saveDraft(id, body.revision, body.config);
+    await repo.saveDraft(id, body.revision, body.config);
     return eventPayload(id);
   });
 
@@ -102,15 +105,15 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = idParam.parse(req.params);
     const body = z.object({ acknowledgeWarnings: z.boolean().default(false), acknowledgeImpact: z.boolean().default(false) }).parse(req.body ?? {});
     // A change that touches riders who already entered must be reviewed, like warnings.
-    const { impact } = impactFor(id);
+    const { impact } = await impactFor(id);
     if (impact && impact.categories.length > 0 && !body.acknowledgeImpact) {
       const n = impact.categories.length;
       throw new HttpError(422, `Review who the ${n} changed ${n === 1 ? 'category' : 'categories'} with entries affect before publishing.`, impact);
     }
-    const result = repo.publish(id, body.acknowledgeWarnings);
+    const result = await repo.publish(id, body.acknowledgeWarnings);
     // Paid entries the change touches each get an item in the resolution workflow.
-    if (impact && impact.categories.length > 0) resolutions.record(id, result.version, impact);
-    return { ...eventPayload(id), publishedVersion: result.version };
+    if (impact && impact.categories.length > 0) await resolutions.record(id, result.version, impact);
+    return { ...(await eventPayload(id)), publishedVersion: result.version };
   });
 
   app.get('/api/events/:id/resolutions', async (req) => resolutions.list(idParam.parse(req.params).id));
@@ -126,18 +129,17 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
    * Change impact preview: what publishing the draft would change for riders who
    * already entered (confirmed entries and unexpired holds) under the latest published version.
    */
-  function impactFor(id: string) {
-    const record = repo.getEvent(id);
+  async function impactFor(id: string) {
+    const record = await repo.getEvent(id);
     if (record.publishedVersion === null) return { publishedVersion: null, impact: null };
-    const published = repo.getVersion(id, record.publishedVersion);
-    const rows = db
-      .prepare<[string, string], { order_id: string; category_id: string; status: string; rider_json: string }>(
-        `SELECT oe.order_id, oe.category_id, oe.status, o.rider_json FROM order_entries oe JOIN orders o ON o.id = oe.order_id
-         WHERE oe.event_id = ? AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > ?))`,
-      )
-      .all(id, clock().toISOString());
+    const published = await repo.getVersion(id, record.publishedVersion);
+    const rows = await db.all<{ order_id: string; category_id: string; status: string; rider_json: { firstName?: string; lastName?: string } }>(
+      `SELECT oe.order_id, oe.category_id, oe.status, o.rider_json FROM order_entries oe JOIN orders o ON o.id = oe.order_id
+       WHERE oe.event_id = $1 AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > $2)) ORDER BY oe.seq`,
+      [id, clock().toISOString()],
+    );
     const entries: ImpactEntry[] = rows.map((r) => {
-      const rider = JSON.parse(r.rider_json) as { firstName?: string; lastName?: string };
+      const rider = r.rider_json;
       return {
         orderId: r.order_id,
         categoryId: r.category_id,
@@ -152,7 +154,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.get('/api/events/:id/versions/:version', async (req) => {
     const p = z.object({ id: z.string(), version: z.coerce.number().int().min(1) }).parse(req.params);
-    return { version: p.version, config: repo.getVersion(p.id, p.version) };
+    return { version: p.version, config: await repo.getVersion(p.id, p.version) };
   });
 
   app.post('/api/events/:id/test-entries', async (req) => {
@@ -164,46 +166,46 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
         riderRefs: z.array(z.string().regex(/^test-rider-[\w-]{1,40}$/)).max(500).optional(),
       })
       .parse(req.body);
-    const result = repo.addTestEntries(id, body.categoryId, body.count, body.riderRefs);
-    return { result, event: eventPayload(id) };
+    const result = await repo.addTestEntries(id, body.categoryId, body.count, body.riderRefs);
+    return { result, event: await eventPayload(id) };
   });
 
   app.delete('/api/events/:id/test-entries', async (req) => {
     const { id } = idParam.parse(req.params);
-    const removed = repo.clearTestEntries(id);
-    return { removed, event: eventPayload(id) };
+    const removed = await repo.clearTestEntries(id);
+    return { removed, event: await eventPayload(id) };
   });
 
   // Rider checkout. Uses the latest published version only.
-  app.get('/api/public/events', async () =>
-    repo
-      .listOrganizations()
-      .flatMap((o) => o.events.filter((e) => e.publishedVersion !== null).map((e) => ({ id: e.id, organizationName: o.name })))
-      .map(({ id, organizationName }) => {
-        const record = repo.getEvent(id);
-        const config = repo.getVersion(id, record.publishedVersion!);
-        return {
-          id,
-          organizationName,
-          name: config.event.name,
-          venue: config.event.venue,
-          isDemo: config.event.isDemo,
-          days: config.days.map((d) => ({ date: d.date, label: d.label, races: config.races.filter((r) => r.dayId === d.id).map((r) => r.name) })),
-          categoryCount: config.categories.filter((c) => c.status !== 'archived').length,
-        };
-      }),
-  );
+  app.get('/api/public/events', async () => {
+    const published = (await repo.listOrganizations()).flatMap((o) => o.events.filter((e) => e.publishedVersion !== null).map((e) => ({ id: e.id, organizationName: o.name })));
+    const out = [];
+    for (const { id, organizationName } of published) {
+      const record = await repo.getEvent(id);
+      const config = await repo.getVersion(id, record.publishedVersion!);
+      out.push({
+        id,
+        organizationName,
+        name: config.event.name,
+        venue: config.event.venue,
+        isDemo: config.event.isDemo,
+        days: config.days.map((d) => ({ date: d.date, label: d.label, races: config.races.filter((r) => r.dayId === d.id).map((r) => r.name) })),
+        categoryCount: config.categories.filter((c) => c.status !== 'archived').length,
+      });
+    }
+    return out;
+  });
 
   /** Loads the clickable demo purchase flow fixtures (docs/fixtures) once, published. */
   app.post('/api/demo/purchase-flow', async (_req, reply) => {
-    const existing = repo.listOrganizations().find((o) => o.name === FIXTURE_ORG_NAME);
+    const existing = (await repo.listOrganizations()).find((o) => o.name === FIXTURE_ORG_NAME);
     if (existing && existing.events.length > 0) return reply.status(200).send({ organizationId: existing.id, eventIds: existing.events.map((e) => e.id) });
-    const org = existing ?? repo.createOrganization(FIXTURE_ORG_NAME);
+    const org = existing ?? (await repo.createOrganization(FIXTURE_ORG_NAME));
     const eventIds: string[] = [];
     for (const { config, entryPlan } of buildFixtureEvents()) {
-      const record = repo.createEvent(org.id, config);
-      for (const p of entryPlan) repo.addTestEntries(record.id, p.categoryId, p.count);
-      repo.publish(record.id, true);
+      const record = await repo.createEvent(org.id, config);
+      for (const p of entryPlan) await repo.addTestEntries(record.id, p.categoryId, p.count);
+      await repo.publish(record.id, true);
       eventIds.push(record.id);
     }
     return reply.status(201).send({ organizationId: org.id, eventIds });
@@ -223,11 +225,11 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
         offerToken: z.string().min(10).max(64).nullable().optional(),
       })
       .parse(req.body);
-    return reply.status(201).send(orders.createOrder(id, body));
+    return reply.status(201).send(await orders.createOrder(id, body));
   });
 
   // Organizer-managed waitlists (src/server/waitlist.ts).
-  app.post('/api/public/events/:id/waitlist', async (req, reply) => reply.status(201).send(waitlist.join(idParam.parse(req.params).id, req.body)));
+  app.post('/api/public/events/:id/waitlist', async (req, reply) => reply.status(201).send(await waitlist.join(idParam.parse(req.params).id, req.body)));
   app.get('/api/public/offers/:token', async (req) => waitlist.offerByToken(z.object({ token: z.string().min(10).max(64) }).parse(req.params).token));
   app.get('/api/events/:id/waitlist', async (req) => waitlist.list(idParam.parse(req.params).id));
   const waitlistParams = z.object({ id: z.string().min(1).max(64), entryId: z.string().min(1).max(64) });
@@ -317,29 +319,29 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return identity.unlink(idParam.parse(req.params).id, orderId);
   });
 
-  app.post('/api/events/:id/check-in-demo-riders', async (req, reply) => reply.status(201).send(checkIn.addDemoRiders(idParam.parse(req.params).id)));
+  app.post('/api/events/:id/check-in-demo-riders', async (req, reply) => reply.status(201).send(await checkIn.addDemoRiders(idParam.parse(req.params).id)));
 
   // Start lists and the sample timer export. No contact or payment data.
   app.get('/api/events/:id/start-lists', async (req) => startLists.overview(idParam.parse(req.params).id));
 
   app.post('/api/events/:id/start-lists/:raceId/snapshots', async (req, reply) => {
     const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
-    return reply.status(201).send(startLists.snapshot(p.id, p.raceId));
+    return reply.status(201).send(await startLists.snapshot(p.id, p.raceId));
   });
 
   app.post('/api/events/:id/start-lists/:raceId/lock', async (req, reply) => {
     const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
-    return reply.status(201).send(startLists.lock(p.id, p.raceId));
+    return reply.status(201).send(await startLists.lock(p.id, p.raceId));
   });
 
   // Organizer exports from the database: entries and a (simulated) ledger. No contact or emergency details.
   app.get('/api/events/:id/exports/:kind', async (req, reply) => {
     const p = z.object({ id: z.string().min(1).max(64), kind: z.enum(['entries.csv', 'ledger.csv']) }).parse(req.params);
-    const record = repo.getEvent(p.id);
-    const list = orders.listOrders(p.id).filter((o) => o.status !== 'cancelled' && o.status !== 'expired');
+    const record = await repo.getEvent(p.id);
+    const list = (await orders.listOrders(p.id)).filter((o) => o.status !== 'cancelled' && o.status !== 'expired');
     const slugName = record.config.event.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'event';
     const demo = record.config.event.isDemo ? '-DEMO' : '';
-    const body = p.kind === 'entries.csv' ? entriesCsv(list, identity.keyOf(p.id)) : ledgerCsv(list);
+    const body = p.kind === 'entries.csv' ? entriesCsv(list, await identity.keyOf(p.id)) : ledgerCsv(list);
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
       .header('Content-Disposition', `attachment; filename="${slugName}-${p.kind === 'entries.csv' ? 'entries' : 'ledger'}${demo}.csv"`)
@@ -350,7 +352,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.get('/api/events/:id/start-lists/:raceId/csv', async (req, reply) => {
     const p = z.object({ id: z.string().min(1).max(64), raceId: z.string().min(1).max(64) }).parse(req.params);
     const q = z.object({ snapshot: z.coerce.number().int().min(1).optional() }).parse(req.query);
-    const file = startLists.csv(p.id, p.raceId, q.snapshot ?? null);
+    const file = await startLists.csv(p.id, p.raceId, q.snapshot ?? null);
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
       .header('Content-Disposition', `attachment; filename="${file.filename}"`)
@@ -358,34 +360,36 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       .send(file.body);
   });
 
-  function seed(orgName: string, { config, entryPlan }: ReturnType<typeof buildDemoEvent>) {
-    const org = repo.createOrganization(orgName);
-    const record = repo.createEvent(org.id, config);
-    for (const p of entryPlan) repo.addTestEntries(record.id, p.categoryId, p.count);
+  async function seed(orgName: string, { config, entryPlan }: ReturnType<typeof buildDemoEvent>) {
+    const org = await repo.createOrganization(orgName);
+    const record = await repo.createEvent(org.id, config);
+    for (const p of entryPlan) await repo.addTestEntries(record.id, p.categoryId, p.count);
     return { organizationId: org.id, eventId: record.id };
   }
 
   /** Seeds two published standalone events once, without touching other local data. */
   app.post('/api/demo/berkeley-events', async (_req, reply) => {
-    const result = db.transaction(() => {
-      const existing = repo.listOrganizations().find((o) => o.name === BERKELEY_DEMO_ORG);
+    const result = await db.transaction(async () => {
+      await db.lock('demo:berkeley-events'); // two seed requests at once create the organization once
+      const existing = (await repo.listOrganizations()).find((o) => o.name === BERKELEY_DEMO_ORG);
       if (existing) return { created: false, organizationId: existing.id, eventIds: existing.events.map((e) => e.id) };
-      const org = repo.createOrganization(BERKELEY_DEMO_ORG);
-      const eventIds = buildBerkeleyEvents().map((config) => {
-        const event = repo.createEvent(org.id, config);
-        repo.publish(event.id, true);
-        return event.id;
-      });
+      const org = await repo.createOrganization(BERKELEY_DEMO_ORG);
+      const eventIds: string[] = [];
+      for (const config of buildBerkeleyEvents()) {
+        const event = await repo.createEvent(org.id, config);
+        await repo.publish(event.id, true);
+        eventIds.push(event.id);
+      }
       return { created: true, organizationId: org.id, eventIds };
-    }).immediate();
+    });
     return reply.status(result.created ? 201 : 200).send(result);
   });
 
   /** Creates the labeled fictional demonstration organization and event. */
-  app.post('/api/demo', async (_req, reply) => reply.status(201).send(seed('Example Cycling Club (demonstration)', buildDemoEvent())));
+  app.post('/api/demo', async (_req, reply) => reply.status(201).send(await seed('Example Cycling Club (demonstration)', buildDemoEvent())));
 
   /** Creates the Berkeley Omnium working copy (2026 fields, 2027 dates, placeholder fees, simulated entries). */
-  app.post('/api/demo/berkeley-omnium', async (_req, reply) => reply.status(201).send(seed(OMNIUM_ORG_NAME, buildBerkeleyOmniumEvent())));
+  app.post('/api/demo/berkeley-omnium', async (_req, reply) => reply.status(201).send(await seed(OMNIUM_ORG_NAME, buildBerkeleyOmniumEvent())));
 
   const webRoot = resolve(process.cwd(), 'dist/web');
   if (opts.serveWeb && existsSync(webRoot)) {

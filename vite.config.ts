@@ -17,5 +17,8 @@ export default defineConfig({
     root: '.',
     include: ['tests/**/*.test.ts'],
     environment: 'node',
+    // API tests run against PostgreSQL: one migrated template per run, one database per test (tests/support).
+    globalSetup: ['tests/support/global-setup.ts'],
+    testTimeout: 20_000,
   },
 } as never);

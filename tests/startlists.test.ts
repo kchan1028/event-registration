@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { testApp } from './support/db';
 import { csvField, diffRows, sortRows, toCsv, type StartListRow } from '../src/shared/startlist';
 
 const row = (o: Partial<StartListRow>): StartListRow => ({
@@ -54,7 +54,7 @@ describe('start-list CSV and diff', () => {
 type Overview = { races: { raceId: string; raceName: string; rows: StartListRow[]; snapshots: { version: number }[]; changesSinceLastSnapshot: { changed: unknown[] } | null; lock: { snapshotVersion: number; lockedAt: string } | null; changesSinceLock: { added: unknown[]; removed: unknown[]; changed: unknown[] } | null }[] };
 
 async function setup() {
-  const { app } = buildApp({ dbPath: ':memory:', now: () => new Date('2027-03-01T18:00:00Z') });
+  const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z') });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in-demo-riders` });
@@ -108,7 +108,7 @@ describe('start-list API', () => {
   });
 
   it('needs a published event', async () => {
-    const { app } = buildApp({ dbPath: ':memory:' });
+    const { app } = await testApp();
     const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
     expect((await app.inject({ method: 'GET', url: `/api/events/${eventId}/start-lists` })).statusCode).toBe(409);
   });

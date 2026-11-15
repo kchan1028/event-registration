@@ -55,13 +55,20 @@ Cause: another order or test entry took the last place in a category, start grou
 Fix: go back to races, choose another category, and try again. Organizers can remove test entries in **Event setup**.
 Last confirmed: November 14, 2026
 
-## `npm ci` fails building `better-sqlite3`
+## The API or the tests cannot connect to PostgreSQL
 
-Who sees it: contributors on an unusual platform or Node version.
+Who sees it: anyone running `npm run dev`, `npm test`, or `npm run test:e2e`.
+Symptoms: `ECONNREFUSED 127.0.0.1:5432`, `The API tests need PostgreSQL at 127.0.0.1:5432`, or `password authentication failed for user "cyclereg"`.
 Likely causes:
-1. Node.js is older than 20. Upgrade.
-2. No prebuilt module exists for your platform, so npm tries to compile it. Install your platform's build tools (Xcode Command Line Tools on macOS, `build-essential` and `python3` on Linux) and retry.
-Last confirmed: November 14, 2026
+1. The database container is not running. Start it with `docker start cyclereg-postgres` (or create it as in [local setup](local-setup.md#what-you-need)).
+2. Something else uses port 5432 with other credentials. Stop it, or point `DATABASE_URL`, `TEST_DATABASE_URL`, and `E2E_DATABASE_URL` at your server. The test user must be allowed to create databases.
+Last confirmed: November 15, 2026
+
+## `database "cyclereg_berkeley" does not exist`
+
+Who sees it: anyone using a separate database for the Berkeley demo or a usability session.
+Fix: create it first, for example `docker exec cyclereg-postgres createdb -U cyclereg cyclereg_berkeley`. Only the default `cyclereg` database is created with the container.
+Last confirmed: November 15, 2026
 
 ## End-to-end test says the browser is missing
 

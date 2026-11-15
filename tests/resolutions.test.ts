@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { testApp } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
 
 /* Resolution workflow for paid entries affected by a published change. */
@@ -10,7 +10,7 @@ type Item = { id: string; status: string; details: string[]; riderName: string; 
 async function setup() {
   let tick = 0;
   const start = new Date('2027-03-01T18:00:00Z').getTime();
-  const { app } = buildApp({ dbPath: ':memory:', now: () => new Date(start + tick++ * 1000), holdMinutes: 10 });
+  const { app } = await testApp({ now: () => new Date(start + tick++ * 1000), holdMinutes: 10 });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
   const get = async () => (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };

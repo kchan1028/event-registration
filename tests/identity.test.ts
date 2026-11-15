@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { testApp } from './support/db';
 import { pairKey, suggestMatches, type IdentityOrder } from '../src/shared/riderIdentity';
 import type { EventConfig } from '../src/shared/schema';
 
@@ -32,7 +32,7 @@ const RIDER = { firstName: 'Pat', lastName: 'Demo', email: 'pat.demo@example.tes
 async function setup() {
   const start = new Date('2027-03-01T18:00:00Z').getTime();
   let tick = 0;
-  const { app } = buildApp({ dbPath: ':memory:', now: () => new Date(start + tick++ * 1000), holdMinutes: 10 });
+  const { app } = await testApp({ now: () => new Date(start + tick++ * 1000), holdMinutes: 10 });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
   await app.inject({ method: 'PUT', url: `/api/events/${eventId}/bib-settings`, payload: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });

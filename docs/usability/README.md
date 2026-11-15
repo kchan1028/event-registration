@@ -50,21 +50,25 @@ Nobody enters real personal information. Every task uses the fictional demo ride
 
 ## Set up the computer before each session
 
-The app runs only on the facilitator's computer and listens only on `127.0.0.1`. Follow [local-setup.md](../runbooks/local-setup.md) once, then give every session its own database file so each participant starts clean and their session stays available for review.
+The app runs only on the facilitator's computer and listens only on `127.0.0.1`. Follow [local-setup.md](../runbooks/local-setup.md) once, then give every session its own database so each participant starts clean and their session stays available for review.
 
-1. Start the app with a fresh database named for the session:
+1. Create a database named for the session, then start the app with it:
 
    ```bash
-   DB_PATH=data/usability-P01.sqlite npm run dev
+   docker exec cyclereg-postgres createdb -U cyclereg cyclereg_usability_p01
    ```
 
-   Expected result: the API logs `Server listening at http://127.0.0.1:3001` and Vite prints `Local: http://127.0.0.1:5273/`. A new database file starts empty.
+   ```bash
+   DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_usability_p01 npm run dev
+   ```
+
+   Expected result: the API logs `Server listening at http://127.0.0.1:3001` and Vite prints `Local: http://127.0.0.1:5273/`. The new database starts empty; the app creates its tables on start.
 
 2. Open `http://127.0.0.1:5273/` and prepare the starting state for the role, as listed under each role in [tasks.md](tasks.md).
 3. Set the display theme the participant will use (the sun or moon button in the header). Run at least one volunteer session in the dark theme and at least one in bright daylight, because [product.md](../../product.md#display-themes) requires the check-in result to read in sunlight.
 4. Close other tabs and notifications. Keep the observation sheet and a timer ready.
 
-To look at a past session again, start the app with that session's `DB_PATH`.
+To look at a past session again, start the app with that session's `DATABASE_URL`.
 
 ### Phone-sized sessions
 
