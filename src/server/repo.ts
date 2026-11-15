@@ -31,34 +31,32 @@ interface EventRow {
   id: string;
   organization_id: string;
   organization_name: string;
-  draft_json: string;
+  draft_json: unknown;
   revision: number;
   published_version: number | null;
   published_revision: number | null;
   updated_at: string;
 }
 
+/** The per-event lock key: every write that can change capacity, holds, bibs, or the ledger takes it first. */
+export const eventLock = (eventId: string) => `event:${eventId}`;
+
 export function createRepo(db: Db, clock: () => Date = () => new Date()) {
-  const getRow = db.prepare<[string], EventRow>(
-    `SELECT e.*, o.name AS organization_name FROM events e JOIN organizations o ON o.id = e.organization_id WHERE e.id = ?`,
-  );
+  const getRowSql = `SELECT e.*, o.name AS organization_name FROM events e JOIN organizations o ON o.id = e.organization_id WHERE e.id = $1`;
   // Places taken: simulated test entries, confirmed registrations, and unexpired checkout holds.
   // Places in use: test entries, confirmed and unexpired held order entries, and live waitlist
   // offers (an offer reserves its place until it expires or its rider's order holds the place instead).
-  const entriesStmt = db.prepare<[string, string, string, string, string, string], { id: string; category_id: string; rider_ref: string }>(
-    `SELECT id, category_id, rider_ref FROM test_entries WHERE event_id = ?
+  const entriesSql = `SELECT id, category_id, rider_ref FROM test_entries WHERE event_id = $1
      UNION ALL
      SELECT oe.id, oe.category_id, oe.rider_ref FROM order_entries oe JOIN orders o ON o.id = oe.order_id
-     WHERE oe.event_id = ? AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > ?))
+     WHERE oe.event_id = $1 AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > $2))
      UNION ALL
      SELECT w.id, w.category_id, 'waitlist-' || w.id FROM waitlist_entries w
-     WHERE w.event_id = ? AND w.status = 'offered' AND w.offer_expires_at > ?
+     WHERE w.event_id = $1 AND w.status = 'offered' AND w.offer_expires_at > $2
        AND NOT EXISTS (
          SELECT 1 FROM order_entries oe JOIN orders o ON o.id = oe.order_id
-         WHERE o.id = w.order_id AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > ?))
-       )`,
-  );
-  const insertEntry = db.prepare(`INSERT INTO test_entries (id, event_id, category_id, rider_ref, created_at) VALUES (?, ?, ?, ?, ?)`);
+         WHERE o.id = w.order_id AND (oe.status = 'confirmed' OR (oe.status = 'held' AND o.hold_expires_at > $2))
+       )`;
 
   function toRecord(row: EventRow): EventRecord {
     return {
@@ -69,19 +67,20 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
       publishedVersion: row.published_version,
       publishedRevision: row.published_revision,
       updatedAt: row.updated_at,
-      config: eventConfigSchema.parse(JSON.parse(row.draft_json)),
+      config: eventConfigSchema.parse(row.draft_json),
     };
   }
 
-  function requireEvent(id: string): EventRecord {
-    const row = getRow.get(id);
+  async function requireEvent(id: string): Promise<EventRecord> {
+    const row = await db.get<EventRow>(getRowSql, [id]);
     if (!row) throw new HttpError(404, 'Event not found.');
     return toRecord(row);
   }
 
-  function entries(eventId: string): TestEntry[] {
+  async function entries(eventId: string): Promise<TestEntry[]> {
     const t = clock().toISOString();
-    return entriesStmt.all(eventId, eventId, t, eventId, t, t).map((r) => ({ id: r.id, categoryId: r.category_id, riderRef: r.rider_ref }));
+    const rows = await db.all<{ id: string; category_id: string; rider_ref: string }>(entriesSql, [eventId, t]);
+    return rows.map((r) => ({ id: r.id, categoryId: r.category_id, riderRef: r.rider_ref }));
   }
 
   /** Rules that protect existing entries; enforced on every save. */
@@ -96,12 +95,11 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
   }
 
   return {
-    listOrganizations() {
-      const orgs = db.prepare<[], { id: string; name: string; created_at: string }>(`SELECT * FROM organizations ORDER BY created_at`).all();
-      const events = db
-        .prepare<[], EventRow>(`SELECT e.*, o.name AS organization_name FROM events e JOIN organizations o ON o.id = e.organization_id ORDER BY e.created_at`)
-        .all()
-        .map(toRecord);
+    async listOrganizations() {
+      const orgs = await db.all<{ id: string; name: string; created_at: string }>(`SELECT id, name, created_at FROM organizations ORDER BY created_at, seq`);
+      const events = (
+        await db.all<EventRow>(`SELECT e.*, o.name AS organization_name FROM events e JOIN organizations o ON o.id = e.organization_id ORDER BY e.created_at, e.seq`)
+      ).map(toRecord);
       return orgs.map((o) => ({
         id: o.id,
         name: o.name,
@@ -120,25 +118,25 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
       }));
     },
 
-    createOrganization(name: string) {
+    async createOrganization(name: string) {
       const id = newId('org');
-      db.prepare(`INSERT INTO organizations (id, name, created_at) VALUES (?, ?, ?)`).run(id, name, now());
+      await db.run(`INSERT INTO organizations (id, name, created_at) VALUES ($1, $2, $3)`, [id, name, now()]);
       return { id, name };
     },
 
-    createEvent(organizationId: string, config: EventConfig): EventRecord {
-      const org = db.prepare(`SELECT id FROM organizations WHERE id = ?`).get(organizationId);
+    async createEvent(organizationId: string, config: EventConfig): Promise<EventRecord> {
+      const org = await db.get(`SELECT id FROM organizations WHERE id = $1`, [organizationId]);
       if (!org) throw new HttpError(404, 'Organization not found.');
       const parsed = eventConfigSchema.parse(config);
       const id = newId('evt');
       const t = now();
-      db.prepare(`INSERT INTO events (id, organization_id, draft_json, revision, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)`).run(
+      await db.run(`INSERT INTO events (id, organization_id, draft_json, revision, created_at, updated_at) VALUES ($1, $2, $3, 1, $4, $5)`, [
         id,
         organizationId,
         JSON.stringify(parsed),
         t,
         t,
-      );
+      ]);
       return requireEvent(id);
     },
 
@@ -146,94 +144,91 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
     entries,
 
     /**
-     * Save the draft with optimistic concurrency. Runs as an immediate
-     * transaction so a cap change and a concurrent entry cannot interleave.
+     * Save the draft with optimistic concurrency. Holds the event lock so a cap
+     * change and a concurrent entry cannot interleave.
      */
-    saveDraft(id: string, expectedRevision: number, config: EventConfig): EventRecord {
+    async saveDraft(id: string, expectedRevision: number, config: EventConfig): Promise<EventRecord> {
       const parsed = eventConfigSchema.parse(config);
-      return db
-        .transaction(() => {
-          const current = requireEvent(id);
-          if (current.revision !== expectedRevision) {
-            throw new HttpError(409, 'This event was changed somewhere else. Reload to see the latest version before saving again.', {
-              currentRevision: current.revision,
-            });
-          }
-          assertSafeForEntries(parsed, entries(id));
-          db.prepare(`UPDATE events SET draft_json = ?, revision = revision + 1, updated_at = ? WHERE id = ?`).run(JSON.stringify(parsed), now(), id);
-          return requireEvent(id);
-        })
-        .immediate();
+      return db.transaction(async () => {
+        await db.lock(eventLock(id));
+        const current = await requireEvent(id);
+        if (current.revision !== expectedRevision) {
+          throw new HttpError(409, 'This event was changed somewhere else. Reload to see the latest version before saving again.', {
+            currentRevision: current.revision,
+          });
+        }
+        assertSafeForEntries(parsed, await entries(id));
+        await db.run(`UPDATE events SET draft_json = $1, revision = revision + 1, updated_at = $2 WHERE id = $3`, [JSON.stringify(parsed), now(), id]);
+        return requireEvent(id);
+      });
     },
 
-    publish(id: string, acknowledgeWarnings: boolean): { version: number; issues: Issue[] } {
-      return db
-        .transaction(() => {
-          const current = requireEvent(id);
-          const issues = validateConfig(current.config, entries(id));
-          const { errors, warnings } = countIssues(issues);
-          if (errors > 0) throw new HttpError(422, `Fix ${errors} ${errors === 1 ? 'error' : 'errors'} before publishing.`, issues);
-          if (warnings > 0 && !acknowledgeWarnings) throw new HttpError(422, `Review and acknowledge ${warnings} ${warnings === 1 ? 'warning' : 'warnings'} before publishing.`, issues);
-          const version = (current.publishedVersion ?? 0) + 1;
-          db.prepare(
-            `INSERT INTO event_versions (event_id, version, config_json, draft_revision, warnings_acknowledged, published_at) VALUES (?, ?, ?, ?, ?, ?)`,
-          ).run(id, version, JSON.stringify(current.config), current.revision, warnings, now());
-          db.prepare(`UPDATE events SET published_version = ?, published_revision = ? WHERE id = ?`).run(version, current.revision, id);
-          return { version, issues };
-        })
-        .immediate();
+    async publish(id: string, acknowledgeWarnings: boolean): Promise<{ version: number; issues: Issue[] }> {
+      return db.transaction(async () => {
+        await db.lock(eventLock(id));
+        const current = await requireEvent(id);
+        const issues = validateConfig(current.config, await entries(id));
+        const { errors, warnings } = countIssues(issues);
+        if (errors > 0) throw new HttpError(422, `Fix ${errors} ${errors === 1 ? 'error' : 'errors'} before publishing.`, issues);
+        if (warnings > 0 && !acknowledgeWarnings) throw new HttpError(422, `Review and acknowledge ${warnings} ${warnings === 1 ? 'warning' : 'warnings'} before publishing.`, issues);
+        const version = (current.publishedVersion ?? 0) + 1;
+        await db.run(
+          `INSERT INTO event_versions (event_id, version, config_json, draft_revision, warnings_acknowledged, published_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+          [id, version, JSON.stringify(current.config), current.revision, warnings, now()],
+        );
+        await db.run(`UPDATE events SET published_version = $1, published_revision = $2 WHERE id = $3`, [version, current.revision, id]);
+        return { version, issues };
+      });
     },
 
-    listVersions(id: string) {
-      requireEvent(id);
-      return db
-        .prepare<[string], { version: number; published_at: string; draft_revision: number; warnings_acknowledged: number }>(
-          `SELECT version, published_at, draft_revision, warnings_acknowledged FROM event_versions WHERE event_id = ? ORDER BY version DESC`,
-        )
-        .all(id)
-        .map((v) => ({ version: v.version, publishedAt: v.published_at, draftRevision: v.draft_revision, warningsAcknowledged: v.warnings_acknowledged }));
+    async listVersions(id: string) {
+      await requireEvent(id);
+      const rows = await db.all<{ version: number; published_at: string; draft_revision: number; warnings_acknowledged: number }>(
+        `SELECT version, published_at, draft_revision, warnings_acknowledged FROM event_versions WHERE event_id = $1 ORDER BY version DESC`,
+        [id],
+      );
+      return rows.map((v) => ({ version: v.version, publishedAt: v.published_at, draftRevision: v.draft_revision, warningsAcknowledged: v.warnings_acknowledged }));
     },
 
-    getVersion(id: string, version: number): EventConfig {
-      const row = db.prepare<[string, number], { config_json: string }>(`SELECT config_json FROM event_versions WHERE event_id = ? AND version = ?`).get(id, version);
+    async getVersion(id: string, version: number): Promise<EventConfig> {
+      const row = await db.get<{ config_json: unknown }>(`SELECT config_json FROM event_versions WHERE event_id = $1 AND version = $2`, [id, version]);
       if (!row) throw new HttpError(404, 'Version not found.');
-      return eventConfigSchema.parse(JSON.parse(row.config_json));
+      return eventConfigSchema.parse(row.config_json);
     },
 
     /**
-     * Add simulated entries one at a time. Each insert happens inside one
-     * immediate transaction that rereads the configuration and every existing
-     * entry, so concurrent requests cannot oversell a shared limit.
+     * Add simulated entries one at a time. The event lock is held while the
+     * configuration and every existing entry are reread, so concurrent requests
+     * cannot oversell a shared limit.
      */
-    addTestEntries(eventId: string, categoryId: string, count: number, riderRefs?: string[]) {
-      return db
-        .transaction(() => {
-          const { config } = requireEvent(eventId);
-          const current = entries(eventId);
-          let created = 0;
-          let blockedBy: LimitUsage | null = null;
-          let reason: string | null = null;
-          for (let i = 0; i < count; i++) {
-            const riderRef = riderRefs?.[i] ?? `test-rider-${newId('r').slice(2)}`;
-            const decision = canAdmit(config, current, categoryId, riderRef);
-            if (!decision.ok) {
-              reason = decision.reason;
-              if (decision.reason === 'full') blockedBy = decision.blockedBy;
-              break;
-            }
-            const entry = { id: newId('ent'), categoryId, riderRef };
-            insertEntry.run(entry.id, eventId, categoryId, riderRef, now());
-            current.push(entry);
-            created++;
+    async addTestEntries(eventId: string, categoryId: string, count: number, riderRefs?: string[]) {
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        const { config } = await requireEvent(eventId);
+        const current = await entries(eventId);
+        let created = 0;
+        let blockedBy: LimitUsage | null = null;
+        let reason: string | null = null;
+        for (let i = 0; i < count; i++) {
+          const riderRef = riderRefs?.[i] ?? `test-rider-${newId('r').slice(2)}`;
+          const decision = canAdmit(config, current, categoryId, riderRef);
+          if (!decision.ok) {
+            reason = decision.reason;
+            if (decision.reason === 'full') blockedBy = decision.blockedBy;
+            break;
           }
-          return { requested: count, created, reason, blockedBy };
-        })
-        .immediate();
+          const entry = { id: newId('ent'), categoryId, riderRef };
+          await db.run(`INSERT INTO test_entries (id, event_id, category_id, rider_ref, created_at) VALUES ($1, $2, $3, $4, $5)`, [entry.id, eventId, categoryId, riderRef, now()]);
+          current.push(entry);
+          created++;
+        }
+        return { requested: count, created, reason, blockedBy };
+      });
     },
 
-    clearTestEntries(eventId: string) {
-      requireEvent(eventId);
-      return db.prepare(`DELETE FROM test_entries WHERE event_id = ?`).run(eventId).changes;
+    async clearTestEntries(eventId: string) {
+      await requireEvent(eventId);
+      return db.run(`DELETE FROM test_entries WHERE event_id = $1`, [eventId]);
     },
   };
 }

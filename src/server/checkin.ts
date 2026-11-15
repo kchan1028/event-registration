@@ -9,7 +9,7 @@ import type { EventConfig } from '../shared/schema';
 import type { Db } from './db';
 import type { Identity } from './identity';
 import type { Orders, OrderView } from './orders';
-import { HttpError, type Repo } from './repo';
+import { eventLock, HttpError, type Repo } from './repo';
 
 /**
  * Race-day check-in. A rider is one order. Volunteers see only what
@@ -19,22 +19,24 @@ import { HttpError, type Repo } from './repo';
 export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => Date, identity: Identity) {
   const nowIso = () => clock().toISOString();
 
-  function config(eventId: string): EventConfig {
-    const record = repo.getEvent(eventId);
+  async function config(eventId: string): Promise<EventConfig> {
+    const record = await repo.getEvent(eventId);
     return record.publishedVersion ? repo.getVersion(eventId, record.publishedVersion) : record.config;
   }
 
-  function settings(eventId: string): BibSettings {
-    const row = db.prepare<[string], { settings_json: string }>(`SELECT settings_json FROM bib_settings WHERE event_id = ?`).get(eventId);
-    return row ? bibSettingsSchema.parse(JSON.parse(row.settings_json)) : DEFAULT_BIB_SETTINGS;
+  async function settings(eventId: string): Promise<BibSettings> {
+    const row = await db.get<{ settings_json: unknown }>(`SELECT settings_json FROM bib_settings WHERE event_id = $1`, [eventId]);
+    return row ? bibSettingsSchema.parse(row.settings_json) : DEFAULT_BIB_SETTINGS;
   }
 
-  function activeBib(eventId: string, scope: string, orderId: string): number | null {
-    return db.prepare<[string, string, string], { bib: number }>(`SELECT bib FROM bib_assignments WHERE event_id = ? AND scope = ? AND order_id = ? AND released_at IS NULL`).get(eventId, scope, orderId)?.bib ?? null;
+  async function activeBib(eventId: string, scope: string, orderId: string): Promise<number | null> {
+    const row = await db.get<{ bib: number }>(`SELECT bib FROM bib_assignments WHERE event_id = $1 AND scope = $2 AND order_id = $3 AND released_at IS NULL`, [eventId, scope, orderId]);
+    return row?.bib ?? null;
   }
 
-  function takenBibs(eventId: string, scope: string): Set<number> {
-    return new Set(db.prepare<[string, string], { bib: number }>(`SELECT bib FROM bib_assignments WHERE event_id = ? AND scope = ? AND released_at IS NULL`).all(eventId, scope).map((r) => r.bib));
+  async function takenBibs(eventId: string, scope: string): Promise<Set<number>> {
+    const rows = await db.all<{ bib: number }>(`SELECT bib FROM bib_assignments WHERE event_id = $1 AND scope = $2 AND released_at IS NULL`, [eventId, scope]);
+    return new Set(rows.map((r) => r.bib));
   }
 
   /**
@@ -53,19 +55,23 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     };
   }
 
-  function riderCard(o: Rider, dayId: string, s: BibSettings) {
+  async function riderCard(o: Rider, dayId: string, s: BibSettings) {
     const scope = bibScopeKey(s, dayId);
     const today = o.entries.filter((e) => e.dayId === dayId && e.status !== 'released' && e.status !== 'withdrawn');
     const readiness = mergeReadiness(today.map((e) => e.readiness));
     const payment = o.status === 'confirmed' ? 'confirmed' : 'not_complete';
     const result = checkInResult({ payment, entriesToday: today.length, readiness });
-    const checkIn = db.prepare<[string, string], { checked_in_at: string }>(`SELECT checked_in_at FROM check_ins WHERE order_id = ? AND day_id = ?`).get(o.id, dayId);
-    const history = db
-      .prepare<[string, string, string], { bib: number; assigned_at: string; released_at: string | null; release_reason: string | null }>(
-        `SELECT bib, assigned_at, released_at, release_reason FROM bib_assignments WHERE event_id = ? AND scope = ? AND order_id = ? ORDER BY assigned_at`,
+    const checkIn = await db.get<{ checked_in_at: string }>(`SELECT checked_in_at FROM check_ins WHERE order_id = $1 AND day_id = $2`, [o.id, dayId]);
+    const history = (
+      await db.all<{ bib: number; assigned_at: string; released_at: string | null; release_reason: string | null }>(
+        `SELECT bib, assigned_at, released_at, release_reason FROM bib_assignments WHERE event_id = $1 AND scope = $2 AND order_id = $3 ORDER BY assigned_at, seq`,
+        [o.eventId, scope, o.id],
       )
-      .all(o.eventId, scope, o.id)
-      .map((r) => ({ bib: r.bib, assignedAt: r.assigned_at, releasedAt: r.released_at, reason: r.release_reason }));
+    ).map((r) => ({ bib: r.bib, assignedAt: r.assigned_at, releasedAt: r.released_at, reason: r.release_reason }));
+    const undone = await db.all<{ checked_in_at: string; undone_at: string; bib: number | null; bib_released: boolean; reason: string }>(
+      `SELECT checked_in_at, undone_at, bib, bib_released, reason FROM check_in_undos WHERE order_id = $1 AND day_id = $2 ORDER BY undone_at, seq`,
+      [o.id, dayId],
+    );
     return {
       orderId: o.id,
       checkInCode: o.checkInCode,
@@ -77,23 +83,18 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       entries: today.map((e) => ({ id: e.id, categoryId: e.categoryId, categoryName: e.categoryName, code: e.code, raceName: e.raceName, startTime: e.startTime })),
       readiness,
       result,
-      bib: activeBib(o.eventId, scope, o.id),
+      bib: await activeBib(o.eventId, scope, o.id),
       bibHistory: history,
       checkedInAt: checkIn?.checked_in_at ?? null,
-      undoneCheckIns: db
-        .prepare<[string, string], { checked_in_at: string; undone_at: string; bib: number | null; bib_released: number; reason: string }>(
-          `SELECT checked_in_at, undone_at, bib, bib_released, reason FROM check_in_undos WHERE order_id = ? AND day_id = ? ORDER BY undone_at`,
-        )
-        .all(o.id, dayId)
-        .map((u) => ({ checkedInAt: u.checked_in_at, undoneAt: u.undone_at, bib: u.bib, bibReleased: u.bib_released === 1, reason: u.reason })),
+      undoneCheckIns: undone.map((u) => ({ checkedInAt: u.checked_in_at, undoneAt: u.undone_at, bib: u.bib, bibReleased: u.bib_released, reason: u.reason })),
     };
   }
 
   /** Riders that matter at check-in: live orders (not cancelled or lapsed holds), with linked orders merged into one rider. */
-  function riders(eventId: string): Rider[] {
-    const key = identity.keyOf(eventId);
+  async function riders(eventId: string): Promise<Rider[]> {
+    const key = await identity.keyOf(eventId);
     const groups = new Map<string, OrderView[]>();
-    for (const o of orders.listOrders(eventId)) {
+    for (const o of await orders.listOrders(eventId)) {
       if (o.status === 'cancelled' || o.status === 'expired') continue;
       const k = key(o.id);
       groups.set(k, [...(groups.get(k) ?? []), o]);
@@ -101,7 +102,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     return [...groups.values()].map(mergeRider);
   }
 
-  function matches(card: ReturnType<typeof riderCard>, q: string): boolean {
+  function matches(card: Awaited<ReturnType<typeof riderCard>>, q: string): boolean {
     const needle = q.trim().toLowerCase();
     if (!needle) return true;
     const bare = (v: string) => v.toLowerCase().replace(/[\s-]/g, '');
@@ -117,31 +118,32 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   }
 
   /** The rider card for an order or any order linked to it; bibs and check-ins live under the rider key. */
-  function cardFor(eventId: string, orderId: string, dayId: string) {
-    const o = orders.getOrder(orderId);
+  async function cardFor(eventId: string, orderId: string, dayId: string) {
+    const o = await orders.getOrder(orderId);
     if (o.eventId !== eventId) throw new HttpError(404, 'Rider not found for this event.');
-    const key = identity.keyOf(eventId)(orderId);
-    const group = identity
-      .groupOf(eventId, key)
-      .map((id) => orders.getOrder(id))
-      .filter((x) => x.status !== 'cancelled' && x.status !== 'expired');
-    return riderCard(mergeRider(group.length ? group : [o]), dayId, settings(eventId));
+    const key = (await identity.keyOf(eventId))(orderId);
+    const group: OrderView[] = [];
+    for (const id of await identity.groupOf(eventId, key)) {
+      const x = await orders.getOrder(id);
+      if (x.status !== 'cancelled' && x.status !== 'expired') group.push(x);
+    }
+    return riderCard(mergeRider(group.length ? group : [o]), dayId, await settings(eventId));
   }
 
   /** Assign a bib inside the configured range without colliding with an active one. */
   /** The category bib range for the rider's races that day (earliest start first), if any category sets one. */
-  function categoryRange(eventId: string, orderId: string, dayId: string) {
-    const cfg = config(eventId);
-    const card = cardFor(eventId, orderId, dayId);
+  async function categoryRange(eventId: string, orderId: string, dayId: string) {
+    const cfg = await config(eventId);
+    const card = await cardFor(eventId, orderId, dayId);
     return categoryBibRange(card.entries.map((e) => ({ id: e.categoryId, bibRange: cfg.categories.find((c) => c.id === e.categoryId)?.bibRange ?? null, startTime: e.startTime })));
   }
 
-  function assign(eventId: string, orderId: string, dayId: string, s: BibSettings, requested: number | null): number {
+  async function assign(eventId: string, orderId: string, dayId: string, s: BibSettings, requested: number | null): Promise<number> {
     const scope = bibScopeKey(s, dayId);
-    const catRange = categoryRange(eventId, orderId, dayId);
+    const catRange = await categoryRange(eventId, orderId, dayId);
     const range = catRange ? { scope, ...catRange } : rangeFor(s, dayId);
     if (!range) throw new HttpError(409, 'No bib range is set for this day. Set bib ranges before checking riders in.');
-    const taken = takenBibs(eventId, scope);
+    const taken = await takenBibs(eventId, scope);
     let bib: number | null = requested;
     if (bib === null) {
       bib = nextFreeBib(range, taken);
@@ -150,18 +152,18 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       if (bib < range.first || bib > range.last) throw new HttpError(422, `Bib ${bib} is outside the range ${range.first}–${range.last}.`);
       if (taken.has(bib)) throw new HttpError(409, `Bib ${bib} is already issued to another rider.`);
     }
-    db.prepare(`INSERT INTO bib_assignments (id, event_id, scope, order_id, bib, assigned_at) VALUES (?, ?, ?, ?, ?, ?)`).run(newId('bib'), eventId, scope, orderId, bib, nowIso());
+    await db.run(`INSERT INTO bib_assignments (id, event_id, scope, order_id, bib, assigned_at) VALUES ($1, $2, $3, $4, $5, $6)`, [newId('bib'), eventId, scope, orderId, bib, nowIso()]);
     return bib;
   }
 
   return {
-    list(eventId: string, dayId: string | undefined, q: string) {
-      const cfg = config(eventId);
+    async list(eventId: string, dayId: string | undefined, q: string) {
+      const cfg = await config(eventId);
       const day = dayId ? requireDay(cfg, dayId) : cfg.days[0];
-      const s = settings(eventId);
-      const all = riders(eventId)
-        .map((o) => riderCard(o, day.id, s))
-        .sort((a, b) => a.name.localeCompare(b.name));
+      const s = await settings(eventId);
+      const all = [];
+      for (const o of await riders(eventId)) all.push(await riderCard(o, day.id, s));
+      all.sort((a, b) => a.name.localeCompare(b.name));
       const enteredToday = all.filter((c) => c.entries.length > 0);
       // A search also finds riders with no entry today, so the volunteer sees why; the plain list shows only today's riders.
       const cards = q.trim() ? all.filter((c) => matches(c, q)) : enteredToday;
@@ -170,20 +172,17 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         riders: enteredToday.length,
         checkedIn: enteredToday.filter((c) => c.checkedInAt).length,
         blocked: enteredToday.filter((c) => !c.result.ready).length,
-        bibsIssued: takenBibs(eventId, scope).size,
+        bibsIssued: (await takenBibs(eventId, scope)).size,
         /** Measured standard check-ins for this day (product.md target: median under 30 s, 95th percentile under 90 s). */
         timing: checkInTiming(
-          db
-            .prepare<[string, string], { duration_ms: number }>(`SELECT duration_ms FROM check_ins WHERE event_id = ? AND day_id = ? AND duration_ms IS NOT NULL`)
-            .all(eventId, day.id)
-            .map((r) => r.duration_ms),
+          (await db.all<{ duration_ms: number }>(`SELECT duration_ms FROM check_ins WHERE event_id = $1 AND day_id = $2 AND duration_ms IS NOT NULL`, [eventId, day.id])).map((r) => r.duration_ms),
         ),
       };
       return {
         eventId,
         eventName: cfg.event.name,
         isDemo: cfg.event.isDemo,
-        published: repo.getEvent(eventId).publishedVersion !== null,
+        published: (await repo.getEvent(eventId)).publishedVersion !== null,
         days: cfg.days.map((d) => ({ id: d.id, label: d.label, date: d.date })),
         dayId: day.id,
         settings: s,
@@ -192,16 +191,15 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       };
     },
 
-    saveSettings(eventId: string, input: unknown) {
-      const cfg = config(eventId);
+    async saveSettings(eventId: string, input: unknown) {
+      const cfg = await config(eventId);
       const s = bibSettingsSchema.parse(input);
       const validScopes = s.scope === 'weekend' ? ['weekend'] : cfg.days.map((d) => d.id);
       for (const r of s.ranges) if (!validScopes.includes(r.scope)) throw new HttpError(422, 'A bib range does not match the chosen bib scope.');
       if (new Set(s.ranges.map((r) => r.scope)).size !== s.ranges.length) throw new HttpError(422, 'Each day can have only one bib range.');
-      db.prepare(`INSERT INTO bib_settings (event_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(event_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at`).run(
-        eventId,
-        JSON.stringify(s),
-        nowIso(),
+      await db.run(
+        `INSERT INTO bib_settings (event_id, settings_json, updated_at) VALUES ($1, $2, $3) ON CONFLICT (event_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at`,
+        [eventId, JSON.stringify(s), nowIso()],
       );
       return s;
     },
@@ -210,22 +208,24 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
      * Check a ready rider in and issue a bib. Repeating it is safe: the first
      * check-in time and the existing bib come back unchanged.
      */
-    checkIn(eventId: string, orderId: string, dayId: string, requestedBib: number | null, durationMs: number | null = null) {
-      requireDay(config(eventId), dayId);
-      orderId = identity.keyOf(eventId)(orderId); // linked orders share the rider key
-      return db
-        .transaction(() => {
-          const card = cardFor(eventId, orderId, dayId);
-          if (card.checkedInAt && card.bib !== null) return card;
-          if (!card.result.ready) throw new HttpError(409, `Not ready to race: ${card.result.blockers.map((b) => b.label.toLowerCase()).join(', ')}.`);
-          const s = settings(eventId);
-          if (card.bib === null) assign(eventId, orderId, dayId, s, requestedBib);
-          // Only a first, plausible measurement is kept; a repeat check-in never overwrites it.
-          const duration = durationMs !== null && durationMs > 0 && durationMs <= MAX_TIMED_CHECK_IN_MS ? Math.round(durationMs) : null;
-          db.prepare(`INSERT OR IGNORE INTO check_ins (id, event_id, order_id, day_id, checked_in_at, duration_ms) VALUES (?, ?, ?, ?, ?, ?)`).run(newId('chk'), eventId, orderId, dayId, nowIso(), duration);
-          return cardFor(eventId, orderId, dayId);
-        })
-        .immediate();
+    async checkIn(eventId: string, orderId: string, dayId: string, requestedBib: number | null, durationMs: number | null = null) {
+      requireDay(await config(eventId), dayId);
+      orderId = (await identity.keyOf(eventId))(orderId); // linked orders share the rider key
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        const card = await cardFor(eventId, orderId, dayId);
+        if (card.checkedInAt && card.bib !== null) return card;
+        if (!card.result.ready) throw new HttpError(409, `Not ready to race: ${card.result.blockers.map((b) => b.label.toLowerCase()).join(', ')}.`);
+        const s = await settings(eventId);
+        if (card.bib === null) await assign(eventId, orderId, dayId, s, requestedBib);
+        // Only a first, plausible measurement is kept; a repeat check-in never overwrites it.
+        const duration = durationMs !== null && durationMs > 0 && durationMs <= MAX_TIMED_CHECK_IN_MS ? Math.round(durationMs) : null;
+        await db.run(
+          `INSERT INTO check_ins (id, event_id, order_id, day_id, checked_in_at, duration_ms) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+          [newId('chk'), eventId, orderId, dayId, nowIso(), duration],
+        );
+        return cardFor(eventId, orderId, dayId);
+      });
     },
 
     /**
@@ -233,66 +233,72 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
      * checked in again, and the record is kept with the reason. The bib is released unless the
      * same bib also covers another day this rider is still checked in for (one bib all weekend).
      */
-    undoCheckIn(eventId: string, orderId: string, dayId: string, reason: string) {
-      const cfg = config(eventId);
+    async undoCheckIn(eventId: string, orderId: string, dayId: string, reason: string) {
+      const cfg = await config(eventId);
       requireDay(cfg, dayId);
-      orderId = identity.keyOf(eventId)(orderId);
-      return db
-        .transaction(() => {
-          const card = cardFor(eventId, orderId, dayId);
-          if (!card.checkedInAt) throw new HttpError(409, 'This rider is not checked in for this day.');
-          const s = settings(eventId);
-          const scope = bibScopeKey(s, dayId);
-          const otherDaysInScope = cfg.days.filter((d) => d.id !== dayId && bibScopeKey(s, d.id) === scope).map((d) => d.id);
-          const stillCheckedInElsewhere = otherDaysInScope.some(
-            (d) => !!db.prepare<[string, string], { id: string }>(`SELECT id FROM check_ins WHERE order_id = ? AND day_id = ?`).get(orderId, d),
-          );
-          const t = nowIso();
-          const releaseBib = card.bib !== null && !stillCheckedInElsewhere;
-          if (releaseBib) {
-            db.prepare(`UPDATE bib_assignments SET released_at = ?, release_reason = ? WHERE event_id = ? AND scope = ? AND order_id = ? AND released_at IS NULL`).run(
-              t,
-              `Check-in undone: ${reason}`,
-              eventId,
-              scope,
-              orderId,
-            );
-          }
-          db.prepare(`DELETE FROM check_ins WHERE order_id = ? AND day_id = ?`).run(orderId, dayId);
-          db.prepare(
-            `INSERT INTO check_in_undos (id, event_id, order_id, day_id, checked_in_at, bib, bib_released, reason, undone_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          ).run(newId('undo'), eventId, orderId, dayId, card.checkedInAt, card.bib, releaseBib ? 1 : 0, reason, t);
-          return cardFor(eventId, orderId, dayId);
-        })
-        .immediate();
+      orderId = (await identity.keyOf(eventId))(orderId);
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        const card = await cardFor(eventId, orderId, dayId);
+        if (!card.checkedInAt) throw new HttpError(409, 'This rider is not checked in for this day.');
+        const s = await settings(eventId);
+        const scope = bibScopeKey(s, dayId);
+        const otherDaysInScope = cfg.days.filter((d) => d.id !== dayId && bibScopeKey(s, d.id) === scope).map((d) => d.id);
+        let stillCheckedInElsewhere = false;
+        for (const d of otherDaysInScope) {
+          if (await db.get(`SELECT id FROM check_ins WHERE order_id = $1 AND day_id = $2`, [orderId, d])) stillCheckedInElsewhere = true;
+        }
+        const t = nowIso();
+        const releaseBib = card.bib !== null && !stillCheckedInElsewhere;
+        if (releaseBib) {
+          await db.run(`UPDATE bib_assignments SET released_at = $1, release_reason = $2 WHERE event_id = $3 AND scope = $4 AND order_id = $5 AND released_at IS NULL`, [
+            t,
+            `Check-in undone: ${reason}`,
+            eventId,
+            scope,
+            orderId,
+          ]);
+        }
+        await db.run(`DELETE FROM check_ins WHERE order_id = $1 AND day_id = $2`, [orderId, dayId]);
+        await db.run(
+          `INSERT INTO check_in_undos (id, event_id, order_id, day_id, checked_in_at, bib, bib_released, reason, undone_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [newId('undo'), eventId, orderId, dayId, card.checkedInAt, card.bib, releaseBib, reason, t],
+        );
+        return cardFor(eventId, orderId, dayId);
+      });
     },
 
     /** Swap a rider's bib. The old one stays in the history with the reason. */
-    changeBib(eventId: string, orderId: string, dayId: string, bib: number, reason: string) {
-      requireDay(config(eventId), dayId);
-      orderId = identity.keyOf(eventId)(orderId);
-      return db
-        .transaction(() => {
-          const card = cardFor(eventId, orderId, dayId);
-          if (card.bib === null) throw new HttpError(409, 'This rider has no bib yet. Check them in first.');
-          if (card.bib === bib) return card;
-          const s = settings(eventId);
-          const scope = bibScopeKey(s, dayId);
-          db.prepare(`UPDATE bib_assignments SET released_at = ?, release_reason = ? WHERE event_id = ? AND scope = ? AND order_id = ? AND released_at IS NULL`).run(nowIso(), reason, eventId, scope, orderId);
-          assign(eventId, orderId, dayId, s, bib);
-          return cardFor(eventId, orderId, dayId);
-        })
-        .immediate();
+    async changeBib(eventId: string, orderId: string, dayId: string, bib: number, reason: string) {
+      requireDay(await config(eventId), dayId);
+      orderId = (await identity.keyOf(eventId))(orderId);
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        const card = await cardFor(eventId, orderId, dayId);
+        if (card.bib === null) throw new HttpError(409, 'This rider has no bib yet. Check them in first.');
+        if (card.bib === bib) return card;
+        const s = await settings(eventId);
+        const scope = bibScopeKey(s, dayId);
+        await db.run(`UPDATE bib_assignments SET released_at = $1, release_reason = $2 WHERE event_id = $3 AND scope = $4 AND order_id = $5 AND released_at IS NULL`, [
+          nowIso(),
+          reason,
+          eventId,
+          scope,
+          orderId,
+        ]);
+        await assign(eventId, orderId, dayId, s, bib);
+        return cardFor(eventId, orderId, dayId);
+      });
     },
 
     /**
      * Fictional riders for trying check-in: paid with a simulated payment, a mix
      * of reviewed and unreviewed licenses, and one unpaid hold.
      */
-    addDemoRiders(eventId: string) {
-      const record = repo.getEvent(eventId);
+    async addDemoRiders(eventId: string) {
+      const record = await repo.getEvent(eventId);
       if (!record.publishedVersion) throw new HttpError(409, 'Publish the event first. Check-in uses the published schedule.');
-      const cfg = repo.getVersion(eventId, record.publishedVersion);
+      const cfg = await repo.getVersion(eventId, record.publishedVersion);
       const created: string[] = [];
       for (const p of DEMO_RIDERS) {
         const full = (guardian: RiderDetails['guardian']): RiderDetails => ({
@@ -314,14 +320,14 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
           signerRole: needsGuardian ? 'guardian' : 'rider',
           signatureName: needsGuardian ? (rider.guardian?.name ?? '') : `${rider.firstName} ${rider.lastName}`,
         };
-        const order = orders.createOrder(eventId, {
+        const order = await orders.createOrder(eventId, {
           clientRequestId: `demo-checkin-${randomUUID()}`,
           categoryIds,
           rider,
           waiver,
         });
-        if (p.paid) orders.pay(order.id, `demo-${randomUUID()}`, 'success');
-        if (p.licenseReviewed) for (const e of order.entries) orders.reviewLicense(e.id, 'Demo: license card shown at the desk (simulated).');
+        if (p.paid) await orders.pay(order.id, `demo-${randomUUID()}`, 'success');
+        if (p.licenseReviewed) for (const e of order.entries) await orders.reviewLicense(e.id, 'Demo: license card shown at the desk (simulated).');
         created.push(order.id);
       }
       return { created: created.length };
