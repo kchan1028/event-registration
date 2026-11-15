@@ -344,7 +344,7 @@ Status: check-in search, ready/blocked result, bib ranges, bib history, repeat-s
 
 ### Automatic and bulk bib assignment
 
-Status: Planned beyond the Implemented check-in-time next-free/manual assignment, bib ranges, collision protection, and bib history.
+Status: Partly Implemented locally. Check-in-time assignment and a registration-manager API for previewing and atomically applying selected confirmed, unassigned riders for one day are available. The API uses surname/given-name/ID order and requires a fresh preview fingerprint. The organizer UI, other sort and selection scopes, automatic assignment on confirmation, and controlled reassignment remain Planned.
 
 - Configure allocation per event or day and map ranges explicitly to the applicable races/start groups/categories without allowing duplicate active numbers inside the configured collision scope. A shared start or multiple classifications must not accidentally allocate extra bibs to the same rider. Range/category overlap and invalid scope combinations produce actionable errors before use.
 - Offer opt-in automatic allocation after entry confirmation, not during an unpaid hold. Replayed confirmation or background retries reuse the same active assignment. Receiving a bib does not imply a waiver, verified license, or readiness clearance.
