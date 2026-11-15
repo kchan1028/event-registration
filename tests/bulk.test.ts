@@ -31,9 +31,11 @@ describe('copy a race day', () => {
     }
     // The original day is untouched.
     expect(out.categories.slice(0, config.categories.length)).toEqual(config.categories);
-    // The copy introduces no validation errors of its own.
-    const errorsBefore = validateConfig(config).filter((i) => i.level === 'error').length;
-    expect(validateConfig(out).filter((i) => i.level === 'error').length).toBe(errorsBefore);
+    // The only new errors are the deliberate "review this copy" blocks, one per copied category.
+    const before = new Set(validateConfig(config).filter((i) => i.level === 'error').map((i) => i.key));
+    const added = validateConfig(out).filter((i) => i.level === 'error' && !before.has(i.key));
+    expect(added).toHaveLength(copies.length);
+    expect(added.every((i) => i.key.endsWith('.review'))).toBe(true);
   });
 
   it('does nothing when copying a day onto itself', () => {
