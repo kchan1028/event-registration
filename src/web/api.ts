@@ -37,6 +37,19 @@ export interface WaitlistEntryView {
   orderId: string | null;
 }
 
+export interface IdentityOrderLabel {
+  orderId: string;
+  name: string;
+  orderNumber: string;
+  team: string;
+  status: OrderStatus;
+}
+
+export interface RiderIdentityOverview {
+  suggestions: { a: string; b: string; reasons: string[]; orders: IdentityOrderLabel[] }[];
+  groups: { key: string; orders: IdentityOrderLabel[] }[];
+}
+
 export interface WaitlistOffer {
   eventId: string;
   categoryId: string;
@@ -230,6 +243,10 @@ export const api = {
   loadPurchaseFlowDemo: () => request<{ organizationId: string; eventIds: string[] }>('POST', '/api/demo/purchase-flow'),
   joinWaitlist: (eventId: string, body: Record<string, unknown>) => request<WaitlistEntryView>('POST', `/api/public/events/${eventId}/waitlist`, body),
   waitlistOffer: (token: string) => request<WaitlistOffer>('GET', `/api/public/offers/${encodeURIComponent(token)}`),
+  riderIdentity: (eventId: string) => request<RiderIdentityOverview>('GET', `/api/events/${eventId}/rider-identity`),
+  linkRiders: (eventId: string, a: string, b: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/link`, { orderIds: [a, b] }),
+  dismissRiderMatch: (eventId: string, a: string, b: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/dismiss`, { orderIds: [a, b] }),
+  unlinkRider: (eventId: string, orderId: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/unlink`, { orderId }),
   waitlist: (eventId: string) => request<{ offerHours: number; entries: WaitlistEntryView[] }>('GET', `/api/events/${eventId}/waitlist`),
   offerWaitlistPlace: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer`),
   removeFromWaitlist: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/remove`),

@@ -131,7 +131,9 @@ Built November 14, 2026, on the same stack, building on the rider checkout proto
 
 **Verified:** checked by hand in the browser on desktop and phone widths in both themes. Automated tests in `tests/checkin.test.ts` cover the rules, bib collisions and ranges, repeat check-in, bib history, per-day bibs, code lookup, and the absence of contact and payment details; they run in CI. A Playwright test (`e2e/checkin.spec.ts`) checks that Enter right after a scanned code or a unique name opens that rider, and that a blocked rider gets no check-in button.
 
-**Not built yet:** QR scanning with a camera; sign-in and the check-in volunteer role (anyone with the local app can use the screen); rider identity across separate orders (two orders for one rider count as two riders).
+**Not built yet:** QR scanning with a camera; sign-in and the check-in volunteer role (anyone with the local app can use the screen).
+
+**Rider identity across orders (added November 14, 2026):** Registrations suggests orders that look like one rider (same license number, or same full name and email) under **Same rider?**. Policy (decided by the project owner, November 14, 2026): nothing is linked automatically; the organizer chooses **Link as one rider** or **Not the same rider**, and can **Unlink**. Linked orders become one rider at check-in (one card, entries combined, ready only when every linked order is paid, one bib and one check-in), on start lists (one `rider_id`), and on the fallback roster. Linking is refused when both orders already hold a bib or check-in. Covered by unit and API tests in `tests/identity.test.ts` (run in CI) and checked by hand in the browser (two orders linked, one rider on both days with one bib).
 
 **Measured check-in times (added November 14, 2026):** the check-in screen times each standard check-in from the first keystroke or scan into an empty search to the successful check-in, and the day summary shows the median and 95th percentile against the [product.md](product.md#success-measures) targets (median under 30 seconds, 95th percentile under 90). Blocked riders cannot be checked in, so exceptions are left out; a rider opened from the list without searching is not timed, and a time over 10 minutes is treated as interrupted. A repeat check-in keeps the first measurement. Covered by unit and API tests in `tests/checkin.test.ts` (run in CI) and checked by hand in the browser. These are prototype measurements, not pilot results.
 
@@ -149,7 +151,7 @@ Built November 14, 2026, building on the check-in prototype. It covers the Phase
 
 **Start-list lock (added November 14, 2026):** **Lock start list** on a race saves a snapshot and marks it as the list sent to the timer, with a link to download that locked version. Policy (decided by the project owner, November 14, 2026): the organizer locks each race's list; changes after the lock (new entries, transfers, withdrawals, check-in bibs) are still allowed and appear as "Revisions since the lock" for the timer, never blocked. **Lock again at current list** moves the lock to a new snapshot. Covered by an API test in `tests/startlists.test.ts` (run in CI) and checked by hand in the browser (a check-in after the lock showed as a bib revision).
 
-**Not built yet:** a format agreed with the actual timer and a round trip through timing software (the open research questions in [product.md](product.md#results-site-updates-research)); the timer/export role and sign-in (anyone with the local app can download); rider identity across separate orders.
+**Not built yet:** a format agreed with the actual timer and a round trip through timing software (the open research questions in [product.md](product.md#results-site-updates-research)); the timer/export role and sign-in (anyone with the local app can download).
 
 ## Delivery approach
 

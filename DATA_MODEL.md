@@ -2,7 +2,7 @@
 
 This describes the database the local prototype uses today. It covers tables, relationships, important fields, constraints, and what happens when data is removed. The intended product data model, including entities that are not built yet, is in [product.md](product.md#data-model) and [product.md](product.md#data-storage).
 
-**Status:** Implemented (local prototype). Describes schema version 9 (nine migrations) as of November 14, 2026.
+**Status:** Implemented (local prototype). Describes schema version 10 (ten migrations) as of November 14, 2026.
 
 **Source of truth:** the migrations in [src/server/db.ts](src/server/db.ts) and the event configuration schema in [src/shared/schema.ts](src/shared/schema.ts). If this file disagrees with them, the code wins; fix this file in the same change.
 
@@ -36,6 +36,7 @@ erDiagram
     orders ||--o{ bib_assignments : "bib history"
     orders ||--o{ check_ins : "checked in"
     orders ||--o{ check_in_undos : "undone check-ins"
+    orders ||--o| rider_links : "linked as one rider"
     events ||--o{ start_list_snapshots : "start lists"
     events ||--o{ start_list_locks : "locked start lists"
     events ||--o{ waitlist_entries : "waitlists"
@@ -264,6 +265,23 @@ Start-list locks (migration 8). The organizer locks a race's start list when sen
 | `race_id` | Race ID inside the event configuration. Indexed with `event_id` and `locked_at` |
 | `snapshot_version` | The `start_list_snapshots.version` that was locked |
 | `locked_at` | |
+
+### rider_links
+
+Rider identity across orders (migration 10). The organizer links orders that are the same rider; each linked order points at a rider key, the earliest order in the group. An order with no row is its own rider. Check-in, bibs, check-ins, and start-list `rider_id` use the rider key. Suggestions come from same license number, or same full name and email; nothing is linked automatically.
+
+| Column | Notes |
+|---|---|
+| `order_id` | Primary key; references `orders` |
+| `event_id` | References `events`. Indexed with `rider_key` |
+| `rider_key` | References `orders`: the earliest order in the linked group |
+| `linked_at` | |
+
+When two orders are linked, a bib or check-in held by the later group moves to the rider key. Linking is refused if both groups already hold one. Unlinking deletes the group's rows; any bib or check-in stays with the earliest order.
+
+### rider_link_dismissals
+
+Suggested matches the organizer marked as different riders (migration 10), so they are not suggested again. Primary key (`event_id`, `order_a`, `order_b`), with `order_a` < `order_b`; plus `dismissed_at`.
 
 ## Event configuration (JSON)
 

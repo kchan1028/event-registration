@@ -6,6 +6,7 @@ import { newId } from '../shared/factory';
 import { sortCategories } from '../shared/format';
 import type { EventConfig } from '../shared/schema';
 import type { Db } from './db';
+import type { Identity } from './identity';
 import type { Orders, OrderView } from './orders';
 import { HttpError, type Repo } from './repo';
 
@@ -14,7 +15,7 @@ import { HttpError, type Repo } from './repo';
  * check-in needs: name, team, entries, readiness, and bib. No email, guardian
  * contact, payment amounts, or emergency details leave this module.
  */
-export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => Date) {
+export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => Date, identity: Identity) {
   const nowIso = () => clock().toISOString();
 
   function config(eventId: string): EventConfig {
@@ -35,7 +36,23 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     return new Set(db.prepare<[string, string], { bib: number }>(`SELECT bib FROM bib_assignments WHERE event_id = ? AND scope = ? AND released_at IS NULL`).all(eventId, scope).map((r) => r.bib));
   }
 
-  function riderCard(o: OrderView, dayId: string, s: BibSettings) {
+  /**
+   * One rider made from linked orders (rider identity): the earliest order's details and ID, every
+   * order's entries, and paid only when every linked order is paid. An unlinked order is unchanged.
+   */
+  type Rider = OrderView & { checkInCodes: string[] };
+  function mergeRider(group: OrderView[]): Rider {
+    const sorted = [...group].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    const first = sorted[0];
+    return {
+      ...first,
+      status: sorted.every((o) => o.status === 'confirmed') ? 'confirmed' : sorted.find((o) => o.status !== 'confirmed')!.status,
+      entries: sorted.flatMap((o) => o.entries),
+      checkInCodes: sorted.map((o) => o.checkInCode).filter((c): c is string => !!c),
+    };
+  }
+
+  function riderCard(o: Rider, dayId: string, s: BibSettings) {
     const scope = bibScopeKey(s, dayId);
     const today = o.entries.filter((e) => e.dayId === dayId && e.status !== 'released' && e.status !== 'withdrawn');
     const readiness = mergeReadiness(today.map((e) => e.readiness));
@@ -51,6 +68,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     return {
       orderId: o.id,
       checkInCode: o.checkInCode,
+      checkInCodes: o.checkInCodes,
       name: `${o.rider.firstName} ${o.rider.lastName}`,
       team: o.rider.team,
       racingAge: o.rider.racingAge,
@@ -70,16 +88,23 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     };
   }
 
-  /** Orders that matter at check-in: anything a rider might show up with, except cancelled or lapsed holds. */
-  function riders(eventId: string) {
-    return orders.listOrders(eventId).filter((o) => o.status !== 'cancelled' && o.status !== 'expired');
+  /** Riders that matter at check-in: live orders (not cancelled or lapsed holds), with linked orders merged into one rider. */
+  function riders(eventId: string): Rider[] {
+    const key = identity.keyOf(eventId);
+    const groups = new Map<string, OrderView[]>();
+    for (const o of orders.listOrders(eventId)) {
+      if (o.status === 'cancelled' || o.status === 'expired') continue;
+      const k = key(o.id);
+      groups.set(k, [...(groups.get(k) ?? []), o]);
+    }
+    return [...groups.values()].map(mergeRider);
   }
 
   function matches(card: ReturnType<typeof riderCard>, q: string): boolean {
     const needle = q.trim().toLowerCase();
     if (!needle) return true;
     const bare = (v: string) => v.toLowerCase().replace(/[\s-]/g, '');
-    if (card.checkInCode && bare(card.checkInCode) === bare(needle)) return true;
+    if (card.checkInCodes.some((c) => bare(c) === bare(needle))) return true;
     if (/^\d+$/.test(needle) && card.bib === Number(needle)) return true;
     return card.name.toLowerCase().includes(needle) || card.team.toLowerCase().includes(needle);
   }
@@ -90,10 +115,16 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     return day;
   }
 
+  /** The rider card for an order or any order linked to it; bibs and check-ins live under the rider key. */
   function cardFor(eventId: string, orderId: string, dayId: string) {
     const o = orders.getOrder(orderId);
     if (o.eventId !== eventId) throw new HttpError(404, 'Rider not found for this event.');
-    return riderCard(o, dayId, settings(eventId));
+    const key = identity.keyOf(eventId)(orderId);
+    const group = identity
+      .groupOf(eventId, key)
+      .map((id) => orders.getOrder(id))
+      .filter((x) => x.status !== 'cancelled' && x.status !== 'expired');
+    return riderCard(mergeRider(group.length ? group : [o]), dayId, settings(eventId));
   }
 
   /** Assign a bib inside the configured range without colliding with an active one. */
@@ -172,6 +203,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
      */
     checkIn(eventId: string, orderId: string, dayId: string, requestedBib: number | null, durationMs: number | null = null) {
       requireDay(config(eventId), dayId);
+      orderId = identity.keyOf(eventId)(orderId); // linked orders share the rider key
       return db
         .transaction(() => {
           const card = cardFor(eventId, orderId, dayId);
@@ -195,6 +227,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     undoCheckIn(eventId: string, orderId: string, dayId: string, reason: string) {
       const cfg = config(eventId);
       requireDay(cfg, dayId);
+      orderId = identity.keyOf(eventId)(orderId);
       return db
         .transaction(() => {
           const card = cardFor(eventId, orderId, dayId);
@@ -228,6 +261,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     /** Swap a rider's bib. The old one stays in the history with the reason. */
     changeBib(eventId: string, orderId: string, dayId: string, bib: number, reason: string) {
       requireDay(config(eventId), dayId);
+      orderId = identity.keyOf(eventId)(orderId);
       return db
         .transaction(() => {
           const card = cardFor(eventId, orderId, dayId);

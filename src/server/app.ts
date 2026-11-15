@@ -13,6 +13,7 @@ import { changeImpact, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
 import { openDb } from './db';
 import { createCheckIn } from './checkin';
+import { createIdentity } from './identity';
 import { createStartLists } from './startlists';
 import { createOrders, type Orders } from './orders';
 import { createWaitlist } from './waitlist';
@@ -33,8 +34,9 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const clock = opts.now ?? (() => new Date());
   const repo = createRepo(db, clock);
   const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10));
-  const checkIn = createCheckIn(db, repo, orders, clock);
-  const startLists = createStartLists(db, repo, orders, clock);
+  const identity = createIdentity(db, orders, clock);
+  const checkIn = createCheckIn(db, repo, orders, clock, identity);
+  const startLists = createStartLists(db, repo, orders, clock, identity);
   const waitlist = createWaitlist(db, repo, clock);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
@@ -282,6 +284,22 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const p = z.object({ id: z.string().min(1).max(64), orderId: z.string().min(1).max(64) }).parse(req.params);
     const body = z.object({ dayId: z.string().min(1).max(64), reason: z.string().trim().min(3, 'Say why the check-in is being undone.').max(200) }).parse(req.body);
     return checkIn.undoCheckIn(p.id, p.orderId, body.dayId, body.reason);
+  });
+
+  // Rider identity across orders: suggestions and organizer-confirmed links (src/server/identity.ts).
+  app.get('/api/events/:id/rider-identity', async (req) => identity.overview(idParam.parse(req.params).id));
+  const pairBody = z.object({ orderIds: z.tuple([z.string().min(1).max(64), z.string().min(1).max(64)]) });
+  app.post('/api/events/:id/rider-identity/link', async (req) => {
+    const { orderIds } = pairBody.parse(req.body);
+    return identity.link(idParam.parse(req.params).id, orderIds[0], orderIds[1]);
+  });
+  app.post('/api/events/:id/rider-identity/dismiss', async (req) => {
+    const { orderIds } = pairBody.parse(req.body);
+    return identity.dismiss(idParam.parse(req.params).id, orderIds[0], orderIds[1]);
+  });
+  app.post('/api/events/:id/rider-identity/unlink', async (req) => {
+    const { orderId } = z.object({ orderId: z.string().min(1).max(64) }).parse(req.body);
+    return identity.unlink(idParam.parse(req.params).id, orderId);
   });
 
   app.post('/api/events/:id/check-in-demo-riders', async (req, reply) => reply.status(201).send(checkIn.addDemoRiders(idParam.parse(req.params).id)));

@@ -196,6 +196,25 @@ const MIGRATIONS: string[] = [
   -- Measured check-in time: from the volunteer starting a search (or scan) to a successful check-in, in milliseconds.
   ALTER TABLE check_ins ADD COLUMN duration_ms INTEGER;
   `,
+  `
+  -- Rider identity across orders. The organizer links orders that are the same rider; rider_key is the
+  -- earliest order in the group. Unlinked orders have no row and are their own rider.
+  CREATE TABLE rider_links (
+    order_id TEXT PRIMARY KEY REFERENCES orders(id),
+    event_id TEXT NOT NULL REFERENCES events(id),
+    rider_key TEXT NOT NULL REFERENCES orders(id),
+    linked_at TEXT NOT NULL
+  );
+  CREATE INDEX rider_links_by_key ON rider_links(event_id, rider_key);
+  -- Suggested matches the organizer marked as different riders, so they are not suggested again.
+  CREATE TABLE rider_link_dismissals (
+    event_id TEXT NOT NULL REFERENCES events(id),
+    order_a TEXT NOT NULL,
+    order_b TEXT NOT NULL,
+    dismissed_at TEXT NOT NULL,
+    PRIMARY KEY (event_id, order_a, order_b)
+  );
+  `,
 ];
 
 export function openDb(path: string): Db {
