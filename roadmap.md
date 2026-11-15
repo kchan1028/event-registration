@@ -295,6 +295,7 @@ Build:
 - Agreed license verification and exception-review workflow, with freshness/source visible.
 - Search and QR check-in, bib-range rules, conflict detection, and repeat-scan handling.
 - Opt-in automatic bib assignment after advance registration closes and outstanding checkout holds settle or expire; deterministic previewed bulk allocation with explicit scopes/ranges, stable tie-breaks, preservation of manual/issued/checked-in assignments, atomic apply, and historical reassignments.
+- Before staff rehearsal, resolve shared weekend bib/category range conflicts across days ([issue #95](https://github.com/kchan1028/event-registration/issues/95); [recorded question](product.md#automatic-and-bulk-bib-assignment)). Current checks use the selected day’s range.
 - Race-day walk-up/mobile/kiosk registration using the same rules as advance entry, staff permissions, explicit surcharges/windows, confirmed Stripe hosted payment, bib handoff, and start-list updates. Physical terminals and cash/check recording need a separate approved workflow.
 - Timer export fields agreed from the road-results research, so results uploads need no retyping.
 - Timestamped start lists, change reports, and tested timer exports.

@@ -319,6 +319,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
   const [changing, setChanging] = useState(false);
   const [newBib, setNewBib] = useState('');
   const [reason, setReason] = useState('');
+  const [acknowledgeCheckedIn, setAcknowledgeCheckedIn] = useState(false);
   const [bibPreview, setBibPreview] = useState<{ input: BibChange; plan: BibReassignmentPlan } | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [undoReason, setUndoReason] = useState('');
@@ -363,7 +364,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
         setReason('');
         setBibPreview(null);
       } else {
-        const input = { dayId, bib: Number(newBib), reason };
+        const input = { dayId, bib: Number(newBib), reason, acknowledgeCheckedIn };
         setBibPreview({ input, plan: await api.previewBibChange(eventId, rider.orderId, input) });
       }
     } catch (err) {
@@ -506,6 +507,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
                   Reason
                   <input className="input" disabled={busy} required minLength={3} placeholder="For example: bib damaged" value={reason} onChange={(e) => { setReason(e.target.value); setBibPreview(null); }} />
                 </label>
+                <label className="ci-batch__choice"><input type="checkbox" disabled={busy} checked={acknowledgeCheckedIn} onChange={(e) => { setAcknowledgeCheckedIn(e.target.checked); setBibPreview(null); }} />I approve changing this rider’s issued bib if already checked in.</label>
                 {bibPreview && <BibReassignmentPreview plan={bibPreview.plan} />}
                 <div className="ci-bib__actions">
                   <button type="submit" className="btn btn--primary" disabled={busy || (!!bibPreview && !changedBibAssignments(bibPreview.plan).length)}>

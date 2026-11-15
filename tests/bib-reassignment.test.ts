@@ -28,7 +28,7 @@ async function setup() {
   expect((await checkIn(alex)).statusCode).toBe(200);
   const preview = (input: BibReassignment, headers = {}) => app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/reassign/preview`, headers, payload: input });
   const apply = (input: BibReassignment, fingerprint: string, headers = {}) => app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/reassign/apply`, headers, payload: { batch: input, fingerprint } });
-  const swap: BibReassignment = { mode: 'manual', dayId: before.dayId, reason: 'Swap two demo numbers', assignments: [{ orderId: alex, bib: 101 }, { orderId: blake, bib: 100 }] };
+  const swap: BibReassignment = { mode: 'manual', acknowledgeCheckedIn: true, dayId: before.dayId, reason: 'Swap two demo numbers', assignments: [{ orderId: alex, bib: 101 }, { orderId: blake, bib: 100 }] };
   return { app, db, eventId, organizationId, before, list, alex, blake, dana, checkIn, preview, apply, swap };
 }
 
@@ -42,6 +42,7 @@ describe('protected bib reassignment', () => {
     expect(planResponse.statusCode).toBe(200);
     const plan = planResponse.json() as BibReassignmentPlan;
     expect(plan).toMatchObject({ scope: 'weekend', reason: swap.reason });
+    expect((await list(before.days[1].id)).riders.find((r) => r.orderId === alex)?.checkedInScope).toBe(true);
     expect(plan.assignments).toEqual(expect.arrayContaining([expect.objectContaining({ orderId: alex, currentBib: 100, bib: 101, checkedInDays: [before.days[0].label] }), expect.objectContaining({ orderId: blake, currentBib: 101, bib: 100, checkedInDays: [] })]));
     expect((await list()).riders.map((r) => [r.orderId, r.bib])).toEqual(original.riders.map((r) => [r.orderId, r.bib]));
     const result = await apply(swap, plan.fingerprint);
@@ -74,7 +75,7 @@ describe('protected bib reassignment', () => {
     const { db, alex, blake, dana, list, preview, apply, swap } = await setup();
     const first = (await preview(swap)).json() as BibReassignmentPlan;
     expect((await apply(swap, first.fingerprint)).statusCode).toBe(200);
-    const sequence: BibReassignment = { mode: 'sequence', dayId: swap.dayId, reason: 'Put selected demo riders in name order', orderIds: [blake, alex], sort: 'name' };
+    const sequence: BibReassignment = { mode: 'sequence', acknowledgeCheckedIn: true, dayId: swap.dayId, reason: 'Put selected demo riders in name order', orderIds: [blake, alex], sort: 'name' };
     const plan = (await preview(sequence)).json() as BibReassignmentPlan;
     expect(plan.assignments.map((r) => [r.orderId, r.bib])).toEqual([[alex, 100], [blake, 101]]);
     expect((await apply(sequence, plan.fingerprint)).statusCode).toBe(200);
@@ -110,6 +111,22 @@ describe('protected bib reassignment', () => {
     expect((await apply(swap, fresh.fingerprint)).statusCode).toBe(409);
   });
 
+  it('requires checked-in acknowledgement and keeps unrelated check-ins from invalidating approval', async () => {
+    const { app, eventId, before, blake, checkIn, preview, apply, swap } = await setup();
+    expect((await preview({ ...swap, acknowledgeCheckedIn: false })).statusCode).toBe(409);
+    const input: BibReassignment = { ...swap, mode: 'manual', assignments: [{ orderId: blake, bib: 130 }], acknowledgeCheckedIn: false };
+    const plan = (await preview(input)).json() as BibReassignmentPlan;
+    const casey = before.riders.find((r) => r.name.startsWith('Casey'))!.orderId;
+    const allocation = { dayId: before.dayId, orderIds: [casey] };
+    const free = (await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/preview`, payload: allocation })).json();
+    await app.inject({ method: 'POST', url: `/api/events/${eventId}/bibs/apply`, payload: { ...allocation, fingerprint: free.fingerprint } });
+    // Take a fresh preview after allocation; the unrelated check-in itself must not stale it.
+    const fresh = (await preview(input)).json() as BibReassignmentPlan;
+    expect(fresh.fingerprint).not.toBe(plan.fingerprint);
+    expect((await checkIn(casey)).statusCode).toBe(200);
+    expect((await apply(input, fresh.fingerprint)).statusCode).toBe(200);
+  });
+
   it('rolls back releases, new numbers, audits and revisions when snapshot storage fails', async () => {
     const { db, preview, apply, swap, list } = await setup();
     const before = await list();
@@ -139,7 +156,7 @@ describe('protected bib reassignment', () => {
     const plan = (await preview(swap)).json() as BibReassignmentPlan;
     expect((await preview(swap, as(email))).statusCode).toBe(403);
     expect((await apply(swap, plan.fingerprint, as(email))).statusCode).toBe(403);
-    const input = { dayId: swap.dayId, bib: 130, reason: 'Staff corrects a damaged demo bib' };
+    const input = { dayId: swap.dayId, bib: 130, reason: 'Staff corrects a damaged demo bib', acknowledgeCheckedIn: true };
     const single = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex}/bib/preview`, headers: as(email), payload: input });
     expect(single.statusCode).toBe(200);
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex}/bib`, headers: as(email), payload: { ...input, fingerprint: single.json().fingerprint } })).statusCode).toBe(200);
@@ -152,7 +169,7 @@ describe('protected bib reassignment', () => {
     await app.inject({ method: 'PUT', url: `/api/events/${eventId}/bib-settings`, payload: { scope: 'day', ranges: [{ scope: sat, first: 100, last: 199 }, { scope: sun, first: 200, last: 299 }] } });
     expect((await checkIn(alex, sat)).statusCode).toBe(200);
     expect((await checkIn(alex, sun)).statusCode).toBe(200);
-    const input: BibReassignment = { mode: 'manual', dayId: sat, reason: 'Correct the Saturday demo bib', assignments: [{ orderId: alex, bib: 150 }] };
+    const input: BibReassignment = { mode: 'manual', acknowledgeCheckedIn: true, dayId: sat, reason: 'Correct the Saturday demo bib', assignments: [{ orderId: alex, bib: 150 }] };
     const plan = (await preview(input)).json() as BibReassignmentPlan;
     expect(plan.races).toHaveLength(1);
     expect(plan.scope).toBe(sat);

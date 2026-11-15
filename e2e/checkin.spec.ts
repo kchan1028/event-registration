@@ -237,6 +237,9 @@ for (const mobile of [false, true]) {
     await page.goto(`/#/events/${eventId}/check-in`);
     await page.getByRole('button', { name: 'Reassign bibs', exact: true }).click();
     const panel = page.getByRole('region', { name: 'Bulk bib reassignment', exact: true });
+    await panel.getByRole('button', { name: 'Select all assigned (1)', exact: true }).click();
+    await expect(panel.getByRole('checkbox', { name: alex.name, exact: true })).not.toBeChecked();
+    await panel.getByRole('checkbox', { name: 'I approve changing checked-in riders’ bibs. Select those riders individually.', exact: true }).check();
     await panel.getByRole('checkbox', { name: alex.name, exact: true }).check();
     await panel.getByRole('checkbox', { name: blake.name, exact: true }).check();
     await panel.getByRole('textbox', { name: 'Reason for bib changes' }).fill('Swap demo numbers for the timer handoff');

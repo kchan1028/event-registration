@@ -252,7 +252,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     const state = await dayState(eventId, day.id, scope);
     const activeBibs = [...state.bibs.values()].flat().filter((b) => b.released_at === null);
     const outside = new Set(activeBibs.filter((b) => !ids.has(b.order_id)).map((b) => b.bib));
-    const checks = await db.all<{ order_id: string; day_id: string; checked_in_at: string }>(`SELECT order_id, day_id, checked_in_at FROM check_ins WHERE event_id = $1 AND day_id = ANY($2::text[]) ORDER BY order_id, day_id`, [eventId, days.map((d) => d.id)]);
+    const checks = await db.all<{ order_id: string; day_id: string; checked_in_at: string }>(`SELECT order_id, day_id, checked_in_at FROM check_ins WHERE event_id = $1 AND day_id = ANY($2::text[]) AND order_id = ANY($3::text[]) ORDER BY order_id, day_id`, [eventId, days.map((d) => d.id), [...ids]]);
     const raceIds = new Set<string>();
     const assignments = proposed.map((a) => {
       const rider = all.get(a.orderId);
@@ -272,6 +272,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const previous = activeBibs.find((b) => b.order_id === rider.id)!;
       return { orderId: rider.id, name: card.name, currentBib: card.bib!, bib: a.bib, previousAssignmentId: previous.id, range: { first: range.first, last: range.last }, checkedInDays: days.filter((d) => checks.some((c) => c.order_id === rider.id && c.day_id === d.id)).map((d) => d.label) };
     });
+    if (!input.acknowledgeCheckedIn && assignments.some((a) => a.currentBib !== a.bib && a.checkedInDays.length)) throw new HttpError(409, 'Acknowledge changes to checked-in riders before previewing.');
     const races = cfg.races.filter((r) => raceIds.has(r.id)).map((r) => ({ id: r.id, name: r.name }));
     const fingerprint = createHash('sha256').update(JSON.stringify({ eventId, input, version, scope, settings: s, active: activeBibs.map((b) => [b.id, b.order_id, b.bib]).sort(), checks, assignments, races })).digest('hex');
     return { dayId: day.id, scope, scopeLabel: s.scope === 'weekend' ? 'Whole event' : day.label, reason: input.reason, publishedVersion: version, races, assignments, fingerprint };
@@ -309,7 +310,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
         const key = (await identity.keyOf(eventId))(orderId);
-        return reassignmentPlan(eventId, { mode: 'manual', dayId: input.dayId, reason: input.reason, assignments: [{ orderId: key, bib: input.bib }] });
+        return reassignmentPlan(eventId, { mode: 'manual', dayId: input.dayId, reason: input.reason, acknowledgeCheckedIn: input.acknowledgeCheckedIn, assignments: [{ orderId: key, bib: input.bib }] });
       });
     },
     /** Called by the post-close job under its event lock and transaction. */
@@ -348,7 +349,8 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const day = dayId ? requireDay(cfg, dayId) : cfg.days[0];
       const s = await settings(eventId);
       const state = await dayState(eventId, day.id, bibScopeKey(s, day.id));
-      const all = (await riders(eventId)).map((o) => riderCard(o, day.id, state)).sort((a, b) => a.name.localeCompare(b.name));
+      const checkedInScope = new Set((await db.all<{ order_id: string }>(`SELECT DISTINCT order_id FROM check_ins WHERE event_id = $1 AND day_id = ANY($2::text[])`, [eventId, cfg.days.filter((d) => bibScopeKey(s, d.id) === bibScopeKey(s, day.id)).map((d) => d.id)])).map((r) => r.order_id));
+      const all = (await riders(eventId)).map((o) => ({ ...riderCard(o, day.id, state), checkedInScope: checkedInScope.has(o.id) })).sort((a, b) => a.name.localeCompare(b.name));
       const enteredToday = all.filter((c) => c.entries.length > 0);
       // A search also finds riders with no entry today, so the volunteer sees why; the plain list shows only today's riders.
       const cards = q.trim() ? all.filter((c) => matches(c, q)) : enteredToday;
@@ -463,7 +465,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
         const key = (await identity.keyOf(eventId))(orderId);
-        await commitReassignment(eventId, { mode: 'manual', dayId: input.dayId, reason: input.reason, assignments: [{ orderId: key, bib: input.bib }] }, fingerprint, actorId);
+        await commitReassignment(eventId, { mode: 'manual', dayId: input.dayId, reason: input.reason, acknowledgeCheckedIn: input.acknowledgeCheckedIn, assignments: [{ orderId: key, bib: input.bib }] }, fingerprint, actorId);
         return cardFor(eventId, key, input.dayId);
       });
     },

@@ -122,7 +122,7 @@ export interface CheckInList {
   races: { id: string; name: string }[];
   categories: { id: string; name: string; raceId: string }[];
   summary: { riders: number; checkedIn: number; blocked: number; bibsAssigned: number; timing: ReturnType<typeof checkInTiming> };
-  riders: CheckInRider[];
+  riders: (CheckInRider & { checkedInScope: boolean })[];
 }
 
 export const MAX_BIB_BATCH_SIZE = 1000;
@@ -181,9 +181,10 @@ export const bibChangeSchema = z.object({
   dayId: bibBatchSchema.shape.dayId,
   bib: bibNumberSchema,
   reason: z.string().trim().min(3, 'Say why the bib changed.').max(200),
+  acknowledgeCheckedIn: z.boolean(),
 });
 export type BibChange = z.infer<typeof bibChangeSchema>;
-const reassignmentScope = bibBatchSchema.pick({ dayId: true, raceId: true, categoryId: true }).extend({ reason: bibChangeSchema.shape.reason });
+const reassignmentScope = bibBatchSchema.pick({ dayId: true, raceId: true, categoryId: true }).extend({ reason: bibChangeSchema.shape.reason, acknowledgeCheckedIn: bibChangeSchema.shape.acknowledgeCheckedIn });
 export const bibReassignmentSchema = z.discriminatedUnion('mode', [
   reassignmentScope.extend({ mode: z.literal('manual'), assignments: z.array(z.object({ orderId: bibBatchSchema.shape.orderIds.element, bib: bibNumberSchema })).min(1).max(MAX_BIB_BATCH_SIZE) }),
   reassignmentScope.extend({ mode: z.literal('sequence'), orderIds: bibBatchSchema.shape.orderIds, sort: bibBatchSchema.shape.sort.unwrap() }),

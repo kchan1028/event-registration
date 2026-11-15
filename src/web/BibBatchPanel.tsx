@@ -14,6 +14,7 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
   const [sort, setSort] = useState<NonNullable<BibBatch['sort']>>('name');
   const [choice, setChoice] = useState<'manual' | 'sequence'>('manual');
   const [reason, setReason] = useState('');
+  const [acknowledgeCheckedIn, setAcknowledgeCheckedIn] = useState(false);
   const [newBibs, setNewBibs] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -75,8 +76,8 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
         const scope = { dayId, ...(raceId ? { raceId } : {}), ...(categoryId ? { categoryId } : {}) };
         if (reassigning) {
           const parsed = bibReassignmentSchema.safeParse(choice === 'manual'
-            ? { ...scope, mode: choice, reason, assignments: selected.map((orderId) => ({ orderId, bib: Number(newBibs[orderId] ?? '') })) }
-            : { ...scope, mode: choice, reason, orderIds: selected, sort });
+            ? { ...scope, mode: choice, reason, acknowledgeCheckedIn, assignments: selected.map((orderId) => ({ orderId, bib: Number(newBibs[orderId] ?? '') })) }
+            : { ...scope, mode: choice, reason, acknowledgeCheckedIn, orderIds: selected, sort });
           if (!parsed.success) { setError(`${parsed.error.issues[0].message} Check the reason and replacement numbers.`); return; }
           const plan = await api.previewReassignments(eventId, parsed.data);
           if (active.current) setPreview({ kind: 'reassign', batch: parsed.data, plan });
@@ -100,7 +101,7 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
   const categories = data?.categories.filter((c) => !raceId || c.raceId === raceId) ?? [];
   const riders = data?.riders.filter((r) => r.entries.some((e) =>
     (!categoryId || e.categoryId === categoryId) && (!raceId || data.categories.some((c) => c.id === e.categoryId && c.raceId === raceId)))) ?? [];
-  const selectable = riders.filter((r) => !bibBatchExclusion(r, mode));
+  const selectable = riders.filter((r) => !bibBatchExclusion(r, mode) && !r.checkedInScope);
   const changeCount = preview?.kind === 'reassign' ? changedBibAssignments(preview.plan).length : preview?.plan.assignments.length ?? 0;
   const noun = reassigning ? 'changes' : 'assignments';
 
@@ -128,6 +129,7 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
         </select></label>}
       </fieldset>
       {reassigning && <label className="ci-batch__reason">Reason for bib changes<input className="input" disabled={busy} required value={reason} onChange={(e) => { setReason(e.target.value); invalidate(); }} /></label>}
+      {reassigning && <label className="ci-batch__choice"><input type="checkbox" disabled={busy} checked={acknowledgeCheckedIn} onChange={(e) => { setAcknowledgeCheckedIn(e.target.checked); invalidate(); }} />I approve changing checked-in riders’ bibs. Select those riders individually.</label>}
       <p className="muted small">Ranges follow each rider’s earliest category with a range on this day, then the event/day range. Narrowing the selection does not override that range.</p>
       <div className="ci-bib__actions">
         <button type="button" className="btn btn--secondary btn--small" disabled={busy || !selectable.length || selectable.length > MAX_BIB_BATCH_SIZE} onClick={() => { setSelected(selectable.map((r) => r.orderId)); invalidate(); }}>Select all {reassigning ? 'assigned' : 'unassigned'} ({selectable.length})</button>
@@ -142,7 +144,7 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
               <th scope="row"><label className="ci-batch__choice"><input type="checkbox" disabled={busy || !!exclusion || (!selected.includes(r.orderId) && selected.length >= MAX_BIB_BATCH_SIZE)} checked={selected.includes(r.orderId)} onChange={(e) => { setSelected((ids) => e.target.checked ? [...ids, r.orderId] : ids.filter((id) => id !== r.orderId)); invalidate(); }} />{r.name}</label></th>
               <td>{r.entries.map((e) => e.categoryName).join(', ')}</td><td>{r.bib ?? 'Unassigned'}</td>
               {reassigning && choice === 'manual' && <td><input className="input ci-batch__number" inputMode="numeric" aria-label={`New bib for ${r.name}`} disabled={busy || !selected.includes(r.orderId)} value={newBibs[r.orderId] ?? ''} onChange={(e) => { setNewBibs((bibs) => ({ ...bibs, [r.orderId]: e.target.value.replace(/\D/g, '') })); invalidate(); }} /></td>}
-              <td>{exclusion ?? (reassigning ? r.checkedInAt ? 'Checked in; explicit approval required' : 'Existing assignment' : r.result.ready ? 'Available for allocation' : 'Available; readiness blocked')}</td>
+              <td>{exclusion ?? (reassigning ? r.checkedInScope ? 'Checked in; explicit approval required' : 'Existing assignment' : r.result.ready ? 'Available for allocation' : 'Available; readiness blocked')}</td>
             </tr>;
           })}</tbody></table>
       </div>}

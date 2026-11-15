@@ -108,7 +108,7 @@ describe('post-close automatic bib allocation', () => {
     const repeated = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${root.orderId}`, payload: { dayId: after.dayId, bib: null } });
     expect(repeated.statusCode).toBe(200);
     expect(repeated.json()).toMatchObject({ bib: allocated.bib, checkedInAt: checked.json().checkedInAt });
-    const change = { dayId: after.dayId, bib: 199, reason: 'Correct the demo handoff number' };
+    const change = { dayId: after.dayId, bib: 199, reason: 'Correct the demo handoff number', acknowledgeCheckedIn: true };
     const preview = (await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex.orderId}/bib/preview`, payload: change })).json() as { fingerprint: string };
     const changed = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex.orderId}/bib`, payload: { ...change, fingerprint: preview.fingerprint } });
     expect(changed.statusCode).toBe(200);
