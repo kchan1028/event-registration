@@ -1,0 +1,70 @@
+# Render Blueprint for CycleReg (ADR 0004: Render web services and Render Postgres, Pro workspace).
+#
+# NOT APPLIED. Nothing here exists on Render. Do not create a Blueprint from this file until
+# sign-in with MFA (ADR 0003) ships: until then the server refuses HOST=0.0.0.0 at start-up
+# (src/server/listen.ts), so a deploy would fail its health check by design.
+# Steps, costs, and approvals: docs/runbooks/deploy-render.md.
+#
+# Production and staging are separate services with separate databases; staging never holds
+# real rider data. No secrets are written here: DATABASE_URL comes from the database itself.
+
+services:
+  - type: web
+    name: cyclereg
+    runtime: docker
+    region: oregon
+    plan: 0.5c-512mb # Starter
+    numInstances: 2 # two instances during registration openings (ADR 0004)
+    branch: main
+    autoDeployTrigger: 'off' # production deploys are started by hand (operations.md change freeze)
+    healthCheckPath: /api/health # 503 while the database is unreachable
+    maxShutdownDelaySeconds: 30 # graceful shutdown on SIGTERM finishes requests in progress
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: HOLD_MINUTES
+        value: '10'
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cyclereg-db
+          property: connectionString
+
+  - type: web
+    name: cyclereg-staging
+    runtime: docker
+    region: oregon
+    plan: 0.5c-512mb # Starter
+    numInstances: 1
+    branch: main
+    healthCheckPath: /api/health
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: HOLD_MINUTES
+        value: '10'
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cyclereg-staging-db
+          property: connectionString
+
+databases:
+  - name: cyclereg-db
+    region: oregon
+    plan: 0.5c-1g # Basic-1gb; point-in-time restore on the Pro workspace (7 days)
+    postgresMajorVersion: '17' # same major version as CI and local setup
+    databaseName: cyclereg
+    user: cyclereg
+    ipAllowList: [] # private network only: reachable from the services above, not the internet
+
+  - name: cyclereg-staging-db
+    region: oregon
+    plan: 0.1c-256mb # Basic-256mb
+    postgresMajorVersion: '17'
+    databaseName: cyclereg_staging
+    user: cyclereg_staging
+    ipAllowList: []

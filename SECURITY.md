@@ -2,7 +2,7 @@
 
 CycleReg will handle rider contact details, emergency contacts, license numbers, waivers, and payments, so security problems are taken seriously even at the documentation stage. This file explains what to report, how to report it privately, and which security rules the product is held to.
 
-> **Status: local build only.** The organizer workspace runs on `127.0.0.1` with no sign-in and stores data in a local PostgreSQL database ([setup](docs/runbooks/local-setup.md)). There is no deployed website, no payment processing, and no real rider data. It must not be hosted or shared until sign-in with MFA and role-based access exist. Unless a section says otherwise, the security requirements below are Planned, not Implemented.
+> **Status: local build only.** The organizer workspace runs on `127.0.0.1` with no sign-in and stores data in a local PostgreSQL database ([setup](docs/runbooks/local-setup.md)). There is no deployed website, no payment processing, and no real rider data. It must not be hosted or shared until sign-in with MFA and role-based access exist. The server enforces this: it refuses to listen on any address other than `127.0.0.1`, `localhost`, or `::1` (`src/server/listen.ts`), and the [Render deploy files](docs/runbooks/deploy-render.md) are not to be used until sign-in ships. Unless a section says otherwise, the security requirements below are Planned, not Implemented.
 
 ## Supported versions
 

@@ -1,9 +1,15 @@
 import { buildApp } from './app';
 import { DEFAULT_DATABASE_URL, ensureLocalDatabase } from './db';
+import { listenHost } from './listen';
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001);
-// Bind to localhost only: the app has no sign-in yet and must not be exposed.
-const host = '127.0.0.1';
+let host: string;
+try {
+  host = listenHost(); // 127.0.0.1 unless HOST says otherwise; a public address is refused until sign-in exists
+} catch (err) {
+  console.error((err as Error).message);
+  process.exit(1);
+}
 const databaseUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
 
 try {

@@ -230,7 +230,8 @@ Decisions first (November 14, 2026): three decision records were drafted; 0003 a
 Progress (November 15, 2026):
 
 - Implemented: persistence moved from SQLite to PostgreSQL per ADR 0004. The twelve migrations were translated; capacity, holds, payments, bibs, and ledger writes take a per-event transaction lock; the API tests run against disposable PostgreSQL databases and CI starts a PostgreSQL service. Verified by the full Vitest suite (including last-place and repeated-payment races across two connections) and the Playwright tests against PostgreSQL. See [DATA_MODEL.md](DATA_MODEL.md#capacity-and-concurrency).
-- Not started: deployment to Render, hosted backups and a restore rehearsal, sign-in (ADR 0003). No accounts or cloud resources exist.
+- Implemented (November 15, 2026): deploy files for Render (`Dockerfile`, `render.yaml` with production and staging services and private Render Postgres 17 databases), a database-aware health check, graceful shutdown, and a start-up guard that refuses a network address until sign-in exists. The image was built and run locally. See [docs/runbooks/deploy-render.md](docs/runbooks/deploy-render.md).
+- Not started: the deploy itself, hosted backups and a restore rehearsal, sign-in (ADR 0003). No accounts or cloud resources exist; the deploy waits on sign-in, the treasurer's cost approval, and the owner's go-ahead.
 
 Build:
 

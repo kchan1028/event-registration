@@ -66,12 +66,13 @@ Current layout:
 ├── tests/                        Vitest unit and API tests
 ├── e2e/                          Playwright browser tests and screenshot capture
 ├── .github/workflows/ci.yml      Automated checks on pushes and pull requests
+├── Dockerfile, render.yaml       Container image and Render Blueprint (not deployed; see docs/runbooks/deploy-render.md)
 └── docs/
     ├── architecture.md, coding-guide.md, content-guide.md, documentation-guide.md, operations.md, timer-export-review.md,
     │                             usac-questions.md, payment-model-questions.md
     ├── decisions/                Architecture decision records
     ├── fixtures/                 Fake demo purchase flow data and sample waiver text
-    ├── runbooks/                 Local setup and troubleshooting
+    ├── runbooks/                 Local setup, troubleshooting, and the planned Render deploy
     ├── usability/                Phase 1 usability test kit
     └── screenshots/              Images used in the README
 ```

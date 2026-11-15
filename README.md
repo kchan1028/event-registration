@@ -266,6 +266,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [docs/csv-category-format.md](docs/csv-category-format.md) | Columns and rules for importing and exporting category schedules |
 | [SETUP.md](SETUP.md) | Quick start: install, run, and test the app |
 | [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md) | Install, run, and test the app; [troubleshooting](docs/runbooks/troubleshooting.md) |
+| [docs/runbooks/deploy-render.md](docs/runbooks/deploy-render.md) | Planned Render deploy: what the `Dockerfile` and `render.yaml` contain, the gates before the first deploy, and the steps |
 | [DESIGN.md](DESIGN.md) | Visual system of the organizer workspace |
 | [docs/coding-guide.md](docs/coding-guide.md) | Category and capacity modeling, eligibility, pricing, payments, privacy, accessibility, testing |
 | [docs/documentation-guide.md](docs/documentation-guide.md) | How docs are organized, status vocabulary, glossary, and setup and troubleshooting templates |

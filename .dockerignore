@@ -1,0 +1,19 @@
+# Only what the image needs: package files, sources, and build config.
+.git
+.github
+.claude
+node_modules
+dist
+data
+coverage
+test-results
+playwright-report
+e2e
+tests
+docs
+*.md
+!README.md
+.env
+.env.*
+*.log
+.DS_Store
