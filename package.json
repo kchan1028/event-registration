@@ -16,6 +16,7 @@
     "seed:demo": "tsx src/server/seed-cli.ts",
     "seed:berkeley": "tsx src/server/seed-cli.ts --berkeley",
     "seed:omnium": "tsx src/server/seed-cli.ts --omnium",
+    "seed:cases": "tsx src/server/case-study-cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",

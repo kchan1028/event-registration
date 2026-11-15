@@ -39,3 +39,46 @@ Each walk-through uses the fixtures above. A demo built from these files should 
 ## Berkeley Omnium package
 
 The existing [executable Berkeley fixture](../../src/shared/berkeleyOmnium.ts) still loads the combined Omnium with its $130 package and podium nomination. The separate [events.md reference](events.md) now describes only the requested standalone road race and criterium; the [standalone fixture](../../src/shared/berkeleyEvents.ts) implements it through the dedicated seed described in [SETUP.md](../../SETUP.md).
+
+## Generated race case studies
+
+Status: Implemented and verified with automated unit, API, and representative browser tests. The reference clock is `2027-03-15T18:00:00.000Z`. Event, category, and simulated entry identifiers are stable across runs. All people, clubs, places, contacts, and transactions are fictional. `example.test` addresses and numbers in the reserved `202-555-01xx` range prevent accidental contact. Simulated payment attempts never contact a provider or move money.
+
+Load the complete collection into the configured local PostgreSQL database:
+
+```bash
+npm run seed:cases
+```
+
+List or load one scenario, or remove only this collection:
+
+```bash
+npm run seed:cases -- --list
+npm run seed:cases -- --scenario criterium
+npm run seed:cases -- --reset
+```
+
+Set `DATABASE_URL` on every command to use a dedicated database. A rerun preserves the existing generated events and their IDs. Reset deletes only the organization with the reserved ID `org_demo_case_studies_v1` and its related records. It does not delete organizer-created organizations or events.
+
+| Scenario | User problem and task | Initial data and rules | Expected outcomes | Features exercised | Availability |
+|---|---|---|---|---|---|
+| `criterium` | Rider finds an eligible field, adds a second race, or registers a junior; organizer explains unavailable fields | One day, several fields, a same-day $10 discount, one full field, one field with one place left, one explicitly closed field, junior guardian rules, and several eligibility paths | Full and closed entries cannot be held; the nearly full field takes one more rider; the discount applies once; a junior needs a matching guardian signature | Eligibility, capacity, discount precedence, schedule conflicts, guardian validation, accented and long-text browser input | Clickable demo and automated tests |
+| `road-shared-field` | Organizer checks whether separate categories sharing a start or capacity pool can accept another rider | Saturday road race categories, shared starts, classification codes, category caps, capacity pools, scheduled price change, and day-of surcharge | A rider counts once in each applicable shared limit; final-place reservations are atomic; early, standard, late, and race-day prices are deterministic | Shared capacity, classifications, pricing boundaries, unknown-license review | Clickable demo and automated tests |
+| `omnium` | Rider compares individual entries with a two-day package, recovers from a decline, and reaches confirmation; organizer resolves a license review | Saturday road race, Sunday criterium, one same-event package, seeded successful, duplicate, declined/retried, and expired simulated payment examples; one ready rider and one paid rider awaiting fictional license review | Both package races are required; the package total and fees remain itemized; duplicate attempt IDs do not duplicate entries; expired holds release capacity; paid entries can remain blocked by license review; the ready control can be used for check-in rehearsal | Package pricing, all-or-none holds, payment recovery, separate payment/readiness states, check-in, organizer CSV exports | Clickable demo and automated tests |
+| `empty-event` | Organizer starts with no categories and needs a clear first action | Valid draft shell with one day and race, no categories, starts, or entries | The event stays draft-only and never appears as rider-ready; organizer can add the first category | Empty states and first-run setup | Clickable organizer demo and browser test |
+| `large-event` | Organizer reviews layout and response time under substantial but valid data | 120 categories, 1,000 deterministic simulated entries, long labels, accented characters, and valid maximum-shaped records | Schedule renders all categories without losing actions or relationships; IDs and counts remain stable | Dense tables, long text, bulk data, performance smoke coverage | Clickable demo and browser test |
+
+The collection supplements, rather than replaces, the focused rule tests. Existing tests still cover simultaneous last-place requests, all-or-none package reservation, duplicate client requests, repeated payment notifications, late payment after expiry, transfers, withdrawals, waitlist offers, check-in transitions, and CSV output.
+
+### Future-requirement cases
+
+These workflows are not represented as working fixtures:
+
+| Case | Expected future behavior | Why it is not clickable now |
+|---|---|---|
+| Series package spanning separate events or organizations | Reserve every component atomically, preserve each accepted version, obtain organizer approvals, and reconcile revenue and refunds per organization | Current packages and orders belong to one event; multi-organization Stripe and authorization decisions are unresolved |
+| Automated waitlist fulfillment | Notify the next rider, protect offer priority, expire safely, and retry delivery without duplicate offers or charges | Organizer-managed waitlists and offer links exist, but automated delivery and charging do not |
+| Real refund | Update provider, ledger, receipt, entry, capacity, and package allocation exactly once | Payments are simulated and Stripe refunds are not connected |
+| Rider-to-rider transfer | Obtain recipient consent, recheck eligibility and capacity, collect a new waiver, and preserve audit history | Current transfer means an organizer moving an entry between categories, not changing the participant |
+| Cancelled event | Stop new sales, preserve paid records, communicate next steps, and reconcile refunds or credits | The event model has category open/closed states but no event cancellation lifecycle |
+| Outstanding post-order waiver resolution | Block check-in until an approved electronic or paper acceptance records version, signer, source, and time | Checkout requires the sample waiver before an order is created; no approved external waiver workflow exists |

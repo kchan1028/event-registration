@@ -6,6 +6,7 @@ import { z, ZodError } from 'zod';
 import { BERKELEY_DEMO_ORG, buildBerkeleyEvents } from '../shared/berkeleyEvents';
 import { buildBerkeleyOmniumEvent, OMNIUM_ORG_NAME } from '../shared/berkeleyOmnium';
 import { buildDemoEvent } from '../shared/demo';
+import { buildCaseStudyScenarios, CASE_STUDY_REFERENCE_NOW } from '../shared/caseStudies';
 import { configFromTemplate } from '../shared/factory';
 import { buildFixtureEvents, FIXTURE_ORG_NAME } from '../shared/fixtures';
 import { createEventInputSchema, eventConfigSchema } from '../shared/schema';
@@ -14,6 +15,7 @@ import { changeImpact, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
 import { openDb } from './db';
 import { createCheckIn } from './checkin';
+import { createCaseStudyFixtures } from './caseStudies';
 import { createIdentity } from './identity';
 import { createResolutions } from './resolutions';
 import { createStartLists } from './startlists';
@@ -42,6 +44,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const checkIn = createCheckIn(db, repo, orders, clock, identity);
   const startLists = createStartLists(db, repo, orders, clock, identity);
   const waitlist = createWaitlist(db, repo, clock);
+  const caseStudies = createCaseStudyFixtures(db, repo, orders);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
   // Migrations run once before the server accepts requests (listen, or the first inject in tests).
@@ -210,6 +213,24 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     }
     return reply.status(201).send({ organizationId: org.id, eventIds });
   });
+
+  app.get('/api/demo/case-studies', async () => ({
+    referenceClock: CASE_STUDY_REFERENCE_NOW,
+    scenarios: buildCaseStudyScenarios().map(({ key, eventId, title, purpose, publish }) => ({ key, eventId, title, purpose, publish })),
+  }));
+
+  app.post('/api/demo/case-studies', async (_req, reply) => {
+    const result = await caseStudies.loadAll();
+    return reply.status(result.results.some((row) => row.created) ? 201 : 200).send(result);
+  });
+
+  app.post('/api/demo/case-studies/:key', async (req, reply) => {
+    const { key } = z.object({ key: z.enum(['criterium', 'road-shared-field', 'omnium', 'empty-event', 'large-event']) }).parse(req.params);
+    const result = await caseStudies.load(key);
+    return reply.status(result.created ? 201 : 200).send(result);
+  });
+
+  app.delete('/api/demo/case-studies', async () => caseStudies.reset());
 
   app.get('/api/public/events/:id', async (req) => orders.publicEvent(idParam.parse(req.params).id));
 

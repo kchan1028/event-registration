@@ -118,17 +118,17 @@ export function createRepo(db: Db, clock: () => Date = () => new Date()) {
       }));
     },
 
-    async createOrganization(name: string) {
-      const id = newId('org');
+    async createOrganization(name: string, requestedId?: string) {
+      const id = requestedId ?? newId('org');
       await db.run(`INSERT INTO organizations (id, name, created_at) VALUES ($1, $2, $3)`, [id, name, now()]);
       return { id, name };
     },
 
-    async createEvent(organizationId: string, config: EventConfig): Promise<EventRecord> {
+    async createEvent(organizationId: string, config: EventConfig, requestedId?: string): Promise<EventRecord> {
       const org = await db.get(`SELECT id FROM organizations WHERE id = $1`, [organizationId]);
       if (!org) throw new HttpError(404, 'Organization not found.');
       const parsed = eventConfigSchema.parse(config);
-      const id = newId('evt');
+      const id = requestedId ?? newId('evt');
       const t = now();
       await db.run(`INSERT INTO events (id, organization_id, draft_json, revision, created_at, updated_at) VALUES ($1, $2, $3, 1, $4, $5)`, [
         id,

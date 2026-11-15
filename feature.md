@@ -1,6 +1,6 @@
 # Feature overview
 
-Status: Local build, not live. Updated November 14, 2026.
+Status: Local build, not live. Updated November 15, 2026.
 
 CycleReg helps organizers configure road races and criteriums, lets riders try registration with simulated payment, and supports local check-in and sample start lists. It is not ready for live registration: sign-in, real payments, and federation connections are not built.
 
@@ -59,6 +59,7 @@ Details: [check-in status](roadmap.md#check-in) and [start-list status](roadmap.
 
 ## Local demo and interface
 
+- A deterministic generated collection covers a single-day criterium, shared-field road race, two-day omnium, empty draft, and 120-category large event. It includes 1,000 simulated capacity entries and success, duplicate, decline/retry, expiry, and license-review states. Individual/full loaders and a collection-only reset are implemented and tested. See [fixture documentation](docs/fixtures/README.md#generated-race-case-studies).
 - Standalone Berkeley Hills Road Race ($80) and Berkeley Streets Criterium ($60) seeds are implemented. Each event has its own categories and no package, fees, surcharges, or prefilled registrations. See [SETUP.md](SETUP.md) and [demo events](docs/fixtures/events.md).
 - The separate Berkeley Omnium fixture includes a $130 two-race package and a podium nomination requiring organizer review. Award approval tools, points, and podium calculation are not built.
 - Light and dark themes are implemented, with system preference, a visible toggle, and a saved device preference.
