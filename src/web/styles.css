@@ -3992,3 +3992,22 @@ fieldset:disabled .field label {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--s-1) var(--s-3);
 }
+
+/* Registration lookup and rider corrections (Registrations). */
+.reg-search {
+  display: grid;
+  gap: 5px;
+  max-width: 560px;
+}
+.reg-search label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.correction {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  background: var(--tyvek);
+  border-radius: var(--r-md);
+}

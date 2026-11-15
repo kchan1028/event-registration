@@ -311,13 +311,14 @@ Acceptance: two independent builds produce equal configurations and stable IDs; 
 - Search by rider, team, bib, license number, or order.
 - Filter incomplete signatures, license review, failed payments, duplicate entries, and pending changes.
 - Allow authorized corrections with a reason and an audit trail.
+  - Status (November 15, 2026): Implemented in the local build for one event's registrations (see [roadmap.md](roadmap.md#rider-checkout)). **Registrations** searches by rider or guardian name, email, team, order number, or check-in code. An organizer corrects a rider's name, email, phone, team, license number, or emergency contact with a required reason; every correction is kept with before and after values. Eligibility fields (racing age, license category and type, competition class, collegiate division) are not correctable there; changing them goes through a transfer or a new registration so eligibility is rechecked. Corrections never change the price, entries, or waiver signature. A new license number clears earlier license reviews on the order (product decision, November 15, 2026). Not built: bib and license-number search on Registrations (bib search exists at check-in), guardian corrections, and recording who made a correction (needs sign-in and roles).
 - Record race-specific status separately from order/payment status.
 - Provide transactional confirmations and targeted operational messages. Marketing consent is separate.
 - Support owner, registration manager, check-in volunteer, timer/export, and finance roles. Owners can transfer responsibility to a successor.
 
 ### Participant management
 
-Status: Planned beyond the Implemented event-level Registrations queue, organizer transfers/withdrawals, and check-in lookup. This manages race participants, not volunteer recruitment or staffing.
+Status: Planned beyond the Implemented event-level Registrations queue and lookup, audited rider corrections, organizer transfers/withdrawals, and check-in lookup. This manages race participants, not volunteer recruitment or staffing.
 
 - Provide a participant workspace across events an organizer is authorized to manage, backed by reusable rider identity. Distinguish people, event registrations, race entries, orders, waitlist records, credits, and payment/readiness states; several entries must not become several unrelated rider profiles.
 - Search by rider, team, permitted license identifier, bib, order, event, or category. Filter by race/day, status, missing waiver/license review, payment exception, waitlist, and package/pass membership. Show a history of registrations, communications, changes, credits, and deferrals with source dates and reasons.
