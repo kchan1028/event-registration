@@ -132,7 +132,7 @@ Demonstration data must be labeled as examples on every screen and must not be p
 
 #### Changes after registration opens
 
-Changes to eligibility, starts, classifications, caps, pricing, or category availability require an impact preview showing affected riders, reservations, orders, and exports. Never silently invalidate or reprice a paid entry. Preserve the rules and price accepted at purchase alongside the current configuration; route affected entries to an explicit resolution workflow.
+Changes to eligibility, starts, classifications, caps, pricing, or category availability require an impact preview showing affected riders, reservations, orders, and exports. Never silently invalidate or reprice a paid entry. Preserve the rules and price accepted at purchase alongside the current configuration; route affected entries to an explicit resolution workflow. Status: the impact preview and an organizer resolution workflow (record kept, transferred, or withdrawn, and that the rider was told) are Implemented in the local prototype.
 
 Do not allow a cap below confirmed entries plus active reservations. Splitting or combining fields requires deliberate remapping, capacity revalidation, rider communication, and a new start-list version. Archive a category with entries instead of deleting its history. Manual exceptions require an authorized role, reason, and audit record; they cannot override hard capacity or mandatory federation requirements.
 

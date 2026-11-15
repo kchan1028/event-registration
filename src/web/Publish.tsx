@@ -205,7 +205,7 @@ function ImpactPanel({ impact, error, saving, publishedVersion }: { impact: Chan
             ))}
           </ul>
           {impact.startListsChange && <p className="small">Start lists change. After publishing, save a new start-list snapshot and send it to the timer.</p>}
-          <p className="muted small">Contacting affected riders and resolving their entries (transfer, refund, keep) is not built yet; handle it outside the app for now.</p>
+          <p className="muted small">After you publish, each affected paid entry appears under Changes to resolve on Registrations, where you record whether it was kept, transferred, or withdrawn and that the rider was told. Contacting riders happens outside the app.</p>
         </>
       )}
     </section>

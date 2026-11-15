@@ -50,6 +50,23 @@ export interface RiderIdentityOverview {
   groups: { key: string; orders: IdentityOrderLabel[] }[];
 }
 
+export interface ResolutionItem {
+  id: string;
+  status: 'open' | 'kept' | 'transferred' | 'withdrawn';
+  publishedVersion: number;
+  details: string[];
+  riderName: string;
+  orderNumber: string;
+  orderId: string;
+  entryId: string;
+  categoryName: string;
+  entryStatus: string;
+  riderNotified: boolean;
+  note: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 export interface WaitlistOffer {
   eventId: string;
   categoryId: string;
@@ -249,6 +266,9 @@ export const api = {
   linkRiders: (eventId: string, a: string, b: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/link`, { orderIds: [a, b] }),
   dismissRiderMatch: (eventId: string, a: string, b: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/dismiss`, { orderIds: [a, b] }),
   unlinkRider: (eventId: string, orderId: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/unlink`, { orderId }),
+  resolutions: (eventId: string) => request<ResolutionItem[]>('GET', `/api/events/${eventId}/resolutions`),
+  resolveItem: (eventId: string, id: string, body: { outcome: 'kept' | 'transferred' | 'withdrawn'; riderNotified: boolean; note: string }) =>
+    request<ResolutionItem[]>('POST', `/api/events/${eventId}/resolutions/${id}`, body),
   waitlist: (eventId: string) => request<{ offerHours: number; entries: WaitlistEntryView[] }>('GET', `/api/events/${eventId}/waitlist`),
   offerWaitlistPlace: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer`),
   removeFromWaitlist: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/remove`),

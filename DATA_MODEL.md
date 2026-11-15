@@ -2,7 +2,7 @@
 
 This describes the database the local prototype uses today. It covers tables, relationships, important fields, constraints, and what happens when data is removed. The intended product data model, including entities that are not built yet, is in [product.md](product.md#data-model) and [product.md](product.md#data-storage).
 
-**Status:** Implemented (local prototype). Describes schema version 11 (eleven migrations) as of November 14, 2026.
+**Status:** Implemented (local prototype). Describes schema version 12 (twelve migrations) as of November 14, 2026.
 
 **Source of truth:** the migrations in [src/server/db.ts](src/server/db.ts) and the event configuration schema in [src/shared/schema.ts](src/shared/schema.ts). If this file disagrees with them, the code wins; fix this file in the same change.
 
@@ -283,6 +283,21 @@ When two orders are linked, a bib or check-in held by the later group moves to t
 ### rider_link_dismissals
 
 Suggested matches the organizer marked as different riders (migration 10), so they are not suggested again. Primary key (`event_id`, `order_a`, `order_b`), with `order_a` < `order_b`; plus `dismissed_at`.
+
+### entry_resolutions
+
+Resolution items for paid entries affected by a published change (migration 12). Publishing a change that touches paid entries opens one item per entry; a later change to the same entry adds to its open item.
+
+| Column | Notes |
+|---|---|
+| `id` | Primary key |
+| `event_id`, `order_id`, `entry_id` | References `events`, `orders`, `order_entries`. Indexed by (`event_id`, `status`) |
+| `published_version` | Version whose publish opened or last refreshed the item |
+| `details_json` | Plain-language list of what changed, from the impact preview |
+| `status` | `open`, `kept`, `transferred`, or `withdrawn`. `withdrawn` needs a withdrawn entry; `transferred` needs a transfer logged after the item opened |
+| `rider_notified` | 1 once the organizer confirms the rider was told (required to resolve) |
+| `note` | Required note on what was agreed |
+| `created_at`, `resolved_at` | |
 
 ## Event configuration (JSON)
 
