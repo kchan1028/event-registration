@@ -1,6 +1,6 @@
 # 0003. Sign-in with required multi-factor authentication
 
-Status: Accepted, amended 2026-11-15 (see [Amendment](#amendment-2026-11-15-email-sign-in-first-mfa-before-the-live-pilot))
+Status: Accepted, amended twice on 2026-11-15 (see [Amendment](#amendment-2026-11-15-email-sign-in-first-mfa-before-the-live-pilot) and [Amendment 2](#amendment-2-2026-11-15-mfa-for-organizer-roles-only))
 Date: 2026-11-14
 Deciders: Project owner (accepted 2026-11-14)
 Related: [Sign-in and account security](../../product.md#sign-in-and-account-security), [Phase 2](../../roadmap.md#phase-2--build-the-registration-core), [decision backlog](README.md#decision-backlog)
@@ -91,6 +91,18 @@ Why: no monthly cost while there is no real rider data or money, and sign-in can
 
 Product impact (product.md): [Sign-in and account security](../../product.md#sign-in-and-account-security) is phased; the acceptance criteria split into email sign-in (Phase 2) and MFA (Phase 3).
 Roadmap impact (roadmap.md): Phase 2 builds email sign-in; Phase 3 builds MFA; the Phase 3 exit gate requires MFA before the Phase 4 pilot.
+
+## Amendment 2 (2026-11-15): MFA for organizer roles only
+
+Decided by the project owner on 2026-11-15, after D01 answered that an authenticator app "will be a turn down for consumer" ([D01](../discovery/interviews/D01.md#racer-follow-ups-2026-11-15)).
+
+- **Riders and guardians:** passwordless email sign-in only, permanently, including during and after the live pilot. A rider change that moves money or hands an entry to someone else asks for a fresh emailed code.
+- **Organizer roles:** MFA on Clerk Pro (passkey or authenticator app, SMS off) is required before the live pilot, with step-up re-verification and recovery as decided above.
+- **Enforcement by role:** Clerk's "require MFA" setting applies to the whole application, so it stays off. The CycleReg server checks that an organizer's session completed a second factor before any organizer route. The Phase 3 spike must confirm Clerk Pro lets riders skip MFA while the server can verify an organizer's second factor.
+- **Risk accepted:** someone who controls a rider's or guardian's inbox can sign in as them and see that account's registrations, including juniors' and emergency-contact details. This replaces requirement 1's "second factor required at enrollment" for riders and guardians only.
+
+Product impact (product.md): Sign-in and account security; acceptance criteria; the checkout success measure no longer excludes MFA enrollment; open question 7 is answered.
+Roadmap impact (roadmap.md): Phase 3 builds organizer MFA only; the Phase 3 exit gate and the P0 definition say organizer MFA.
 
 ## Consequences
 
