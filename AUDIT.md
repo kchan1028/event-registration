@@ -1,0 +1,88 @@
+# Audit findings
+
+A public-safe register of audit findings for CycleReg: what was examined, what was found, and what evidence closes each finding. It records findings only. Requirements stay in [product.md](product.md), priorities and delivery status in [roadmap.md](roadmap.md), and individual defects in GitHub issues, which findings link to rather than copy.
+
+This repository is public. Security weaknesses are reported privately as [SECURITY.md](SECURITY.md) describes. This register never holds exploit details, affected endpoints, or reproduction steps for a vulnerability; at most a placeholder that a private report exists.
+
+## Current audit
+
+| Field | Value |
+|---|---|
+| Audit | Documentation-based baseline |
+| Date | November 16, 2026 |
+| Reviewed commit | `f2875ba8ef03f7c5364138dd654553554dc405b5` (`main`) |
+| Auditor | Claude Code (author of this register); independent verification by Codex is Pending |
+| Methods | Read `product.md`, `roadmap.md`, `feature.md`, `SECURITY.md`, `ACCESSIBILITY.md`, `DATA_MODEL.md`, and the [test plan](docs/testing/test-plan.md); reviewed open GitHub issues; checked specific claims against the source and tests named in each finding; ran `npm audit` for dependency advisories |
+| Limitations | No application run, no regression suite, no penetration test, no load test, no manual accessibility pass, no real-device check, and no review against real provider instances (Clerk, Stripe, SES). A document saying a feature is Implemented was not taken as evidence that it works. Coverage below says what was and was not examined |
+
+## Coverage
+
+| Area | Status | What was examined |
+|---|---|---|
+| Documentation accuracy | Partly assessed | Status claims in README, roadmap, and source comments compared with the code for the findings below; not a full document sweep |
+| Dependencies | Assessed | `npm audit` on the reviewed commit |
+| Payments (Stripe test mode) | Partly assessed | Open issues and `src/server/payments.ts` for the recorded defect; no provider-level check |
+| Sign-in, roles, guardian access | Partly assessed | Roadmap gates and source search for MFA; no access-control test review |
+| Email (Amazon SES, test-only) | Partly assessed | `src/server/email.ts` and the schema for delivery-event handling |
+| Check-in and bibs | Partly assessed | Open issues only |
+| Registration screens on phones | Partly assessed | Open issue only; no device check |
+| Capacity, eligibility, pricing, refunds | Not Assessed | |
+| Start lists and timer export | Not Assessed | Readiness gap recorded from the roadmap only |
+| Application security (threat model, penetration test) | Not Assessed | Out of scope for a public register; handled privately under [SECURITY.md](SECURITY.md) |
+| Privacy, retention, and deletion | Not Assessed | Readiness gap recorded from the roadmap only |
+| Accessibility (manual passes) | Not Assessed | Readiness gap recorded from `ACCESSIBILITY.md` only |
+| Performance and load | Not Assessed | Readiness gap recorded from the roadmap only |
+| Operations (backups, restore, monitoring, support) | Not Assessed | Readiness gap recorded from the roadmap only; runbooks are deferred |
+
+## How findings are recorded
+
+- **IDs are stable.** `AUD-` for an observed defect, `GAP-` for a documented readiness gap. An ID is never reused or renumbered; a finding that turns out wrong is marked Invalidated, not deleted.
+- **Severity:** Critical (oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, or exposed private data, as [operations.md](docs/operations.md#incident-severity) defines), High (wrong result in money, capacity, eligibility, waivers, permissions, or personal data, or a known exploitable dependency on a shipped path), Medium (a wrong or failed result with a workaround), Low (cosmetic, documentation, or maintenance).
+- **Launch impact:** Blocks live launch, Blocks hosted beta, Before pilot, or None.
+- **Owner:** a named role, or Unassigned.
+- **Status:** Open, Fixed (pending verification), Closed, Accepted risk (owner decision recorded in `roadmap.md`), or Invalidated.
+
+### Closure rule
+
+A finding is Closed only with verification evidence: a test, check, or rehearsal that someone other than the author ran or reviewed, linked in the Closure evidence column. Merging a fix moves a finding to **Fixed (pending verification)**; it does not close it. A pull request that introduces, fixes, or invalidates a finding updates this register in the same pull request ([AGENTS.md](AGENTS.md#documentation-impact-in-every-pull-request), [CONTRIBUTING.md](CONTRIBUTING.md)).
+
+## Observed defects
+
+Defects seen in the code, tooling, or documents at the reviewed commit.
+
+| ID | Finding | Evidence | Severity | Launch impact | Owner | Issue or PR | Status | Closure evidence |
+|---|---|---|---|---|---|---|---|---|
+| AUD-001 | Two simultaneous Pay requests for one order send Stripe the same idempotency key; the second can fail and the rider must press Pay again | Issue #84; `startCheckout` in `src/server/payments.ts` builds the key from a session count read before the Stripe call | Medium | Blocks live launch (labeled `release-blocker`) | Unassigned | [#84](https://github.com/kchan1028/event-registration/issues/84) | Open | |
+| AUD-002 | Runtime and development dependencies have published advisories: `@fastify/static` (high) with transitive `glob` and `minimatch` (moderate), `zod` (high), and `vitest` with `tinypool` and `@vitest/mocker` (critical, development and CI only) | `npm audit` on the reviewed commit: 7 advisories (2 critical, 2 high, 3 moderate). Public advisories; no project-specific detail | High | Blocks hosted beta | Project owner | Scheduled in [roadmap.md Next actions](roadmap.md#next-actions), item 8 | Open | |
+| AUD-003 | The signed-in rider registration header overflows at phone width | Issue #117 (390 px viewport, `src/web/Register.tsx`) | Low | Before pilot | Unassigned | [#117](https://github.com/kchan1028/event-registration/issues/117) | Open | |
+| AUD-004 | `DATA_MODEL.md` still says role-change audit history does not exist | Issue #105 | Low | None | Unassigned | [#105](https://github.com/kchan1028/event-registration/issues/105) | Open | |
+| AUD-005 | Bib replacement drafts and the reassignment region are hard to tell apart in the bib batch panel | Issue #98 (`src/web/BibBatchPanel.tsx`) | Low | None | Unassigned | [#98](https://github.com/kchan1028/event-registration/issues/98) | Open | |
+| AUD-006 | README says Stripe integration is not built, but Stripe hosted Checkout and refunds exist in test mode | `README.md` line 25 versus `src/server/payments.ts` and [roadmap.md Delivery status](roadmap.md#delivery-status) | Low | None | Unassigned | None | Open | |
+| AUD-007 | A source comment says MFA ships in Phase 3; the roadmap moved organizer MFA to the final pre-launch security gate | `src/server/listen.ts` comment versus [roadmap.md](roadmap.md#final-pre-launch-security-gate-planned) | Low | None | Unassigned | None | Open | |
+| AUD-008 | Agent instructions were untracked (`AGENTS.md` was gitignored), so Claude Code and Codex could work from different, unreviewed rules | `.gitignore` at the reviewed commit | Low | None | Project owner | This pull request tracks `AGENTS.md` | Fixed (pending verification) | Needs: after merge, `git ls-files AGENTS.md` on `main` lists the file, verified by the other agent |
+
+## Documented readiness gaps
+
+Work the documents say is not done yet. These are not defects; each is tracked in `roadmap.md`, which owns its priority.
+
+| ID | Gap | Evidence | Severity | Launch impact | Owner | Tracking | Status | Closure evidence |
+|---|---|---|---|---|---|---|---|---|
+| GAP-001 | Organizer MFA and sensitive-action re-verification are not built | [Final pre-launch security gate](roadmap.md#final-pre-launch-security-gate-planned); no MFA code in `src/` | High | Blocks live launch | Project owner | roadmap.md | Open | |
+| GAP-002 | Sign-in has not been checked against a real Clerk development instance | [Berkeley weekend review priorities](roadmap.md#berkeley-weekend-review-priorities), identity lifecycle row | Medium | Blocks hosted beta | Project owner | roadmap.md | Open | |
+| GAP-003 | Merchant and settlement model not accepted (ADR 0005 Proposed); no reconciliation check against a real Stripe sandbox account | [ADR 0005](docs/decisions/0005-merchant-and-settlement-model.md); [roadmap.md Delivery status](roadmap.md#delivery-status) | High | Blocks live launch | Project owner | roadmap.md | Open | |
+| GAP-004 | USA Cycling electronic waiver, guardian, and license path not accepted | [Berkeley weekend review priorities](roadmap.md#berkeley-weekend-review-priorities), Phase 0 decisions row; [USAC questions](docs/usac-questions.md) | High | Blocks live launch | Project owner | roadmap.md | Open | |
+| GAP-005 | Retention and deletion rules for riders, minors, waivers, exports, and audit history not approved | [Berkeley weekend review priorities](roadmap.md#berkeley-weekend-review-priorities), before real rider data row | High | Blocks live launch | Unassigned | roadmap.md | Open | |
+| GAP-006 | Backup restore, monitoring, and support ownership not demonstrated | [Test plan section 4](docs/testing/test-plan.md#4-predeployment-testing); [operations.md](docs/operations.md) | High | Blocks hosted beta | Unassigned | roadmap.md | Open | |
+| GAP-007 | Email delivery, bounce, and complaint events are not recorded | `src/server/email.ts` records send outcome only; [roadmap.md Phase 2](roadmap.md#phase-2--build-the-registration-core), email delivery tracking | Medium | Before pilot | Unassigned | roadmap.md | Open | |
+| GAP-008 | Event, race, and day cancellation workflow not built; refunds are not yet worked out from the organizer's rules | [Berkeley weekend review priorities](roadmap.md#berkeley-weekend-review-priorities), cancellation integrity row | High | Blocks live launch | Unassigned | roadmap.md | Open | |
+| GAP-009 | Timer export format not agreed with a timer or round-trip tested | [roadmap.md Delivery status](roadmap.md#delivery-status), start lists row | Medium | Before pilot | Unassigned | roadmap.md | Open | |
+| GAP-010 | Manual accessibility passes (keyboard only, screen reader, real phone) not done | [ACCESSIBILITY.md](ACCESSIBILITY.md) status | Medium | Before pilot | Unassigned | roadmap.md | Open | |
+| GAP-011 | Expected event size, opening peak, and race-morning concurrency not established or load tested | [Berkeley weekend review priorities](roadmap.md#berkeley-weekend-review-priorities), before Phase 3 exit row | Medium | Before pilot | Unassigned | roadmap.md | Open | |
+
+## Not assessed
+
+These areas were not examined in this audit. No conclusion, positive or negative, should be drawn about them: capacity, eligibility, pricing, and refund correctness; start list and timer export behavior; application security; privacy and data handling; manual accessibility; performance; and operations. See [Coverage](#coverage). A later audit adds findings here, with its own scope, date, and reviewed commit.
+
+## Later work
+
+Operational runbooks and the data-retention document are deferred; GAP-005 and GAP-006 stay open until they exist and are verified.

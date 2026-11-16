@@ -278,6 +278,9 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [product.md](product.md) | Source of truth for requirements, scope, flows, business rules, and acceptance criteria |
 | [roadmap.md](roadmap.md) | Source of truth for phases, priorities, dependencies, risks, and delivery status |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose, make, and review a change |
+| [AGENTS.md](AGENTS.md) | Entry point for AI coding agents: how to work here, with links to the rules' homes |
+| [AUDIT.md](AUDIT.md) | Public-safe audit findings register: scope, coverage, findings, and closure evidence |
+| [docs/testing/test-plan.md](docs/testing/test-plan.md) | Test scope, independent verification, predeployment gate, release blockers, and evidence |
 | [SECURITY.md](SECURITY.md) | How to report a security problem privately, and a summary of security requirements |
 | [ACCESSIBILITY.md](ACCESSIBILITY.md) | Accessibility target, how it will be checked, and how to report a barrier |
 | [LICENSE.md](LICENSE.md) | MIT License |

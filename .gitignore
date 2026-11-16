@@ -28,8 +28,5 @@ design-md/
 .DS_Store
 *.log
 
-# Agent instructions are kept locally, not tracked
-AGENTS.md
-
 # Local competitor research; retained on disk, not published
 /competitor-profiles/

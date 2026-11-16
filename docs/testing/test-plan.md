@@ -61,6 +61,15 @@ The agent that writes a change never verifies it alone.
 - **Findings.** Material findings are fixed in the same pull request and retested before verification counts as complete, for at most three rounds. A finding deferred past the merge becomes a GitHub issue, labeled as the [coding guide](../coding-guide.md#labels-and-milestones-on-issues) describes.
 - **Unavailable verifier.** If the other agent is unavailable, record verification as **Pending**. Never report it as passed.
 
+Where a finding from any kind of testing (QA, security, user acceptance, usability, accessibility, performance) is recorded:
+
+- **On an open pull request:** a pull request comment; the author fixes it in that pull request.
+- **On `main`, or outside the change's scope:** a GitHub issue with a severity and the [labels](../coding-guide.md#labels-and-milestones-on-issues), plus a line under "Open questions". A defect touching money, capacity, eligibility, waivers, permissions, or personal data is a `release-blocker`. When it changes the launch picture, also add or update the finding in [AUDIT.md](../../AUDIT.md).
+- **A security weakness or exposed private data:** never a public issue, comment, or document. Report it privately as [SECURITY.md](../../SECURITY.md) describes; it blocks a release until fixed.
+- **An observation, not a bug** (usability, or acceptance feedback asking for different behavior): an issue labeled `usability` recording what the person tried, expected, and saw. The owner decides before anyone codes a change; a changed flow goes into `product.md` first.
+- **A failed acceptance criterion** from `product.md` is a bug, not an observation; the roadmap item stays incomplete until it passes.
+- Never name a tester or include real rider data in an issue.
+
 Each pull request records this in its description:
 
 ```text

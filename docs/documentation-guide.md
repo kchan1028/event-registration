@@ -28,6 +28,8 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Feature overview | [feature.md](../feature.md) | Summarizes existing requirements and status; not a competing roadmap |
 | Project summary, status snapshot, document map | [README.md](../README.md) | Summarizes; must match the two sources |
 | How to propose and review changes | [CONTRIBUTING.md](../CONTRIBUTING.md) | |
+| How AI agents work in this repository | [AGENTS.md](../AGENTS.md) | Entry point that links to each rule's home; holds only agent workflow rules |
+| Audit findings, coverage, and closure evidence | [AUDIT.md](../AUDIT.md) | Public-safe; requirements stay in product.md, priorities in roadmap.md, defects in GitHub issues |
 | Security reporting and security requirement summary | [SECURITY.md](../SECURITY.md) | Summary links to the rules' homes |
 | Accessibility target, checks, and barrier reports | [ACCESSIBILITY.md](../ACCESSIBILITY.md) | Detailed rules stay in the coding guide |
 | License | [LICENSE.md](../LICENSE.md) | MIT |
