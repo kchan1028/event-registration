@@ -17,6 +17,7 @@ These are the repository's real commands ([package.json](../../package.json), [l
 | Full unit and API suite | `npm test` |
 | Full check: typecheck, unit and API tests, build | `npm run check` |
 | Full browser suite (builds the app, resets the `cyclereg_e2e` database) | `npm run test:e2e` |
+| Relative links and heading anchors in every tracked Markdown file | `npm run check:docs` |
 
 Browser tests run in desktop Chrome (Playwright's `desktop` project). Several check-in tests also run at phone width inside that project. No other browser engine is automated.
 
@@ -30,7 +31,7 @@ A pull request tests what it changes, not the whole application.
 - **Explain the scope.** The pull request says which test files ran and why that set covers the change, and names anything left out.
 - **Not for a pull request:** `npm run check` and the full `npm run test:e2e` run locally only at the [predeployment gate](#4-predeployment-testing).
 - **CI.** [CI](../../.github/workflows/ci.yml) runs the typecheck, the full unit and API suite, the build, and the full browser suite on every pull request that changes more than documentation. For a documentation-only change those jobs report as skipped. The `main` ruleset requires both test jobs to pass before a merge. Do not repeat CI's full run locally.
-- **Documentation-only changes** run no tests. Say so in the summary.
+- **Documentation-only changes** run no application tests. Run `npm run check:docs`; CI's Documentation links job also runs it on every change, documentation-only or not. Say so in the summary.
 
 ## 2. Risk-based coverage
 
