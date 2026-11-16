@@ -3654,14 +3654,14 @@ fieldset:disabled .field label {
 .ci-history li {
   font-size: 14px;
 }
-.ci-bibs {
+.ci-bibs, .ci-walkup {
   margin: var(--s-3) var(--s-4) 0;
   padding: var(--s-4);
   background: var(--canvas);
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
 }
-.ci-walkup-trigger, .ci-walkup .btn { min-height: 44px; }
+.ci__bar-actions .btn, .ci-walkup .btn { min-height: 44px; }
 .ci-walkup .btn { white-space: normal; justify-self: start; }
 .ci-walkup { display: grid; gap: var(--s-3); }
 .ci-walkup > p, .ci-walkup > ol, .ci-walkup > label { max-width: 72ch; }

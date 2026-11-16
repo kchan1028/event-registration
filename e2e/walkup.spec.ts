@@ -44,6 +44,8 @@ test('phone handoff keeps the rider account separate and returns a paid rider to
     await expect(rider.getByRole('alert')).toContainText('declined');
     await page.getByRole('searchbox', { name: 'Find a rider' }).fill('Alex Demo');
     await page.getByRole('searchbox', { name: 'Find a rider' }).press('Enter');
+    await expect(page.getByRole('region', { name: 'Rider check-in' })).toContainText('Alex Demo');
+    await expect(page.getByRole('region', { name: 'Rider check-in' })).toContainText('Payment not complete');
     await expect(page.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
     await rider.getByRole('button', { name: /Complete simulated payment/ }).click();
     await expect(rider.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
@@ -51,6 +53,9 @@ test('phone handoff keeps the rider account separate and returns a paid rider to
     // Account ownership is also enforced by the actual participant session used throughout checkout.
     expect(mine.status()).toBe(200);
     expect((await mine.json()).filter((o: { rider: { firstName: string }; placedByYou: boolean }) => o.rider.firstName === 'Alex' && o.placedByYou)).toHaveLength(1);
+    const staffOrders = await page.request.get('/api/rider/registrations');
+    expect(staffOrders.status()).toBe(200);
+    expect((await staffOrders.json()).filter((o: { eventId: string }) => o.eventId === eventId)).toHaveLength(0);
     await page.getByRole('searchbox', { name: 'Find a rider' }).press('Enter');
     await expect(page.getByRole('region', { name: 'Rider check-in' })).toContainText('Ready to race');
     await page.getByRole('button', { name: /Check in and issue/ }).click();

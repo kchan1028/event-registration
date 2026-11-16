@@ -5,7 +5,7 @@ import { QrCodeImage } from './QrCodeImage';
 export function WalkUpRegistration({ eventId, published }: { eventId: string; published: boolean }) {
   const address = new URL(href({ page: 'register', eventId }), window.location.origin + window.location.pathname);
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(address.hostname);
-  return <section className="ci-bibs ci-walkup" aria-label="Rider phone registration">
+  return <section className="ci-walkup" aria-label="Rider phone registration">
     <h2>Register on the rider’s phone</h2>
     {!published ? <p role="status">Publish this event before sharing rider registration.</p> : <>
       <p>The rider or guardian opens this public event link on their own phone and signs in with their own account. Keep the staff session on this device.</p>

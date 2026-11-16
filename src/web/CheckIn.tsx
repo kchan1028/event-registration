@@ -140,7 +140,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
         {data && can(data.roles, 'checkin.settings') && <button type="button" className="btn btn--secondary btn--small" aria-expanded={showBibs} onClick={() => setShowBibs((v) => !v)}>
           Bib ranges
         </button>}
-        {data && <button type="button" className="btn btn--secondary btn--small ci-walkup-trigger" aria-expanded={showRegistration} onClick={() => setShowRegistration((open) => !open)}>Register a walk-up</button>}
+        {data && <button type="button" className="btn btn--secondary btn--small" aria-expanded={showRegistration} onClick={() => setShowRegistration((open) => !open)}>Register a walk-up</button>}
         <a className="btn btn--secondary btn--small" href={href({ page: 'roster', eventId })}>
           Fallback roster
         </a>
