@@ -8,6 +8,10 @@ CycleReg will handle rider contact details, emergency contacts, license numbers,
 
 The existing per-tab registration draft also retains the exact pending reservation payload and displayed waiver text until its outcome is known. Unknown network/server, authentication and rate-limit failures retain that request ID; pending entries and consent cannot be edited. Recovery uses the existing account-protected order endpoint and server idempotency checks. A definitive rejection refreshes published terms and clears agreement if the waiver changed. This adds no route, role, database field, logging or card storage. Browser storage remains best effort; blocked storage or closing the tab cannot guarantee refresh recovery. Use fictional data only.
 
+## Checkout-session retries (Implemented locally)
+
+Concurrent requests use the existing order-scoped provider key and fixed request parameters. The Stripe SDK handles bounded conflict retries; an exhausted `idempotency_key_in_use` conflict returns a retryable 503 without creating a payment or changing entry/readiness state. The same authenticated order can be retried. Session expiry is described in [the data model](DATA_MODEL.md#payment_sessions); it does not extend capacity reservations. Tests use the real SDK with a fake HTTP transport and fictional data, not a real provider account. Live keys remain refused; permissions and webhook verification are unchanged.
+
 ## Supported versions
 
 | Version | Supported |

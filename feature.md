@@ -43,7 +43,7 @@ Details and limits: [category builder](product.md#1a-road-race-and-criterium-cat
 | Rider and guardian details | Implemented | Enter fictional rider details once per order, with guardian details for minors; validation corrections retain keyboard focus |
 | Sample waiver | Implemented | Confirm reading and sign a versioned sample waiver; it is not an official federation waiver |
 | Capacity reservation | Implemented | Hold all selected places together; an incomplete bundle is not sold silently; recover uncertain submissions with the original request across same-tab refresh |
-| Simulated payment | Implemented | Exercise success, decline, retry, and duplicate notifications without charging money or collecting card details |
+| Simulated and Stripe test-mode payment | Implemented | Exercise simulated success/decline; use hosted test-mode Checkout with stable session retries and a retryable busy response. No real money or app-stored card details |
 | Confirmation and receipt | Implemented | Show a demo receipt, check-in code, entries, and independent readiness items; payment does not clear an unreviewed license |
 
 Details: [demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-1) and [checkout status](roadmap.md#rider-checkout). Usability testing with people remains open.
