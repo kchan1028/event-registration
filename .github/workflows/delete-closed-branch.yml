@@ -19,8 +19,17 @@ jobs:
       github.event.pull_request.head.ref != github.event.repository.default_branch
     runs-on: ubuntu-latest
     steps:
-      # A branch that is already gone (deleted by hand) is not an error.
+      # Only a branch that is already gone (GitHub answers "Reference does not exist") counts as done;
+      # any other failure fails the job so it shows up and can be rerun.
       - env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$BRANCH" || echo "Branch $BRANCH was already deleted."
+        run: |
+          if out=$(gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$BRANCH" 2>&1); then
+            echo "Deleted $BRANCH."
+          elif grep -q "Reference does not exist" <<< "$out"; then
+            echo "Branch $BRANCH was already deleted."
+          else
+            echo "$out" >&2
+            exit 1
+          fi
