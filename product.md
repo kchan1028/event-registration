@@ -461,7 +461,9 @@ Acceptance: filters and exports agree with a timestamped source dataset; transfe
 
 ### Race-day registration
 
-Status: Planned, distinct from the Implemented check-in workflow. Authorized staff can add a walk-up rider or direct them to a mobile/kiosk entry flow while enforcing the same eligibility, registration-window, capacity, guardian, waiver, and waitlist rules as advance registration. Configure race-day opening/closing times and surcharges explicitly. Staff need a reason and audit record for an allowed exception and cannot override hard capacity or mandatory requirements.
+Status: Full race-day workflow remains Planned; the first approved increment is a phone-first handoff from check-in. Owner decision (November 16, 2026): riders/guardians register on their own phones and accounts, then staff check readiness and issue bibs. Staff-entered registrations and shared-kiosk sessions are outside this increment. Existing published category windows and day-of surcharges apply; the handoff never reopens a closed race or creates an exception.
+
+Planned full workflow: authorized staff can add a walk-up rider or direct them to a mobile/kiosk entry flow while enforcing the same eligibility, registration-window, capacity, guardian, waiver, and waitlist rules as advance registration. Configure race-day opening/closing times and surcharges explicitly. Staff need a reason and audit record for an allowed exception and cannot override hard capacity or mandatory requirements.
 
 Use the selected Stripe hosted payment flow for online collection. Cash/check recording, complimentary entries, and any physical card-terminal integration require explicit permissions, reconciliation rules, and a further integration decision; do not imply they are supported by selecting Stripe. Never collect card numbers in CycleReg. Show pending payment separately from readiness, then issue a bib and update the timestamped start list only under the applicable confirmed-entry rules. Connectivity is required; the printable roster remains a contingency, not offline synchronization.
 

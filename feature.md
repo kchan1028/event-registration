@@ -38,6 +38,7 @@ Details and limits: [category builder](product.md#1a-road-race-and-criterium-cat
 | Feature | Status | What it does |
 |---|---|---|
 | Browse published events | Implemented | View already-published events and schedules; browsing does not create demo fixtures |
+| Walk-up phone handoff | Implemented locally | Check-in shares a published event registration QR/address; the rider/guardian registers on their own phone/account. Staff then check readiness and issue bibs. No staff-entered order or kiosk mode |
 | Responsive header navigation | Implemented | Shared headers wrap to keep theme, registration lookup and sign-out actions reachable; coarse-pointer account actions meet the 44px target; interactive brand links in registration, catalog and My registrations headers do too |
 | Choose entries | Implemented | Select eligible categories, see capacity and review requirements, and receive schedule-conflict warnings |
 | Order pricing | Implemented | Show entries, discounts, and configured fees before simulated payment; prevent discount stacking |
@@ -124,7 +125,7 @@ These are not available in the app. Phase order and dependencies remain in [road
 | Automatic post-close bib assignment and previewed bulk allocation | Bulk preview/apply Implemented in the manager check-in panel; opt-in post-close automatic assignment Implemented locally; previewed manual/resequenced reassignment with reasons, history, and start-list revisions Implemented locally; shared-range overlap and individual corrections after refund/cancellation Implemented locally; staff rehearsal remains Planned | [Automatic and bulk bib assignment](product.md#automatic-and-bulk-bib-assignment) |
 | Reusable credits, partial redemption, and policy-controlled deferrals | Planned; same-organization first | [Credits and deferrals](product.md#reusable-credits-and-deferrals) |
 | Operational/finance dashboards, role-scoped exports, and cross-event history | Event summary on Registrations Implemented (counts for registration roles, money for ledger roles); the rest Planned beyond start-list, entries, and ledger exports | [Reporting](product.md#reporting) |
-| Walk-up/mobile/kiosk race-day registration | Planned beyond check-in | [Race-day registration](product.md#race-day-registration) |
+| Walk-up/mobile/kiosk race-day registration | Phone-first handoff Implemented locally; staff-entered orders and shared kiosks Planned; full race-day acceptance remains unverified | [Race-day registration](product.md#race-day-registration) |
 | Dedicated omnium/stage-race setup, TT, pricing, and overall participation | Planned beyond existing package pricing | [Competition setup](product.md#omnium-and-stage-race-setup) |
 | Multi-event, multi-organization bundles / season passes | Planned | [Season passes](product.md#cross-organization-bundles-and-season-passes) |
 
