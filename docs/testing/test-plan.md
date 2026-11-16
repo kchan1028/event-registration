@@ -51,6 +51,18 @@ When a change touches one of these areas, run that row's tests in addition to th
 
 Concurrency and idempotency tests must run requests in parallel or replay events; a single-threaded test does not prove them. Use fictional data only.
 
+### Berkeley rider pricing and race discovery
+
+When changing these workflows, cover the approved [Berkeley pricing](../../product.md#combined-berkeley-demo-event) and [rider-facing behavior](../../product.md#rider-facing-behavior):
+
+- Single-race, fixed-package and extra-criterium prices for each rider rate, overlapping qualifications, unknown facts, and day-of pricing. Check coupon precedence and accepted-order snapshot preservation.
+- Rate scopes after category deletion/duplication, changed-rate publication impact, and transfer price comparisons. Missing-race rate references must remain an ignored-price warning rather than a publication dead end.
+- The rate comparison is visible before selection and reads published configuration; check phone/desktop widths, both themes, table semantics and contrast.
+- All races remains the default. The opt-in shortcut for racing age 50/Cat 4 shows the six expected category choices, preserves shared-start counts, and moves focus to the results heading.
+- Review-required choices remain reachable in All races. Keep selected/offered entries visible after profile changes, support empty matches, and retain All races after required details are cleared and re-entered.
+
+Focused coverage lives in `tests/pricing.test.ts`, `tests/berkeley-events.test.ts`, `tests/orders.test.ts`, `tests/transfers.test.ts`, `tests/impact.test.ts`, `tests/validation.test.ts` and the Berkeley scenarios in `e2e/checkout.spec.ts`. Apply the risk table above for affected integrations; these scenario lists do not replace it. Browser automation is not a real-phone or assistive-technology rehearsal.
+
 ## 3. Independent verification
 
 The agent that writes a change never verifies it alone.

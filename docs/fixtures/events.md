@@ -13,7 +13,9 @@ The road race uses Bear Creek Road near Orinda; the criterium uses downtown Berk
 
 ## Package and pricing
 
-One independently eligible category in each race costs $130 as a fixed-price package, saving $10. It records a podium nomination requiring organizer review; scoring, results, and award approval tools are not built. An additional criterium race costs $20. The fixture retains the $15 day-of surcharge, with zero platform and processing fees. See [product requirements](../../product.md#scope-of-the-first-release) for the authoritative package rules.
+See the [Berkeley pricing matrix](../case-studies/organizer-templates/berkeley-omnium.md#organizer-approved-demo-pricing) for owner-approved junior, collegiate, women’s and standard rates. Lowest eligible pricing applies to new orders; previous order snapshots remain unchanged.
+
+At the standard rate, one independently eligible category in each race costs $130 as a fixed-price package, saving $10. It records a podium nomination requiring organizer review; scoring, results, and award approval tools are not built. An additional criterium race costs $20 at the standard rate and $10 at the reduced rates. The fixture retains the $15 day-of surcharge, with zero platform and processing fees. See [product requirements](../../product.md#scope-of-the-first-release) for the authoritative package rules.
 
 ## Seed behavior and boundaries
 

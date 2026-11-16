@@ -1,3 +1,4 @@
+import { evaluatePath, type RiderProfile } from './eligibility';
 import type { CouponTerms } from './coupons';
 import type { Category, EventConfig } from './schema';
 
@@ -105,8 +106,10 @@ function allocate(lines: QuoteLine[], total: number, reason: string): number {
   return total - remaining;
 }
 
-export function quote(config: EventConfig, categoryIds: readonly string[], onDate: string, coupon: CouponTerms | null = null): Quote {
+export function quote(config: EventConfig, categoryIds: readonly string[], onDate: string, coupon: CouponTerms | null = null, profile: RiderProfile | null = null): Quote {
   const settings = config.registration;
+  const rates = profile ? (settings.riderRates ?? []).filter((r) => evaluatePath(r.eligibility, profile).status === 'eligible') : [];
+  const scopedRates = (categoryId: string) => rates.filter((r) => r.categoryIds ? r.categoryIds.length === 0 || r.categoryIds.includes(categoryId) : r.categoryGenderClass === 'any' || config.categories.some((c) => c.id === categoryId && c.eligibility.paths.length > 0 && c.eligibility.paths.every((p) => p.genderClass === r.categoryGenderClass)));
   const lines: QuoteLine[] = [];
   for (const id of categoryIds) {
     const cat = config.categories.find((c) => c.id === id);
@@ -114,6 +117,8 @@ export function quote(config: EventConfig, categoryIds: readonly string[], onDat
     const race = config.races.find((r) => r.id === cat.raceId);
     const day = config.days.find((d) => d.id === race?.dayId);
     const price = categoryPrice(cat, onDate, day?.date ?? '');
+    const riderPrices = scopedRates(cat.id).flatMap((r) => r.racePrices.filter((p) => p.raceId === cat.raceId).map((p) => p.cents + (price.dayOf ? cat.pricing.dayOfSurchargeCents : 0)));
+    price.cents = Math.min(price.cents, ...riderPrices);
     lines.push({
       categoryId: cat.id,
       raceId: cat.raceId,
@@ -137,7 +142,9 @@ export function quote(config: EventConfig, categoryIds: readonly string[], onDat
     .map((b) => {
       const picked = [...new Set(b.raceIds)].map((raceId) => lines.filter((l) => l.raceId === raceId).sort((x, y) => y.priceCents - x.priceCents)[0]);
       const sum = picked.reduce((s, l) => s + l.priceCents, 0);
-      const saving = Math.max(0, Math.min(sum, b.priceCents !== null ? sum - b.priceCents : b.discountCents));
+      const riderBundlePrices = rates.filter((r) => picked.every((l) => scopedRates(l.categoryId).includes(r) && r.racePrices.some((p) => p.raceId === l.raceId))).map((r) => r.bundlePriceCents);
+      const price = b.priceCents === null ? null : Math.min(b.priceCents, ...riderBundlePrices);
+      const saving = Math.max(0, Math.min(sum, price !== null ? sum - price : b.discountCents));
       return { b, picked, saving };
     })
     .filter((o) => o.saving > 0)
@@ -163,8 +170,9 @@ export function quote(config: EventConfig, categoryIds: readonly string[], onDat
     for (const raceId of selectedRaces) {
       const inRace = lines.filter((l) => l.raceId === raceId).sort((a, b) => b.priceCents - a.priceCents);
       for (const l of inRace.slice(1)) {
-        if (inBundle.has(l) || l.priceCents <= sameRace) continue;
-        l.discountCents = l.priceCents - sameRace;
+        const extraPrice = Math.min(sameRace, ...scopedRates(l.categoryId).flatMap((r) => r.racePrices.filter((p) => p.raceId === raceId).map((p) => p.extraEntryCents)));
+        if (inBundle.has(l) || l.priceCents <= extraPrice) continue;
+        l.discountCents = l.priceCents - extraPrice;
         l.discountReason = 'Extra entry in the same race';
         flatExtra.add(l);
       }

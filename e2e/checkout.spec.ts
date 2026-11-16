@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures';
 import { seedRegistrationCase } from './support/registration-case';
 
@@ -241,4 +242,100 @@ test('organizer finds a registration by order number and corrects the rider’s 
 
   await page.getByRole('searchbox', { name: 'Find a registration' }).fill('no such rider');
   await expect(page.locator('.empty')).toContainText('No registration matches “no such rider”');
+});
+
+test('Berkeley package recalculates when rider age changes between junior and standard rates', async ({ page }) => {
+  const seeded = await page.request.post('/api/demo/berkeley-events');
+  expect(seeded.ok()).toBe(true);
+  const eventId = (await seeded.json()).eventIds[0];
+  await page.goto(`/#/register/${eventId}`);
+  await page.getByLabel('Racing age').fill('17');
+  await page.getByLabel('License category').selectOption('3');
+  await expect(page.getByRole('checkbox', { name: /RR-E3/ })).toContainText('$30');
+  await page.getByRole('checkbox', { name: /RR-E3/ }).click();
+  await page.getByRole('checkbox', { name: /CR-E3/ }).click();
+  await expect(page.locator('.tray .quote__total')).toContainText('$40');
+  await page.getByLabel('Racing age').fill('30');
+  await expect(page.locator('.tray .quote__total')).toContainText('$130');
+  await expect(page.getByRole('checkbox', { name: /RR-E3/ })).toContainText('$80');
+});
+
+
+test('Berkeley shows every Omnium rate above the schedule before rider details are entered', async ({ page }) => {
+  const seeded = await page.request.post('/api/demo/berkeley-events');
+  expect(seeded.ok()).toBe(true);
+  const eventId = (await seeded.json()).eventIds[0];
+  await page.goto(`/#/register/${eventId}`);
+  const pricing = page.getByRole('region', { name: 'Omnium pricing' });
+  for (const [label, amount] of [['Junior', '$40'], ['Collegiate', '$90'], ['Women', '$50'], ['Standard', '$130']]) {
+    await expect(pricing.getByRole('row').filter({ hasText: label })).toContainText(amount);
+  }
+  await expect(pricing).toContainText('lowest eligible price applies automatically');
+  expect(await page.evaluate(() => Boolean(document.querySelector('.package-pricing')!.compareDocumentPosition(document.querySelector('#schedule')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  await expect(page.locator('.bundle-pick')).not.toContainText('$130');
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    if (viewport.width === 390) await page.getByRole('button', { name: /Switch to dark/ }).click();
+    await pricing.scrollIntoViewIfNeeded();
+    await expect(pricing).toBeVisible();
+    expect(await pricing.evaluate((node) => node.getBoundingClientRect().right <= window.innerWidth && node.scrollWidth <= node.clientWidth)).toBe(true);
+    expect((await new AxeBuilder({ page }).include('.package-pricing').analyze()).violations).toEqual([]);
+    await page.screenshot({ path: test.info().outputPath(`berkeley-pricing-${viewport.width}.png`) });
+  }
+});
+
+test('Berkeley shortcut finds the six category choices for a 50-year-old Cat 4 and restores the full schedule', async ({ page }) => {
+  const seeded = await page.request.post('/api/demo/berkeley-events');
+  const eventId = (await seeded.json()).eventIds[0];
+  await page.goto(`/#/register/${eventId}`);
+  const schedule = page.locator('#schedule');
+  await expect(schedule.getByRole('checkbox')).toHaveCount(54);
+  await expect(page.getByRole('button', { name: 'Find my races', exact: true })).toBeDisabled();
+  await page.getByLabel('Racing age').fill('50');
+  await page.getByLabel('License category').selectOption('4');
+  await expect(schedule.getByRole('checkbox')).toHaveCount(54);
+  await expect(schedule.getByRole('checkbox', { name: /RR-WL/ }).locator('..')).toContainText('Organizer review');
+  await page.getByRole('button', { name: 'Find my races', exact: true }).click();
+  await expect(schedule).toBeFocused();
+  await expect(schedule.getByRole('heading', { name: 'Your matching races', exact: true })).toBeInViewport();
+  await expect(schedule.getByRole('checkbox')).toHaveCount(6);
+  for (const code of ['RR-E4', 'RR-M35-34', 'RR-M50-34', 'CR-E4', 'CR-M35-34', 'CR-M50-34']) {
+    await expect(schedule.getByRole('checkbox', { name: new RegExp(code) })).toBeVisible();
+  }
+  await expect(schedule.getByRole('checkbox', { name: /RR-WL/ })).toHaveCount(0);
+  await expect(schedule).toContainText('2 categories start together and are scored separately');
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    if (width === 390) await page.getByRole('button', { name: /Switch to dark/ }).click();
+    await schedule.getByRole('heading', { name: 'Your matching races', exact: true }).scrollIntoViewIfNeeded();
+    expect(await schedule.evaluate((node) => node.getBoundingClientRect().right <= window.innerWidth && node.scrollWidth <= node.clientWidth)).toBe(true);
+    expect((await new AxeBuilder({ page }).include('#schedule').analyze()).violations).toEqual([]);
+    await page.screenshot({ path: test.info().outputPath(`berkeley-matches-${width}.png`) });
+  }
+  await page.getByRole('button', { name: 'All races', exact: true }).click();
+  await expect(schedule.getByRole('checkbox')).toHaveCount(54);
+});
+
+test('Berkeley matching view retains selected categories when rider details change', async ({ page }) => {
+  const seeded = await page.request.post('/api/demo/berkeley-events');
+  const eventId = (await seeded.json()).eventIds[0];
+  await page.goto(`/#/register/${eventId}`);
+  await page.getByLabel('Racing age').fill('50');
+  await page.getByLabel('License category').selectOption('4');
+  await page.getByRole('button', { name: 'Find my races', exact: true }).click();
+  const selected = page.getByRole('checkbox', { name: /RR-M50-34/ });
+  await selected.click();
+  await page.getByLabel('Racing age').fill('30');
+  await expect(selected).toHaveAttribute('aria-checked', 'true');
+  await expect(selected.locator('..')).toContainText('Not eligible');
+  await expect(page.locator('.tray')).toContainText('Masters 50+ 3/4');
+  await page.getByRole('button', { name: 'All races', exact: true }).click();
+  await expect(selected).toHaveAttribute('aria-checked', 'true');
+  await selected.click();
+  await expect(selected).toHaveAttribute('aria-checked', 'false');
+  await page.getByRole('button', { name: 'Matching races', exact: true }).click();
+  await page.getByLabel('License category').selectOption('');
+  await expect(page.getByRole('button', { name: 'All races', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByLabel('License category').selectOption('4');
+  await expect(page.locator('#schedule').getByRole('checkbox')).toHaveCount(54);
 });

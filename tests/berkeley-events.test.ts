@@ -18,7 +18,9 @@ describe('Berkeley Omnium demo', () => {
     expect(config.races.map((r) => config.categories.filter((c) => c.raceId === r.id).length)).toEqual([26, 28]);
     for (const cat of config.categories) {
       expect(config.startGroups.some((g) => g.id === cat.startGroupId && g.raceId === cat.raceId)).toBe(true);
-      expect(cat.pricing.baseCents).toBe(cat.raceId === config.races[0].id ? 8000 : 6000);
+      const group = config.displayGroups.find((g) => g.id === cat.displayGroupId)!.name;
+      const rates: Record<string, number[]> = { Juniors: [3000, 2000], Collegiate: [6000, 4000], Women: [4000, 2000] };
+      expect(cat.pricing.baseCents).toBe((rates[group] ?? [8000, 6000])[cat.raceId === config.races[0].id ? 0 : 1]);
     }
     const selections = config.races.map((r) => config.categories.find((c) => c.raceId === r.id)!.id);
     expect(quote(config, selections, '2027-03-15').entriesTotalCents).toBe(13000);

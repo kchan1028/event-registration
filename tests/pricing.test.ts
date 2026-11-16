@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { checkSelection, findConflicts, profileOf } from '../src/shared/checkout';
 import { buildBerkeleyOmniumEvent } from '../src/shared/berkeleyOmnium';
+import { validateConfig } from '../src/shared/validation';
 import { buildDemoEvent } from '../src/shared/demo';
 import { categoryPrice, quote } from '../src/shared/pricing';
 import type { EventConfig } from '../src/shared/schema';
@@ -242,4 +243,64 @@ describe('Berkeley Omnium package', () => {
     expect(extra.bundle?.omnium?.categoryIds).toHaveLength(2);
     expect(extra.lines.find((l) => l.categoryId === id(c, 'CR-E4'))?.totalCents).toBe(2000);
   });
+});
+
+
+describe('Berkeley organizer-approved rider rates', () => {
+  const profile = { racingAge: 30, licenseCategory: '3' as const, licenseType: 'annual' as const, competitionClass: 'men' as const, collegiateDivision: null };
+  it.each([
+    ['junior', { ...profile, racingAge: 17 }, 3000, 2000, 4000, 1000],
+    ['collegiate', { ...profile, collegiateDivision: 'B' as const }, 6000, 4000, 9000, 1000],
+    ['women', { ...profile, competitionClass: 'women' as const }, 4000, 2000, 5000, 1000],
+    ['junior collegiate woman', { ...profile, racingAge: 17, collegiateDivision: 'B' as const, competitionClass: 'women' as const }, 3000, 2000, 4000, 1000],
+    ['collegiate woman', { ...profile, collegiateDivision: 'B' as const, competitionClass: 'women' as const }, 4000, 2000, 5000, 1000],
+    ['standard', profile, 8000, 6000, 13000, 2000],
+  ])('%s receives the lowest eligible prices, package and extra criterium entry', (_name, rider, road, crit, bundle, extra) => {
+    const c = buildBerkeleyOmniumEvent().config;
+    const women = rider.competitionClass === 'women';
+    const codes = women ? ['RR-WL', 'CR-W3', 'CR-WP123'] : ['RR-E3', 'CR-E3', 'CR-M35-123'];
+    const ids = codes.map((code) => id(c, code));
+    const total = (selected: string[], date = '2027-03-15') => quote(c, selected, date, null, rider).totalCents;
+    expect(total([ids[0]])).toBe(road);
+    expect(total([ids[1]])).toBe(crit);
+    expect(total(ids.slice(0, 2))).toBe(bundle);
+    expect(total(ids)).toBe(bundle + extra);
+    expect(total(ids.slice(1))).toBe(crit + extra);
+    expect(total(ids.slice(1).reverse())).toBe(crit + extra);
+    expect(total([ids[1]], '2027-04-18')).toBe(crit + 1500);
+    expect(total(ids.slice(1), '2027-04-18')).toBe(crit + 1500 + extra);
+  });
+  it('does not grant profile discounts for unknown age or collegiate status', () => {
+    const c = buildBerkeleyOmniumEvent().config;
+    expect(quote(c, [id(c, 'RR-E3'), id(c, 'CR-E3')], '2027-03-15', null, { ...profile, racingAge: null }).totalCents).toBe(13000);
+  });
+});
+
+
+describe('rider rate category edits', () => {
+  it('keeps women pricing when categories are duplicated or deleted', () => {
+    const c = buildBerkeleyOmniumEvent().config;
+    const source = cat(c, 'CR-W3');
+    const duplicate = { ...structuredClone(source), id: 'duplicated-women-category' };
+    c.categories.push(duplicate);
+    c.categories = c.categories.filter((x) => x.id !== source.id);
+    expect(validateConfig(c, []).filter((x) => x.level === 'error')).toEqual([]);
+    const rider = { racingAge: 30, licenseCategory: '3' as const, licenseType: 'annual' as const, competitionClass: 'women' as const, collegiateDivision: null };
+    expect(quote(c, [id(c, 'RR-WL'), duplicate.id], '2027-03-15', null, rider).totalCents).toBe(5000);
+  });
+});
+
+
+it('ignores rates for a removed race without preventing publication of the remaining race', () => {
+  const c = buildBerkeleyOmniumEvent().config;
+  const road = c.races[0];
+  c.races = [road];
+  c.categories = c.categories.filter((category) => category.raceId === road.id);
+  c.startGroups = c.startGroups.filter((group) => group.raceId === road.id);
+  c.registration.bundles = [];
+  const issues = validateConfig(c, []);
+  expect(issues.filter((issue) => issue.level === 'error')).toEqual([]);
+  expect(issues.some((issue) => issue.key === 'event.rider-rate-reference' && issue.level === 'warning')).toBe(true);
+  const rider = { racingAge: 17, licenseCategory: '3' as const, licenseType: 'annual' as const, competitionClass: 'men' as const, collegiateDivision: null };
+  expect(quote(c, [id(c, 'RR-E3')], '2027-03-15', null, rider).totalCents).toBe(3000);
 });

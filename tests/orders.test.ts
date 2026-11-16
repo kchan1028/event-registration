@@ -301,16 +301,16 @@ describe('registration windows through the API', () => {
 
 
 describe('Berkeley package order snapshot', () => {
-  it('preserves the discount and podium nomination through simulated confirmation and later draft changes', async () => {
+  it.each([{ codes: ['RR-M35-34', 'CR-M35-34'], rider: RIDER, total: 13000 }, { codes: ['RR-WL', 'CR-W3'], rider: { ...RIDER, competitionClass: 'women', collegiateDivision: 'B' }, total: 5000 }])('preserves the $total discount and podium nomination through simulated confirmation and later draft changes', async ({ codes, rider, total }) => {
     const { app } = await testApp({ now: () => new Date('2027-03-15T18:00:00Z') });
     try {
       const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo/berkeley-omnium' })).json();
       const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json();
       const config = event.config as EventConfig;
-      const categoryIds = ['RR-M35-34', 'CR-M35-34'].map((code) => config.categories.find((c) => c.timingCode === code)!.id);
+      const categoryIds = codes.map((code) => config.categories.find((c) => c.timingCode === code)!.id);
       expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
       const res = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: {
-        clientRequestId: 'berkeley-package-order', categoryIds, rider: RIDER,
+        clientRequestId: 'berkeley-package-order', categoryIds, rider,
         waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' },
       } });
       expect(res.statusCode).toBe(201);
@@ -320,7 +320,7 @@ describe('Berkeley package order snapshot', () => {
       expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config } })).statusCode).toBe(200);
       const paid = (await app.inject({ method: 'POST', url: `/api/orders/${held.id}/payment`, payload: { attemptId: 'berkeley-package-payment', outcome: 'success' } })).json();
       expect(paid.status).toBe('confirmed');
-      expect(paid.totalCents).toBe(13000);
+      expect(paid.totalCents).toBe(total);
       expect(paid.quote.bundle).toEqual(held.quote.bundle);
       expect(paid.quote.bundle.omnium.status).toBe('needs_review');
       expect(paid.entries).toHaveLength(2);

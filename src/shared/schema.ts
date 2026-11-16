@@ -109,6 +109,15 @@ export const refundRulesSchema = z.object({
 export type RefundRules = z.infer<typeof refundRulesSchema>;
 
 export const registrationSettingsSchema = z.object({
+  /** Lowest eligible rider rate wins; category scope follows structured eligibility. */
+  riderRates: z.array(z.object({
+    eligibility: eligibilityPathSchema,
+    categoryGenderClass: z.enum(GENDER_CLASSES).default('any'),
+    /** Retained when reading the interim local published rate format; new fixtures use structured scope. */
+    categoryIds: z.array(id).optional(),
+    racePrices: z.array(z.object({ raceId: id, cents, extraEntryCents: cents })),
+    bundlePriceCents: cents,
+  })).max(10).optional(),
   bundles: z
     .array(
       z.object({

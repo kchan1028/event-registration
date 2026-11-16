@@ -8,7 +8,7 @@ import { newId } from '../shared/factory';
 import { termsOf } from '../shared/coupons';
 import type { RefundStatus } from '../shared/refunds';
 import { applyCorrection, matchesRegistration, type FieldChange, type RiderCorrection } from '../shared/lookup';
-import { categoryPrice, quote, todayIn, type Quote } from '../shared/pricing';
+import { quote, todayIn, type Quote } from '../shared/pricing';
 import { checkExtras, describeAnswers, EMPTY_EXTRAS, orderExtrasSchema, pruneExtras, type OrderExtras } from '../shared/categoryExtras';
 import type { EventConfig } from '../shared/schema';
 import { blocksPublicSale, effectiveWaitlistStatus, type StoredWaitlistStatus } from '../shared/waitlist';
@@ -442,7 +442,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
               throw err;
             })
           : null;
-        const q = quote(config, input.categoryIds, todayIn(config.event.timeZone, clock()), coupon ? termsOf(coupon) : null);
+        const q = quote(config, input.categoryIds, todayIn(config.event.timeZone, clock()), coupon ? termsOf(coupon) : null, profileOf(rider));
         if (q.coupon?.unappliedReason) throw new HttpError(422, `${q.coupon.unappliedReason} Go back to Choose races and remove the code to continue. Nothing was held.`);
         const t = nowIso();
         const expires = new Date(clock().getTime() + holdMinutes * 60_000).toISOString();
@@ -649,9 +649,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         if (!room.ok) throw new HttpError(409, room.reason === 'full' ? fullMessage(target.name, room.blockedBy) : `${target.name} cannot take this entry.`);
 
         const paid = paidLine(row.quote_json, e)?.totalCents ?? 0;
-        const race = config.races.find((r) => r.id === target.raceId);
-        const day = config.days.find((d) => d.id === race?.dayId);
-        const newPrice = categoryPrice(target, todayIn(config.event.timeZone, clock()), day?.date ?? '').cents;
+        const newPrice = quote(config, [target.id], todayIn(config.event.timeZone, clock()), null, profileOf(rider)).lines[0].priceCents;
         const t = nowIso();
         await db.run(`UPDATE order_entries SET original_category_id = COALESCE(original_category_id, category_id), category_id = $1 WHERE id = $2`, [target.id, e.id]);
         await db.run(
