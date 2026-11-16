@@ -3299,6 +3299,13 @@ fieldset:disabled .field label {
   margin-left: auto;
   flex-wrap: wrap;
 }
+.ci__days .segmented__opt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+}
 .ci__scan-btn {
   margin-top: var(--s-2);
 }
@@ -3661,7 +3668,7 @@ fieldset:disabled .field label {
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
 }
-.ci__bar-actions .btn, .ci-walkup .btn { min-height: 44px; }
+.ci__bar .btn, .ci-walkup .btn { min-height: 44px; }
 .ci-walkup .btn { white-space: normal; justify-self: start; }
 .ci-walkup { display: grid; gap: var(--s-3); }
 .ci-walkup > p, .ci-walkup > ol, .ci-walkup > label { max-width: 72ch; }
