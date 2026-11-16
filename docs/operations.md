@@ -1,6 +1,6 @@
 # Operations (proposed)
 
-**Status: Proposed.** Nothing here is in use. There is no running system, no hosting, no monitoring, and no support rota. This document sets out how CycleReg is meant to be operated once it exists, so that operating needs shape the build instead of being added after it. The requirements it draws on are in [product.md](../product.md#quality-requirements); the phases that deliver them are in [roadmap.md](../roadmap.md#phase-3--make-race-day-operable).
+**Status: Proposed.** Nothing here is in use. The application runs locally; there is no hosted production service, demonstrated monitoring, or staffed support rota. This document sets out how CycleReg is meant to be operated once it exists, so that operating needs shape the build instead of being added after it. The requirements it draws on are in [product.md](../product.md#quality-requirements); the phases that deliver them are in [roadmap.md](../roadmap.md#phase-3--make-race-day-operable).
 
 The short version: every event has a named support owner and escalation route, the riskiest moments (registration opening and race morning) get a change freeze and a rehearsed fallback, money and capacity problems are treated as critical, and a successor organizer must be able to run all of it without the developer.
 
@@ -142,6 +142,8 @@ The handoff acceptance criterion in [product.md](../product.md#core-flows-and-ac
 - use event templates so next year's setup starts from this year's verified configuration; and
 - transfer ownership through the product, never by sharing a login.
 
+The [readiness checklist](research/prelaunch-readiness.md#race-day-readiness-checklist), [failure recovery matrix](research/prelaunch-readiness.md#payment-and-failure-recovery-matrix) and [Proposed measurement protocol](research/prelaunch-readiness.md#proposed-launch-measurement-specification) identify evidence for the existing operating requirements. They do not establish staff independence or approve telemetry collection.
+
 ## Open questions
 
 1. Who funds and staffs support after launch? ([product.md](../product.md#open-decisions), question 3)
@@ -149,3 +151,17 @@ The handoff acceptance criterion in [product.md](../product.md#core-flows-and-ac
 3. What data loss and restore-time targets are acceptable for registration opening and race morning?
 4. Which monitoring and alerting tools fit a small volunteer team? (hosting ADR)
 5. What retention periods apply to waivers, financial records, and everything else?
+
+### November 16, 2026 research follow-up
+
+The existing questions above remain open. Owners below are roles to assign, not commitments. Research and synthetic scenario design can proceed under the provisional assumptions; no answer is inferred from silence.
+
+| Existing question | Owner / why it matters | Provisional assumption, blocked work and revisit |
+|---|---|---|
+| 1, support coverage | Project owner; named primary/deputy needed for independent operation | Assume no committed coverage. Live event support remains blocked; revisit before hosted pilot rehearsal. Includes responsibility for paid-but-not-ready follow-up and measurement review. |
+| 2, freeze/response targets | Product owner with registration lead; race-morning disruption needs an agreed response | Existing proposed values are not approved. Rehearsal design proceeds; accepted incident response remains blocked until organizer review before rehearsal. |
+| 3, data-loss/restore targets | Technical lead and treasurer, unassigned; restore must preserve money, capacity and entries | No approved RPO/RTO assumed. Isolated synthetic restoration can be planned; recovery sign-off blocked until targets agreed, before hosted rehearsal. |
+| 4, monitoring/tools | Technical/support lead, unassigned; failures need an accountable receiver | No monitoring service, alert thresholds or after-hours rota accepted. Synthetic fault cases proceed; hosted operational sign-off blocked pending routing/tool review. |
+| 5, retention | Project owner/privacy responsibility unassigned; waivers, financial records, paper rosters and opaque telemetry keys remain personal data | No retention period or analytics collection approved. Synthetic measurements proceed; real-data collection blocked until access/retention approval before pilot. |
+
+Related decisions remain in [product.md decisions 4–6 and 8–10](../product.md#open-decisions), [ADR 0005](decisions/0005-merchant-and-settlement-model.md), [federation questions](usac-questions.md) and [timer review](timer-export-review.md). The new research does not resolve merchant liability, event-year waiver/licensing approval, timer acknowledgement or safe device/accessibility arrangements. Revisit those existing records before the corresponding live-money, sanctioned-event or physical rehearsal gate.

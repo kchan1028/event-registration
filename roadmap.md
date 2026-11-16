@@ -420,6 +420,8 @@ These are roles to assign, not assumed staffing commitments.
 
 ## Critical risks and decision points
 
+The [November 16 prelaunch readiness assessment](docs/research/prelaunch-readiness.md) supplies code evidence, a proposed findings backlog and recovery/rehearsal matrices for these existing risks. Its recommendations do not change priorities or close gates. Main defects are tracked in [#127](https://github.com/kchan1028/event-registration/issues/127) and [#128](https://github.com/kchan1028/event-registration/issues/128), separately from provider concurrency #84 and mobile overflow #117.
+
 | Risk | Response | Stop / change condition |
 |---|---|---|
 | Too little volunteer capacity | Dedicated delivery/support ownership; brief scheduled research sessions | No funded capacity or support owner: do not commit to a live event |
