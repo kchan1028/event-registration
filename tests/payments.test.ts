@@ -264,7 +264,7 @@ describe('Stripe hosted Checkout (test mode)', () => {
     const { order, checkout, webhook, paidSession, get, clock } = await setup();
     const o = await order(['RR-M35-34']);
     await checkout(o.id);
-    clock.advance(15);
+    clock.advance(40); // one minute before the provider deadline, 30 minutes after the capacity hold
     expect((await webhook('evt_test_late', 'checkout.session.completed', paidSession(o))).json()).toMatchObject({ result: 'confirmed' });
     expect((await get(o.id)).status).toBe('confirmed');
   });
