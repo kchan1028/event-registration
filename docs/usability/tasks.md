@@ -209,7 +209,7 @@ Status: Planned formative module. Use this module **instead of** R1–R5/O1–O6
 
 ### Facilitator setup and fictional data
 
-Create a fresh session database under the existing [local-only setup](README.md#set-up-the-computer-before-each-session). Use **Load Berkeley Omnium** on the home page, not the standalone Berkeley seed. This loader creates the combined draft with synthetic capacity usage. For rider/volunteer sessions, preview and publish it after recording warnings; for organizer tasks, leave it as a draft. Do not assume it is already published. Record the commit, local date, theme, viewport, published version, starting availability, and any preparation changes. Do not seed other example events into this session.
+Create a fresh session database under the existing [local-only setup](README.md#set-up-the-computer-before-each-session). Use **Load Berkeley Omnium** on the home page, not the combined Berkeley seed. This loader creates the combined draft with synthetic capacity usage. For rider/volunteer sessions, preview and publish it after recording warnings; for organizer tasks, leave it as a draft. Do not assume it is already published. Record the commit, local date, theme, viewport, published version, starting availability, and any preparation changes. Do not seed other example events into this session.
 
 | Fictional person | Profile / use |
 |---|---|

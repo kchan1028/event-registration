@@ -65,4 +65,31 @@ describe('named demo checkout and workspace isolation', () => {
     expect((await app.inject({ method: 'GET', url: `/api/events/${privateEvent.id}`, headers: as('another@example.test') })).statusCode).toBe(404);
     await app.close();
   });
+  it('does not share additional events even when their drafts are relabeled as demos', async () => {
+    const { app } = await testApp();
+    const seed = (await app.inject({ method: 'POST', url: '/api/demo/wente' })).json();
+    const extra = (await app.inject({ method: 'POST', url: `/api/organizations/${seed.organizationId}/events`, payload: { name: 'Additional fictional event', template: 'road_race', startDate: '2027-01-01', timeZone: 'America/Los_Angeles' } })).json();
+    extra.config.event.isDemo = true;
+    expect((await app.inject({ method: 'PUT', url: `/api/events/${extra.id}/config`, payload: { revision: extra.revision, config: extra.config } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/api/demo/wente', headers: as('another@example.test') })).statusCode).toBe(409);
+    expect((await app.inject({ method: 'GET', url: `/api/events/${extra.id}`, headers: as('another@example.test') })).statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('checks the published demo identity even after the working draft is relabeled', async () => {
+    const { app } = await testApp();
+    const seed = (await app.inject({ method: 'POST', url: '/api/demo/wente' })).json();
+    const url = `/api/events/${seed.eventIds[0]}`;
+    let event = (await app.inject({ method: 'GET', url })).json();
+    event.config.event.isDemo = false;
+    expect((await app.inject({ method: 'PUT', url: `${url}/config`, payload: { revision: event.revision, config: event.config } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: `${url}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    event = (await app.inject({ method: 'GET', url })).json();
+    event.config.event.isDemo = true;
+    expect((await app.inject({ method: 'PUT', url: `${url}/config`, payload: { revision: event.revision, config: event.config } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/api/demo/wente', headers: as('another@example.test') })).statusCode).toBe(409);
+    expect((await app.inject({ method: 'GET', url, headers: as('another@example.test') })).statusCode).toBe(404);
+    await app.close();
+  });
+
 });

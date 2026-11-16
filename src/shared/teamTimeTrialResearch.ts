@@ -17,7 +17,7 @@ function researchExample(name: string, date: string, dayLabel: string, venue: st
 
 export const teamTimeTrialResearchDemos = [
   {
-    key: 'bbc-team-time-trial', organizationId: 'org_08a3e636d31f',
+    key: 'bbc-team-time-trial', eventId: 'evt_48f49bb3a6a7', organizationId: 'org_08a3e636d31f',
     organizationName: 'BBC team time trial research (local demo)',
     build: () => researchExample(
       'Berkeley Bicycle Club Team Time Trial (research example)',
@@ -29,7 +29,7 @@ export const teamTimeTrialResearchDemos = [
     ),
   },
   {
-    key: 'pinole-team-time-trial', organizationId: 'org_6dad1e89551f',
+    key: 'pinole-team-time-trial', eventId: 'evt_8c249e364855', organizationId: 'org_6dad1e89551f',
     organizationName: 'Pinole team time trial research (local demo)',
     build: () => researchExample(
       'Pinole Team Time Trial (research example)',
