@@ -30,7 +30,7 @@ The app exports one CSV per race, per saved snapshot, or for all races of an eve
 | Column | Meaning | Format | Example |
 |---|---|---|---|
 | `race_date` | Date of the race | `YYYY-MM-DD` | `2027-04-17` |
-| `race` | Race name as configured | Text | `Demo Valley Criterium` |
+| `race` | Race name as configured | Text | `Demo Harbor Criterium: pricing and eligibility lab` |
 | `start_time` | Start group's start time | 24-hour `HH:MM`, local time | `09:00` |
 | `start_group` | Riders who start together | Text | `Men Cat 4/5` |
 | `category_code` | Timer classification code for scoring and awards | Text | `DVC-M45` |

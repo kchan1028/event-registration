@@ -37,7 +37,7 @@ Details and limits: [category builder](product.md#1a-road-race-and-criterium-cat
 
 | Feature | Status | What it does |
 |---|---|---|
-| Browse published events | Implemented | View events and their race schedules |
+| Browse published events | Implemented | View already-published events and schedules; browsing does not create demo fixtures |
 | Choose entries | Implemented | Select eligible categories, see capacity and review requirements, and receive schedule-conflict warnings |
 | Order pricing | Implemented | Show entries, discounts, and configured fees before simulated payment; prevent discount stacking |
 | Rider and guardian details | Implemented | Enter fictional rider details once per order, with guardian details for minors |

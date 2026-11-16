@@ -60,9 +60,17 @@ The app runs only on the facilitator's computer and listens only on `127.0.0.1`.
 
    Expected result: the API logs `Server listening at http://127.0.0.1:3001` and Vite prints `Local: http://127.0.0.1:5273/`. The API also logs `Created local database cyclereg_usability_p01.` the first time. The new database starts empty; the app creates its tables on start.
 
-2. Open `http://127.0.0.1:5273/` and prepare the starting state for the role, as listed under each role in [tasks.md](tasks.md).
-3. Set the display theme the participant will use (the sun or moon button in the header). Run at least one volunteer session in the dark theme and at least one in bright daylight, because [product.md](../../product.md#display-themes) requires the check-in result to read in sunlight.
-4. Close other tabs and notifications. Keep the observation sheet and a timer ready.
+2. Before the session, load the generated collection into the same session database (replace the email with the fictional address you will sign in with):
+
+   ```bash
+   DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_usability_p01 npm run seed:cases -- --owner organizer@example.test
+   ```
+
+   This supplies the Harbor criterium and Redwood omnium used in the rider tasks. Use a fresh session database for each participant; some cases deliberately have only one place left.
+
+3. Open `http://127.0.0.1:5273/` and prepare the starting state for the role, as listed under each role in [tasks.md](tasks.md).
+4. Set the display theme the participant will use (the sun or moon button in the header). Run at least one volunteer session in the dark theme and at least one in bright daylight, because [product.md](../../product.md#display-themes) requires the check-in result to read in sunlight.
+5. Close other tabs and notifications. Keep the observation sheet and a timer ready.
 
 To look at a past session again, start the app with that session's `DATABASE_URL`.
 

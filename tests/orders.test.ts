@@ -213,16 +213,17 @@ describe('rider checkout: holds and simulated payment', () => {
   });
 });
 
-describe('demo purchase flow fixtures through the API', () => {
+describe('generated case-study purchases through the API', () => {
   it('loads the fixture events once, published, and orders reproduce the worked totals and simulated license results', async () => {
     const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z') });
-    const first = await app.inject({ method: 'POST', url: '/api/demo/purchase-flow' });
+    const first = await app.inject({ method: 'POST', url: '/api/demo/case-studies' });
     expect(first.statusCode).toBe(201);
-    const again = await app.inject({ method: 'POST', url: '/api/demo/purchase-flow' });
+    const again = await app.inject({ method: 'POST', url: '/api/demo/case-studies' });
     expect(again.statusCode).toBe(200);
     const events = (await app.inject({ method: 'GET', url: '/api/public/events' })).json() as { id: string; name: string }[];
-    expect(events.map((e) => e.name).sort()).toEqual(['Demo Ridge Road Race Weekend', 'Demo Valley Criterium']);
-    const valleyId = events.find((e) => e.name === 'Demo Valley Criterium')!.id;
+    expect(events).toHaveLength(4);
+    expect((await app.inject({ method: 'POST', url: '/api/demo/purchase-flow' })).statusCode).toBe(404);
+    const valleyId = events.find((e) => e.name === 'Demo Harbor Criterium: pricing and eligibility lab')!.id;
     const pub = (await app.inject({ method: 'GET', url: `/api/public/events/${valleyId}` })).json() as { config: EventConfig; remaining: Record<string, number> };
     const cat = (n: string) => pub.config.categories.find((c) => c.name === n)!.id;
     expect(pub.remaining[cat('Masters 35+ Cat 3/4')]).toBe(0);

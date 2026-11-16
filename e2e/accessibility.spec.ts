@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures';
+import { seedRegistrationCase } from './support/registration-case';
 
 /*
  * Automated accessibility checks (ACCESSIBILITY.md, "How accessibility will be checked").
@@ -29,8 +30,8 @@ async function setUp(page: Page): Promise<Setup> {
   const ready = list.riders.find((r: { result: { ready: boolean } }) => r.result.ready);
   const blocked = list.riders.find((r: { result: { ready: boolean } }) => !r.result.ready);
   await api.post(`/api/events/${eventId}/check-in/${ready.orderId}`, { data: { dayId: list.dayId, bib: null } });
-  const { eventIds } = await (await api.post('/api/demo/purchase-flow')).json();
-  return { eventId, readyRider: ready.name, blockedRider: blocked.name, fixtureEventId: eventIds[0] };
+  const fixtureEventId = await seedRegistrationCase(api, 'criterium');
+  return { eventId, readyRider: ready.name, blockedRider: blocked.name, fixtureEventId };
 }
 
 for (const theme of ['light', 'dark'] as const) {

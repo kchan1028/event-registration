@@ -11,7 +11,7 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 | Item | Status | Notes |
 |---|---|---|
 | Repository and documentation foundation | Implemented (November 14, 2026) | Supporting work, not a roadmap phase. |
-| Demo purchase flow fixtures | Implemented (November 14, 2026) | Fake events, riders, fees, worked order totals, and sample waiver text in [docs/fixtures/](docs/fixtures/README.md), used by the rider demo. Phone numbers corrected to 10 digits to match the fixture's own phone rule. |
+| Legacy purchase-flow fixture events | Implemented (removal, November 15, 2026 owner decision) | Legacy Valley/Ridge events, YAML definitions, and their loader removed. Shared fictional riders and waiver remain; checkout coverage uses generated case studies in [docs/fixtures/](docs/fixtures/README.md). Browsing events never seeds data. |
 | Generated race case-study collection | Verified (November 15, 2026) | Five deterministic scenarios cover criterium, road/shared fields, omnium, empty, and large organizer states. Individual/full loaders and generated-data-only reset are covered by unit/API tests; representative rider and organizer browser journeys pass. This is local simulated data, not live capability or participant evidence. |
 | Category builder milestone | Implemented (November 14, 2026); partly verified | Local only. See [Category builder milestone](#category-builder-milestone). |
 | Rider checkout and demo purchase flow (2a) | Implemented (November 14, 2026); partly verified | Simulated payment only. Meets the [2a](product.md#2a-clickable-demo-purchase-flow--phase-1) behavior in automated tests, including both display themes; usability testing with people is not done. See [Rider checkout](#rider-checkout). |

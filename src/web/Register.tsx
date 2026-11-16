@@ -189,7 +189,7 @@ export function RegisterIndex() {
         {events === null && !error && <div className="skeleton" aria-label="Loading events" />}
         {events?.length === 0 && (
           <div className="empty">
-            <p>No published events yet. Open the rider demo from the home page, or publish an event in the organizer workspace.</p>
+            <p>No published events yet. Publish an event in the organizer workspace, or load a local demo using the setup guide.</p>
             <a className="btn btn--secondary" href="#/">
               Back to the home page
             </a>

@@ -605,6 +605,8 @@ There is no separate redemption table: an order with `coupon_id` set is the rede
 
 ## Deletion behavior
 
+Owner-directed local fixture retirement (November 15, 2026): the two legacy purchase-flow demo events were removed in one transaction after confirming they were fictional and had no orders, payment sessions, or other operational children. Only simulated capacity rows, published fixture versions, and the two event rows were deleted. Unrelated events, accounts, and organization access were retained. This was a one-off local cleanup, not a new deletion API or schema migration; the removed loader cannot recreate these fixtures.
+
 The app does not delete operational records during ordinary organizer or rider workflows. The generated case-study reset is the one development-only exception described above.
 
 - **Few cascades.** Operational foreign keys have no `ON DELETE` clause, so deleting a parent row that still has children fails. The exceptions are the sign-in tables (migration 16): deleting an organization deletes its memberships and invitations, deleting an account deletes its memberships, and `orders.account_id`, `waitlist_entries.account_id`, `granted_by`, and `invited_by` become null. Ordinary app endpoints do not delete organizations, events, versions, orders, payment attempts, bibs, check-ins, or snapshots.

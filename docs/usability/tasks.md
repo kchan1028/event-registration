@@ -6,13 +6,13 @@ Task wording avoids the names of buttons and screens on purpose, so the test sho
 
 ## Rider and parent tasks
 
-**Starting state.** Fresh session database (see [setup](README.md#set-up-the-computer-before-each-session)). On the home page select **Open the rider demo**, which loads the fictional events, then leave the browser on the **Choose an event** page. For at least two of the five rider sessions, use a phone-sized window.
+**Starting state.** Fresh session database (see [setup](README.md#set-up-the-computer-before-each-session)). Load the generated case-study collection for this session first (see setup), then select **Browse rider events** on the home page and leave the browser on **Choose an event**. Browsing does not create events. For at least two of the five rider sessions, use a phone-sized window.
 
 **Warm-up questions.** How do you usually register for races? What do you find annoying about it? Have you ever entered the wrong race or category?
 
 ### R1. Two races on one day (core)
 
-**Scenario:** "You're Alex Demo. You want to race both the Men Cat 4/5 race and the Open Cat 4/5 Evening race at Demo Valley Criterium. Register and pay. Use the demo rider details instead of your own."
+**Scenario:** "You're Alex Demo. You want to race both the Men Cat 4/5 race and the Open Cat 4/5 Evening race at Demo Harbor Criterium: pricing and eligibility lab. Register and pay. Use the demo rider details instead of your own."
 
 **Success:** Confirmation shows both entries and a total of **$59.65** (entries $65.00, second-race discount −$10.00, demo platform fee $3.00, demo processing fee $1.65).
 
@@ -22,7 +22,7 @@ Task wording avoids the names of buttons and screens on purpose, so the test sho
 
 ### R2. Both days with the weekend bundle (core)
 
-**Scenario:** "You're Blake Demo. You want to race the masters road race on Saturday and the masters criterium on Sunday at Demo Ridge Road Race Weekend, at the best price. Register and pay."
+**Scenario:** "You're Blake Demo. You want to race the masters road race on Saturday and the masters criterium on Sunday at Demo Redwood Omnium Weekend, at the best price. Register and pay."
 
 **Success:** Confirmation shows both masters entries under the weekend bundle and a total of **$80.25**.
 
@@ -32,7 +32,7 @@ Task wording avoids the names of buttons and screens on purpose, so the test sho
 
 ### R3. Parent registering a junior (core)
 
-**Scenario:** "You're Jordan Demo. Your child, Casey Demo, is 13 and wants to race Juniors 10-14 at Demo Valley Criterium. Register Casey and sign for them."
+**Scenario:** "You're Jordan Demo. Your child, Casey Demo, is 13 and wants to race Juniors 10-14 at Demo Harbor Criterium: pricing and eligibility lab. Register Casey and sign for them."
 
 **Success:** Guardian details entered, the waiver signed by Jordan as guardian, confirmation shows Juniors 10-14 and a total of **$18.45**.
 
@@ -42,7 +42,7 @@ Task wording avoids the names of buttons and screens on purpose, so the test sho
 
 ### R4. A license that still needs review (core)
 
-**Scenario:** "You're Sam Demo. Enter Women Cat 3/4/5 at Demo Valley Criterium and pay. When you're done, tell me whether you're all set to race."
+**Scenario:** "You're Sam Demo. Enter Women Cat 3/4/5 at Demo Harbor Criterium: pricing and eligibility lab and pay. When you're done, tell me whether you're all set to race."
 
 **Success:** Confirmation shows Women Cat 3/4/5 and a total of **$39.05**, **and** the participant says they are not yet cleared because the license needs review (at the desk or by the organizer).
 
@@ -54,7 +54,7 @@ Task wording avoids the names of buttons and screens on purpose, so the test sho
 
 ### R5. A full race and a declined payment (optional)
 
-**Scenario:** "You're Blake Demo. Try to enter Masters 35+ Cat 3/4 at Demo Valley Criterium. If that doesn't work, enter Women Cat 3/4/5 instead. When you get to payment, I'll ask you to pretend the card was declined."
+**Scenario:** "You're Blake Demo. Try to enter Masters 35+ Cat 3/4 at Demo Harbor Criterium: pricing and eligibility lab. If that doesn't work, enter Women Cat 3/4/5 instead. When you get to payment, I'll ask you to pretend the card was declined."
 
 At the payment step, ask the participant to choose **Simulate a declined payment**, then to finish.
 
@@ -69,7 +69,7 @@ At the payment step, ask the participant to choose **Simulate a declined payment
 **Starting state.** Fresh session database. Then, before the participant arrives:
 
 1. On the home page select **Load Berkeley Omnium**.
-2. Back on the home page, select **Open the rider demo**, choose **Demo Valley Criterium**, pick the demo rider **Sam Demo**, enter **Women Cat 3/4/5**, sign the waiver, and choose **Complete simulated payment**. This creates a paid entry whose license still needs review.
+2. Back on the home page, select **Browse rider events**, choose **Demo Harbor Criterium: pricing and eligibility lab**, pick the demo rider **Sam Demo**, enter **Women Cat 3/4/5**, sign the waiver, and choose **Complete simulated payment**. This creates a paid entry whose license still needs review.
 3. Open the Berkeley Omnium's rider preview, enter racing age 16, Cat 4, Women in **Check which races you can enter**, and write down the qualifying Sunday criterium categories on the observation sheet. This is the expected answer for O3.
 4. Return to the home page and leave it open.
 
@@ -117,9 +117,9 @@ At the payment step, ask the participant to choose **Simulate a declined payment
 
 ### O5. Record a license review (core)
 
-**Scenario:** "Sam Demo registered for Demo Valley Criterium and just showed her license card at the desk. Record that her license has been checked."
+**Scenario:** "Sam Demo registered for Demo Harbor Criterium: pricing and eligibility lab and just showed her license card at the desk. Record that her license has been checked."
 
-**Success:** In the **Demo purchase flow (fixtures)** organization's Demo Valley Criterium, opens **Registrations**, finds Sam, chooses **Review license**, writes how it was checked, and selects **Mark reviewed**.
+**Success:** In the **CycleReg generated case studies** organization's Demo Harbor Criterium: pricing and eligibility lab, opens **Registrations**, finds Sam, chooses **Review license**, writes how it was checked, and selects **Mark reviewed**.
 
 **Watch for:** finding the right organization and event; using the license review filter; writing a meaningful note; believing that paying had already cleared her.
 
@@ -127,7 +127,7 @@ At the payment step, ask the participant to choose **Simulate a declined payment
 
 ### O6. Send the start list to the timer (core)
 
-**Scenario:** "The timer needs the Demo Valley Criterium start list. Send them a file, and keep a record of exactly what you sent."
+**Scenario:** "The timer needs the Demo Harbor Criterium: pricing and eligibility lab start list. Send them a file, and keep a record of exactly what you sent."
 
 **Success:** Downloads the race CSV from **Start lists and timer export** and saves a snapshot.
 

@@ -8,7 +8,6 @@ import { buildBerkeleyOmniumEvent, OMNIUM_ORG_NAME } from '../shared/berkeleyOmn
 import { buildDemoEvent } from '../shared/demo';
 import { buildCaseStudyScenarios, CASE_STUDY_ORG_ID, CASE_STUDY_REFERENCE_NOW } from '../shared/caseStudies';
 import { configFromTemplate } from '../shared/factory';
-import { buildFixtureEvents, FIXTURE_ORG_NAME } from '../shared/fixtures';
 import { bibNumberSchema, createEventInputSchema, eventConfigSchema } from '../shared/schema';
 import { entriesCsv, ledgerCsv } from '../shared/exports';
 import { eventSummary } from '../shared/reports';
@@ -351,25 +350,6 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       days: config.days.map((d) => ({ date: d.date, label: d.label, races: config.races.filter((r) => r.dayId === d.id).map((r) => r.name) })),
       categoryCount: config.categories.filter((c) => c.status !== 'archived').length,
     }));
-  });
-
-  /** Loads the clickable demo purchase flow fixtures (docs/fixtures) once, published. */
-  app.post('/api/demo/purchase-flow', async (req, reply) => {
-    const existing = await repo.findOrganizationByName(FIXTURE_ORG_NAME);
-    if (existing && existing.eventIds.length > 0) {
-      await joinDemo(req, existing.id);
-      return reply.status(200).send({ organizationId: existing.id, eventIds: existing.eventIds });
-    }
-    const org = existing ?? (await repo.createOrganization(FIXTURE_ORG_NAME));
-    const eventIds: string[] = [];
-    for (const { config, entryPlan } of buildFixtureEvents()) {
-      const record = await repo.createEvent(org.id, config);
-      for (const p of entryPlan) await repo.addTestEntries(record.id, p.categoryId, p.count);
-      await repo.publish(record.id, true);
-      eventIds.push(record.id);
-    }
-    await joinDemo(req, org.id);
-    return reply.status(201).send({ organizationId: org.id, eventIds });
   });
 
   app.get('/api/demo/case-studies', async () => ({

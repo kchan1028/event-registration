@@ -345,7 +345,6 @@ export const api = {
     request<{ result: TestEntryResult; event: EventPayload }>('POST', `/api/events/${id}/test-entries`, { categoryId, count }),
   clearTestEntries: (id: string) => request<{ removed: number; event: EventPayload }>('DELETE', `/api/events/${id}/test-entries`),
   publicEvents: () => request<PublicEventSummary[]>('GET', '/api/public/events'),
-  loadPurchaseFlowDemo: () => request<{ organizationId: string; eventIds: string[] }>('POST', '/api/demo/purchase-flow'),
   joinWaitlist: (eventId: string, body: WaitlistJoin) => request<WaitlistEntryView>('POST', `/api/rider/events/${eventId}/waitlist`, body),
   waitlistOffer: (token: string) => request<WaitlistOffer>('GET', `/api/rider/offers/${encodeURIComponent(token)}`),
   riderIdentity: (eventId: string) => request<RiderIdentityOverview>('GET', `/api/events/${eventId}/rider-identity`),
