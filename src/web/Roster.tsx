@@ -80,10 +80,11 @@ export function Roster({ eventId }: { eventId: string }) {
               <p>No registered riders for this day.</p>
             ) : (
               <>
+              <h2 className="sr-only roster__phone-only">Riders</h2>
               <ul className="roster__cards roster__phone-only" role="list" aria-label={`Riders, ${day?.label ?? 'race day'}`}>
                 {roster.rows.map((r) => (
                   <li key={r.orderId}>
-                    <h2 className="roster__rider-name">{r.name}</h2>
+                    <h3 className="roster__rider-name">{r.name}</h3>
                     <dl className="roster__rider-meta">
                       <div className="roster__rider-wide"><dt>Snapshot status</dt><dd><Status row={r} /></dd></div>
                       <div><dt>Recorded bib</dt><dd>{r.bib ?? 'Not assigned'}</dd></div>
@@ -159,8 +160,10 @@ export function Roster({ eventId }: { eventId: string }) {
             )}
             </div>
 
-            <h2 className="roster__sub">Riders not on this list</h2>
-            <p className="roster__hint">Send riders to the registration lead. Record lookup questions only; adding a name to the printed sheet does not create an entry, reserve capacity or authorize a bib.</p>
+            <h2 className="roster__sub roster__table-only">Riders not on this list</h2>
+            <p className="roster__hint roster__table-only">Send riders to the registration lead. Record lookup questions only; adding a name to the printed sheet does not create an entry, reserve capacity or authorize a bib.</p>
+            <h2 className="roster__sub roster__phone-only">Rider not shown?</h2>
+            <p className="roster__hint roster__phone-only">Ask the registration lead to check the current record. Notes do not clear requirements, create an entry, reserve capacity or authorize a bib.</p>
             <table className="roster__table roster__table--blank roster__table-only">
               <thead>
                 <tr>

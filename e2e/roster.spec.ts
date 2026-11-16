@@ -30,7 +30,8 @@ for (const theme of ['light', 'dark']) {
       await page.setViewportSize({ width, height: 844 });
       const cards = day.getByRole('list', { name: /^Riders,/ }).getByRole('listitem');
       await expect(cards).toHaveCount(list.riders.length);
-      expect(await cards.getByRole('heading').allTextContents()).toEqual(desktopNames);
+      await expect(day.getByRole('heading', { name: 'Riders', exact: true, level: 2 })).toHaveCount(1);
+      expect(await cards.getByRole('heading', { level: 3 }).allTextContents()).toEqual(desktopNames);
       await expect(day.getByRole('table')).toHaveCount(0);
       const checkedCard = cards.filter({ has: page.getByRole('heading', { name: checked.name, exact: true }) });
       await expect(checkedCard).toContainText('Snapshot statusChecked in');
@@ -45,7 +46,8 @@ for (const theme of ['light', 'dark']) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       expect(await cards.evaluateAll((items) => items.some((item) => item.scrollWidth > item.clientWidth))).toBe(false);
       await expect(day).toContainText('Reference only');
-      await expect(day).toContainText('adding a name to the printed sheet does not create an entry');
+      await expect(day.getByRole('heading', { name: 'Rider not shown?' })).toBeVisible();
+      await expect(day.getByText('Ask the registration lead to check the current record. Notes do not clear requirements, create an entry, reserve capacity or authorize a bib.', { exact: true })).toBeVisible();
       if (width === 390) {
         expect((await new AxeBuilder({ page }).include('.roster').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
         await checkedCard.screenshot({ path: `test-results/roster-phone-${theme}.png` });
