@@ -62,7 +62,7 @@ test('fallback roster lists every rider and puts blocked riders on the exception
     await expect(section).toContainText('This snapshot does not authorize offline registration');
     await expect(section).toContainText('Without one, pause issuance and contact the registration lead');
     await expect(section).toContainText('reconcile notes with current records');
-    await expect(section).toContainText('adding a name here does not create an entry, reserve capacity or authorize a bib');
+    await expect(section).toContainText('adding a name to the printed sheet does not create an entry, reserve capacity or authorize a bib');
     await expect(section.getByRole('columnheader', { name: 'Snapshot status', exact: true })).toBeVisible();
     await expect(section.getByRole('columnheader', { name: 'Recorded bib', exact: true })).toBeVisible();
     expect(await section.getByRole('cell', { name: 'Not assigned', exact: true }).count()).toBeGreaterThan(0);
@@ -106,7 +106,7 @@ test('empty fallback roster retains recording limits without riders or exception
     await expect(section).toContainText('No registered riders for this day');
     await expect(section).toContainText('No riders are blocked for this day');
     await expect(section).toContainText('This snapshot does not authorize offline registration');
-    await expect(section).toContainText('adding a name here does not create an entry');
+    await expect(section).toContainText('adding a name to the printed sheet does not create an entry');
     await expect(section.getByRole('columnheader', { name: 'Question for registration lead', exact: true })).toBeVisible();
   }
   await page.emulateMedia({ media: 'print' });

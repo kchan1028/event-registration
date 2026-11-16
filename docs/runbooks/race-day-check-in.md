@@ -64,6 +64,8 @@ If the request times out or the connection drops after a click, stop handing out
 
 ## Connectivity loss and fallback limits
 
+On phones the roster shows stacked rider entries with snapshot status, recorded bib, races and blocker guidance. It is still a read-only snapshot, not the live check-in controls. Desktop and print use the tables; **Print roster** from a phone also prints tables, including the separate exception checklist and writing aids.
+
 Live registration and changes require connectivity. Do not reload away from an uncertain submission just to start a new one. Do not assume a cached screen or old printout reflects later withdrawals, reviews, bib changes or payments.
 
 The printout identifies its limits as **Reference only**, labels readiness and bibs as snapshot records, and provides **Lead review notes** rather than a paper clearance field ([wording correction #142](https://github.com/kchan1028/event-registration/issues/142)). The registration lead must still brief staff on the unapproved contingency and reconciliation process before using it in a fictional rehearsal.

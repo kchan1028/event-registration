@@ -723,7 +723,9 @@ Open, raised November 16, 2026; owner: project owner (technical and registration
 
 ### Phone roster review decision
 
-Open, raised November 16, 2026; owner: project owner. Should the phone roster present snapshot readiness differently when its horizontally scrollable table places status off the initial viewport? [Expert observation #144](https://github.com/kchan1028/event-registration/issues/144) records a 390px rendered review, not volunteer feedback or a real-device result. Provisional assumption: retain the current scrollable table; no alternate mobile workflow is approved. The recording-limit wording fix and existing roster use can proceed. A different mobile presentation remains blocked on the owner decision. Revisit before the Phase 3 volunteer/device rehearsal, when phone readability can be evaluated in the intended setting.
+Resolved November 16, 2026 by the project owner: use a stacked phone roster with snapshot readiness always visible for each rider; keep tables on desktop and in print. This answers [expert observation #144](https://github.com/kchan1028/event-registration/issues/144), based on a 390px rendered review, not volunteer feedback or a real-device result. The previous provisional scrollable-phone-table assumption is superseded.
+
+At phone widths (640 CSS pixels and below), show each rider’s name, snapshot status and blockers, recorded bib, racing age, team, races and next-step guidance in a stacked read-only list without sideways scrolling. Desktop and printed tables keep the existing data and recording limits; printing from a phone also uses tables. The phone view exposes one visible/accessible roster presentation, preserves reference-only warnings and does not add registration, payment, waiver clearance or offline check-in. Its entries already include blocker guidance, so the separate paper exception checklist and blank write-in rows remain desktop/print aids. Verify both themes, long content, empty states and print behavior before closing the observation; real-device, screen-reader and staff acceptance remain separate gates.
 
 ## Research baseline
 

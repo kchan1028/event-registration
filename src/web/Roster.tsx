@@ -79,6 +79,23 @@ export function Roster({ eventId }: { eventId: string }) {
             {roster.rows.length === 0 ? (
               <p>No registered riders for this day.</p>
             ) : (
+              <>
+              <h2 className="sr-only roster__phone-only">Riders</h2>
+              <ul className="roster__cards roster__phone-only" role="list" aria-label={`Riders, ${day?.label ?? 'race day'}`}>
+                {roster.rows.map((r) => (
+                  <li key={r.orderId}>
+                    <h3 className="roster__rider-name">{r.name}</h3>
+                    <dl className="roster__rider-meta">
+                      <div className="roster__rider-wide"><dt>Snapshot status</dt><dd><Status row={r} /></dd></div>
+                      <div><dt>Recorded bib</dt><dd>{r.bib ?? 'Not assigned'}</dd></div>
+                      <div><dt>Racing age</dt><dd>{r.racingAge}</dd></div>
+                      <div className="roster__rider-wide"><dt>Team</dt><dd>{r.team || 'No team'}</dd></div>
+                      <div className="roster__rider-wide"><dt>Races</dt><dd><RosterRaces entries={r.entries} /></dd></div>
+                      {r.blockers.length > 0 && <div className="roster__rider-wide"><dt>Next step</dt><dd><RosterActions blockers={r.blockers} /></dd></div>}
+                    </dl>
+                  </li>
+                ))}
+              </ul>
               <div className="roster__scroll" role="region" aria-label={`Riders, ${day?.label ?? 'race day'}`} tabIndex={0}>
               <table className="roster__table">
                 <thead>
@@ -98,11 +115,7 @@ export function Roster({ eventId }: { eventId: string }) {
                       <td>{r.team || '·'}</td>
                       <td className="roster__num">{r.racingAge}</td>
                       <td>
-                        {r.entries.map((e) => (
-                          <span key={e.code} className="roster__race">
-                            {formatTime(e.startTime)} <code>{e.code}</code> {e.categoryName}
-                          </span>
-                        ))}
+                        <RosterRaces entries={r.entries} />
                       </td>
                       <td>
                         <Status row={r} />
@@ -113,8 +126,10 @@ export function Roster({ eventId }: { eventId: string }) {
                 </tbody>
               </table>
               </div>
+              </>
             )}
 
+            <div className="roster__table-only">
             <h2 className="roster__sub">Exception checklist</h2>
             {roster.exceptions.length === 0 ? (
               <p>No riders are blocked for this day.</p>
@@ -135,7 +150,7 @@ export function Roster({ eventId }: { eventId: string }) {
                       <tr key={r.orderId}>
                         <td className="roster__name">{r.name}</td>
                         <td>{r.blockers.map((b) => b.label).join('; ')}</td>
-                        <td>{[...new Set(r.blockers.map((b) => b.action))].join(' ')}</td>
+                        <td><RosterActions blockers={r.blockers} /></td>
                         <td className="roster__resolve" />
                       </tr>
                     ))}
@@ -143,10 +158,13 @@ export function Roster({ eventId }: { eventId: string }) {
                 </table>
               </>
             )}
+            </div>
 
-            <h2 className="roster__sub">Riders not on this list</h2>
-            <p className="roster__hint">Send riders to the registration lead. Record lookup questions only; adding a name here does not create an entry, reserve capacity or authorize a bib.</p>
-            <table className="roster__table roster__table--blank">
+            <h2 className="roster__sub roster__table-only">Riders not on this list</h2>
+            <p className="roster__hint roster__table-only">Send riders to the registration lead. Record lookup questions only; adding a name to the printed sheet does not create an entry, reserve capacity or authorize a bib.</p>
+            <h2 className="roster__sub roster__phone-only">Rider not shown?</h2>
+            <p className="roster__hint roster__phone-only">Ask the registration lead to check the current record. Notes do not clear requirements, create an entry, reserve capacity or authorize a bib.</p>
+            <table className="roster__table roster__table--blank roster__table-only">
               <thead>
                 <tr>
                   <th scope="col">Rider</th>
@@ -169,6 +187,18 @@ export function Roster({ eventId }: { eventId: string }) {
       })}
     </div>
   );
+}
+
+function RosterRaces({ entries }: { entries: RosterRow['entries'] }) {
+  return <>{entries.map((e) => (
+    <span key={e.code} className="roster__race">
+      {formatTime(e.startTime)} <code>{e.code}</code> {e.categoryName}
+    </span>
+  ))}</>;
+}
+
+function RosterActions({ blockers }: { blockers: RosterRow['blockers'] }) {
+  return <>{[...new Set(blockers.map((b) => b.action))].join(' ')}</>;
 }
 
 function Status({ row }: { row: RosterRow }) {
