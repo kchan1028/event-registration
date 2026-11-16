@@ -318,8 +318,8 @@ Steps:
 
 Rules:
 
-- **Navigation.** A visible progress indicator shows the current step. The rider can go back to any completed step without losing entered data, and cannot skip ahead past an incomplete step.
-- **Validation.** Required fields are marked. Errors appear next to the field when the rider tries to continue, say what is wrong and how to fix it, are summarized at the top of the step, and are announced to screen readers. See the [accessibility rules](docs/coding-guide.md#accessibility-and-mobile-usability).
+- **Navigation.** A visible progress indicator shows the current step. The rider can go back to any completed step without losing entered data, and cannot skip ahead past an incomplete step. An uncertain reservation must be recovered before editing the submitted entries or consent.
+- **Validation.** Required fields are marked. Errors appear next to the field when the rider tries to continue, say what is wrong and how to fix it, are summarized at the top of the step, and are announced to screen readers. The summary takes focus once per failed submission and does not steal focus while the rider corrects a field. See the [accessibility rules](docs/coding-guide.md#accessibility-and-mobile-usability).
 - **Simulation labeling.** Every demo screen shows a persistent, readable "Demo" label. The order review, payment step, confirmation, and receipt also state "Simulated payment: no money is charged". Buttons say "Complete simulated payment", never "Pay" or "Buy". The receipt is watermarked as a demo.
 - **Separate states.** Entry, payment, and readiness states stay independent in the demo, as in the product. A simulated paid entry is not shown as cleared to race.
 - **Fake rider data only.** Demo riders, prices, fees, and the sample waiver are fictional fixtures in [docs/fixtures/](docs/fixtures/README.md), which also lists the worked orders and totals a demo must reproduce. Never use real rider data or present demo prices and fees as real ones. The one real event allowed is the Berkeley Omnium, which its promoter has approved as demo event data: its fields, distances, times, and field limits come from the published race information, while its entries stay simulated and its base fees are promoter-set at $80 for the road race, $60 for the criterium, and $130 for the package.
@@ -339,6 +339,7 @@ Acceptance: two independent builds produce equal configurations and stable IDs; 
 ### 3. Capacity and entry integrity
 
 - Use short-lived capacity reservations during checkout. Release expired reservations.
+- An uncertain reservation retry, including after a same-tab refresh, reuses the exact submitted request and request ID until the outcome is known. Recover an existing order before validating newly published terms. A definitive rejection permits correction; changed waiver terms require renewed reading and agreement.
 - Enforce category and shared start-group limits atomically across all checkout paths.
 - A weekend bundle reserves all its component entries together; never sell half a bundle silently.
 - Distinguish unique riders, race entries, and orders in every report.

@@ -51,6 +51,18 @@ When a change touches one of these areas, run that row's tests in addition to th
 
 Concurrency and idempotency tests must run requests in parallel or replay events; a single-threaded test does not prove them. Use fictional data only.
 
+### Registration correction and reservation recovery
+
+Focused browser scenarios in `e2e/checkout.spec.ts` cover [#127](https://github.com/kchan1028/event-registration/issues/127) and [#128](https://github.com/kchan1028/event-registration/issues/128):
+
+- Failed-submit summary links focus the field; sequential typing retains focus and full values. A new failed submission focuses the updated summary.
+- Lose the response after a reservation commits, refresh, and retry with exactly the original payload/key; recover the same order and one entry set. Rapid submission produces one request.
+- Unknown server/network, auth and rate-limit outcomes preserve recovery and disable submitted-data edits. Definitive rejection allows correction.
+- Publish new waiver/addendum terms during an unknown outcome, with and without an original commit. Recover the accepted snapshot when committed; otherwise refresh terms and require renewed agreement.
+- A recovered cancelled order cannot be paid and permits reselection.
+
+Run order/guardian/addendum API regressions and rider accessibility checks in both themes. Browser automation is not a screen-reader or real-phone pass. Provider session creation (#84) is separate and is not proved by these reservation tests.
+
 ### Berkeley rider pricing and race discovery
 
 When changing these workflows, cover the approved [Berkeley pricing](../../product.md#combined-berkeley-demo-event) and [rider-facing behavior](../../product.md#rider-facing-behavior):
