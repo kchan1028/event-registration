@@ -140,7 +140,7 @@ For changes to this seed, run `npm run typecheck` and `npx vitest run tests/berk
 | `DATABASE_URL` | `postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg` | Local PostgreSQL database; use the same value for seeding and running |
 | `PORT` or `API_PORT` | `3001` | API server port |
 | `NODE_ENV=production` | unset | Serves the built web app from `dist/web` |
-| `HOLD_MINUTES` | `10` | Checkout reservation duration |
+| `HOLD_MINUTES` | `10` | Checkout reservation duration; keep short. Stripe mode requires no more than 1409 minutes because its fixed session deadline is the hold deadline plus 31 minutes (not startup-validated) |
 
 If port 5273 or 3001 is already in use, stop your existing development server before running the demo. To keep that server running, use the built app on an unused port instead:
 

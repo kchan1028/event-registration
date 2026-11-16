@@ -165,9 +165,11 @@ Payments use a provider's hosted payment flow. The application never sees or sto
 
 ### Make every payment operation idempotent
 
+The installed Stripe SDK retries transient HTTP 409 conflicts with the configured two-retry budget ([SDK documentation](https://github.com/stripe/stripe-node/blob/v23.1.0/README.md#network-retries), [retry implementation](https://github.com/stripe/stripe-node/blob/v23.1.0/src/RequestSender.ts), reviewed November 16, 2026). Do not add another unbounded retry loop. An exhausted session conflict returns a retryable response on the same order; a provider error never proves payment. The [session data model](../DATA_MODEL.md#payment_sessions) describes stable request expiry. [Stripe's session API](https://docs.stripe.com/api/checkout/sessions/create#expires_at) requires an expiry between 30 minutes and 24 hours (reviewed November 16, 2026); the supported hold configuration is documented in [local setup](runbooks/local-setup.md#stripe-test-mode-optional).
+
 Idempotent means doing the same thing twice has the same effect as doing it once. Riders refresh pages, networks retry, and providers resend notifications, so duplicates are normal.
 
-- Send an idempotency key with every request that creates a charge, refund, or checkout session, so a retried request cannot charge twice.
+- Send an idempotency key with every request that creates a charge, refund, or checkout session, so a retried request cannot charge twice. Preserve its request parameters too, including expiry; do not recompute them from the current time while reusing the key.
 - Store each provider event ID when it is processed. If the same event arrives again, acknowledge it and do nothing else.
 - Process notifications in any order. A "refunded" event can arrive before the "paid" event it refers to; handle it by looking up current state rather than assuming order.
 - Wrap "record payment" and "confirm entries" in one transaction, or make each step safe to repeat.

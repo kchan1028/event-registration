@@ -354,10 +354,10 @@ One row per Stripe Checkout Session the app opened (migration 17). Only a sessio
 | `url` | Stripe's hosted payment page, reused while the session is open |
 | `amount_cents` | The order total the session charges. A paid notification must match it and the order total |
 | `status` | `open`, `completed` (Stripe reported the session finished, paid or awaiting a delayed method), or `expired` |
-| `expires_at` | When Stripe closes the session (about 31 minutes after opening; Stripe's minimum is 30) |
+| `expires_at` | When Stripe closes the session: 31 minutes after the order's fixed hold expiry, so a retry sends the same parameters; the capacity hold still ends at `orders.hold_expires_at` |
 | `created_at` | |
 
-At most one open session per order is reused. A new session is opened only while the hold is live and the previous session has expired, so a rider cannot pay twice by accident. The idempotency key sent to Stripe is `checkout-<order id>-<n>`, so a retried request returns the same session.
+At most one open session per order is reused. A new session is opened only while the hold is live and the previous session has expired, so a rider cannot pay twice by accident. The idempotency key sent to Stripe is `checkout-<order id>-<n>`. The request expiry is anchored to the existing order hold rather than the time of each call, so a later retry keeps the key and parameters unchanged. The SDK retries transient conflicts twice. If that budget is exhausted, the API returns a retryable 503 with instructions to use the same order; no session row or payment is fabricated. No schema migration is needed. Existing session deadlines and accepted orders are not rewritten.
 
 ### provider_events
 

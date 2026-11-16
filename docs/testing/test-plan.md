@@ -51,6 +51,10 @@ When a change touches one of these areas, run that row's tests in addition to th
 
 Concurrency and idempotency tests must run requests in parallel or replay events; a single-threaded test does not prove them. Use fictional data only.
 
+### Checkout-session concurrency and retry parameters
+
+`tests/payments.test.ts` drives the installed Stripe SDK through a fake HTTP transport, not a mocked `sessions.create`, for simultaneous requests and exhausted conflict retries. Force two requests to overlap; return `idempotency_key_in_use` while the first runs; verify one recorded session, the same request key/body and both redirects. Exhaust the configured retry budget, verify a retryable 503 and unchanged held order, advance the clock, then retry successfully with exactly the same key/body and reuse the saved session. Verify signed expiry/late-success ordering and duplicate-charge refund handling. These checks do not replace a real-provider sandbox rehearsal. Apply the payment risk-table regressions above.
+
 ### Registration correction and reservation recovery
 
 Focused browser scenarios in `e2e/checkout.spec.ts` cover [#127](https://github.com/kchan1028/event-registration/issues/127) and [#128](https://github.com/kchan1028/event-registration/issues/128):

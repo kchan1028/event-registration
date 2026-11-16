@@ -8,7 +8,7 @@ import type { EventConfig } from '../src/shared/schema';
 
 /*
  * Stripe hosted Checkout in test mode (ADR 0002, Phase 2). No network: the Stripe client's
- * session call is stubbed, and webhooks are signed locally with the SDK's test-header helper,
+ * session call or HTTP transport is stubbed, and webhooks are signed locally with the SDK's test-header helper,
  * so signature verification runs exactly as it would for a real Stripe notification.
  */
 
@@ -17,17 +17,18 @@ const RIDER = { firstName: 'Test', lastName: 'Rider', email: 'test.rider@example
 
 type Order = { id: string; status: string; totalCents: number; paidWith: string | null; entries: { status: string }[] };
 
-async function setup(opts: { holdMinutes?: number } = {}) {
+async function setup(opts: { holdMinutes?: number; client?: Stripe } = {}) {
   let now = new Date('2027-03-01T18:00:00Z');
   const clock = { advance: (min: number) => (now = new Date(now.getTime() + min * 60_000)) };
-  const client = new Stripe('sk_test_fictional', { maxNetworkRetries: 0 });
+  const client = opts.client ?? new Stripe('sk_test_fictional', { maxNetworkRetries: 0 });
   let n = 0;
-  const create = vi.spyOn(client.checkout.sessions, 'create').mockImplementation((async (params: Stripe.Checkout.SessionCreateParams) => {
+  const create = vi.spyOn(client.checkout.sessions, 'create');
+  if (!opts.client) create.mockImplementation((async (params: Stripe.Checkout.SessionCreateParams) => {
     n++;
     return { id: `cs_test_${n}`, url: `https://checkout.stripe.test/pay/${n}`, expires_at: params.expires_at!, amount_total: params.line_items![0].price_data!.unit_amount! } as Stripe.Checkout.Session;
   }) as never);
   vi.spyOn(client.refunds, 'create').mockImplementation((async () => ({ id: 're_test_1', status: 'pending', failure_reason: null }) as unknown as Stripe.Refund) as never);
-  const payments = stripePayments({ secretKey: 'sk_test_fictional', webhookSecret: WEBHOOK_SECRET, client, now: () => now });
+  const payments = stripePayments({ secretKey: 'sk_test_fictional', webhookSecret: WEBHOOK_SECRET, client });
   const databaseUrl = await testDatabaseUrl();
   const { app } = await testApp({ databaseUrl, now: () => now, holdMinutes: opts.holdMinutes ?? 10, payments, appUrl: 'http://app.test' });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
@@ -58,7 +59,7 @@ async function setup(opts: { holdMinutes?: number } = {}) {
       await c.end();
     }
   };
-  return { app, clock, create, order, checkout, get, webhook, paidSession, attempts, eventId };
+  return { app, clock, create, order, checkout, get, webhook, paidSession, attempts, eventId, databaseUrl };
 }
 
 describe('payment configuration', () => {
@@ -92,6 +93,77 @@ describe('Stripe hosted Checkout (test mode)', () => {
     expect(params.success_url).toBe(`http://app.test/?checkout=returned#/orders/${o.id}`);
     expect(params.cancel_url).toBe(`http://app.test/#/register/${eventId}`);
     expect(options.idempotencyKey).toBe(`checkout-${o.id}-1`);
+    expect(params.expires_at).toBe(Date.parse('2027-03-01T18:41:00Z') / 1000);
+  });
+
+  it('recovers concurrent Checkout requests through SDK retries with one recorded session', async () => {
+    let releaseFirst!: () => void;
+    const conflictSeen = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const keys: (string | null)[] = [];
+    const bodies: string[] = [];
+    let completed = false;
+    const session = { id: 'cs_test_concurrent', url: 'https://checkout.stripe.test/pay/concurrent', expires_at: Date.parse('2027-03-01T18:41:00Z') / 1000 };
+    const transport = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      keys.push(new Headers(init?.headers).get('idempotency-key'));
+      bodies.push(String(init?.body));
+      if (keys.length === 1) {
+        await conflictSeen;
+        completed = true;
+      } else if (!completed) {
+        releaseFirst();
+        return new Response(JSON.stringify({ error: { type: 'invalid_request_error', code: 'idempotency_key_in_use', message: 'Another request is using this key.' } }), { status: 409 });
+      }
+      return new Response(JSON.stringify(session));
+    });
+    const client = new Stripe('sk_test_fictional', { maxNetworkRetries: 2, httpClient: Stripe.createFetchHttpClient(transport) });
+    const { order, checkout, databaseUrl, get } = await setup({ client });
+    const o = await order(['RR-M35-34']);
+    const [a, b] = await Promise.all([checkout(o.id), checkout(o.id)]);
+    expect([a.statusCode, b.statusCode]).toEqual([200, 200]);
+    expect(a.json()).toEqual({ kind: 'redirect', url: session.url });
+    expect(b.json()).toEqual(a.json());
+    expect(keys).toHaveLength(3); // two concurrent attempts plus the SDK's conflict retry
+    expect(new Set(keys)).toEqual(new Set([`checkout-${o.id}-1`]));
+    expect(new Set(bodies).size).toBe(1);
+    const db = new pg.Client({ connectionString: databaseUrl });
+    await db.connect();
+    try {
+      expect((await db.query('SELECT id FROM payment_sessions WHERE order_id = $1', [o.id])).rows).toEqual([{ id: session.id }]);
+    } finally {
+      await db.end();
+    }
+    expect((await get(o.id)).entries).toHaveLength(1);
+    expect((await get(o.id)).status).toBe('held');
+  });
+
+  it('returns a retryable result after SDK conflict retries run out and reuses the original key', async () => {
+    const keys: (string | null)[] = [];
+    const bodies: string[] = [];
+    let busy = true;
+    const session = { id: 'cs_test_after_conflict', url: 'https://checkout.stripe.test/pay/recovered', expires_at: Date.parse('2027-03-01T18:41:00Z') / 1000 };
+    const transport = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      keys.push(new Headers(init?.headers).get('idempotency-key'));
+      bodies.push(String(init?.body));
+      return busy
+        ? new Response(JSON.stringify({ error: { type: 'invalid_request_error', code: 'idempotency_key_in_use', message: 'Another request is using this key.' } }), { status: 409 })
+        : new Response(JSON.stringify(session));
+    });
+    const client = new Stripe('sk_test_fictional', { maxNetworkRetries: 2, httpClient: Stripe.createFetchHttpClient(transport) });
+    const { order, checkout, get, clock } = await setup({ client });
+    const o = await order(['RR-M35-34']);
+    const waiting = await checkout(o.id);
+    expect(waiting.statusCode).toBe(503);
+    expect(waiting.json().error).toBe('Your payment page is still being prepared. Try again in a moment using this order.');
+    expect(keys).toHaveLength(3); // the configured retry budget is bounded
+    expect((await get(o.id)).status).toBe('held');
+    clock.advance(1); // a later retry must not change expiry under the same provider key
+    busy = false;
+    expect((await checkout(o.id)).json()).toEqual({ kind: 'redirect', url: session.url });
+    expect(keys).toHaveLength(4);
+    expect(new Set(keys)).toEqual(new Set([`checkout-${o.id}-1`]));
+    expect(new Set(bodies).size).toBe(1);
+    expect((await checkout(o.id)).json()).toEqual({ kind: 'redirect', url: session.url });
+    expect(keys).toHaveLength(4); // the saved session is reused without another provider call
   });
 
   it('turns off the simulated payment button and tells the rider page which mode is on', async () => {
@@ -192,16 +264,16 @@ describe('Stripe hosted Checkout (test mode)', () => {
     const { order, checkout, webhook, paidSession, get, clock } = await setup();
     const o = await order(['RR-M35-34']);
     await checkout(o.id);
-    clock.advance(15);
+    clock.advance(40); // one minute before the provider deadline, 30 minutes after the capacity hold
     expect((await webhook('evt_test_late', 'checkout.session.completed', paidSession(o))).json()).toMatchObject({ result: 'confirmed' });
     expect((await get(o.id)).status).toBe('confirmed');
   });
 
   it('records a second paid session for the same order as a duplicate charge, not a second entry', async () => {
-    const { order, checkout, webhook, paidSession, clock, get } = await setup({ holdMinutes: 60 });
+    const { order, checkout, webhook, paidSession, get } = await setup({ holdMinutes: 60 });
     const o = await order(['RR-M35-34']);
     await checkout(o.id);
-    clock.advance(33); // the first session has expired; the hold has not
+    await webhook('evt_test_initial_expiry', 'checkout.session.expired', paidSession(o, 'cs_test_1', { payment_status: 'unpaid' })); // provider expiration can precede a delayed success event
     expect((await checkout(o.id)).json()).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/pay/2' });
     expect((await webhook('evt_test_first', 'checkout.session.completed', paidSession(o, 'cs_test_1'))).json()).toMatchObject({ result: 'confirmed' });
     expect((await webhook('evt_test_second', 'checkout.session.completed', paidSession(o, 'cs_test_2'))).json()).toMatchObject({ result: 'duplicate_charge' });
@@ -209,10 +281,10 @@ describe('Stripe hosted Checkout (test mode)', () => {
   });
 
   it('marks a refund of the duplicate charge, so it is not read as a refund of the order', async () => {
-    const { app, order, checkout, webhook, paidSession, clock, get } = await setup({ holdMinutes: 60 });
+    const { app, order, checkout, webhook, paidSession, get } = await setup({ holdMinutes: 60 });
     const o = await order(['RR-M35-34']);
     await checkout(o.id);
-    clock.advance(33);
+    await webhook('evt_test_initial_expiry', 'checkout.session.expired', paidSession(o, 'cs_test_1', { payment_status: 'unpaid' }));
     await checkout(o.id);
     await webhook('evt_test_first', 'checkout.session.completed', paidSession(o, 'cs_test_1'));
     await webhook('evt_test_second', 'checkout.session.completed', paidSession(o, 'cs_test_2', { payment_intent: 'pi_test_2' }));

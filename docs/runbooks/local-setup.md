@@ -152,6 +152,8 @@ Never commit `.env`, and never paste the secret key into an issue, chat, log, or
 
 ## Stripe test mode (optional)
 
+Keep `HOLD_MINUTES` at its default `10` unless deliberately testing another short hold. Stripe requires session expiry within 24 hours; the stable provider deadline is the order hold deadline plus 31 minutes, so values above `1409` are not supported in Stripe mode. Startup does not validate this upper bound. The provider page may remain open after capacity expires; it does not reserve a place, and late payments still use the existing capacity recheck/exception path. See [session storage and retries](../../DATA_MODEL.md#payment_sessions).
+
 Without Stripe keys, checkout uses the simulated payment. To try Stripe hosted Checkout in test mode, the project owner uses their own Stripe account's sandbox; agents never create accounts or use live keys.
 
 1. In the Stripe Dashboard, switch to test mode (sandbox) and copy the secret key (`sk_test_...`) into `.env` as `STRIPE_SECRET_KEY`.

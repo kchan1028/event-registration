@@ -23,6 +23,8 @@ interface CheckoutRequest {
   cancelUrl: string;
   /** Same key, same session: a retried request never opens a second one. */
   idempotencyKey: string;
+  /** Unix seconds, fixed for retries of this order. */
+  expiresAt: number;
 }
 
 interface CheckoutSession {
@@ -85,14 +87,13 @@ function refundStatus(status: string | null | undefined): ProviderRefund['status
   return 'pending';
 }
 
-/** Stripe Checkout requires a session to stay open at least 30 minutes; a late payment is handled by the order's hold rules. */
-const SESSION_MINUTES = 30;
+/** Stripe requires at least 30 minutes. Anchoring after the hold keeps expiry valid and retry parameters stable. */
+const SESSION_AFTER_HOLD_MINUTES = 31;
 
-export function stripePayments(opts: { secretKey: string; webhookSecret: string; client?: Stripe; now?: () => Date }): PaymentProvider {
+export function stripePayments(opts: { secretKey: string; webhookSecret: string; client?: Stripe }): PaymentProvider {
   if (!/^(sk|rk)_test_/.test(opts.secretKey)) throw new Error('STRIPE_SECRET_KEY must be a test-mode key (sk_test_ or rk_test_). Live keys are refused until ADR 0005 is accepted.');
   if (!opts.webhookSecret.startsWith('whsec_')) throw new Error('STRIPE_WEBHOOK_SECRET must be a webhook signing secret (whsec_...).');
   const stripe = opts.client ?? new Stripe(opts.secretKey, { maxNetworkRetries: 2 });
-  const now = opts.now ?? (() => new Date());
 
   return {
     mode: 'stripe_test',
@@ -107,10 +108,16 @@ export function stripePayments(opts: { secretKey: string; webhookSecret: string;
           line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: req.amountCents, product_data: { name: req.description } } }],
           success_url: req.successUrl,
           cancel_url: req.cancelUrl,
-          expires_at: Math.floor(now().getTime() / 1000) + SESSION_MINUTES * 60 + 60,
+          expires_at: req.expiresAt,
         },
         { idempotencyKey: req.idempotencyKey },
-      );
+      ).catch((err: unknown) => {
+        // The SDK already retries conflicts. Keep an exhausted conflict retryable without rotating the key.
+        if (err instanceof Stripe.errors.StripeError && err.code === 'idempotency_key_in_use') {
+          throw new HttpError(503, 'Your payment page is still being prepared. Try again in a moment using this order.');
+        }
+        throw err;
+      });
       if (!session.url) throw new HttpError(502, 'Stripe did not return a payment page.');
       return { id: session.id, url: session.url, expiresAt: new Date(session.expires_at * 1000).toISOString() };
     },
@@ -227,8 +234,9 @@ export function createPayments(
      *
      * Three steps, so no database connection waits on Stripe: decide in one transaction, call
      * Stripe with no transaction open, record the session in a second transaction. Two requests
-     * at once read the same session count, so they send Stripe the same idempotency key, get the
-     * same session back, and the second insert is a no-op: still one open session per order.
+     * at once read the same session count and use the same key. Stripe's SDK retries transient
+     * conflicts; if those retries run out, the rider can retry the same order. Successful calls
+     * receive the same session, and the second insert is a no-op.
      */
     async startCheckout(orderId: string): Promise<{ kind: 'redirect'; url: string } | { kind: 'confirmed' }> {
       if (provider.mode === 'simulated') throw new HttpError(409, 'Payments are simulated for this build. Use the simulated payment.');
@@ -263,6 +271,7 @@ export function createPayments(
             successUrl: `${appUrl}/?checkout=returned#/orders/${orderId}`,
             cancelUrl: `${appUrl}/#/register/${order.eventId}`,
             idempotencyKey: `checkout-${orderId}-${Number(count?.n ?? 0) + 1}`,
+            expiresAt: Math.floor(Date.parse(order.holdExpiresAt) / 1000) + SESSION_AFTER_HOLD_MINUTES * 60,
           },
         };
       });

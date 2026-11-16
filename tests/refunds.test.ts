@@ -21,7 +21,7 @@ async function setup(opts: { stripe?: boolean } = {}) {
   vi.spyOn(client.checkout.sessions, 'create').mockImplementation((async (p: Stripe.Checkout.SessionCreateParams) => ({ id: 'cs_test_1', url: 'https://checkout.stripe.test/pay/1', expires_at: p.expires_at! }) as Stripe.Checkout.Session) as never);
   let n = 0;
   const refundCall = vi.spyOn(client.refunds, 'create').mockImplementation((async () => ({ id: `re_test_${++n}`, status: 'pending', failure_reason: null }) as unknown as Stripe.Refund) as never);
-  const payments = opts.stripe ? stripePayments({ secretKey: 'sk_test_fictional', webhookSecret: WEBHOOK_SECRET, client, now: () => now }) : undefined;
+  const payments = opts.stripe ? stripePayments({ secretKey: 'sk_test_fictional', webhookSecret: WEBHOOK_SECRET, client }) : undefined;
   const { app } = await testApp({ databaseUrl: await testDatabaseUrl(), now: () => now, payments, appUrl: 'http://app.test' });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
