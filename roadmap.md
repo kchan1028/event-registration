@@ -82,7 +82,7 @@ Built November 14, 2026, on the stack in [ADR 0001](docs/decisions/0001-stack-fo
 
 **Not built yet (still required by product.md):** nothing beyond the hosted Phase 2 work; the local rider checkout is described under [Rider checkout](#rider-checkout).
 
-**Pending external dependencies, shown as pending in the interface:** USA Cycling license and waiver checks, Stripe payments, and organizer MFA (Phase 3, before the live pilot). Email sign-in is built; until organizer MFA ships the app holds fictional data only.
+**Pending external dependencies, shown as pending in the interface:** USA Cycling license and waiver checks, Stripe payments, and organizer MFA and sensitive-action re-verification (final pre-launch security gate). Email sign-in is built; until organizer MFA ships the app holds fictional data only.
 
 ## Rider checkout
 
@@ -233,7 +233,7 @@ Exit gate: Participants complete the core tasks without facilitator rescue; all 
 
 Indicative effort: 5–7 weeks. Depends on Phase 1 and a settled payment model. Priority: P0.
 
-Decisions first (November 14, 2026): three decision records were drafted; 0003 and 0004 were accepted by the owner on November 14, 2026, and 0005 remains Proposed: [ADR 0003](docs/decisions/0003-sign-in-and-mfa.md) sign-in with required MFA (recommends a managed identity service), [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md) hosted stack and database (recommends keeping TypeScript and React, with managed PostgreSQL on a managed application platform), and [ADR 0005](docs/decisions/0005-merchant-and-settlement-model.md) merchant and settlement model (recommends each club as merchant through its own connected Stripe account). 0003 chose Clerk Pro with SMS off, and was amended on November 15, 2026: the first release uses passwordless email sign-in on Clerk's free plan, and MFA (Clerk Pro, SMS off) moves to Phase 3 as a gate for the Phase 4 live pilot. A second amendment the same day limits MFA to organizer roles: riders and guardians keep email sign-in; 0004 chose Render and Render Postgres on Pro (treasurer cost approval and legal review of minors' data are follow-ups before production). No live keys or live payments until 0005 is accepted. The Phase 1 exit gate is still open; starting Phase 2 decisions now is the owner's choice.
+Decisions first (November 14, 2026): three decision records were drafted; 0003 and 0004 were accepted by the owner on November 14, 2026, and 0005 remains Proposed: [ADR 0003](docs/decisions/0003-sign-in-and-mfa.md) sign-in with required MFA (recommends a managed identity service), [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md) hosted stack and database (recommends keeping TypeScript and React, with managed PostgreSQL on a managed application platform), and [ADR 0005](docs/decisions/0005-merchant-and-settlement-model.md) merchant and settlement model (recommends each club as merchant through its own connected Stripe account). 0003 chose Clerk Pro with SMS off, and was amended on November 15, 2026: the first release uses passwordless email sign-in on Clerk's free plan, and MFA (Clerk Pro, SMS off) is a gate for the Phase 4 live pilot; its current delivery position is the final pre-launch security gate. A second amendment the same day limits MFA to organizer roles: riders and guardians keep email sign-in; 0004 chose Render and Render Postgres on Pro (treasurer cost approval and legal review of minors' data are follow-ups before production). No live keys or live payments until 0005 is accepted. The Phase 1 exit gate is still open; starting Phase 2 decisions now is the owner's choice.
 
 The Phase 2 status means selected foundation work was pulled forward. It does not mean Phase 1 has passed or that live-data and live-payment work is authorized. Record formal Phase 2 entry only after the Phase 1 exit evidence and the applicable payment decision are accepted.
 
@@ -256,7 +256,7 @@ Progress (November 15, 2026):
 Build:
 
 - Organization access, roles, ownership transfer, actor-attributed audit history, access revocation, and event templates.
-- Passwordless email sign-in (emailed link or code, Clerk free plan) for every account before any signed-in page, with sign-in rate limits and one account per person. Verify a real Clerk development instance, invitation resend/revoke/expiry, email-delivery recovery, explicit guardian-to-junior access, and account support paths. Organizer MFA, step-up re-verification, and audited recovery are Phase 3 work; riders and guardians stay on email sign-in, with a fresh emailed code before rider changes that move money or hand an entry to someone else. See [product.md](product.md#sign-in-and-account-security).
+- Passwordless email sign-in (emailed link or code, Clerk free plan) for every account before any signed-in page, with sign-in rate limits and one account per person. Verify a real Clerk development instance, invitation resend/revoke/expiry, email-delivery recovery, explicit guardian-to-junior access, and account support paths. Organizer MFA, step-up re-verification, and audited recovery are deferred to the final pre-launch security gate; riders and guardians stay on email sign-in, with a fresh emailed code before rider changes that move money or hand an entry to someone else. See [product.md](product.md#sign-in-and-account-security).
 - Event/day/race/category/start-group setup and publishing checks.
 - Mobile registration, guardian data, accepted waiver flow, and license-review status, behind one verification interface that can later use a live USAC source without reworking registration. See [product.md](product.md#future-usa-cycling-waiver-and-license-integration).
 - Individual entries and same-event packages with transparent totals; cross-organization season passes remain Phase 6 work.
@@ -280,7 +280,7 @@ Verification:
 - Role access, private-data visibility, waiver/version integrity, and keyboard/mobile use.
 - Participant workspace saved-view/export isolation, stable person/entry/order counts, and bulk-action previews with visible refused-record reasons.
 - Contrast and readability of text, forms, buttons, errors, and status indicators in both light and dark themes; theme choice persists without a flash of the wrong theme.
-- Email sign-in enforced on every signed-in page for every account type, sign-in attempt rate limits, and no access to another person's data. Organizer MFA verification moves to Phase 3.
+- Email sign-in enforced on every signed-in page for every account type, sign-in attempt rate limits, and no access to another person's data. Organizer MFA verification is deferred to the final pre-launch security gate.
 - Real Clerk development-instance invitation, expiry, resend, revocation, ownership transfer, guardian access, session revocation, and delayed/bounced email recovery.
 - Repeated event/race/day cancellation requests produce one auditable financial and capacity outcome; provider or communication failure remains an actionable exception.
 - Retention/deletion approval, actor-attributed protected exports, access revocation, twice-baseline load checks, and a demonstrated hosted backup restore before real rider data.
@@ -295,7 +295,6 @@ Early independent build: the local API can preview and atomically assign bibs to
 
 Build:
 
-- Required multi-factor authentication (MFA) for every organizer role (Clerk Pro, passkey or authenticator app, SMS off), enforced by role on the server because riders and guardians stay on email sign-in; step-up re-verification for sensitive organizer actions, single-use recovery codes, audited recovery, and factor-change notices. See [product.md](product.md#sign-in-and-account-security). Required before Phase 4.
 - Agreed license verification and exception-review workflow, with freshness/source visible.
 - Search and QR check-in, bib-range rules, conflict detection, and repeat-scan handling.
 - Opt-in automatic bib assignment after advance registration closes and outstanding checkout holds settle or expire; deterministic previewed bulk allocation with explicit scopes/ranges, stable tie-breaks, preservation of manual/issued/checked-in assignments, atomic apply, and historical reassignments.
@@ -316,13 +315,20 @@ Rehearsal:
 - Exercise simultaneous automatic/manual/bulk bib allocation, exhausted ranges, stale previews, repeated confirmation, and protected manual/checked-in assignments. Failed batches must leave no partial assignments.
 - Exercise a walk-up rider, a full field with a waitlist, a minor needing a guardian, failed payment, and repeated staff actions without duplicate charges or entries.
 - Reconcile the financial report with provider records and demonstrate backup recovery.
-- Organizer MFA: first-time enrollment when a role is granted, step-up prompts on sensitive organizer actions, recovery with and without recovery codes, and attempt rate limits. Riders: email sign-in on a phone on race morning, and a fresh emailed code before a refund or entry hand-off.
+- Riders: email sign-in on a phone on race morning, and a fresh emailed code before a refund or entry hand-off. Organizer MFA and sensitive-action verification are rehearsed at the final pre-launch security gate.
 
-Exit gate: Registration lead, timer, treasurer, and pilot organizer accept the workflow; all P0 defects are closed; contingency and support ownership are documented. Before sanctioned use, record explicit acceptance of the USAC platform/electronic-waiver path or approved alternative, guardian process, and license review/freshness fallback. Rehearse missing waiver and license blockers through accepted resolution, including server refusal to issue a bib while blocked; retain independent payment/entry/readiness evidence. Confirm live payment responsibilities and operating approval before Phase 4. MFA is enforced for every organizer role before any real rider data or live payment; riders and guardians use email sign-in.
+Exit gate: Registration lead, timer, treasurer, and pilot organizer accept the workflow; all P0 defects are closed; contingency and support ownership are documented. Before sanctioned use, record explicit acceptance of the USAC platform/electronic-waiver path or approved alternative, guardian process, and license review/freshness fallback. Rehearse missing waiver and license blockers through accepted resolution, including server refusal to issue a bib while blocked; retain independent payment/entry/readiness evidence. Confirm live payment responsibilities and operating approval before Phase 4. Organizer MFA and sensitive-action re-verification are deferred to the [final pre-launch security gate](#final-pre-launch-security-gate-planned); they do not block local development or fictional-data rehearsals. Riders and guardians use email sign-in.
 
 ## Phase 4 — Run a controlled live pilot
 
 Indicative effort: 2–4 weeks of preparation and review, plus the chosen event date. Depends on Phase 3. Priority: P0.
+
+### Final pre-launch security gate (Planned)
+
+Scheduling decision by the project owner, November 15, 2026: implement and independently verify organizer MFA and sensitive-action re-verification last, after the other build work and fictional-data rehearsals. This defers the work from the immediate Phase 3 sequence; it does not remove the launch requirement. No launch, real rider data, or live payments before this gate passes.
+
+- Implement required MFA for every organizer role (Clerk Pro, passkey or authenticator app, SMS off), enforced by role on the server; riders and guardians keep email sign-in only. Include sensitive-action re-verification, single-use recovery codes, audited recovery, and factor-change notices. Requirements remain in [product.md](product.md#sign-in-and-account-security).
+- Verify the provider and server enforcement, then rehearse first-time enrollment on role grant, sensitive-action prompts, recovery with and without codes, and attempt rate limits. Independent testing and review must pass before opening the pilot.
 
 Scope:
 
@@ -406,6 +412,8 @@ These are roles to assign, not assumed staffing commitments.
 | Successor cannot operate it | Early role testing, templates, ownership transfer, runbook | Developer remains essential to routine operations: defer expansion |
 
 ## Next actions
+
+**Immediate local build priority (project-owner decision, November 15, 2026): testing data first.** Review and prepare fictional testing data before starting further feature work. Reuse the existing [fixtures](docs/fixtures/README.md) and generated race case studies, identify missing development and rehearsal cases, and keep this work Planned until checked. Organizer MFA and sensitive-action re-verification remain the final pre-launch security gate.
 
 1. Done (2026-11-15): the project owner is the product owner and registration lead, and owns the USAC and payment questions ([decision memo](docs/discovery/decision-memo.md#team-and-owners)). Still open: a technical lead, a pilot accountable organizer, and a pilot support owner, at least one of them someone other than the project owner.
 2. Partly done: category setups are public on BikeReg and berkeleyomnium.com. Still needed, anonymized: a timer export, an exception list, and a reconciliation example.

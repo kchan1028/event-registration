@@ -97,7 +97,7 @@ These are not available in the app. Phase order and dependencies remain in [road
 | Feature | Status | Requirement reference |
 |---|---|---|
 | Reusable organizer templates: event formats, category presets, guided starts, and saved setups | Planned enhancement; current format templates are structural only | [Organizer templates](product.md#reusable-organizer-templates); [six research cases](docs/case-studies/organizer-templates/README.md) |
-| Multi-factor authentication for organizer roles (passkey or authenticator app) | Planned (Phase 3); required before the live pilot, before any real rider data or live payments. Riders and guardians keep email sign-in only | [Sign-in and account security](product.md#sign-in-and-account-security) |
+| Multi-factor authentication for organizer roles and sensitive-action re-verification | Planned as the final pre-launch security gate, after other build work and fictional-data rehearsals; required before the live pilot, any real rider data, or live payments. Riders and guardians keep email sign-in only | [Sign-in and account security](product.md#sign-in-and-account-security) |
 | Stripe hosted Checkout, refunds, payouts, and reconciliation | Planned; Stripe selected, operating model pending | [Money and reporting](product.md#6-money-and-reporting) |
 | Federation license and waiver verification | Planned; access and approval required | [Future USA Cycling integration](product.md#future-usa-cycling-waiver-and-license-integration) |
 | Rider self-service changes, withdrawals, and policy-governed transfers | Planned beyond existing organizer actions | [Rider self-service](product.md#rider-self-service) |

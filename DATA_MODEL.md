@@ -617,7 +617,7 @@ The app does not delete operational records during ordinary organizer or rider w
 
 ## Not in the database yet
 
-These are in [product.md](product.md#data-model) but do not exist in the app: sign-in factors and MFA records (Phase 3; Clerk holds sign-in), owner succession and role-change audit history, rider profiles separate from orders, guardian relationships as records, live payments (Stripe test-mode payments and refunds are recorded in `payment_sessions`, `provider_events`, `payment_attempts`, and `refunds`; no real money moves), automated waitlist promotion, USA Cycling license and waiver checks, and a general audit log (per-feature histories exist: `entry_changes`, `rider_corrections`, `check_in_undos`, bib history; none records who made the change yet, although every change now needs a signed-in organizer with the right role).
+These are in [product.md](product.md#data-model) but do not exist in the app: sign-in factors and MFA records (final pre-launch security gate; Clerk holds sign-in), owner succession and role-change audit history, rider profiles separate from orders, guardian relationships as records, live payments (Stripe test-mode payments and refunds are recorded in `payment_sessions`, `provider_events`, `payment_attempts`, and `refunds`; no real money moves), automated waitlist promotion, USA Cycling license and waiver checks, and a general audit log (per-feature histories exist: `entry_changes`, `rider_corrections`, `check_in_undos`, bib history; none records who made the change yet, although every change now needs a signed-in organizer with the right role).
 
 
 ## Planned expansion, not current schema
