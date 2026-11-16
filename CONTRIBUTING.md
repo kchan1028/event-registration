@@ -54,11 +54,14 @@ Why:
 Product impact (product.md): <sections updated, or "None" plus the reason>
 Roadmap impact (roadmap.md): <sections updated, or "None" plus the reason>
 Docs updated: <README or guides touched, or "None needed" plus the reason>
+Test plan: <"Test plan updated: what changed and why" or "No test plan update needed: brief reason">
 Status: Planned | Implemented | Verified (say what was checked and how)
 Open questions:
 ```
 
 Example of a valid "no impact" line: `Product impact (product.md): None. This fixes a broken link in the coding guide and changes no requirement.`
+
+The `Test plan` line follows [keeping the test plan current](docs/testing/test-plan.md#8-keeping-this-plan-current): update the plan in the same pull request when the change alters workflows, integrations, risks, test commands, environments, fixtures, CI, coverage, verification, or release gates.
 
 ## Review expectations
 
@@ -66,6 +69,7 @@ Example of a valid "no impact" line: `Product impact (product.md): None. This fi
 - Changes that touch money, capacity, eligibility, waivers, permissions, or personal data need a reviewer who understands that area (for example the treasurer for refunds, the registration lead for category rules). See [docs/coding-guide.md](docs/coding-guide.md#testing-and-review). Changes written by an agent are independently verified by the other agent ([test plan](docs/testing/test-plan.md#3-independent-verification)).
 - Reviewers check:
   - [ ] Product and roadmap impact is stated and correct
+  - [ ] The `Test plan` line is present and true; the [test plan](docs/testing/test-plan.md#8-keeping-this-plan-current) is updated when the change requires it
   - [ ] Docs describe what exists, labeled Planned, Implemented, or Verified
   - [ ] Roadmap items are marked complete only with evidence that acceptance criteria pass
   - [ ] No secrets or real personal data

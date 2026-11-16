@@ -121,3 +121,19 @@ Status values:
 - **Not Run:** in scope but not attempted yet.
 
 Only Pass is evidence that a requirement works. Planned integrations stay Not Run or Blocked until they run against a real test instance.
+
+## 8. Keeping this plan current
+
+Every change reviews whether this plan needs updating, and updates it in the same pull request when the change introduces or modifies:
+
+- User workflows or acceptance criteria.
+- Integration behavior, failure handling, or operational risks.
+- Test commands, environments, fixtures, or CI checks.
+- Required coverage, verification responsibilities, or release gates.
+
+Individual execution results stay in the pull request or a linked test report (see the [evidence template](#7-evidence-template)). Reusable scenarios and testing policy stay here.
+
+Every pull request states one of these in the `Test plan` line of its change summary ([CONTRIBUTING.md](../../CONTRIBUTING.md#change-summary)):
+
+- **Test plan updated:** what changed and why.
+- **No test plan update needed:** a brief reason.
