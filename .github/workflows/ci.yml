@@ -1,12 +1,11 @@
 name: CI
 
-# Documentation-only changes skip CI. docs/fixtures stays in because tests read it.
+# CI starts for every change, so the required checks always report. For documentation-only
+# changes the test jobs are skipped (GitHub counts a skipped required check as passed).
 on:
   push:
     branches: [main]
-    paths: ['**', '!**/*.md', '!docs/**', 'docs/fixtures/**']
   pull_request:
-    paths: ['**', '!**/*.md', '!docs/**', 'docs/fixtures/**']
 
 permissions:
   contents: read
@@ -22,8 +21,40 @@ env:
   E2E_DATABASE_URL: postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_e2e
 
 jobs:
+  changes:
+    name: Detect documentation-only changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Markdown files and docs/ are documentation; docs/fixtures is not, because tests read it.
+      # Anything unexpected (an unreadable diff, an empty one) counts as a code change. --no-renames lists a
+      # renamed file under both its old and new path, so moving code into docs/ still counts as code.
+      - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          code=true
+          if files=$(git diff --name-only --no-renames "$BASE"...HEAD 2>/dev/null) && [ -n "$files" ]; then
+            code=false
+            while IFS= read -r f; do
+              case "$f" in
+                docs/fixtures/*) code=true ;;
+                *.md|docs/*) ;;
+                *) code=true ;;
+              esac
+            done <<< "$files"
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   check:
     name: Typecheck, unit and API tests, build
+    needs: changes
+    # Run unless detection succeeded and found documentation only, so a failed detection job runs the tests.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -53,6 +84,9 @@ jobs:
   # Runs alongside `check` instead of after it.
   e2e:
     name: End-to-end browser test
+    needs: changes
+    # Run unless detection succeeded and found documentation only, so a failed detection job runs the tests.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
     services:
       postgres:
