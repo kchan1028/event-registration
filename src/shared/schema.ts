@@ -171,6 +171,8 @@ export const eventConfigSchema = z.object({
     timeZone: z.string().min(1).max(64),
     venue: z.string().max(200),
     isDemo: z.boolean(),
+    /** Read-only published demo research; never accepts registrations. */
+    researchOnly: z.boolean().optional(),
     demoNotice: z.string().max(400),
   }),
   ruleSet: z.object({ source: z.string().max(200), season: z.number().int().min(2000).max(2100) }),
@@ -196,6 +198,17 @@ export const eventConfigSchema = z.object({
     )
     .max(50),
 });
+
+export interface PublicEventSummary {
+  id: string;
+  organizationName: string;
+  name: string;
+  venue: string;
+  isDemo: boolean;
+  researchOnly: boolean;
+  days: { date: string; label: string; races: string[] }[];
+  categoryCount: number;
+}
 
 export type LicenseCategory = (typeof LICENSE_CATEGORIES)[number];
 export type LicenseType = (typeof LICENSE_TYPES)[number];

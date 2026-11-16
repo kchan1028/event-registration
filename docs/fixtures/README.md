@@ -1,10 +1,19 @@
 # Fixtures
 
-Status: In use. The generated case-study collection and standalone Berkeley fixtures supply local testing data. Shared fictional riders and the sample waiver live in `src/shared/fixtures.ts`; generated pricing sources live in `src/shared/caseStudySources.ts`. The two legacy purchase-flow events and their YAML fixture/loader were removed by owner decision on November 15, 2026. Browsing rider events never seeds data. These fixtures do not verify federation rules. Never add real rider or contact data here.
+Status: In use. The generated case-study collection and combined Berkeley Omnium fixture supply local testing data. Shared fictional riders and the sample waiver live in `src/shared/fixtures.ts`; generated pricing sources live in `src/shared/caseStudySources.ts`. The two legacy purchase-flow events and their YAML fixture/loader were removed by owner decision on November 15, 2026. Browsing rider events never seeds data. These fixtures do not verify federation rules. Never add real rider or contact data here.
 
 | File | Purpose |
 |---|---|
-| [events.md](events.md) | Standalone Berkeley Hills Road Race and Berkeley Streets Criterium structure and prices |
+| [BBC TTT research example](../case-studies/organizer-templates/berkeley-bicycle-club-team-time-trial.md) | Read-only published historical identity; team/TT model unsupported; `seed:bbc-ttt` |
+| [Pinole TTT research example](../case-studies/organizer-templates/pinole-team-time-trial.md) | Read-only published predecessor study with explicitly non-event date placeholder; `seed:pinole-ttt` |
+| [Wente](../case-studies/organizer-templates/wente-vineyards-classic.md) | Historical identity and synthetic road setup sample; `seed:wente` |
+| [Mount Hamilton](../case-studies/organizer-templates/mount-hamilton-classic.md) | Historical full-course schedule, separate shared-start classifications; `seed:mount-hamilton` |
+| [Chico](../case-studies/organizer-templates/chico-stage-race.md) | Explicit selected road/crit component sample; `seed:chico` |
+| [Sunset](../case-studies/organizer-templates/sunset-criterium.md) | Historical San Rafael geared-race slot sample; `seed:sunset` |
+| [Red Kite series case study](../case-studies/organizer-templates/red-kite-series.md) | Explicit three-round historical criterium sample; seed with `npm run seed:red-kite -- --owner organizer@example.test` |
+| [San Francisco Grand Prix case study](../case-studies/organizer-templates/san-francisco-grand-prix.md) | Historical 2005 road race and professional admission boundary; seed with `npm run seed:sf-grand-prix -- --owner organizer@example.test` |
+| [Burlingame case study](../case-studies/organizer-templates/burlingame-criterium.md) | Historical 2017 program and explicit demo assumptions; seed with `npm run seed:burlingame -- --owner organizer@example.test` |
+| [events.md](events.md) | Combined Berkeley Omnium structure and prices |
 | [sample-waiver.md](sample-waiver.md) | Placeholder sample waiver, not an official federation waiver |
 | [sample-start-list.csv](sample-start-list.csv) | Illustrative start-list rows using generated-case labels; static example IDs, not a timer-approved format |
 
@@ -37,7 +46,7 @@ Each walk-through uses the generated configurations. All payments are simulated.
 
 ## Berkeley Omnium package
 
-The existing [executable Berkeley fixture](../../src/shared/berkeleyOmnium.ts) still loads the combined Omnium with its $130 package and podium nomination. The separate [events.md reference](events.md) now describes only the requested standalone road race and criterium; the [standalone fixture](../../src/shared/berkeleyEvents.ts) implements it through the dedicated seed described in [SETUP.md](../../SETUP.md).
+The [executable Berkeley fixture](../../src/shared/berkeleyOmnium.ts) supplies the combined Omnium with its $130 package and podium nomination. The standard `seed:berkeley` loader publishes only that combined event, without prefilled entries. The separate `seed:omnium` command creates an organizer draft with simulated capacity entries. See [events.md](events.md) and [SETUP.md](../../SETUP.md).
 
 ## Generated race case studies
 

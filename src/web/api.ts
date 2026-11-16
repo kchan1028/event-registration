@@ -1,6 +1,6 @@
 import type { LimitUsage } from '../shared/capacity';
 import type { RefundStatus } from '../shared/refunds';
-import type { CreateEventInput, EventConfig, CapacityEntry } from '../shared/schema';
+import type { CreateEventInput, EventConfig, CapacityEntry, PublicEventSummary } from '../shared/schema';
 import type { Issue } from '../shared/validation';
 import type { ReadinessItem, RiderDetails, WaiverAcceptance } from '../shared/checkout';
 import type { Quote } from '../shared/pricing';
@@ -96,15 +96,7 @@ export interface WaitlistOffer {
 
 export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
 
-export interface PublicEventSummary {
-  id: string;
-  organizationName: string;
-  name: string;
-  venue: string;
-  isDemo: boolean;
-  days: { date: string; label: string; races: string[] }[];
-  categoryCount: number;
-}
+export type { PublicEventSummary } from '../shared/schema';
 
 export interface RefundablePaymentView {
   ref: string | null;

@@ -136,14 +136,6 @@ export function createRepo(db: Db, clock: () => Date) {
       }));
     },
 
-    /** The oldest organization with this exact name and its event IDs, or null. Used by the demo seeders. */
-    async findOrganizationByName(name: string): Promise<{ id: string; eventIds: string[] } | null> {
-      const org = await db.get<{ id: string }>(`SELECT id FROM organizations WHERE name = $1 ORDER BY created_at, seq LIMIT 1`, [name]);
-      if (!org) return null;
-      const events = await db.all<{ id: string }>(`SELECT id FROM events WHERE organization_id = $1 ORDER BY created_at, seq`, [org.id]);
-      return { id: org.id, eventIds: events.map((e) => e.id) };
-    },
-
     /** Every published event with its latest published configuration, in the order organizations and events were created. */
     async listPublished(): Promise<{ id: string; organizationName: string; config: EventConfig }[]> {
       const rows = await db.all<{ id: string; organization_name: string; config_json: unknown }>(

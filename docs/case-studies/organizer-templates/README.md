@@ -2,7 +2,7 @@
 
 Status: Research documented; organizer template implementation remains Planned. Reviewed November 14, 2026.
 
-These six cases test the [reusable organizer template requirements](../../../product.md#reusable-organizer-templates). They describe published event structures and proposed ways to configure them in CycleReg. They are not approved race templates, current federation rules, executable seed data, or evidence of organizer permission to reuse an event's identity. No participant, waiver, payment, or results records are copied.
+These fifteen cases test the [reusable organizer template requirements](../../../product.md#reusable-organizer-templates). They describe published event structures and proposed ways to configure them in CycleReg. They are not approved race templates, current federation rules, or evidence of organizer permission to reuse an event's identity. Several cases have explicitly labeled historical demos or limited samples, as their case documents explain; research cases do not imply complete executable templates. No participant, waiver, payment, or results records are copied.
 
 Use 2026 publications where available, with each source's season stated. Several websites already advertise 2027 while linking 2026 schedules. Never silently combine those editions. Published field names are evidence of presentation, not complete structured eligibility. A label alone does not settle license type, age calculation, competition class, shared capacity, or award eligibility.
 
@@ -13,6 +13,15 @@ Use 2026 publications where available, with each source's season stated. Several
 | [Redlands Bicycle Classic](redlands-bicycle-classic.md) | Professional stage-race program alongside separate licensed/junior events | Separate registration programs; ordered mixed-format stages; approval/team workflow boundary |
 | [Chicago Grit](chicago-grit.md) | Ten-day criterium festival with shorter category series | Daily overrides, category availability, classification mappings, and package subsets |
 | [Tulsa Tough](tulsa-tough.md) | Three criteriums with a restricted Friday field list | Category-by-day matrix; two-day versus three-day participation |
+| [BBC Team Time Trial](berkeley-bicycle-club-team-time-trial.md) | Historical two-person TTT and special equipment classes | Team/member entry, capacity units and interval starts; read-only research example |
+| [Pinole Team Time Trial](pinole-team-time-trial.md) | Earlier Pinole identity related to BBC TTT | Historical lineage/date uncertainty and unsupported team-entry model; read-only example |
+| [Wente Vineyards Classic Road Race](wente-vineyards-classic.md) | Historical event identity with incomplete field evidence | Explicit synthetic setup sample; avoid invented official rules |
+| [Mount Hamilton Classic Road Race](mount-hamilton-classic.md) | Point-to-point road course with shared women/masters starts | Separate classifications, shared limits, shorter-course boundary |
+| [Chico Stage Race](chico-stage-race.md) | Category-dependent circuit/RR/TT/crit stage program | Supported component sample; explicit TT, circuit, progression and GC gaps |
+| [San Rafael Sunset Criterium](sunset-criterium.md) | Day/evening geared racing alongside kids and fixed-gear activities | Historical slot sample; equipment and special-activity boundaries |
+| [Red Kite series](red-kite-series.md) | Mixed-format historical omnium with category-specific participation | Full-series model boundary; explicit three-round criterium demo, shared starts, independent capacity |
+| [San Francisco Grand Prix](san-francisco-grand-prix.md) | Historical professional road race with varying city loops | Total distance without uniform laps; professional admission boundary; includes a local demo |
+| [Burlingame Criterium](burlingame-criterium.md) | Historical single-day program with combined masters starts | Shared capacity, separate classifications, and explicit unknown rules; includes a local demo |
 | [Berkeley Omnium](berkeley-omnium.md) | Road race plus criterium with different day-specific combinations | Independent day categories, shared starts, staging versus actual starts |
 | [Golden State Race Series](golden-state-race-series.md) | TT, criterium, circuit race, and points-based overall classifications | Optional components, circuit format, pending TT schedules, and source conflicts |
 | [California Bicycle Racing (CBR)](california-bicycle-racing.md) | Repeated single-day criteriums, special junior event, and seasonal competitions | Reuse with event overrides; separate daily/season awards and credit-style benefits |

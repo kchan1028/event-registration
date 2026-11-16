@@ -4,7 +4,17 @@ Last verified: November 15, 2026 on macOS 26 (Apple silicon) with Node.js 20.19,
 
 This runs the organizer workspace on your own computer, listening on `127.0.0.1`. Without Clerk keys, sign-in is a local test form that takes any fictional address ending in `.test` and sends no email. With a Clerk development instance, sign-in is a passwordless emailed code or link ([ADR 0003](../decisions/0003-sign-in-and-mfa.md), Phase 2). MFA is not built yet, so use fictional data only.
 
-For the two standalone Berkeley demo events, follow [Set up the Berkeley demo](../../SETUP.md). It seeds a separate database and publishes both events for rider testing.
+For BBC and Pinole team-time-trial research, follow [TTT research setup](../../SETUP.md#team-time-trial-read-only-research-examples). These examples are publicly readable but do not enable rider entry.
+
+For Wente, Mount Hamilton, Chico, and San Rafael Sunset historical demos, follow [regional setup](../../SETUP.md#additional-northern-california-historical-demos) and review each sample's source and scope limits.
+
+For the historical Red Kite criterium sample and full-series boundaries, follow [Red Kite setup](../../SETUP.md#red-kite-historical-criterium-sample).
+
+For the historical road Grand Prix demo, follow [San Francisco setup](../../SETUP.md#san-francisco-grand-prix-historical-demo).
+
+For the historical Burlingame demo and its source/assumption boundaries, follow [Burlingame setup](../../SETUP.md#burlingame-historical-demo).
+
+For the combined Berkeley Omnium demo, follow [Set up the Berkeley demo](../../SETUP.md). It seeds a separate database and publishes one event containing both races for rider testing.
 
 ## What you need
 

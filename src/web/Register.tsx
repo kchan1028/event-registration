@@ -1,3 +1,4 @@
+import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/researchExamples';
 import QRCode from 'qrcode';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
@@ -183,7 +184,7 @@ export function RegisterIndex() {
       <main className="reg__main reg__main--narrow">
         <h1 className="done__title">Choose an event</h1>
         <div className="pending-stack">
-          <Pending>No real money moves here: payment is simulated or runs in Stripe test mode. Events marked “Demo data” are fictional.</Pending>
+          <Pending>No real money moves here: payment is simulated or runs in Stripe test mode. Demo entries are fictional. Research examples are read-only and do not accept registrations.</Pending>
         </div>
         {error && <p className="alert alert--error">{error}</p>}
         {events === null && !error && <div className="skeleton" aria-label="Loading events" />}
@@ -201,14 +202,14 @@ export function RegisterIndex() {
               <a className="event-pick__link" href={href({ page: 'register', eventId: e.id })}>
                 <span className="event-pick__name">
                   {e.name}
-                  {e.isDemo && <span className="tag tag--demo">Demo data</span>}
+                  {e.researchOnly ? <span className="tag tag--demo">Research example</span> : e.isDemo && <span className="tag tag--demo">Demo data</span>}
                 </span>
                 <span className="event-pick__meta">
-                  {e.days.map((d) => formatDate(d.date)).join(' and ')}
+                  {e.researchOnly ? 'Read-only research' : e.days.map((d) => formatDate(d.date)).join(' and ')}
                   {e.venue ? ` · ${e.venue}` : ''}
                 </span>
                 <span className="event-pick__races">
-                  {e.days.flatMap((d) => d.races).join(' · ')} · {e.categoryCount} categories
+                  {e.researchOnly ? 'Registration unavailable' : `${e.days.flatMap((d) => d.races).join(' · ')} · ${e.categoryCount} categories`}
                 </span>
               </a>
             </li>
@@ -277,6 +278,21 @@ export function Register({ eventId }: { eventId: string }) {
   if (!ev) return <div className="state-page"><div className="skeleton skeleton--page" aria-label="Loading registration" /></div>;
 
   const { config } = ev;
+  if (isResearchExample(config)) {
+    return (
+      <div className="reg">
+        <RegHeader />
+        <main className="reg__main reg__main--narrow">
+          <h1 className="done__title">{config.event.name}</h1>
+          <p className="muted">{config.event.venue}</p>
+          <h2>Registration unavailable</h2>
+          <p>{RESEARCH_REGISTRATION_MESSAGE}</p>
+          <Pending>{config.event.demoNotice}</Pending>
+          <a className="btn btn--secondary" href={href({ page: 'events' })}>Back to events</a>
+        </main>
+      </div>
+    );
+  }
   const stepIndex = STEPS.findIndex((s) => s.key === draft.step);
 
   /** Going back keeps everything entered. Leaving the review step releases the held places first. */

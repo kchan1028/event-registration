@@ -44,6 +44,18 @@ This is a volunteer project with no response-time guarantee. The owner aims to:
 
 Please give the owner a reasonable chance to fix the problem before you discuss it publicly.
 
+Named demo loaders use reserved organization IDs for fixture workspace identity and refuse sharing a reserved workspace that contains non-demo events. User-chosen organization names are display labels only.
+
+The BBC and Pinole TTT research loaders require sign-in and use the existing demo-owner policy. They publish empty, explicitly read-only demo records, with no historical roster, rider/license, result, consent, or payment records. Public event views expose the research notice without entry forms; server order creation and shared selection checks reject registration. Validation only permits the research-only publication exception for empty demo configurations. Organizer editing/publication permissions remain unchanged. TT/team consent and registration are not implemented.
+
+The Wente, Mount Hamilton, Chico, and Sunset historical loaders use the same authenticated demo-owner policy. They seed event structure and declared test assumptions only, with no historical rider, license, result, or signature records. Simulated checkout does not approve licensing, professional admission, stage progression, or equipment-specific entry.
+
+The Red Kite historical sample uses the existing authenticated demo-owner loader. It seeds only selected event structure and explicit test assumptions, never historical participant, license, standings, or result records. Payments remain simulated; organizer/license review is independent of payment.
+
+The San Francisco Grand Prix historical loader uses the same authenticated demo-owner policy. Its individual simulated checkout does not perform professional team selection or admission. Only event structure is seeded; no historical roster, result, or rider records are imported.
+
+The Burlingame historical demo loader requires sign-in and grants its caller demo-organization ownership using the existing demo access policy. It imports event structure only, with no historical rider or result records. Its sample waiver, prices, and payments are fictional testing data.
+
 The retired purchase-flow fixture loader is removed. The home-page rider action only browses existing events; generated case studies and Berkeley demos still require their explicit loaders. No role or private-data access is added by fixture removal.
 
 ## Protected bib reassignment (Implemented locally)
