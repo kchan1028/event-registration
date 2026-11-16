@@ -44,7 +44,7 @@ This is a volunteer project with no response-time guarantee. The owner aims to:
 
 Please give the owner a reasonable chance to fix the problem before you discuss it publicly.
 
-Named demo loaders use reserved organization IDs for fixture workspace identity and refuse sharing a reserved workspace that contains non-demo events. User-chosen organization names are display labels only.
+Named demo loaders use reserved organization/event IDs for fixture identity and refuse sharing workspaces with additional events or non-demo draft/published configurations. User-chosen organization names are display labels only.
 
 The BBC and Pinole TTT research loaders require sign-in and use the existing demo-owner policy. They publish empty, explicitly read-only demo records, with no historical roster, rider/license, result, consent, or payment records. Public event views expose the research notice without entry forms; server order creation and shared selection checks reject registration. Validation only permits the research-only publication exception for empty demo configurations. Organizer editing/publication permissions remain unchanged. TT/team consent and registration are not implemented.
 

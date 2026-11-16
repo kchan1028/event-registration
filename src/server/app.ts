@@ -705,16 +705,18 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   }
 
   /** Publishes one empty named demo once; research examples remain unavailable for registration. */
-  async function seedPublishedDemo(req: { account?: Account }, orgId: string, orgName: string, build: () => EventConfig) {
+  async function seedPublishedDemo(req: { account?: Account }, orgId: string, eventId: string, orgName: string, build: () => EventConfig) {
     const result = await db.transaction(async () => {
       await db.lock(`demo:${orgId}`);
       const existing = (await repo.listOrganizations([orgId]))[0];
       if (existing) {
-        if (existing.events.some((event) => !event.isDemo)) throw new HttpError(409, 'The demo workspace contains non-demo events and cannot be shared by this loader.');
-        return { created: false, organizationId: existing.id, eventIds: existing.events.map((event) => event.id) };
+        const event = existing.events[0];
+        if (existing.events.length !== 1 || event.id !== eventId || !event.isDemo) throw new HttpError(409, 'The demo workspace contains additional or non-demo events and cannot be shared by this loader.');
+        if (event.publishedVersion !== null && !(await repo.getVersion(eventId, event.publishedVersion)).event.isDemo) throw new HttpError(409, 'The demo workspace has a non-demo publication and cannot be shared by this loader.');
+        return { created: false, organizationId: existing.id, eventIds: [eventId] };
       }
       const org = await repo.createOrganization(orgName, orgId);
-      const event = await repo.createEvent(org.id, build());
+      const event = await repo.createEvent(org.id, build(), eventId);
       await repo.publish(event.id, true);
       const eventIds = [event.id];
       return { created: true, organizationId: org.id, eventIds };
@@ -724,35 +726,35 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   }
 
   app.post('/api/demo/berkeley-events', async (req, reply) => {
-    const result = await seedPublishedDemo(req, 'org_acbeb908951a', 'Berkeley Omnium (local demo)', () => buildBerkeleyOmniumEvent().config);
+    const result = await seedPublishedDemo(req, 'org_acbeb908951a', 'evt_e70bd7cd1b17', 'Berkeley Omnium (local demo)', () => buildBerkeleyOmniumEvent().config);
     return reply.status(result.created ? 201 : 200).send(result);
   });
 
   app.post('/api/demo/burlingame', async (req, reply) => {
-    const result = await seedPublishedDemo(req, 'org_5470cc3518ac', 'Burlingame historical case study (local demo)', buildBurlingameEvent);
+    const result = await seedPublishedDemo(req, 'org_5470cc3518ac', 'evt_f27fa508a3d5', 'Burlingame historical case study (local demo)', buildBurlingameEvent);
     return reply.status(result.created ? 201 : 200).send(result);
   });
 
   app.post('/api/demo/san-francisco-grand-prix', async (req, reply) => {
-    const result = await seedPublishedDemo(req, 'org_5792fe80507a', 'San Francisco Grand Prix historical case study (local demo)', buildSanFranciscoGrandPrixEvent);
+    const result = await seedPublishedDemo(req, 'org_5792fe80507a', 'evt_46cd01ce202f', 'San Francisco Grand Prix historical case study (local demo)', buildSanFranciscoGrandPrixEvent);
     return reply.status(result.created ? 201 : 200).send(result);
   });
 
   app.post('/api/demo/red-kite-series', async (req, reply) => {
-    const result = await seedPublishedDemo(req, 'org_29aac4734933', 'Red Kite historical criterium sample (local demo)', buildRedKiteSeriesEvent);
+    const result = await seedPublishedDemo(req, 'org_29aac4734933', 'evt_280dff645637', 'Red Kite historical criterium sample (local demo)', buildRedKiteSeriesEvent);
     return reply.status(result.created ? 201 : 200).send(result);
   });
 
   for (const demo of regionalHistoricalDemos) {
     app.post(`/api/demo/${demo.key}`, async (req, reply) => {
-      const result = await seedPublishedDemo(req, demo.organizationId, demo.organizationName, demo.build);
+      const result = await seedPublishedDemo(req, demo.organizationId, demo.eventId, demo.organizationName, demo.build);
       return reply.status(result.created ? 201 : 200).send(result);
     });
   }
 
   for (const demo of teamTimeTrialResearchDemos) {
     app.post(`/api/demo/${demo.key}`, async (req, reply) => {
-      const result = await seedPublishedDemo(req, demo.organizationId, demo.organizationName, demo.build);
+      const result = await seedPublishedDemo(req, demo.organizationId, demo.eventId, demo.organizationName, demo.build);
       return reply.status(result.created ? 201 : 200).send(result);
     });
   }

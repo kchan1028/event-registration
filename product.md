@@ -205,7 +205,7 @@ Status: Planned. A bundle can include races from multiple events run by differen
 
 Acceptance: two approved organizations sell one season pass for their selected races; the rider enters details once and reviews every entry and organization-specific requirement. Concurrent purchase cannot oversell any component. Duplicate notifications create no duplicate entries or settlements. Each organization can reconcile only its allocated proceeds; a partial cancellation produces an auditable refund allocation and clear status for the remaining races. Live sales depend on the accepted multi-organization Stripe operating model.
 
-Named demo workspace rule (November 15, 2026): loaders use reserved fixture organization IDs, never a user-chosen organization name, to identify shared demo workspaces. Matching names in other organizations do not grant access. A reserved workspace containing non-demo events must refuse shared demo loading. Existing role checks and ordinary organizer-created workspaces remain unchanged.
+Named demo workspace rule (November 15, 2026): loaders use reserved fixture organization IDs, never a user-chosen organization name, to identify shared demo workspaces. Matching names in other organizations do not grant access. A reserved workspace must contain only its exact fixture event, with both draft and latest published versions marked as demo; additional or non-demo events refuse shared loading. Existing role checks and ordinary organizer-created workspaces remain unchanged.
 
 ### BBC and Pinole team time trial research examples
 
