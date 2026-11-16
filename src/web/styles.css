@@ -154,6 +154,9 @@
     width: 44px;
     height: 44px;
   }
+  .account .btn--small {
+    min-height: 44px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .theme-toggle,
@@ -739,6 +742,7 @@ fieldset {
 }
 .home__bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s-4);
   padding: var(--s-4) var(--s-5);
@@ -2091,12 +2095,14 @@ button.issue {
 }
 .reg__bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s-4);
   padding: var(--s-3) var(--s-5);
   border-bottom: 1px solid var(--hairline);
 }
 .reg__bar-note {
+  flex: 1 1 200px;
   font-size: 13px;
   color: var(--muted);
 }
@@ -4037,6 +4043,8 @@ fieldset:disabled .field label {
 }
 .reg__bar-end {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   align-items: center;
   gap: var(--s-3);
 }
@@ -4133,6 +4141,9 @@ fieldset:disabled .field label {
   }
   .account__email {
     display: none;
+  }
+  .reg__bar-end {
+    margin-left: 0;
   }
 }
 
