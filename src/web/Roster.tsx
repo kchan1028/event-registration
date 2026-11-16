@@ -83,9 +83,6 @@ export function Roster({ eventId }: { eventId: string }) {
               <table className="roster__table">
                 <thead>
                   <tr>
-                    <th scope="col" className="roster__tick">
-                      <span className="sr-only">Notes recorded</span>
-                    </th>
                     <th scope="col">Rider</th>
                     <th scope="col">Team</th>
                     <th scope="col" className="roster__num">Age</th>
@@ -97,9 +94,6 @@ export function Roster({ eventId }: { eventId: string }) {
                 <tbody>
                   {roster.rows.map((r) => (
                     <tr key={r.orderId} className={r.status === 'blocked' ? 'is-blocked' : undefined}>
-                      <td className="roster__tick">
-                        <span className="roster__box" aria-hidden="true" />
-                      </td>
                       <td className="roster__name">{r.name}</td>
                       <td>{r.team || '·'}</td>
                       <td className="roster__num">{r.racingAge}</td>
@@ -113,7 +107,7 @@ export function Roster({ eventId }: { eventId: string }) {
                       <td>
                         <Status row={r} />
                       </td>
-                      <td className="roster__bib">{r.bib ?? <span className="roster__blank" aria-label="No bib yet" />}</td>
+                      <td className="roster__bib">{r.bib ?? 'Not assigned'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -126,7 +120,7 @@ export function Roster({ eventId }: { eventId: string }) {
               <p>No riders are blocked for this day.</p>
             ) : (
               <>
-                <p className="roster__hint">Do not issue a bib while requirements remain unresolved. Refer these riders to the registration lead; notes on this sheet do not clear requirements.</p>
+                <p className="roster__hint">Do not issue a bib while requirements remain unresolved. Send these riders to the registration desk for review by the registration lead; notes on this sheet do not clear requirements.</p>
                 <table className="roster__table">
                   <thead>
                     <tr>

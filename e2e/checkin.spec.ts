@@ -65,7 +65,8 @@ test('fallback roster lists every rider and puts blocked riders on the exception
     await expect(section).toContainText('adding a name here does not create an entry, reserve capacity or authorize a bib');
     await expect(section.getByRole('columnheader', { name: 'Snapshot status', exact: true })).toBeVisible();
     await expect(section.getByRole('columnheader', { name: 'Recorded bib', exact: true })).toBeVisible();
-    await expect(section.getByRole('columnheader', { name: 'Notes recorded', exact: true })).toHaveCount(1);
+    expect(await section.getByRole('cell', { name: 'Not assigned', exact: true }).count()).toBeGreaterThan(0);
+    await expect(section.getByRole('columnheader', { name: 'Notes recorded', exact: true })).toHaveCount(0);
   }
   await expect(day).toContainText('notes on this sheet do not clear requirements');
   await expect(day.getByRole('columnheader', { name: 'Lead review notes', exact: true })).toBeVisible();

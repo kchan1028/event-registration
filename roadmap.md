@@ -337,6 +337,8 @@ These remain within the existing Phase 3 scope; this status clarification adds n
 | Continuity and alerts | Operational payment/email alerts, backup/restore procedure, incident handling/support runbook, restricted emergency-contact process and paper reconciliation remain unproved or Proposed. Printed-roster instructions now state their recording limits ([#142](https://github.com/kchan1028/event-registration/issues/142)); this wording fix does not approve a paper process or complete its rehearsal. | Demonstrated failure detection, restore and contingency reconciliation; [operations](docs/operations.md). |
 | Volunteer and successor instructions | A [role-specific check-in guide](docs/runbooks/race-day-check-in.md) now documents the local workflow and escalation limits; independent volunteer rehearsal, successor handoff and named support/deputy ownership remain open. | A second organizer and volunteers operate without developer rescue or shared credentials. |
 
+Phone roster readability remains an [owner decision](product.md#phone-roster-review-decision) ([#144](https://github.com/kchan1028/event-registration/issues/144)); no alternative mobile workflow is approved.
+
 Minor replacement-draft behavior remains an owner decision ([#98](https://github.com/kchan1028/event-registration/issues/98)); do not treat a proposed interaction preference as approved scope.
 
 ### Dependencies and external approvals

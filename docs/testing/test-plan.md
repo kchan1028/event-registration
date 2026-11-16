@@ -72,7 +72,7 @@ Real phone, printer, sign-in/provider, timer and staff-independence checks remai
 
 ### Printable roster recording limits
 
-When changing the fallback roster, run `tests/roster.test.ts` and the fallback-roster scenario in `e2e/checkin.spec.ts`. Check the notice on every day, including no-entrant/no-exception states: printed notes do not register a rider, record payment, clear requirements or record check-in. Missing-rider rows are lookup questions, not a paper entry/bib form. Preserve NOT READY blockers and snapshot status/bib labels. Check desktop, phone width and print media; the notice must print while navigation controls do not. Real pagination, printer output and accepted staff contingency/reconciliation remain separate manual evidence. No paper policy is approved by a rendering check.
+When changing the fallback roster, run `tests/roster.test.ts` and the fallback-roster scenario in `e2e/checkin.spec.ts`. Check the notice on every day, including no-entrant/no-exception states: printed notes do not register a rider, record payment, clear requirements or record check-in. Missing-rider rows are lookup questions, not a paper entry/bib form. Unassigned snapshot bibs say Not assigned; there is no paper check-in tick column. Preserve NOT READY blockers and snapshot status/bib labels. Check desktop, phone width and print media; the notice must print while navigation controls do not. Real pagination, printer output and accepted staff contingency/reconciliation remain separate manual evidence. No paper policy is approved by a rendering check.
 
 ### Shared responsive account headers
 
