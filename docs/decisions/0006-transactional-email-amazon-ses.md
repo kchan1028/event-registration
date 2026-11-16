@@ -3,7 +3,7 @@
 Status: Accepted
 Date: 2026-11-15
 Deciders: Project owner
-Related: [Communications](../../product.md#communications), [Sign-in and account security](../../product.md#sign-in-and-account-security), [Phase 2](../../roadmap.md#phase-2--build-the-registration-core), [email provider case study](../discovery/email-providers.md)
+Related: [Communications](../../product.md#communications), [Sign-in and account security](../../product.md#sign-in-and-account-security), [Phase 2](../../roadmap.md#phase-2--build-the-registration-core), [email provider case study](../research/email-providers.md)
 
 ## Context
 
