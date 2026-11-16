@@ -12,7 +12,7 @@ This guide sets the rules code must follow. Most of them protect three things vo
 | `tests/` | Vitest unit tests for `src/shared` and API tests using `app.inject` |
 | `e2e/` | Playwright browser tests |
 
-Commands (details in [runbooks/local-setup.md](runbooks/local-setup.md)): `npm run dev` to work locally, `npm run check` for typecheck plus unit and API tests plus build, `npm run test:e2e` for the browser tests. CI runs the same checks on every push to `main` and every pull request.
+Commands (details in [runbooks/local-setup.md](runbooks/local-setup.md)): `npm run dev` to work locally, `npm run check` for typecheck plus unit and API tests plus build, `npm run test:e2e` for the browser tests. CI runs the same checks on every push to `main` and every pull request. Locally, run only the tests for what you change; see [How much to test, and who verifies](#how-much-to-test-and-who-verifies).
 
 Every rule traces to a requirement in [product.md](../product.md). When a rule here and `product.md` disagree, `product.md` wins and this guide must be corrected.
 
@@ -229,12 +229,13 @@ Current coverage (all passing November 14, 2026): category fixtures, eligibility
 
 ### How much to test, and who verifies
 
-**Test each change in proportion to what it touches.**
+**Test what you build.**
 
-- Every pull request tests the changed code and the behavior it directly affects.
-- Test more widely when the change touches shared components, sign-in or roles, the database schema, dependencies, or a critical registration flow (checkout, capacity, eligibility, payments, refunds, check-in).
-- Before any deployment, run the full regression suite and the critical user journeys.
-- Keep every required CI check. While the full automated suite stays fast, keep running all of it on every pull request.
+- For a pull request, the author runs only the tests for what the change touches: `npm run typecheck`, the unit and API test files for the changed code (`npx vitest run tests/<file>.test.ts`), and, when a screen changes, the browser tests for that screen (`npx playwright test e2e/<file>.spec.ts`). New behavior gets a new or updated test.
+- When the change touches shared code (`src/shared/`), sign-in or roles, the database schema, dependencies, or a critical registration flow (checkout, capacity, eligibility, payments, refunds, check-in), also run the test files for every flow that uses what changed.
+- Do not run `npm run check` or the whole browser suite (`npm run test:e2e`) for a pull request. Run both, plus the critical user journeys, only before a deployment.
+- CI keeps its required checks on every pull request. That is where the whole suite runs, so do not repeat it locally.
+- A documentation-only change runs no tests; say so in the summary.
 
 **Someone other than the author verifies.**
 
