@@ -63,7 +63,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Same-rider suggestions across orders, linked only when the organizer confirms | Implemented; automated tests in CI |
 | Organizer CSV exports: entries and a simulated ledger, without contact details | Implemented; automated tests in CI |
 | Registration lookup (name, email, team, order number, check-in code) and audited corrections of rider details with a required reason | Implemented; automated tests in CI. Recording the authenticated actor for each correction remains Planned |
-| Coupon codes: percentage or fixed, validity window, eligible categories, total cap held atomically, one per order and never stacked on another discount | Implemented; automated tests in CI. Per-rider limits Planned |
+| Coupon codes: percentage or fixed, validity window, eligible categories, total cap held atomically, one per order and never stacked on another discount | Implemented; automated tests in CI. Per-rider limits Implemented (same-rider rule); combinability Planned |
 | Per-category rider questions, waiver addenda, and bib ranges | Implemented; automated tests in CI |
 | QR check-in code on the rider confirmation; camera scanning at check-in in Chrome and Edge | Implemented; live camera scan not yet checked |
 | Change resolution workflow for paid entries affected by a published change | Implemented; automated tests in CI |

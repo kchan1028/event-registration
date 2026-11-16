@@ -12,7 +12,7 @@ All of these must be true. Until then, do not create a Blueprint or any Render r
 2. The treasurer has approved the monthly cost (ADR 0004 estimates about $75 a month on the Pro plan).
 3. Legal review of minors' data is done, if any riders are under 13 (ADR 0004 caveats).
 4. The project owner has said, in writing, to create the Render resources.
-5. Before production holds any real rider data or takes a live payment: the final pre-launch security gate must pass, including organizer MFA and sensitive-action re-verification (riders and guardians use email sign-in, [product.md](../../product.md#sign-in-and-account-security)). Until then, hosted use is staging and rehearsals with fictional data only. Agents must not create accounts or cloud resources on their own (AGENTS.md boundaries).
+5. Before production holds any real rider data or takes a live payment: the final pre-launch security gate must pass, including organizer MFA and sensitive-action re-verification (riders and guardians use email sign-in, [product.md](../../product.md#sign-in-and-account-security)). Until then, hosted use is staging and rehearsals with fictional data only. Agents must not create accounts or cloud resources unless the owner asks for it in the current task.
 
 ## What the repository contains
 
