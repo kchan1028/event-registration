@@ -3954,6 +3954,55 @@ fieldset:disabled .field label {
 .roster__table tr.is-blocked td:first-child {
   box-shadow: inset 4px 0 0 currentColor;
 }
+.roster__phone-only {
+  display: none;
+}
+@media screen and (max-width: 640px) {
+  .roster__scroll,
+  .roster__table-only {
+    display: none;
+  }
+  .roster__phone-only {
+    display: block;
+  }
+  .roster__bar .btn {
+    min-height: 44px;
+  }
+  .roster__cards {
+    list-style: none;
+    margin: var(--s-3) 0 0;
+    padding: 0;
+    border-top: 1px solid var(--hairline);
+  }
+  .roster__cards > li {
+    padding: var(--s-4) 0;
+    border-bottom: 1px solid var(--hairline);
+    overflow-wrap: anywhere;
+  }
+  .roster__rider-name {
+    margin: 0 0 var(--s-2);
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .roster__rider-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-2) var(--s-4);
+    margin: 0;
+    font-size: 14px;
+  }
+  .roster__rider-meta dt {
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+  .roster__rider-meta dd {
+    margin: 0;
+  }
+  .roster__rider-wide {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+}
 
 @media print {
   .no-print {
