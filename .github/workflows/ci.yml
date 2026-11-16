@@ -31,13 +31,14 @@ jobs:
         with:
           fetch-depth: 0
       # Markdown files and docs/ are documentation; docs/fixtures is not, because tests read it.
-      # Anything unexpected (an unreadable diff, an empty one) counts as a code change.
+      # Anything unexpected (an unreadable diff, an empty one) counts as a code change. --no-renames lists a
+      # renamed file under both its old and new path, so moving code into docs/ still counts as code.
       - id: diff
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           code=true
-          if files=$(git diff --name-only "$BASE"...HEAD 2>/dev/null) && [ -n "$files" ]; then
+          if files=$(git diff --name-only --no-renames "$BASE"...HEAD 2>/dev/null) && [ -n "$files" ]; then
             code=false
             while IFS= read -r f; do
               case "$f" in
@@ -52,7 +53,8 @@ jobs:
   check:
     name: Typecheck, unit and API tests, build
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Run unless detection succeeded and found documentation only, so a failed detection job runs the tests.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -83,7 +85,8 @@ jobs:
   e2e:
     name: End-to-end browser test
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Run unless detection succeeded and found documentation only, so a failed detection job runs the tests.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
     services:
       postgres:
