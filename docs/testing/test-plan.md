@@ -30,8 +30,8 @@ A pull request tests what it changes, not the whole application.
 - **Relevant regressions.** Add the test files for behavior the change could plausibly break, such as the flow that calls a changed function.
 - **Explain the scope.** The pull request says which test files ran and why that set covers the change, and names anything left out.
 - **Not for a pull request:** `npm run check` and the full `npm run test:e2e` run locally only at the [predeployment gate](#4-predeployment-testing).
-- **CI.** [CI](../../.github/workflows/ci.yml) runs the typecheck, the full unit and API suite, the build, and the full browser suite on every pull request that changes more than documentation. For a documentation-only change those jobs report as skipped. The `main` ruleset requires both test jobs to pass before a merge. Do not repeat CI's full run locally.
-- **Documentation-only changes** run no application tests. Run `npm run check:docs`; CI's Documentation links job also runs it on every change, documentation-only or not. Say so in the summary.
+- **CI.** [CI](../../.github/workflows/ci.yml) runs the typecheck, the full unit and API suite, the build, and the full browser suite on every pull request that changes more than documentation. For a documentation-only change those jobs report as skipped. The `main` ruleset requires both test jobs and the Documentation links job to pass before a merge. Do not repeat CI's full run locally.
+- **Documentation-only changes** run no application tests. Run `npm run check:docs`; CI's Documentation links job also runs it on every change, documentation-only or not, and it is a required check. Fix every broken link or anchor in the same pull request before merging, including one the change exposes in a file it did not edit. Say so in the summary.
 
 ## 2. Risk-based coverage
 
