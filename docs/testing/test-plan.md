@@ -63,7 +63,7 @@ The [check-in guide](../runbooks/race-day-check-in.md) is documentation for exis
 - Duplicate names resolved by the existing confirmation code and listed details; a missing/day-mismatched entry escalates without creating a replacement.
 - Paid-but-blocked rider, guardian/review requirement and incomplete payment: no bib until the accepted resolution and current readiness permit it. Missing external approval remains a blocked scenario, not a pass.
 - Separate-account phone registration, closed/full category and waitlist, failed payment and existing-order recovery without another entry or charge.
-- Individual bib correction with preview/reason/issued-bib acknowledgement, wrong-rider undo, missing/exhausted ranges and stale/conflicting previews.
+- Individual bib correction with preview/reason/issued-bib acknowledgement, physical recovery of an old bib before correction/undo makes its number reusable, escalation when the physical bib cannot be recovered, wrong-rider undo, missing/exhausted ranges and stale/conflicting previews.
 - Lost response during check-in: reconnect, inspect the recorded result, retry safely and coordinate physical inventory. Do not infer payment or readiness from an old screen.
 - Print every day's timestamped roster; simulate connectivity loss and shift handoff. Confirm printed rows do not authorize offline entry or clearance. Paper issuance/reconciliation cannot pass without an accepted contingency procedure and named owner.
 - Reach the assigned lead/deputy, route payment questions to finance and send changes to the timer liaison. Record acknowledgement separately from creating a start-list revision.

@@ -28,7 +28,7 @@ The [server role table](../../src/shared/roles.ts) is authoritative. Roles are s
 
 | Role | Relevant local controls | Refer elsewhere |
 |---|---|---|
-| Check-in volunteer | Find riders, see readiness, check in, assign/correct an individual bib, undo a check-in with a reason, print fallback roster, show phone-registration link | Category/window changes, license review, bulk/range settings, refunds and timer exports |
+| Check-in volunteer | Find riders, see readiness, check in, assign/correct an individual bib, undo a check-in with a reason, print fallback roster, show **Register a walk-up** for a published event | Category/window changes, license review, bulk/range settings, refunds and timer exports |
 | Registration manager | Volunteer controls plus registration/entry management, license review, publishing and bib settings/batches | Money refunds require finance or owner access; accepted waiver/license processes still need approval |
 | Timer and exports | Start lists, snapshots/locks and entries CSV | Check-in or entry changes require another granted role |
 | Finance | Orders, ledger export and refunds | Check-in, entry changes or publishing require another granted role |
@@ -37,16 +37,16 @@ The [server role table](../../src/shared/roles.ts) is authoritative. Roles are s
 ## At the desk: check-in volunteer
 
 1. Check the event and selected race day before each shift. A rider's races on another day do not establish an entry today.
-2. In **Find a rider**, enter their name, team, bib or confirmation check-in code and press Enter. A unique match opens the rider. With multiple matches, select the correct person and confirm their listed team, racing age and **Racing today** entries with them. A name alone is not enough for duplicate names. Camera scanning is optional and device-dependent; typing the code remains available.
+2. In **Find a rider**, enter their full name, team, bib or confirmation check-in code and press Enter. Broad searches return at most 50 matches; use the full name or confirmation code to narrow the result instead of assuming the visible list is complete. A unique match opens the rider. With multiple matches, select the correct person and confirm their listed team, racing age and **Racing today** entries with them. A name alone is not enough for duplicate names. Camera scanning is optional and device-dependent; typing the code remains available.
 3. Read the **Ready to race** or **Not ready** result and **Requirements**. Paid and bib-assigned do not mean cleared. For **Not ready**, do not issue a bib: use the escalation table below.
 4. For **Ready to race**, use **Check in and issue bib**, **Check in with bib**, or **Check in and issue next bib**, as shown. An empty bib field requests the next available number. Wait for a successful checked-in result and verify the displayed bib before handing it over. A conflict or error is not confirmation.
 5. Use **Next rider** to return to lookup. Returning to an already checked-in rider preserves the recorded bib; do not hand out another physical bib merely because the page is opened again.
 
 ### Corrections and uncertain outcomes
 
-For an incorrect individual number, use **Change bib**, enter the new number and reason, and **Preview bib change**. Check the affected days/entries and proposed number. A checked-in correction needs the displayed acknowledgement. Apply only the reviewed change; a stale/conflicting preview needs a new review. Coordinate the physical replacement and tell the timer/officials liaison about an issued-number change. Saved start-list revisions do not prove that the timer received it.
+For an incorrect individual number, use **Change bib**, enter the new number and reason, and **Preview bib change**. Check the affected days/entries and proposed number. A checked-in correction needs the displayed acknowledgement. Apply only the reviewed change; a stale/conflicting preview needs a new review. Before applying, recover the old physical bib and confirm the replacement is in desk inventory: changing the number can release the old assignment for reuse. If the old bib cannot be recovered, stop and ask the registration lead to control that number before any reuse; do not leave two physical bibs in circulation. Tell the timer/officials liaison about an issued-number change. Saved start-list revisions do not prove that the timer received it.
 
-For a mistaken check-in, use **Undo check-in** and record the reason. This removes that day's check-in; a number used by another checked-in day can remain reserved. Recheck the rider before any further issue.
+For a mistaken check-in, use **Undo check-in** and record the reason. Before confirming, recover any physical bib already handed out. Undo normally releases its number back to the available pool; a number used by another checked-in day can remain reserved. If the physical bib is missing, stop and escalate to the registration lead before undo/reuse so the same number cannot be handed to another rider. Recheck the current recorded assignment before any further issue.
 
 If the request times out or the connection drops after a click, stop handing out numbers, reconnect and search again. Confirm the recorded check-in/bib before retrying. Repeated online check-in is designed to retain the same bib; that does not prevent duplicate physical handover. Escalate any uncertain or conflicting record instead of selecting another number to make the error disappear.
 
@@ -57,7 +57,7 @@ If the request times out or the connection drops after a click, stop handing out
 | Payment not complete, failed payment or unknown payment outcome | Rider/guardian recovers the existing order under their own account; registration lead and finance investigate unresolved results. Do not create a second order or treat a bank screen as readiness clearance. |
 | License review, waiver, guardian or other outstanding requirement | Refer to the registration lead. The authorized reviewer must use the accepted process and recheck readiness. Unknown/stale verification is not cleared. The accepted federation/guardian/waiver path remains an external gate; this guide grants no bypass. |
 | No match, duplicate names or no entry on this day | Recheck event/day and confirmation code; ask the registration lead to locate the existing record. Do not create a replacement entry solely because lookup failed. |
-| Rider needs to register | Use the [phone-first walk-up guide](walkup-registration.md). Riders/guardians use their own accounts; staff do not sign a waiver or enter a payment for them. Closed/full categories and waitlists remain enforced. |
+| Rider needs to register | Open **Register a walk-up** and use the [phone-first walk-up guide](walkup-registration.md); unpublished events show no registration link. Riders/guardians use their own accounts; staff do not sign a waiver or enter a payment for them. Closed/full categories and waitlists remain enforced. |
 | Missing bib range, exhausted range, conflicting number or stale preview | Stop that assignment and ask the registration manager to review ranges/inventory and obtain a fresh preview. Do not invent a number outside the allowed range. |
 | Refund, withdrawal or entry/category correction | Registration lead coordinates entry changes; finance/owner handles refunds. Payment, entry and readiness must be checked separately. A requested refund is not proof of provider settlement. |
 | App unavailable, wrong permissions or suspicious data exposure | Contact the support owner; keep the affected screen/material restricted. Security reports follow [SECURITY.md](../../SECURITY.md#how-to-report), not public issues or chats containing rider data. |
@@ -65,6 +65,8 @@ If the request times out or the connection drops after a click, stop handing out
 ## Connectivity loss and fallback limits
 
 Live registration and changes require connectivity. Do not reload away from an uncertain submission just to start a new one. Do not assume a cached screen or old printout reflects later withdrawals, reviews, bib changes or payments.
+
+Known wording conflict ([#142](https://github.com/kchan1028/event-registration/issues/142)): the current printout says to enter paper-issued bibs and record cleared exceptions. Those instructions assume an accepted paper process that remains unapproved; they do not grant that approval. The registration lead must brief staff on this limitation before using the printout in a fictional rehearsal.
 
 Use the printed roster to identify its snapshot time and the affected riders for the registration lead. A paper tick does not update the application. The blank rows and exception checklist are recording aids; they do not authorize new offline entries, capacity exceptions, waiver clearance or payment collection. The lead must use an approved contingency process before authorizing any paper bib issuance. That process and paper reconciliation remain Proposed in [operations](../operations.md#handling-an-incident); no live fallback is approved by this guide. If none is accepted, pause affected issuance and escalate.
 
