@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { NO_START_TIME_SORT_KEY } from './format';
 import type { Category, EventConfig } from './schema';
 
 /**
@@ -61,11 +60,8 @@ export function describeAnswers(config: EventConfig, extras: OrderExtras): { cat
   return out;
 }
 
-/**
- * The bib range for a rider's day: the category range of their earliest-starting race that day that
- * has one, otherwise null (the event or day range applies).
- */
-export function categoryBibRange(categories: readonly (Pick<Category, 'id' | 'bibRange'> & { startTime: string | null })[]): { first: number; last: number } | null {
-  const withRange = categories.filter((c) => c.bibRange).sort((a, b) => (a.startTime ?? NO_START_TIME_SORT_KEY).localeCompare(b.startTime ?? NO_START_TIME_SORT_KEY));
-  return withRange[0]?.bibRange ?? null;
+/** The overlap of all applicable category ranges; an inverted interval means no common bib. */
+export function categoryBibRange(categories: readonly Pick<Category, 'bibRange'>[]): { first: number; last: number } | null {
+  const ranges = categories.flatMap((c) => c.bibRange ? [c.bibRange] : []);
+  return ranges.length ? { first: Math.max(...ranges.map((r) => r.first)), last: Math.min(...ranges.map((r) => r.last)) } : null;
 }

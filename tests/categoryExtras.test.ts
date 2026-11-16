@@ -33,9 +33,10 @@ describe('category extras rules', () => {
     expect(out).toEqual({ answers: { [catId]: { 'q-club': 'Demo' } }, addenda: [catId] });
   });
 
-  it('uses the category bib range of the earliest race that has one', () => {
-    expect(categoryBibRange([{ id: 'a', bibRange: null, startTime: '08:00' }, { id: 'b', bibRange: { first: 300, last: 399 }, startTime: '10:00' }, { id: 'c', bibRange: { first: 200, last: 299 }, startTime: '09:00' }])).toEqual({ first: 200, last: 299 });
-    expect(categoryBibRange([{ id: 'a', bibRange: null, startTime: '08:00' }])).toBeNull();
+  it('uses the intersection of applicable category bib ranges', () => {
+    expect(categoryBibRange([{ bibRange: null }, { bibRange: { first: 150, last: 299 } }, { bibRange: { first: 100, last: 199 } }])).toEqual({ first: 150, last: 199 });
+    expect(categoryBibRange([{ bibRange: { first: 100, last: 199 } }, { bibRange: { first: 200, last: 299 } }])).toEqual({ first: 200, last: 199 });
+    expect(categoryBibRange([{ bibRange: null }])).toBeNull();
   });
 
   it('validates bib ranges: backwards is an error, overlapping is a warning', () => {
