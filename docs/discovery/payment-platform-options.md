@@ -1,6 +1,6 @@
 # Choose payment methods for race registration
 
-**Keep Stripe as the baseline for the planned CycleReg checkout, with cards and eligible Apple Pay/Google Pay first.** That is a project-fit recommendation, not proof that Stripe has the best uptime or lowest possible negotiated price. Square’s API card price matches Stripe; Braintree’s standard rate saves only about $10 across 500 orders of $90. Bank payments offer larger potential savings, but raw ACH needs delayed-payment and refund handling before it suits race registration. Consider eligible Link Instant Bank Payments before adding raw ACH near race day; defer Affirm unless larger orders and rider demand justify its fees. This research does not authorize moving the club off BikeReg, changing [ADR 0002](../docs/decisions/0002-stripe-payments.md), opening accounts, or enabling live payments.
+**Keep Stripe as the baseline for the planned CycleReg checkout, with cards and eligible Apple Pay/Google Pay first.** That is a project-fit recommendation, not proof that Stripe has the best uptime or lowest possible negotiated price. Square’s API card price matches Stripe; Braintree’s standard rate saves only about $10 across 500 orders of $90. Bank payments offer larger potential savings, but raw ACH needs delayed-payment and refund handling before it suits race registration. Consider eligible Link Instant Bank Payments before adding raw ACH near race day; defer Affirm unless larger orders and rider demand justify its fees. This research does not authorize moving the club off BikeReg, changing [ADR 0002](../decisions/0002-stripe-payments.md), opening accounts, or enabling live payments.
 
 Research checked **November 15, 2026**. U.S. online merchant collection, USD, public standard prices. Provider approval and account-specific terms remain unconfirmed. CycleReg contains simulated and Stripe test-mode payment code; the methods researched here are provider capabilities, not verified CycleReg integrations.
 
@@ -12,7 +12,7 @@ These examples calculate processor fees on the stated order total, rounded to ce
 |---|---|---:|---|
 | [Stripe domestic cards](https://stripe.com/pricing) | 2.9% + $0.30 | $2.91 | Practical baseline; existing test-mode implementation |
 | [Square Online API](https://developer.squareup.com/docs/payments-pricing) | 2.9% + $0.30 | $2.91 | Same headline card cost; confirm the exact hosted Checkout API contract |
-| [Square basic Payment Links](https://squareup.com/us/en/payment-links) | 3.3% + $0.30 | $3.27 | Different product from API processing |
+| [Square Free Payment Links](https://squareup.com/us/en/payment-links) | 3.3% + $0.30 | $3.27 | Different product from API processing |
 | [Braintree standard cards](https://www.paypal.com/us/enterprise/paypal-braintree-fees) | 2.89% + $0.29 | $2.89 | About two cents less per $90 order |
 | [PayPal/Guest Checkout/Venmo](https://www.paypal.com/us/business/paypal-business-fees) | 3.49% + $0.49 | $3.63 | Rider convenience, not a low-fee card substitute |
 | [PayPal Advanced cards](https://www.paypal.com/us/business/paypal-business-fees) | 2.89% + $0.29 | $2.89 | Separate card product; do not apply this rate to every PayPal button |
@@ -36,7 +36,7 @@ Stripe standard ACH Direct Debit costs **0.8%, capped at $5**. Optional instant 
 
 These are arithmetic scenarios using Stripe’s published formulas, not quotes or the club’s forecast. The verification column assumes one charge per order; bank-account reuse and the selected verification flow change it. Affirm uses its standard **6% + $0.30** price; Enhanced and other financing products differ. ([Stripe method pricing](https://stripe.com/us/pricing/local-payment-methods))
 
-For Berkeley’s **$40 junior package**, ACH with that first verification costs $0.36 more than cards. At **$50**, cards cost $1.75 versus $1.90 for verified ACH. The calculated break-even is about **$57.14** under these assumptions. Raw ACH is therefore not automatically the cheapest experience for every rider.
+For an illustrative **$40 entry**, ACH with that first verification costs $0.36 more than cards. At **$50**, cards cost $1.75 versus $1.90 for verified ACH. The calculated break-even is about **$57.14** under these assumptions. Raw ACH is therefore not automatically the cheapest experience for every rider.
 
 Other published ACH collection rates are Braintree **0.75%, capped $5**; Square API **1%, $1 minimum/$5 cap**; and Helcim **0.5% + $0.25, capped $6**. Adyen lists **$0.40**, but its unknown invoice floor prevents treating that as an all-in quote. Verification, returns and account terms still need comparison. ([Braintree](https://www.paypal.com/us/enterprise/paypal-braintree-fees), [Square](https://developer.squareup.com/docs/payments-pricing), [Helcim](https://www.helcim.com/pricing/), [Adyen ACH](https://www.adyen.com/payment-methods/ach-direct-debit))
 
@@ -71,17 +71,4 @@ For CycleReg, the practical reliability test is whether authoritative payment ev
 
 Obtain actual annual volume, average order/card mix, refund history and fee-allocation expectations, then compare an approved direct-club quote before adding platform/Connect economics. Connect has separate account/payout pricing choices and responsibilities; do not add every public pricing line indiscriminately to a single-club card comparison. ([Connect pricing](https://stripe.com/us/connect/pricing))
 
-The useful decision is the lowest sustainable cost per completed, reconciled registration. Confirm merchant classification, refund windows and payment timing first; then decide whether bank savings or a genuinely available charity tier justify added operations. The unresolved decisions are maintained in the existing [payment-model guide](../docs/payment-model-questions.md#unresolved-operating-decisions), not treated as approved requirements here.
-
-## Change summary
-
-- What changed: Dated payment-platform/method research and the existing payment-model guide, including fee examples and unresolved operating decisions.
-- Why: Compare real online collection costs and reliability for CycleReg.
-- Product impact (product.md): Dated source-index entry only; provider choice and requirements unchanged.
-- Roadmap impact (roadmap.md): None; no priorities, gates or delivery status changed.
-- Feature impact (feature.md): None; no payment method enabled or capability added.
-- Security impact (SECURITY.md): None; no code, keys, permissions or live processing changed.
-- Docs updated: This report, research notes and payment-model guide; DATA_MODEL.md reviewed, no schema/data behavior changed.
-- Test plan: No test plan update needed; this documentation-only research changes no accepted workflow, implementation or testing policy.
-- Status: Verified public-source research as dated above; recommendations Proposed, merchant eligibility/quotes and provider acceptance unverified. No tests run for documentation-only work.
-- Open questions: [Unresolved operating decisions](../docs/payment-model-questions.md#unresolved-operating-decisions), including switch authority, tax status, actual economics, method eligibility, ACH/refunds and platform terms.
+The useful decision is the lowest sustainable cost per completed, reconciled registration. Confirm merchant classification, refund windows and payment timing first; then decide whether bank savings or a genuinely available charity tier justify added operations. The unresolved decisions are maintained in the existing [payment-model guide](../payment-model-questions.md#unresolved-operating-decisions), not treated as approved requirements here.

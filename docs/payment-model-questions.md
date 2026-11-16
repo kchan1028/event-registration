@@ -1,6 +1,6 @@
 # Payment model questions
 
-Status: Proposed operating model, written November 14, 2026; research updated November 15, 2026. Stripe is selected by the project owner ([ADR 0002](decisions/0002-stripe-payments.md)). The repository now contains simulated and Stripe test-mode checkout/refund code ([payment implementation](../src/server/payments.ts)); live keys are refused. No live merchant/settlement model is approved here. Public research is recorded in [Findings](#findings) and the [payment-platform comparison](../reports/Cycling%20registration%20payment%20options.md); club answers from D01 remain below. The owner and status of the operating-model question are tracked in the [Phase 0 discovery kit](discovery/external-requirements.md#status).
+Status: Proposed operating model, written November 14, 2026; research updated November 15, 2026. Stripe is selected by the project owner ([ADR 0002](decisions/0002-stripe-payments.md)). The repository now contains simulated and Stripe test-mode checkout/refund code ([payment implementation](../src/server/payments.ts)); live keys are refused. No live merchant/settlement model is approved here. Public research is recorded in [Findings](#findings) and the [payment-platform comparison](discovery/payment-platform-options.md); club answers from D01 remain below. The owner and status of the operating-model question are tracked in the [Phase 0 discovery kit](discovery/external-requirements.md#status).
 
 Before any live payment, the club must decide who collects the money, who the rider's card statement names, who pays fees, and who absorbs refunds and disputes. That is [open decision 5](../product.md#open-decisions) in product.md, and the rules in [Money and reporting](../product.md#6-money-and-reporting) apply whatever the answer. This page lays out the choices and the questions to answer, first inside the club and then against Stripe's supported configurations and terms.
 
@@ -88,7 +88,7 @@ Stripe's public pages, checked November 15, 2026. Most pages show no effective d
 
 ## Current platform and method comparison
 
-Research checked November 15, 2026: [Cycling registration payment options](../reports/Cycling%20registration%20payment%20options.md) compares Stripe, Square, Braintree/PayPal, Helcim and Adyen, plus ACH, card wallets, Cash App/Venmo/Zelle and financing. It recommends retaining Stripe as the planned CycleReg baseline, not moving the club off BikeReg today. This is a Proposed research recommendation, not a provider change or authorization to enable methods. The report distinguishes collection from organizer payouts, optional bank verification, merchant-category approval and refund-window limits.
+Research checked November 15, 2026: [Cycling registration payment options](discovery/payment-platform-options.md) compares Stripe, Square, Braintree/PayPal, Helcim and Adyen, plus ACH, card wallets, Cash App/Venmo/Zelle and financing. It recommends retaining Stripe as the planned CycleReg baseline, not moving the club off BikeReg today. This is a Proposed research recommendation, not a provider change or authorization to enable methods. The report distinguishes collection from organizer payouts, optional bank verification, merchant-category approval and refund-window limits.
 
 ## Unresolved operating decisions
 

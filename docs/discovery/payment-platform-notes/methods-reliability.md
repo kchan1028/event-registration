@@ -60,7 +60,7 @@ Integrated merchant checkout is not the same as collecting personal transfers. C
 ### Gaps
 
 - Neither a public rate page nor a payment-method list proves the nonprofit club's race-entry merchant classification will be accepted. Obtain written account-specific eligibility before choosing Cash App Pay/Affirm.
-- Current integrated PayPal/Braintree pricing and contract terms are being researched by the processor-comparison researcher; direct-profile rates above are not a substitute.
+- Integrated PayPal/Braintree pricing and contract terms are summarized in the [processor comparison](alternatives.md); direct-profile rates above are not a substitute.
 - Direct Cash App Business pricing is disclosed in-account, not a single universal fee established here. The sole-proprietor pilot does not fit the known nonprofit-corporation entity.
 
 ## Which platform is more stable?
@@ -71,7 +71,7 @@ No defensible head-to-head reliability winner can be declared from public market
 
 ### Cited findings
 
-- Stripe advertises 99.999% historical uptime for its services. The inspected marketing page does not establish a CycleReg-specific contracted SLA, matching observation period, region, product coverage or comparable measurement against competitors. Treat it as the provider's historical claim. [Stripe official site](https://stripe.com/?issue=64).
+- Stripe advertises 99.999% historical uptime for its services. The inspected marketing page does not establish a CycleReg-specific contracted SLA, matching observation period, region, product coverage or comparable measurement against competitors. Treat it as the provider's historical claim. [Stripe official site](https://stripe.com/).
 - Official status pages exist for [Stripe](https://status.stripe.com/), [PayPal production](https://www.paypal-status.com/product/production), and [Square](https://www.issquareup.com/). In this research reader the pages rendered loading/empty shells, so no incident totals, verified historical uptime, or current-state ranking was extracted.
 - Payment success and provider availability are not final settlement guarantees; refunds, disputes/returns and bank payout schedules remain distinct. [Payment methods](https://docs.stripe.com/payments/payment-methods), [ACH terms](https://stripe.com/legal/ACH).
 

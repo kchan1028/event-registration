@@ -64,7 +64,7 @@ A nonprofit corporation selling race entries should budget standard commercial p
 ### Inferences
 - Retain Stripe as the practical baseline for this app, since it already has a test-mode integration, and compare alternatives on full switching/operating cost, not only their cheapest advertised rail. This does not amend ADR 0002 or approve live activation.
 - For a one-club pilot, obtain pricing for the club's own account first. Obtain a separate written Connect quote before a multi-organizer roll-out; do not force Connect payout fees into the direct-account comparison.
-- Buy-now-pay-later is more expensive for these $40–$130 race orders unless a provider confirms special pricing; the other research track must verify event-category eligibility, borrower rules and minimum purchase limits.
+- Buy-now-pay-later is more expensive for these $40–$130 race orders unless a provider confirms special pricing; the [methods and reliability notes](methods-reliability.md) cover event-category eligibility, borrower rules and minimum purchase limits, with merchant approval still unconfirmed.
 
 ### Gaps
 - Unanswered: who approves the receiving legal entity/processor switch; actual annual volume; average order/refund/dispute mix; which party absorbs fees; whether a Connect pricing/risk model is needed; permitted methods for this merchant category. These already intersect the repository's payment-model questions and do not authorize a change in provider or live payments.
