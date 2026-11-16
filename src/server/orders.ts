@@ -562,7 +562,6 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       });
     },
 
-    /** Every order of the event, newest first. With `query`, only registrations it finds (see `matchesRegistration`). */
     /** Orders the account placed, plus orders of juniors whose viewer email is the account's, newest first. */
     async listForAccount(account: { id: string; email: string }) {
       const rows = await db.all<OrderRow>(
@@ -573,6 +572,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       return views.map((v, i) => ({ ...v, placedByYou: rows[i].account_id === account.id }));
     },
 
+    /** Every order of the event, newest first. With `query`, only registrations it finds (see `matchesRegistration`). */
     async listOrders(eventId: string, query = '') {
       await repo.getEvent(eventId);
       const views = await viewsOf(await db.all<OrderRow>(`SELECT * FROM orders WHERE event_id = $1 ORDER BY created_at DESC, seq`, [eventId]));
