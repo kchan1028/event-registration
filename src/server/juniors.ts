@@ -14,13 +14,32 @@ import { HttpError } from './repo';
  * that email can see the junior's registrations, read-only. Another household sees nothing.
  */
 
-/** The profile key: one profile per guardian and junior name. A JSON pair keeps "Ann Marie / Smith" and "Ann / Marie Smith" apart. */
-const nameKey = (firstName: string, lastName: string) => JSON.stringify([normalizeText(firstName), normalizeText(lastName)]);
+/**
+ * The profile key: one profile per guardian and junior name. A tab separates the names; normalized
+ * names never contain one, so "Ann Marie / Smith" and "Ann / Marie Smith" stay apart.
+ */
+const nameKey = (firstName: string, lastName: string) => `${normalizeText(firstName)}\t${normalizeText(lastName)}`;
 
 /** Serializes creating, linking, and renaming one guardian's junior profiles across events. */
 const guardianLock = (guardianAccountId: string) => `juniors:${guardianAccountId}`;
 
 export function createJuniors(db: Db, clock: () => Date) {
+  /**
+   * Profiles saved before the tab-separated key (first and last name joined by a space) get the
+   * current key, in one statement. Call under the guardian lock, before any lookup by key.
+   */
+  async function rekey(guardianAccountId: string): Promise<void> {
+    const old = await db.all<{ id: string; first_name: string; last_name: string }>(
+      `SELECT id, first_name, last_name FROM junior_profiles WHERE guardian_account_id = $1 AND strpos(name_key, E'\\t') = 0`,
+      [guardianAccountId],
+    );
+    if (old.length === 0) return;
+    await db.run(`UPDATE junior_profiles p SET name_key = v.key FROM unnest($1::text[], $2::text[]) AS v(id, key) WHERE p.id = v.id`, [
+      old.map((p) => p.id),
+      old.map((p) => nameKey(p.first_name, p.last_name)),
+    ]);
+  }
+
   /** The guardian's profile for this junior, created on first use. */
   async function profileFor(guardianAccountId: string, rider: { firstName: string; lastName: string }): Promise<string> {
     const key = nameKey(rider.firstName, rider.lastName);
@@ -39,6 +58,7 @@ export function createJuniors(db: Db, clock: () => Date) {
   async function adopt(guardianAccountId: string): Promise<void> {
     await db.transaction(async () => {
       await db.lock(guardianLock(guardianAccountId));
+      await rekey(guardianAccountId);
       const orders = await db.all<{ id: string; rider_json: { firstName: string; lastName: string } }>(
         `SELECT id, rider_json FROM orders WHERE account_id = $1 AND junior_profile_id IS NULL AND jsonb_typeof(rider_json->'guardian') = 'object'`,
         [guardianAccountId],
@@ -77,6 +97,7 @@ export function createJuniors(db: Db, clock: () => Date) {
     async renamed(profileId: string, guardianAccountId: string, rider: { firstName: string; lastName: string }): Promise<string> {
       // Called inside the correction's transaction; the guardian lock keeps a registration at another event from creating the same name meanwhile.
       await db.lock(guardianLock(guardianAccountId));
+      await rekey(guardianAccountId);
       const key = nameKey(rider.firstName, rider.lastName);
       const existing = await db.get<{ id: string }>(`SELECT id FROM junior_profiles WHERE guardian_account_id = $1 AND name_key = $2`, [guardianAccountId, key]);
       if (existing && existing.id !== profileId) {

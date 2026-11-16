@@ -165,7 +165,7 @@ Migration 25. A junior a guardian manages (owner decision November 15, 2026; [gu
 |---|---|
 | `id` | Primary key (`jun_...`) |
 | `guardian_account_id` | References `accounts`; cascades on delete |
-| `name_key` | Normalized first and last name as a JSON pair (so a different first/last split is a different junior); unique with `guardian_account_id` |
+| `name_key` | Normalized first and last name joined by a tab (so a different first/last split is a different junior); unique with `guardian_account_id`. Keys saved in the earlier space-joined form are rewritten, under the guardian lock, before the next lookup for that guardian |
 | `first_name`, `last_name` | As first registered |
 | `viewer_email` | The junior's own login, lowercase, or null. Whoever signs in with it can read the junior's orders (read-only: never pay, cancel, or change). Only the guardian sets or clears it. Indexed where not null |
 | `created_at` | |

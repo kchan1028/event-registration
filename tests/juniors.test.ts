@@ -127,4 +127,18 @@ describe('guardian and junior access', () => {
     expect(after).toEqual([expect.objectContaining({ firstName: 'Sam', viewerEmail: JUNIOR })]);
     expect(((await call(JUNIOR, 'GET', '/api/rider/registrations')).json() as { id: string }[]).map((o) => o.id).sort()).toEqual([typo1, typo2, right].sort());
   });
+
+  it('finds a profile saved with the earlier space-joined key, keeping its viewer access', async () => {
+    const { call, registerJunior, databaseUrl } = await setup();
+    const first = await registerJunior(PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string }[];
+    await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/viewer`, { email: JUNIOR });
+    const client = new pg.Client({ connectionString: databaseUrl });
+    await client.connect();
+    await client.query(`UPDATE junior_profiles SET name_key = 'sam example'`);
+    await client.end();
+    const second = await registerJunior(PARENT, 'Sam');
+    expect(((await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string }[]).map((j) => j.id)).toEqual([sam.id]);
+    expect(((await call(JUNIOR, 'GET', '/api/rider/registrations')).json() as { id: string }[]).map((o) => o.id).sort()).toEqual([first, second].sort());
+  });
 });
