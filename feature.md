@@ -17,7 +17,7 @@ This is a feature summary, not a second requirements document or roadmap. [produ
 | Capacity rules | Implemented | Enforce category caps, start-group limits, and explicit shared pools; display headers never create limits |
 | Pricing and discounts | Implemented | Configure base prices, scheduled changes, day-of surcharges, bundles, extra-entry pricing, and demo fees |
 | Registration windows | Implemented | Enforce opening and closing times in the event's time zone; clearly labeled demo mode can bypass windows |
-| Passwordless sign-in and organization roles | Implemented locally | Require email sign-in before checkout or organizer tools; enforce owner, registration manager, check-in, timer/export, and finance access on the server. Real Clerk development-instance verification remains open |
+| Passwordless sign-in and organization roles | Implemented locally | Require email sign-in before checkout or organizer tools; enforce owner, registration manager, check-in, timer/export, and finance access on the server. Owners hand over ownership in one recorded step, and every role change is recorded with who made it. Invitations last 14 days and are emailed on invite and resend, test-only: recorded locally, or sent through the Amazon SES sandbox. Real Clerk development-instance verification remains open |
 | Schedule CSV | Implemented | Import categories with column mapping and row errors; export the configured schedule |
 | Preview and publish | Implemented | Preview eligibility, block publishing on errors, acknowledge warnings, and retain immutable published versions |
 | Published change-impact preview | Implemented | Show affected categories, entries, riders, and orders; require acknowledgement while preserving accepted prices and rules |
@@ -27,6 +27,7 @@ This is a feature summary, not a second requirements document or roadmap. [produ
 | Registration queue | Implemented | Review simulated orders, outstanding readiness items, and manual license-review notes |
 | Registration lookup and corrections | Implemented | Find registrations by rider, guardian, email, team, order, or check-in code; preserve reasoned before/after correction history. Recording the signed-in actor remains Planned |
 | Basic coupons | Implemented | Configure event-scoped fixed or percentage codes with windows, category eligibility, atomic total redemption caps, and per-rider limits (same-rider rule); combinability remains Planned |
+| Refund and credit rules | Implemented locally | Organizers start from a template (full refund until a deadline, tiered, or credit only), edit the steps, and say what riders get if a race is cancelled. Riders see the rules before paying and on their confirmation; each order keeps the rules it was sold under. Refund amounts are still entered by the organizer |
 | Published-change resolution | Implemented | Resolve affected paid entries through organizer transfer, withdrawal, or unchanged acceptance while preserving accepted prices and an append-only history |
 | Same-rider linking | Implemented | Suggest likely matches across orders; link only when the organizer confirms |
 | Entries and ledger CSV | Implemented | Download one row per entry and a simulated ledger; contact, emergency, and license-number details are left out |
@@ -43,6 +44,7 @@ Details and limits: [category builder](product.md#1a-road-race-and-criterium-cat
 | Choose entries | Implemented | Select eligible categories, see capacity and review requirements, and receive schedule-conflict warnings |
 | Order pricing | Implemented | Show entries, discounts, and configured fees before simulated payment; prevent discount stacking |
 | Rider and guardian details | Implemented | Enter fictional rider details once per order, with guardian details for minors; validation corrections retain keyboard focus |
+| My registrations and guardian access | Implemented locally | A signed-in rider lists their own registrations. A guardian manages each junior they register (one guardian per junior) and can let the junior sign in to view, not change, their registrations. A second guardian and the claim at 18 are Planned |
 | Sample waiver | Implemented | Confirm reading and sign a versioned sample waiver; it is not an official federation waiver |
 | Capacity reservation | Implemented | Hold all selected places together; an incomplete bundle is not sold silently; recover uncertain submissions with the original request across same-tab refresh |
 | Simulated and Stripe test-mode payment | Implemented | Exercise simulated success/decline; use hosted test-mode Checkout with stable session retries and a retryable busy response. No real money or app-stored card details |

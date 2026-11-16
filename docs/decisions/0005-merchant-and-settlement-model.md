@@ -49,7 +49,7 @@ Option C remains a fallback for a one-club pilot if Connect onboarding proves to
 ## Consequences
 
 - Sandbox work can proceed: the ledger records which organization each charge, fee, refund, and dispute belongs to.
-- No live keys, live charges, or account creation are authorized by this ADR (AGENTS.md boundaries).
+- No live keys, live charges, or account creation are authorized by this ADR.
 - Cross-organization season passes (Phase 6) will need a further decision about splitting one rider payment across clubs.
 - Next: Stripe documentation check, treasurer review, then an accepted version of this ADR before any live payment.
 

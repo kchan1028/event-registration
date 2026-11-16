@@ -674,7 +674,9 @@ The app does not delete operational records during ordinary organizer or rider w
 
 ## Not in the database yet
 
-These are in [product.md](product.md#data-model) but do not exist in the app: sign-in factors and MFA records (final pre-launch security gate; Clerk holds sign-in), owner succession and role-change audit history, rider profiles separate from orders, guardian relationships as records, live payments (Stripe test-mode payments and refunds are recorded in `payment_sessions`, `provider_events`, `payment_attempts`, and `refunds`; no real money moves), automated waitlist promotion, USA Cycling license and waiver checks, and a general audit log (per-feature histories exist: `entry_changes`, `rider_corrections`, `check_in_undos`, bib history; none records who made the change yet, although every change now needs a signed-in organizer with the right role).
+These are in [product.md](product.md#data-model) but do not exist in the app: sign-in factors and MFA records (final pre-launch security gate; Clerk holds sign-in), rider profiles separate from orders for adult riders (juniors have [`junior_profiles`](#junior_profiles), one guardian each; a second guardian is Planned), live payments (Stripe test-mode payments and refunds are recorded in `payment_sessions`, `provider_events`, `payment_attempts`, and `refunds`; no real money moves), automated waitlist promotion, USA Cycling license and waiver checks, and a general audit log.
+
+Per-feature histories exist instead of a general log. These record who made the change: [`membership_changes`](#membership_changes) (role changes, invitations, and ownership hand-over), `rider_corrections.corrected_by`, `refunds.requested_by`, `bib_reassignments.requested_by`, and `automatic_bib_jobs.configured_by` and `cancelled_by`. These do not record an actor yet: `entry_changes` (transfers and withdrawals), `check_in_undos`, and `bib_assignments`, although each of those actions already requires a signed-in organizer with the right role.
 
 
 ## Planned expansion, not current schema
