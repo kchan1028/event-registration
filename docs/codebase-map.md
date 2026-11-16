@@ -2,7 +2,7 @@
 
 Where to start reading for a change, what tests cover each area, and constraints that are easy to miss. It is for navigation: open the files it names and check the current code before changing anything. System design and tradeoffs are in [architecture.md](architecture.md); domain rules are in the [coding guide](coding-guide.md).
 
-Initial path inventory verified against `main` at commit `740d0b9` (November 16, 2026); subsequent additions are checked in their own pull requests. When a change makes an entry untrue, fix the entry in the same pull request. If this map and the code disagree, the code wins; correct the map.
+Paths verified against `main` at commit `740d0b9` (November 16, 2026). When a change makes an entry untrue, fix the entry in the same pull request. If this map and the code disagree, the code wins; correct the map.
 
 ## How the pieces fit
 
