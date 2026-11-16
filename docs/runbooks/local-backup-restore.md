@@ -4,7 +4,7 @@ Status: Implemented technical rehearsal procedure. This checks a local logical a
 
 ## Boundaries and prerequisites
 
-The technical lead runs this in an isolated checkout/worktree, one rehearsal at a time, using the existing [local PostgreSQL container](local-setup.md#what-you-need). Use the project's installed Node dependencies. The examples use `/usr/local/bin/docker`, the existing container `cyclereg-postgres`, and the documented local-only `cyclereg` test credentials at `127.0.0.1:5432`. Confirm these describe your local setup before running anything. Do not substitute a shared working database or a remote URL.
+The technical lead runs this in an isolated checkout/worktree, one rehearsal at a time, using the existing [local PostgreSQL container](local-setup.md#what-you-need). Use dependencies installed with `npm ci` under the [local setup](local-setup.md#steps). A worktree can resolve dependencies from its parent checkout: if intentionally reusing them, confirm the lockfiles match and record the parent path in the evidence. That is a reused-dependency rehearsal, not verification of a clean install. The examples use `/usr/local/bin/docker`, the existing container `cyclereg-postgres`, and the documented local-only `cyclereg` test credentials at `127.0.0.1:5432`. Confirm these describe your local setup before running anything. Do not substitute a shared working database or a remote URL.
 
 Use matching PostgreSQL 17 server/dump/restore tools in that container. The dump uses custom format; the restore uses one transaction and stops on errors. It deliberately omits ownership and access-control restoration: application membership tables are checked, but PostgreSQL cluster roles, grants and tablespaces are not established by this procedure. Do not use `--create` or `--clean`: restore goes into a separately created empty database, never back into the source.
 
@@ -185,6 +185,8 @@ Keep execution evidence in the PR or a dated rehearsal record under the [test pl
 
 After preserving the public-safe evidence and confirming these databases were created by this rehearsal, drop only those exact three names. If creation failed because a name already existed, do not run cleanup against that database. Check the variables against the creation log first.
 
+For a partial failure, do not run the three-database cleanup block wholesale. Drop only names with a successful **Created source/target/rejection target** message from this run: for example, a stop before rejection-target creation leaves only source/target to remove. Skip databases that were never created, and never delete a database named in a collision error. Preserve diagnostics before removing the listed local files. `rm -f` tolerates artifacts that were never written; `rmdir` leaves any unlisted files in place rather than removing a directory recursively.
+
 ```bash
 case "$RESTORE_SOURCE_DB:$RESTORE_TARGET_DB:$RESTORE_REJECT_DB" in
   "cyclereg_restore_source_${RESTORE_RUN_ID}:cyclereg_restore_target_${RESTORE_RUN_ID}:cyclereg_restore_reject_${RESTORE_RUN_ID}") ;;
@@ -193,7 +195,7 @@ esac
 /usr/local/bin/docker exec cyclereg-postgres dropdb -U cyclereg "$RESTORE_SOURCE_DB"
 /usr/local/bin/docker exec cyclereg-postgres dropdb -U cyclereg "$RESTORE_TARGET_DB"
 /usr/local/bin/docker exec cyclereg-postgres dropdb -U cyclereg "$RESTORE_REJECT_DB"
-rm data/restore-rehearsal/local.dump data/restore-rehearsal/local.dump.sha256 data/restore-rehearsal/manifest.json data/restore-rehearsal/fixture.json data/restore-rehearsal/nonempty-source.log data/restore-rehearsal/rejected-restore.log data/restore-rehearsal/rehearse.ts
+rm -f data/restore-rehearsal/local.dump data/restore-rehearsal/local.dump.sha256 data/restore-rehearsal/manifest.json data/restore-rehearsal/fixture.json data/restore-rehearsal/nonempty-source.log data/restore-rehearsal/rejected-restore.log data/restore-rehearsal/rehearse.ts
 rmdir data/restore-rehearsal
 ```
 
