@@ -368,7 +368,7 @@ test('validation recovery keeps keyboard focus and typed details', async ({ page
 
 test('lost hold response retries the same reservation across refresh', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await openEvent(page, 'criterium');
+  const eventId = await openEvent(page, 'criterium');
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
   await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
   await page.getByRole('button', { name: 'Continue to racer details' }).click();
@@ -390,7 +390,15 @@ test('lost hold response retries the same reservation across refresh', async ({ 
   await expect(page.locator('.error-summary')).toContainText('Cannot reach');
   await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeDisabled();
   await page.screenshot({ path: 'test-results/recovery-mobile-pending.png', fullPage: true });
-  await page.reload();
+  const beforeOffer = await page.evaluate((id) => JSON.parse(sessionStorage.getItem(`cyclereg.register.${id}`)!), eventId);
+  await page.route('**/api/rider/offers/pending-test', async (route) => {
+    await route.fulfill({ json: { eventId, categoryId: 'another-offer-category', categoryName: 'Other fictional race', status: 'offered', offerExpiresAt: '2027-04-17T18:00:00Z', rider: { firstName: 'Other', lastName: 'Rider', email: 'other@example.test', racingAge: 60, licenseCategory: '5', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null } } });
+  });
+  // A new document restores the draft while an offer link also tries to prefill it.
+  await page.goto(`/?recovery-offer=1#/register/${eventId}?offer=pending-test`);
+  await expect(page.getByText(/Other fictional race/)).toBeVisible();
+  const afterOffer = await page.evaluate((id) => JSON.parse(sessionStorage.getItem(`cyclereg.register.${id}`)!), eventId);
+  expect(afterOffer).toEqual(beforeOffer);
   await expect(page.getByLabel(/Type your full name to sign/)).toHaveValue('Alex Demo');
   await page.getByRole('button', { name: /Retry.*reservation/ }).click();
   await expect(page.locator('.error-summary')).toContainText('Sign in again');

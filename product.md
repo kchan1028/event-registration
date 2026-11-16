@@ -715,6 +715,10 @@ Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/R
 9. Interim rule decided 2026-11-15 by the project owner: the local build requires a guardian and guardian signature for every rider with racing age 18 or under, in any category. Racing age is age on December 31, so this catches every rider who may be 17 on race day and also asks some riders who are already 18. Still open: the federation's accepted minor-signature policy and whether a date of birth is needed to decide legal age on race day.
 10. Who owns the initial Berkeley reference study and approved schedule review, and which safe local-device arrangement supports phone/screen-reader testing? Confirm participants and session availability before scheduling; no outreach has occurred.
 
+### Uncertain reservation support decision
+
+Open, raised November 16, 2026; owner: project owner (technical and registration support input unassigned). What safe status-check or operator-assisted cancellation path should be available after prolonged reservation failures? The unresolved outcome may already hold capacity, so abandoning the request and starting again can create another hold. Provisional implementation keeps the original request and disables edits while offering retry and organizer-contact guidance; it does not automatically abandon it. The current fixes and synthetic testing can proceed. A developer-independent recovery procedure remains blocked on ownership and policy. Revisit before the controlled pilot and its operational rehearsal. Separately, decide whether to display the accepted category addendum text during recovery ([usability observation #131](https://github.com/kchan1028/event-registration/issues/131)); the current snapshot keeps the submitted addendum IDs, but the pending view hides their text. This visibility choice does not block exact-request replay and remains open for the same owner at that revisit.
+
 ## Research baseline
 
 Reviewed November 14, 2026. Product requirements above are proposed; listed sources are reference points, not promised integrations.

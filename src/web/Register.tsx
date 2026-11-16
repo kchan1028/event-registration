@@ -250,7 +250,7 @@ export function Register({ eventId }: { eventId: string }) {
         if (o.eventId !== eventId) return;
         setOffer(o);
         if (o.status !== 'offered') return;
-        update((d) => ({
+        update((d) => d.pendingReservation ? d : ({
           ...d,
           offerToken: token,
           offerCategoryId: o.categoryId,

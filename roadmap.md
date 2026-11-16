@@ -86,7 +86,7 @@ Built November 14, 2026, on the stack in [ADR 0001](docs/decisions/0001-stack-fo
 
 ## Rider checkout
 
-**Registration recovery fixes (November 16, 2026):** Implemented on the focused fix branch for [#127](https://github.com/kchan1028/event-registration/issues/127) and [#128](https://github.com/kchan1028/event-registration/issues/128). Details correction retains focus; uncertain reservations preserve the submitted request across same-tab refresh and block edits until recovery or definitive rejection. Targeted automated checks passed; independent verification and merge remain pending. Real-device and screen-reader checks remain open. No phase or live-payment gate changes.
+**Registration recovery fixes (November 16, 2026):** Implemented on the focused fix branch for [#127](https://github.com/kchan1028/event-registration/issues/127) and [#128](https://github.com/kchan1028/event-registration/issues/128). Details correction retains focus; uncertain reservations preserve the submitted request across same-tab refresh and block edits until recovery or definitive rejection. Targeted automated checks passed; Claude Code independently passed typecheck and nine browser scenarios on `b5f9c35`. A subsequent waitlist-prefill guard is pending independent verification; merge remains pending. Real-device and screen-reader checks remain open. No phase or live-payment gate changes.
 
 Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "clickable rider checkout for one day, both days, a junior entry, and an uncertain-license case" and the organizer exception queue, with **simulated payment only**.
 
