@@ -4,6 +4,8 @@ An architecture decision record (ADR) is a short document that captures one sign
 
 **Current state:** five ADRs are accepted (0001 to 0004 and 0006) and one is Proposed (0005, merchant and settlement model). See the index below. The backlog below lists decisions still open, with known options and tradeoffs. Options listed in the backlog are not recommendations.
 
+Research reports and source notes live under the [research index](../research/README.md). ADRs retain the options and rationale needed to understand a decision, with an explicit Proposed or Accepted status. Research alone does not accept a decision.
+
 ## Document maintenance rule (mandatory)
 
 Every change must review both [product.md](../../product.md) and [roadmap.md](../../roadmap.md) for impact.
@@ -91,7 +93,7 @@ These are unresolved. They are ordered roughly by when the roadmap needs them. "
 | Hosting, backups, and monitoring | Phase 2 | Managed platform; self-managed cloud resources | Managed services cost more but need less volunteer expertise; restore must be demonstrated either way. Signals to monitor are in [operations.md](../operations.md#monitoring-and-alerts) |
 | Support coverage and incident response | Phase 3 exit | Volunteer support owner per event; paid support; a hybrid | Who answers on opening day and race morning, freeze lengths, and response targets. See [operations.md](../operations.md) |
 | Authentication | Phase 2 email sign-in; final pre-launch organizer security gate | First factor: email magic links, passwords, or third-party sign-in. Second factor (decided in ADR 0003: organizer roles only, before the live pilot; riders and guardians use email sign-in only): passkeys, authenticator apps, SMS fallback for riders and guardians only (never organizers) | MFA is required by [product.md](../../product.md#sign-in-and-account-security) before the live pilot; choose methods that occasional riders and guardians can complete, and phishing-resistant factors for organizers |
-| Transactional email provider | Phase 2 | Decided in ADR 0006: Amazon SES. Marketing email later: see the [case study](../discovery/email-providers.md) | Delivery status and suppression handling are required |
+| Transactional email provider | Phase 2 | Decided in ADR 0006: Amazon SES. Marketing email later: see the [case study](../research/email-providers.md) | Delivery status and suppression handling are required |
 | Timer export format | Phase 1 (samples), Phase 3 (tested) | Whatever the actual timer accepts | Must be tested with the real timer; no assumed standard |
 | Data retention and deletion periods | Before the pilot | To be set with the club and federation requirements | Waiver and financial records may need long retention; other data should be kept as briefly as possible |
 | Product name | Before any public page | CycleReg (working name, availability not checked) | Trademark and domain availability |

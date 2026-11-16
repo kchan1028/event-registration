@@ -29,6 +29,7 @@ Reviewers will send back any change whose summary does not state its product and
    |---|---|
    | New or changed requirement, rule, flow, or acceptance criterion | Edit `product.md` |
    | New priority, dependency, milestone, blocker, or status | Edit `roadmap.md` |
+   | Research evidence, options, or recommendations | Start with the [research index](docs/research/README.md); file reports and specialized evidence using its filing rules |
    | Significant technical choice (stack, data store, payment provider, hosting, integration approach) | New ADR in [docs/decisions/](docs/decisions/README.md) |
    | How we work, write, or test | Edit the relevant guide in [docs/](docs/documentation-guide.md#where-things-live) |
    | Implementation of planned work | Code plus the docs it affects |

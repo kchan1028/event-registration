@@ -159,7 +159,7 @@ Granting a role someone already holds writes no row. Inviting an email again wri
 
 ### junior_profiles
 
-Migration 25. A junior a guardian manages (owner decision November 15, 2026; [guardian research](docs/discovery/guardian-accounts.md)). Created the first time a signed-in account places an order for a rider with a guardian, and reused for later orders of the same junior name by that account. Junior orders placed before migration 25 are linked the next time that guardian registers or opens **My registrations**. When an organizer corrects a junior's name, the profile takes the corrected name; if the guardian already has a profile under that name, the two merge (all orders move, the viewer email is kept). One guardian per junior: the profile belongs to the account that registered the junior, and another household registering a junior with the same name gets its own profile and sees nothing of this one.
+Migration 25. A junior a guardian manages (owner decision November 15, 2026; [guardian research](docs/research/guardian-accounts.md)). Created the first time a signed-in account places an order for a rider with a guardian, and reused for later orders of the same junior name by that account. Junior orders placed before migration 25 are linked the next time that guardian registers or opens **My registrations**. When an organizer corrects a junior's name, the profile takes the corrected name; if the guardian already has a profile under that name, the two merge (all orders move, the viewer email is kept). One guardian per junior: the profile belongs to the account that registered the junior, and another household registering a junior with the same name gets its own profile and sees nothing of this one.
 
 | Column | Notes |
 |---|---|

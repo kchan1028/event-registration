@@ -34,6 +34,8 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | License | [LICENSE.md](../LICENSE.md) | MIT |
 | Technical structure and constraints | [architecture.md](architecture.md) | Labeled Proposed until ADRs accept it |
 | Current database tables, relationships, constraints, and deletion behavior | [DATA_MODEL.md](../DATA_MODEL.md) | Describes what is implemented; the target model is in `product.md` |
+| Research reports and source notes | [research/](research/README.md) | Start here for desk research and links to field discovery, usability work, and event case studies; research recommendations do not change requirements |
+| Field discovery and evidence | [discovery/](discovery/README.md) | Phase 0 interviews, observations, baselines, and the continue-or-stop memo |
 | Significant technical decisions | [decisions/](decisions/README.md) | One file per decision |
 | Operating model: support, incidents, monitoring, backups, handoff | [operations.md](operations.md) | Labeled Proposed until there is a running system |
 | Domain rules for code | [coding-guide.md](coding-guide.md) | |
@@ -72,7 +74,9 @@ Current layout:
 └── docs/
     ├── architecture.md, coding-guide.md, content-guide.md, documentation-guide.md, operations.md, timer-export-review.md,
     │                             usac-questions.md, payment-model-questions.md
-    ├── discovery/                Research reports, interviews, and dated source notes
+    ├── research/                 Research index, desk reports, and dated source notes
+    ├── discovery/                Phase 0 field-discovery kit and evidence
+    ├── case-studies/             Event-specific research and setup exercises
     ├── decisions/                Architecture decision records
     ├── fixtures/                 Fake demo purchase flow data and sample waiver text
     ├── runbooks/                 Local setup, troubleshooting, and the planned Render deploy
@@ -221,6 +225,7 @@ Terms from the category model are defined in [product.md](../product.md#keep-the
 - [ ] Product and roadmap impact stated in the change summary
 - [ ] Status words match the [status vocabulary](#status-vocabulary)
 - [ ] Each fact lives in one home; other documents link to it
+- [ ] Research reports and evidence collections are reachable from the [research index](research/README.md); decision records keep their explicit status
 - [ ] Terms match the glossary
 - [ ] Relative links and anchors resolve
 - [ ] Every Mermaid diagram parses and has a plain-English explanation
