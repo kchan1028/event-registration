@@ -6,6 +6,7 @@ Start here to find evidence, options, and recommendations. Research informs deci
 
 | Topic | Report and research date | Status and limitations |
 |---|---|---|
+| Customer and launch strategy | [Cycling customer and launch strategy](customer-launch-strategy.md), November 16, 2026 | Proposed segment, build-versus-buy, operating-cost and validation recommendations. No new interviews, analytics, fresh UI audit, accepted priorities or launch approval. Competitor sources are anonymized. |
 | Registration experience | [Design research](design-research.md), November 16, 2026 | Public-source review, code assessment, existing feedback, and Proposed design work. No new participant study or live UI accessibility audit. Sources are anonymized, limiting independent verification. |
 | Payments | [Payment platform options](payment-platform-options.md) and source notes: [card processing](payment-platform-notes/stripe.md), [alternatives](payment-platform-notes/alternatives.md), [methods and reliability](payment-platform-notes/methods-reliability.md), November 15, 2026 | Research recommendations. Stripe is selected in [ADR 0002](../decisions/0002-stripe-payments.md); the merchant model remains Proposed in [ADR 0005](../decisions/0005-merchant-and-settlement-model.md). Recheck dated fees before relying on them. |
 | Guardians and juniors | [Guardian accounts](guardian-accounts.md), November 15, 2026 | Research and the owner-accepted model. Steps 1–3 are implemented locally; later steps remain Planned as identified in the report. |
