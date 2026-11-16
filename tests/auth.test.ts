@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import type { FastifyRequest } from 'fastify';
 import { describe, expect, it } from 'vitest';
 import type { AuthProvider } from '../src/server/auth';
 import { authProviderFromEnv } from '../src/server/auth';
@@ -411,14 +412,18 @@ describe('riders see only their own orders', () => {
 });
 
 describe('choosing the sign-in provider', () => {
-  it('needs a Clerk secret key unless the local test provider is chosen', () => {
-    expect(() => authProviderFromEnv({})).toThrow(/CLERK_SECRET_KEY/);
-    expect(() => authProviderFromEnv({ CLERK_SECRET_KEY: 'sk_test_fictional' })).not.toThrow();
-    expect(() => authProviderFromEnv({ AUTH_MODE: 'test' })).not.toThrow();
+  const testToken = { headers: { authorization: 'Bearer test:dev@example.test' } } as FastifyRequest;
+
+  it('uses Clerk when its secret key is set, and the local test provider otherwise on this computer', async () => {
+    expect(await authProviderFromEnv({ CLERK_SECRET_KEY: 'sk_test_fictional' }).verify(testToken)).toBeNull();
+    expect(await authProviderFromEnv({}).verify(testToken)).toEqual({ providerUserId: 'test|dev@example.test', email: 'dev@example.test' });
+    expect(await authProviderFromEnv({ AUTH_MODE: 'test', CLERK_SECRET_KEY: 'sk_test_fictional' }).verify(testToken)).not.toBeNull();
   });
 
-  it('refuses the test provider in production or on a network address', () => {
-    expect(() => authProviderFromEnv({ AUTH_MODE: 'test', NODE_ENV: 'production' })).toThrow(/local browser tests only/);
-    expect(() => authProviderFromEnv({ AUTH_MODE: 'test', HOST: '0.0.0.0' })).toThrow(/local browser tests only/);
+  it('requires Clerk in production or on a network address', () => {
+    expect(() => authProviderFromEnv({ NODE_ENV: 'production' })).toThrow(/CLERK_SECRET_KEY/);
+    expect(() => authProviderFromEnv({ HOST: '0.0.0.0' })).toThrow(/CLERK_SECRET_KEY/);
+    expect(() => authProviderFromEnv({ AUTH_MODE: 'test', NODE_ENV: 'production' })).toThrow(/local only/);
+    expect(() => authProviderFromEnv({ AUTH_MODE: 'test', HOST: '0.0.0.0', CLERK_SECRET_KEY: 'sk_test_fictional' })).toThrow(/local only/);
   });
 });

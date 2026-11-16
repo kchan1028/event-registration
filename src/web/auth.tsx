@@ -7,9 +7,10 @@ import { Field, Pending, ThemeToggle } from './ui';
  * Sign-in in the browser (ADR 0003, Phase 2: passwordless email sign-in on Clerk).
  *
  * - With VITE_CLERK_PUBLISHABLE_KEY set, Clerk's sign-in window sends an emailed code or link.
- * - With VITE_AUTH_MODE=test (browser tests only), a plain form signs in as a fictional
- *   `.test` address; the server accepts it only when it runs with AUTH_MODE=test locally.
- * - With neither, the app says sign-in is not configured.
+ * - With VITE_AUTH_MODE=test (browser tests), or in the dev server without a Clerk key, a plain
+ *   form signs in as a fictional `.test` address; the server accepts it only when it runs on this
+ *   computer outside production without Clerk, or with AUTH_MODE=test.
+ * - In a production build with neither, the app says sign-in is not configured.
  *
  * Every API call carries the session token (api.ts). The server decides what each person may do.
  */
@@ -32,7 +33,7 @@ export function useSession(): Session {
 // Read import.meta.env.* directly: the bundler replaces these exact expressions at build time, which lets a
 // production build drop the test sign-in page. An alias of import.meta.env can defeat that.
 const CLERK_KEY = (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined)?.trim();
-const TEST_MODE = import.meta.env.VITE_AUTH_MODE === 'test';
+const TEST_MODE = import.meta.env.VITE_AUTH_MODE === 'test' || (import.meta.env.DEV && !CLERK_KEY);
 
 export function AuthRoot({ children }: { children: ReactNode }) {
   if (TEST_MODE) return <TestSession>{children}</TestSession>;
@@ -120,7 +121,7 @@ function TestSignInPage({ onDone, onCancel }: { onDone: (email: string) => void;
       <main className="signin__main">
         <form className="panel-form signin__card" onSubmit={submit}>
           <h1>Sign in for testing</h1>
-          <p>Browser-test sign-in. Use a fictional address ending in .test. Real sign-in sends an emailed code instead.</p>
+          <p>Local test sign-in, with no email sent. Use a fictional address ending in .test. Real sign-in sends an emailed code instead.</p>
           <Field label="Test email" hint="For example, organizer@example.test">
             {(id, describedBy) => <input id={id} className="input" type="email" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} aria-describedby={describedBy} required />}
           </Field>

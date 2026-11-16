@@ -4,6 +4,7 @@ import { newId } from '../shared/factory';
 import { can, INVITATION_DAYS, ROLE_LABELS, type Invitation, type MembershipAction, type MembershipChange, type Permission, type Role } from '../shared/roles';
 import type { Db } from './db';
 import type { Mailer } from './email';
+import { listenHost } from './listen';
 import { HttpError } from './repo';
 
 /**
@@ -12,8 +13,8 @@ import { HttpError } from './repo';
  * The identity provider proves who is calling; CycleReg decides what they may do. An
  * `AuthProvider` turns a request into a provider user ID (or null when not signed in).
  * The app uses Clerk session tokens sent as `Authorization: Bearer <token>`. API tests use
- * a fake provider and the browser tests use the local-only test provider below, so neither
- * needs Clerk keys.
+ * a fake provider; the browser tests, and local development without Clerk keys, use the
+ * local-only test provider below.
  */
 
 export interface SignedIn {
@@ -72,8 +73,8 @@ function clerkAuth(opts: { secretKey: string; authorizedParties?: string[] }): A
 const TEST_TOKEN = /^test:([a-z0-9._+-]+@[a-z0-9.-]+\.test)$/;
 
 /**
- * Local browser tests only: `Authorization: Bearer test:<name>@<domain>.test` signs in as
- * that fictional address. Only `.test` addresses are accepted, and `authProviderFromEnv`
+ * Local development and browser tests only: `Authorization: Bearer test:<name>@<domain>.test`
+ * signs in as that fictional address. Only `.test` addresses are accepted, and `authProviderFromEnv`
  * refuses to start it in production or on a network address.
  */
 export function testAuth(): AuthProvider {
@@ -108,19 +109,21 @@ export function seedOwner(argv: string[], env: Record<string, string | undefined
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1']);
 
 /**
- * Picks the provider from the environment. `AUTH_MODE=test` is for the local browser tests
- * and is refused in production or when the server listens beyond this computer.
- * Otherwise Clerk is required: without `CLERK_SECRET_KEY` the server does not start.
+ * Picks the provider from the environment. With `CLERK_SECRET_KEY`, Clerk (unless
+ * `AUTH_MODE=test`). Without it, or with `AUTH_MODE=test`, the local test provider, which is
+ * refused in production or when the server listens beyond this computer: there Clerk is required.
  */
 export function authProviderFromEnv(env: Record<string, string | undefined> = process.env): AuthProvider {
-  if (env.AUTH_MODE === 'test') {
-    const host = env.HOST?.trim() || '127.0.0.1';
-    if (env.NODE_ENV === 'production') throw new Error('AUTH_MODE=test is for local browser tests only and cannot run with NODE_ENV=production.');
-    if (!LOOPBACK.has(host)) throw new Error(`AUTH_MODE=test is for local browser tests only; refusing to listen on ${host}.`);
-    return testAuth();
-  }
   const secretKey = env.CLERK_SECRET_KEY?.trim();
-  if (!secretKey) throw new Error('CLERK_SECRET_KEY is not set. Sign-in needs a Clerk development instance; see docs/runbooks/local-setup.md.');
+  if (env.AUTH_MODE === 'test' || !secretKey) {
+    const host = listenHost(env);
+    if (env.NODE_ENV !== 'production' && LOOPBACK.has(host)) {
+      if (env.AUTH_MODE !== 'test') console.warn('Clerk keys are not set: using the local test sign-in (fictional .test addresses, no email). See docs/runbooks/local-setup.md.');
+      return testAuth();
+    }
+    if (env.AUTH_MODE === 'test') throw new Error(`AUTH_MODE=test is local only; refusing it with NODE_ENV=${env.NODE_ENV ?? 'unset'} on ${host}.`);
+    throw new Error('CLERK_SECRET_KEY is not set. Outside local development, sign-in needs Clerk; see docs/runbooks/local-setup.md.');
+  }
   const parties = env.CLERK_AUTHORIZED_PARTIES?.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
   return clerkAuth({ secretKey, authorizedParties: parties.length ? parties : undefined });
 }
