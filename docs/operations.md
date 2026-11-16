@@ -142,6 +142,8 @@ Retention and deletion periods are not set; they are in the [decision backlog](d
 
 ## Handoff to a successor
 
+The [organizer handoff guide](runbooks/organizer-handoff.md) documents the existing organization-wide role transfer, retained access, successor checks and uncertain-result recovery. Its local separate-account rehearsal is technical evidence only; actual successor/volunteer acceptance and external responsibilities remain open.
+
 The handoff acceptance criterion in [product.md](../product.md#core-flows-and-acceptance-criteria) is the test: a second authorized organizer can operate the event and its runbook without the original owner's credentials. To support it:
 
 - keep each event's runbook, support contacts, and fallback documents inside the organizer workspace, not in one person's email;
