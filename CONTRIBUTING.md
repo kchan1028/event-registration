@@ -6,7 +6,7 @@ The project has its source documents and a local build covering the category bui
 
 ## The one rule that applies to every change
 
-Every change must review both [product.md](product.md) and [roadmap.md](roadmap.md) for impact.
+Every change must review [product.md](product.md) and [roadmap.md](roadmap.md) for impact, and also [feature.md](feature.md), [SECURITY.md](SECURITY.md), [DATA_MODEL.md](DATA_MODEL.md), the [test plan](docs/testing/test-plan.md), and the [audit findings](AUDIT.md). AI agents start from [AGENTS.md](AGENTS.md), which links to the same rules.
 
 - Update `product.md` when requirements, scope, user flows, business rules, acceptance criteria, or product decisions change.
 - Update `roadmap.md` when priorities, dependencies, milestones, blockers, or delivery status change.
@@ -15,6 +15,8 @@ Every change must review both [product.md](product.md) and [roadmap.md](roadmap.
 - Mark roadmap work complete only after its acceptance criteria are verified.
 - Distinguish planned, implemented, and verified behavior.
 - Do not maintain a competing product roadmap elsewhere.
+- Update `feature.md` when a feature is added, removed, or changes status, and `SECURITY.md` when the change touches sign-in, roles, permissions, payments, personal data, secrets, or routes open without sign-in.
+- Update [AUDIT.md](AUDIT.md) when the change introduces, fixes, or invalidates a recorded finding. Only verification evidence closes a finding.
 
 Reviewers will send back any change whose summary does not state its product and roadmap impact.
 
@@ -53,6 +55,9 @@ What changed:
 Why:
 Product impact (product.md): <sections updated, or "None" plus the reason>
 Roadmap impact (roadmap.md): <sections updated, or "None" plus the reason>
+Feature impact (feature.md): <rows updated, or "None" plus the reason>
+Security impact (SECURITY.md): <sections updated, or "None" plus the reason>
+Audit impact (AUDIT.md): <findings added, updated, or closed, or "None" plus the reason>
 Docs updated: <README or guides touched, or "None needed" plus the reason>
 Test plan: <"Test plan updated: what changed and why" or "No test plan update needed: brief reason">
 Status: Planned | Implemented | Verified (say what was checked and how)
@@ -69,6 +74,7 @@ The `Test plan` line follows [keeping the test plan current](docs/testing/test-p
 - Changes that touch money, capacity, eligibility, waivers, permissions, or personal data need a reviewer who understands that area (for example the treasurer for refunds, the registration lead for category rules). See [docs/coding-guide.md](docs/coding-guide.md#testing-and-review). Changes written by an agent are independently verified by the other agent ([test plan](docs/testing/test-plan.md#3-independent-verification)).
 - Reviewers check:
   - [ ] Product and roadmap impact is stated and correct
+  - [ ] Audit findings the change introduces, fixes, or invalidates are updated in [AUDIT.md](AUDIT.md)
   - [ ] The `Test plan` line is present and true; the [test plan](docs/testing/test-plan.md#8-keeping-this-plan-current) is updated when the change requires it
   - [ ] Docs describe what exists, labeled Planned, Implemented, or Verified
   - [ ] Roadmap items are marked complete only with evidence that acceptance criteria pass

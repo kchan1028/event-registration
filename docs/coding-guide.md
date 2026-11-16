@@ -36,6 +36,37 @@ Every change must review both [product.md](../product.md) and [roadmap.md](../ro
 - **Small, boring, readable.** Prefer plain code a successor can follow over clever abstractions. Complexity must earn its place by satisfying a requirement.
 - **Stable IDs everywhere.** Every entity that appears in an export, receipt, audit record, or external system has a stable, opaque ID that never changes or gets reused. Display names and timing codes can change; IDs cannot.
 
+## Keep the code simple
+
+These rules come from the November 15, 2026 code review, which found the same rule written in up to seven places, about twenty unused exports, and wording that still described the first prototype.
+
+**One rule, one place**
+
+- Before writing a rule, calculation, query, formatter, or validation, search for one that already exists (`src/shared/` first, then the module you are in). Use it. If it almost fits, extend it instead of writing a second version.
+- A rule the browser and the server both need lives in `src/shared/` and both sides call it. Never re-implement it in `src/web/` or `src/server/` to explain it early or to change the wording.
+- A SQL condition used by more than one query is defined once and reused (see `liveEntrySql` and `reservedOrderSql` in `src/server/repo.ts`).
+- Loading something every module needs (the published configuration, bib settings, an order) goes through one function in `repo` or `orders`, not a private copy per module.
+- Types sent over the API are imported from `src/shared/`, not retyped in `src/web/api.ts`.
+- Numbers and labels with one meaning are constants (`OFFER_HOURS`, `licenseLabel`), never typed again as text such as "24 hours".
+
+**No complexity without a second caller**
+
+- Do not add a helper, hook, component, option, parameter, or default value until two real callers need it. Write the plain code first.
+- Do not add a fallback, optional field, or branch for a case that cannot happen. If a caller always supplies a value, the field is required.
+- Do not add configuration, feature flags, or a new dependency for something one line of code does.
+- Prefer deleting code to adding code.
+- Do not load every row and filter in code when a `WHERE` clause can do it, and do not run a query per row inside a loop.
+
+**Leave nothing stale**
+
+- When a change makes code unused, delete it in the same change: exports, types, CSS selectors, props, defaults, and tests of removed behavior.
+- When a change makes a comment, name, label, error message, or document untrue, fix it in the same change. A name says what the thing is now (`CapacityEntry`, not `TestEntry`).
+- Do not write "until X exists", "for now", or "older callers" in a comment without checking that it is still true. If X exists, remove the workaround.
+- User-facing text follows the data (payment mode, the event's demo flag, the signed-in role), never an assumption about how the build is configured.
+- Name a function for what it does. Do not reuse one short name (`norm`, `money`) for helpers that behave differently. A copied block that needs a different result in one place means the shared version needs a parameter, not a second copy.
+
+A duplicate, dead code, or stale assumption found outside your task is not fixed silently: list it under "Open questions" in the change summary.
+
 ## Naming conventions
 
 - Use the domain terms from the [glossary](documentation-guide.md#glossary) in code: `RegistrationCategory`, `StartGroup`, `Classification`, `CapacityPool`, `DisplayGroup`, `Bundle`. Do not invent synonyms such as `Division` or `Wave` for the same concept.
