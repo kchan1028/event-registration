@@ -67,6 +67,7 @@ test.describe('touch header', () => {
       await page.goto(route);
       await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
       expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+      await expect(page.locator('header a.brand')).toHaveCount(route === '/' ? 0 : 1);
       for (const width of [320, 390, 768]) {
         await page.setViewportSize({ width, height: 900 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);

@@ -38,7 +38,7 @@ Details and limits: [category builder](product.md#1a-road-race-and-criterium-cat
 | Feature | Status | What it does |
 |---|---|---|
 | Browse published events | Implemented | View already-published events and schedules; browsing does not create demo fixtures |
-| Responsive header navigation | Implemented | Shared headers wrap to keep theme, registration lookup and sign-out actions reachable; coarse-pointer account actions and interactive brand links meet the 44px target |
+| Responsive header navigation | Implemented | Shared headers wrap to keep theme, registration lookup and sign-out actions reachable; coarse-pointer account actions meet the 44px target; interactive brand links in registration, catalog and My registrations headers do too |
 | Choose entries | Implemented | Select eligible categories, see capacity and review requirements, and receive schedule-conflict warnings |
 | Order pricing | Implemented | Show entries, discounts, and configured fees before simulated payment; prevent discount stacking |
 | Rider and guardian details | Implemented | Enter fictional rider details once per order, with guardian details for minors; validation corrections retain keyboard focus |
