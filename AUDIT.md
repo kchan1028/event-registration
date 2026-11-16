@@ -21,6 +21,8 @@ November 16, 2026, Codex, baseline `028d7e2`: [registration and operational read
 
 The supplement partially examines capacity/eligibility/pricing/refund implementation and race-day controls; it does not verify their complete correctness. It does not close GAP-001–011. Two newly tracked main defects are added below. AUD-006 was corrected and independently reviewed in merged PR #129 (`75b86ae`).
 
+November 16 volunteer-guide source review against `cdc9fbc`: Claude Code identified a printed-roster instruction conflict, tracked as AUD-011 / #142 below. This supplemental finding is source-inspected only; no fresh runtime, printer or volunteer test was performed. The new [check-in guide](docs/runbooks/race-day-check-in.md) documents the limitation; it does not fix the printout or close operational gaps.
+
 ## Coverage
 
 | Area | Status | What was examined |
@@ -68,6 +70,7 @@ Defects seen in the code, tooling, or documents at the reviewed commit.
 | AUD-008 | Agent instructions are untracked (`AGENTS.md` is gitignored), so Claude Code and Codex can work from different, unreviewed rules | `.gitignore`; shared rules live in the tracked guides ([CONTRIBUTING.md](CONTRIBUTING.md), [coding guide](docs/coding-guide.md), [test plan](docs/testing/test-plan.md)) | Low | None | Project owner | Tracked briefly in #119, untracked again by owner decision | Accepted risk (owner decision, November 16, 2026: agent instructions stay local) | Not applicable |
 | AUD-009 | Details-form error summary can regain focus while the rider types a correction | Pre-fix `Register.tsx` ErrorSummary dependency and fresh DetailsStep array; historical CRO-variant expert walkthrough, not a main runtime test; blocks keyboard completion of required rider data under existing accessibility requirements | Medium | Blocks live launch (release-blocker) | Unassigned | [#127](https://github.com/kchan1028/event-registration/issues/127) | Closed | [#130](https://github.com/kchan1028/event-registration/pull/130); author and Claude Code keyboard regression passed on `b5f9c35`; Claude Code guard regression passed on `df69c3d`; unchanged reviewed tree merged at `586eb95`, with CI passing |
 | AUD-010 | Reservation retry rotates request identity after an unknown response, risking another hold | Pre-fix `Register.tsx` Waiver catch; code-inspected risk, no duplicate real charge demonstrated | High | Blocks live launch (release-blocker) | Unassigned | [#128](https://github.com/kchan1028/event-registration/issues/128) | Closed | [#130](https://github.com/kchan1028/event-registration/pull/130); author and Claude Code recovery regressions passed on `b5f9c35`; Claude Code guard regression passed on `df69c3d`; unchanged reviewed tree merged at `586eb95`, with CI passing |
+| AUD-011 | Printed-roster instructions assume paper issuance/clearance while the accepted contingency process remains Proposed | Source-only review of `src/web/Roster.tsx` against [operations](docs/operations.md#handling-an-incident); no fresh runtime or paper processing test | Medium | Blocks live launch (release-blocker) | Unassigned | [#142](https://github.com/kchan1028/event-registration/issues/142) | Open | |
 
 ## Documented readiness gaps
 
@@ -93,4 +96,4 @@ These areas were not examined in the original audit; the supplemental research a
 
 ## Later work
 
-Operational runbooks and the data-retention document are deferred; GAP-005 and GAP-006 stay open until they exist and are verified.
+The phone handoff and check-in guides exist for local fictional-data rehearsals. Accepted recovery procedures, demonstrated operations and the data-retention document remain open; GAP-005 and GAP-006 are not closed by writing instructions.

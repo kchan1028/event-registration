@@ -62,6 +62,8 @@ Details: [demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-
 | Start lists | Implemented | List confirmed entries by race, with numbered snapshots and changes between versions |
 | Sample timer CSV | Implemented | Export stable entry identifiers and race data; the format is not yet agreed or round-tripped with a timer |
 
+The [check-in volunteer guide](docs/runbooks/race-day-check-in.md) documents the local desk workflow and role boundaries. Independent staff rehearsal and an approved connectivity fallback remain open.
+
 Details: [check-in status](roadmap.md#check-in) and [start-list status](roadmap.md#start-lists-and-timer-export). Volunteer usability tests and a timer-approved export remain open.
 
 ## Local demo and interface
