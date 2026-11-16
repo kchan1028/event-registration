@@ -112,7 +112,7 @@ docker run -d --name cyclereg-postgres -e POSTGRES_USER=cyclereg -e POSTGRES_PAS
 npm ci
 ```
 
-Sign-in needs a Clerk development instance: put `CLERK_SECRET_KEY` and `VITE_CLERK_PUBLISHABLE_KEY` in a local `.env` ([sign-in keys](docs/runbooks/local-setup.md#sign-in-keys)). The tests do not need them.
+Local development needs no Clerk keys: without them, sign-in is a local test form for fictional `.test` addresses, refused in production and on network addresses. For real emailed sign-in, put `CLERK_SECRET_KEY` and `VITE_CLERK_PUBLISHABLE_KEY` in a local `.env` ([sign-in keys](docs/runbooks/local-setup.md#sign-in-keys)).
 
 ```bash
 npm run dev
