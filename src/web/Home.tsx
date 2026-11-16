@@ -31,17 +31,6 @@ export function Home() {
     }
   }
 
-  async function loadRiderDemo() {
-    setBusy(true);
-    try {
-      await api.loadPurchaseFlowDemo();
-      navigate({ page: 'events' });
-    } catch (e) {
-      setError((e as ApiError).message);
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="home">
       <header className="home__bar">
@@ -147,10 +136,10 @@ export function Home() {
               </p>
             </div>
             <div className="demo-callout">
-              <h2>Try the rider demo</h2>
-              <p>Click through registration as a rider, from choosing an event to a test payment, using the fictional events, riders, and fees in docs/fixtures.</p>
-              <button className="btn btn--secondary" onClick={loadRiderDemo} disabled={busy}>
-                Open the rider demo
+              <h2>Try rider registration</h2>
+              <p>Browse events already loaded in this database. Use fictional rider details and test payments.</p>
+              <button className="btn btn--secondary" onClick={() => navigate({ page: 'events' })} disabled={busy}>
+                Browse rider events
               </button>
             </div>
           </aside>

@@ -1,3 +1,4 @@
+import { seedRegistrationCase } from './support/registration-case';
 import { expect, test } from '@playwright/test';
 
 // Signed out: organizer pages ask for sign-in, rider event pages stay open, and checkout asks
@@ -20,17 +21,10 @@ test('organizer pages ask for sign-in, then show the workspace', async ({ page }
 });
 
 test('riders browse events signed out and sign in before entering details', async ({ page }) => {
-  const seeded = await page.request.post('/api/demo/purchase-flow', { headers: { Authorization: 'Bearer test:organizer@example.test' } });
-  expect([200, 201]).toContain(seeded.status());
-
-  // The shared fixture loader is not locked: a parallel test may still be publishing it (or have
-  // created it twice), so reload until the event is listed and take the first link.
-  const event = page.getByRole('link', { name: /Demo Valley Criterium/ }).first();
-  await expect(async () => {
-    await page.goto('/#/register');
-    await page.reload();
-    await expect(event).toBeVisible({ timeout: 2000 });
-  }).toPass({ timeout: 30_000 });
+  const eventId = await seedRegistrationCase(page.request, 'criterium');
+  await page.goto('/#/register');
+  const event = page.locator(`a[href="#/register/${eventId}"]`);
+  await expect(event).toBeVisible();
   await event.click();
   await expect(page.getByRole('heading', { name: 'About you' })).toBeVisible();
   // Riders can sign in before choosing races, so checkout is not interrupted.

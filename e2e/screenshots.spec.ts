@@ -1,3 +1,4 @@
+import { seedRegistrationCase } from './support/registration-case';
 import { expect, test } from './fixtures';
 
 // Regenerates docs/screenshots from the demonstration event.
@@ -55,12 +56,13 @@ test('capture documentation screenshots', async ({ page }) => {
 test('capture rider checkout screenshots', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 1440, height: 900 });
+  const seededEventId = await seedRegistrationCase(page.request, 'criterium');
   await page.goto('/');
-  await page.getByRole('button', { name: 'Open the rider demo' }).click();
+  await page.getByRole('button', { name: 'Browse rider events' }).click();
   await expect(page.getByRole('heading', { name: 'Choose an event' })).toBeVisible();
   await page.screenshot({ path: out('09-register-choose-event') });
 
-  await page.getByRole('link', { name: /Demo Valley Criterium/ }).click();
+  await page.locator(`a[href="#/register/${seededEventId}"]`).click();
   const eventId = new URL(page.url()).hash.split('/')[2];
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
   await page.getByRole('checkbox', { name: /DVC-M45/ }).click();

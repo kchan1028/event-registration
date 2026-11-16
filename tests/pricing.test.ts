@@ -125,52 +125,44 @@ describe('selection checks', () => {
 });
 
 import { readFileSync } from 'node:fs';
-import { buildFixtureEvents, DEMO_RIDERS, FIXTURE_WAIVER_TEXT, FIXTURE_WAIVER_VERSION, RIDGE_SAT, RIDGE_SUN, VALLEY_CATEGORIES } from '../src/shared/fixtures';
+import { FIXTURE_WAIVER_TEXT, FIXTURE_WAIVER_VERSION } from '../src/shared/fixtures';
+import { buildCaseStudyScenarios } from '../src/shared/caseStudies';
 
-describe('demo purchase flow fixtures (docs/fixtures)', () => {
-  const [valley, ridge] = buildFixtureEvents().map((f) => f.config);
+describe('generated case-study purchase examples', () => {
+  const cases = buildCaseStudyScenarios();
+  const criterium = cases.find((c) => c.key === 'criterium')!.config;
+  const weekend = cases.find((c) => c.key === 'omnium')!.config;
   const byName = (c: EventConfig, name: string) => c.categories.find((x) => x.name === name)!.id;
 
   it('reproduces every worked demo order total in docs/fixtures/README.md', () => {
     // Two races, one day: $65 - $10 second-race discount + $3 platform + $1.65 processing
-    const alex = quote(valley, [byName(valley, 'Men Cat 4/5'), byName(valley, 'Open Cat 4/5 Evening')], '2027-03-01');
+    const alex = quote(criterium, [byName(criterium, 'Men Cat 4/5'), byName(criterium, 'Open Cat 4/5 Evening')], '2027-03-01');
     expect([alex.entriesTotalCents, alex.fees.map((f) => f.cents), alex.totalCents]).toEqual([5500, [300, 165], 5965]);
     // Weekend bundle: $75 bundle + $3 + $2.25
-    const blake = quote(ridge, [byName(ridge, 'Masters 35+ Cat 3/4 Road Race'), byName(ridge, 'Masters 35+ Cat 3/4 Criterium')], '2027-03-01');
+    const blake = quote(weekend, [byName(weekend, 'Masters 35+ Cat 3/4 Road Race'), byName(weekend, 'Masters 35+ Cat 3/4 Criterium')], '2027-03-01');
     expect([blake.entriesTotalCents, blake.bundle?.name, blake.totalCents]).toEqual([7500, 'Weekend bundle (one road race + one criterium)', 8025]);
     // Junior with guardian: $15 + $3 + $0.45
-    expect(quote(valley, [byName(valley, 'Juniors 10-14')], '2027-03-01').totalCents).toBe(1845);
+    expect(quote(criterium, [byName(criterium, 'Juniors 10-14')], '2027-03-01').totalCents).toBe(1845);
     // Uncertain license: $35 + $3 + $1.05
-    expect(quote(valley, [byName(valley, 'Women Cat 3/4/5')], '2027-03-01').totalCents).toBe(3905);
+    expect(quote(criterium, [byName(criterium, 'Women Cat 3/4/5')], '2027-03-01').totalCents).toBe(3905);
   });
 
-  it('applies the Valley second-race discount once, only for two entries on the same day', () => {
-    const one = quote(valley, [byName(valley, 'Men Cat 4/5')], '2027-03-01');
+  it('applies the generated criterium second-race discount once, only for two entries on the same day', () => {
+    const one = quote(criterium, [byName(criterium, 'Men Cat 4/5')], '2027-03-01');
     expect(one.discountCents).toBe(0);
-    const two = quote(valley, [byName(valley, 'Men Cat 4/5'), byName(valley, 'Open Cat 4/5 Evening')], '2027-03-01');
+    const two = quote(criterium, [byName(criterium, 'Men Cat 4/5'), byName(criterium, 'Open Cat 4/5 Evening')], '2027-03-01');
     expect(two.lines.filter((l) => l.discountReason === 'Second race discount')).toHaveLength(1);
   });
 
-  it('matches the YAML: every category name, price, cap, start time, and the waiver version', () => {
-    const yaml = readFileSync('docs/fixtures/demo-purchase-flow.yaml', 'utf8');
-    for (const c of [...VALLEY_CATEGORIES, ...RIDGE_SAT, ...RIDGE_SUN]) {
-      const block = yaml.slice(yaml.indexOf(`registration_category: "${c.name}"`));
-      expect(block.length, c.name).toBeLessThan(yaml.length);
-      const next = block.slice(0, 600);
-      expect(next).toContain(`price_cents: ${c.priceCents}`);
-      expect(next).toContain(`start_time: "${c.startTime}"`);
-      expect(next).toContain(`cap: ${c.cap}, confirmed: ${c.confirmed}`);
-    }
-    expect(yaml).toContain(`version: "${FIXTURE_WAIVER_VERSION}"`);
-    for (const r of DEMO_RIDERS) expect(yaml).toContain(`name: "${r.firstName} ${r.lastName}"`);
+  it('uses the documented sample waiver', () => {
     const waiver = readFileSync('docs/fixtures/sample-waiver.md', 'utf8');
     expect(waiver).toContain(FIXTURE_WAIVER_VERSION);
     expect(waiver).toContain('I understand bicycle racing can cause injury');
     expect(FIXTURE_WAIVER_TEXT).toContain('I understand bicycle racing can cause injury');
   });
 
-  it('marks Masters 35+ Cat 3/4 at the Valley criterium as full', () => {
-    const plan = buildFixtureEvents()[0];
+  it('marks Masters 35+ Cat 3/4 at the generated criterium as full', () => {
+    const plan = buildCaseStudyScenarios().find((c) => c.key === 'criterium')!;
     const m35 = plan.config.categories.find((c) => c.name === 'Masters 35+ Cat 3/4')!;
     expect(plan.entryPlan.find((p) => p.categoryId === m35.id)?.count).toBe(m35.cap);
   });

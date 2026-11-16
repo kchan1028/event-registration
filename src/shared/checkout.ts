@@ -10,7 +10,7 @@ import { COLLEGIATE_DIVISIONS, COMPETITION_CLASSES, LICENSE_CATEGORIES, LICENSE_
  * still needs before they are cleared to race.
  */
 
-/** Messages from docs/fixtures/demo-purchase-flow.yaml (validation_messages). */
+/** Shared validation messages for rider details and sample waiver acceptance. */
 export const MESSAGES = {
   firstName: 'Enter your first name.',
   lastName: 'Enter your last name.',

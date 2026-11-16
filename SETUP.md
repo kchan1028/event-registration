@@ -13,6 +13,8 @@ DATABASE_URL=postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_cases npm run 
 
 The collection contains a multi-category criterium, shared-field road race, two-day omnium, empty draft, and large event. It also contains clearly labeled simulated payment states. List or load one case with `npm run seed:cases -- --list` and `npm run seed:cases -- --scenario omnium`. Remove only generated collection data with `npm run seed:cases -- --reset`. Keep the same `DATABASE_URL` for every command. `--owner` names the email you sign in with ([sign-in keys](docs/runbooks/local-setup.md#sign-in-keys)); without it the collection loads but your account cannot see it. Full rules and expected outcomes are in [fixture documentation](docs/fixtures/README.md#generated-race-case-studies).
 
+Previously loaded generated cases keep their published snapshots; loader reuse does not rewrite their old race labels. To get the updated labels, use a fresh local database, or deliberately reset and reload only the generated collection with `npm run seed:cases -- --reset` followed by the load command above. Reset removes that collection’s fictional orders and history; it does not reset the standalone Berkeley events.
+
 ## Berkeley standalone events
 
 This setup uses two standalone events: Berkeley Hills Road Race ($80) and Berkeley Streets Criterium ($60). Each has one day and one race, with Berkeley's draft category definitions. There is no package, series, podium nomination, extra-entry discount, surcharge, or fee in these two fixtures. Payments and rider details must be simulated.

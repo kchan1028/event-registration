@@ -44,6 +44,8 @@ This is a volunteer project with no response-time guarantee. The owner aims to:
 
 Please give the owner a reasonable chance to fix the problem before you discuss it publicly.
 
+The retired purchase-flow fixture loader is removed. The home-page rider action only browses existing events; generated case studies and Berkeley demos still require their explicit loaders. No role or private-data access is added by fixture removal.
+
 ## Protected bib reassignment (Implemented locally)
 
 Bulk bib changes require `checkin.settings` (owner or registration manager). Individual corrections retain the existing `checkin` permission for check-in staff. Both paths require a reason and a fresh server-verified before/after preview. Changes to checked-in riders also require an explicit acknowledgement bound to that preview; the former direct individual-change endpoint refuses requests without a preview fingerprint. Linked orders resolve to the canonical rider key. Individual corrections may retain an issued bib after refund, withdrawal, or cancellation; authorized lookup includes inactive riders only while they retain an active bib in the selected collision scope. Bulk changes still require confirmed entrants. No financial or entry state is restored.

@@ -1,5 +1,5 @@
 import { buildDemoEvent } from './demo';
-import { buildFixtureEvents } from './fixtures';
+import { buildCaseStudySources } from './caseStudySources';
 import { eventConfigSchema, type EventConfig } from './schema';
 
 export const CASE_STUDY_ORG_ID = 'org_demo_case_studies_v1';
@@ -79,9 +79,7 @@ function planFor(config: EventConfig, requested: Array<{ timingCode: string; cou
 }
 
 function criterium(): CaseStudyScenario {
-  const source = buildFixtureEvents()[0].config;
-  source.event.name = 'Demo Harbor Criterium: pricing and eligibility lab';
-  source.event.venue = 'Example Harbor Circuit, Sample City, CA';
+  const source = buildCaseStudySources()[0];
   const closed = structuredClone(source.categories[source.categories.length - 1]);
   closed.id = 'source-closed-category';
   closed.name = 'Closed demonstration field';
@@ -138,9 +136,7 @@ function roadSharedField(): CaseStudyScenario {
 }
 
 function omnium(): CaseStudyScenario {
-  const source = buildFixtureEvents()[1].config;
-  source.event.name = 'Demo Redwood Omnium Weekend';
-  source.event.venue = 'Example Road Loop and Civic Circuit, Redwood, CA';
+  const source = buildCaseStudySources()[1];
   const config = stabilize(source, 'omnium');
   return {
     key: 'omnium',
@@ -154,7 +150,7 @@ function omnium(): CaseStudyScenario {
 }
 
 function emptyEvent(): CaseStudyScenario {
-  const source = buildFixtureEvents()[0].config;
+  const source = buildCaseStudySources()[0];
   source.event.name = 'Demo Empty Event';
   source.event.venue = '';
   source.categories = [];
@@ -174,7 +170,7 @@ function emptyEvent(): CaseStudyScenario {
 }
 
 function largeEvent(): CaseStudyScenario {
-  const source = buildFixtureEvents()[0].config;
+  const source = buildCaseStudySources()[0];
   source.event.name = 'Demo Grand Prix with an intentionally long but valid event name for layout and performance review';
   source.event.venue = 'Velódromo de Prueba José Example, 123 Long Demonstration Boulevard, Sample City, CA';
   source.races[0].name = 'Large field criterium';

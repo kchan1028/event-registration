@@ -213,29 +213,30 @@ describe('rider checkout: holds and simulated payment', () => {
   });
 });
 
-describe('demo purchase flow fixtures through the API', () => {
-  it('loads the fixture events once, published, and orders reproduce the worked totals and simulated license results', async () => {
+describe('generated case-study purchases through the API', () => {
+  it('loads generated cases once and preserves checkout totals and simulated license results', async () => {
     const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z') });
-    const first = await app.inject({ method: 'POST', url: '/api/demo/purchase-flow' });
+    const first = await app.inject({ method: 'POST', url: '/api/demo/case-studies' });
     expect(first.statusCode).toBe(201);
-    const again = await app.inject({ method: 'POST', url: '/api/demo/purchase-flow' });
+    const again = await app.inject({ method: 'POST', url: '/api/demo/case-studies' });
     expect(again.statusCode).toBe(200);
     const events = (await app.inject({ method: 'GET', url: '/api/public/events' })).json() as { id: string; name: string }[];
-    expect(events.map((e) => e.name).sort()).toEqual(['Demo Ridge Road Race Weekend', 'Demo Valley Criterium']);
-    const valleyId = events.find((e) => e.name === 'Demo Valley Criterium')!.id;
-    const pub = (await app.inject({ method: 'GET', url: `/api/public/events/${valleyId}` })).json() as { config: EventConfig; remaining: Record<string, number> };
+    expect(events).toHaveLength(4);
+    expect((await app.inject({ method: 'POST', url: '/api/demo/purchase-flow' })).statusCode).toBe(404);
+    const criteriumId = events.find((e) => e.name === 'Demo Harbor Criterium: pricing and eligibility lab')!.id;
+    const pub = (await app.inject({ method: 'GET', url: `/api/public/events/${criteriumId}` })).json() as { config: EventConfig; remaining: Record<string, number> };
     const cat = (n: string) => pub.config.categories.find((c) => c.name === n)!.id;
     expect(pub.remaining[cat('Masters 35+ Cat 3/4')]).toBe(0);
 
     const waiverFor = (name: string, role = 'rider') => ({ version: pub.config.registration.waiverVersion, read: true, agreed: true, signatureName: name, signerRole: role });
     const alex = { firstName: 'Alex', lastName: 'Demo', email: 'alex.demo@example.com', phone: '555-555-0101', team: 'Demo Wheelers', racingAge: 29, licenseCategory: '4', licenseType: 'annual', licenseNumber: 'DEMO-100001', competitionClass: 'men', collegiateDivision: null, demoRiderId: 'rider-alex', emergencyContact: { name: 'Robin Demo', phone: '555-555-0111' }, guardian: null };
-    const a = (await app.inject({ method: 'POST', url: `/api/rider/events/${valleyId}/orders`, payload: { clientRequestId: 'alex-order-1', categoryIds: [cat('Men Cat 4/5'), cat('Open Cat 4/5 Evening')], rider: alex, waiver: waiverFor('Alex Demo') } })).json() as Order;
+    const a = (await app.inject({ method: 'POST', url: `/api/rider/events/${criteriumId}/orders`, payload: { clientRequestId: 'alex-order-1', categoryIds: [cat('Men Cat 4/5'), cat('Open Cat 4/5 Evening')], rider: alex, waiver: waiverFor('Alex Demo') } })).json() as Order;
     expect(a.totalCents).toBe(5965);
     const paidA = (await app.inject({ method: 'POST', url: `/api/orders/${a.id}/payment`, payload: { attemptId: 'alex-attempt-1', outcome: 'success' } })).json() as Order;
     expect(paidA.entries.every((e) => e.readiness.every((r) => r.state === 'done'))).toBe(true);
 
     const sam = { ...alex, firstName: 'Sam', email: 'sam.demo@example.com', racingAge: 31, competitionClass: 'women', licenseNumber: 'DEMO-100004', demoRiderId: 'rider-sam', team: '' };
-    const s = (await app.inject({ method: 'POST', url: `/api/rider/events/${valleyId}/orders`, payload: { clientRequestId: 'sam-order-1', categoryIds: [cat('Women Cat 3/4/5')], rider: sam, waiver: waiverFor('Sam Demo') } })).json() as Order;
+    const s = (await app.inject({ method: 'POST', url: `/api/rider/events/${criteriumId}/orders`, payload: { clientRequestId: 'sam-order-1', categoryIds: [cat('Women Cat 3/4/5')], rider: sam, waiver: waiverFor('Sam Demo') } })).json() as Order;
     expect(s.totalCents).toBe(3905);
     const paidS = (await app.inject({ method: 'POST', url: `/api/orders/${s.id}/payment`, payload: { attemptId: 'sam-attempt-1', outcome: 'success' } })).json() as Order;
     expect(paidS.status).toBe('confirmed');

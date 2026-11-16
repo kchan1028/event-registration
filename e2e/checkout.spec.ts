@@ -1,14 +1,16 @@
 import { expect, test, type Page } from './fixtures';
+import { seedRegistrationCase } from './support/registration-case';
 
-/* Clickable demo purchase flow (product.md 2a) using the docs/fixtures data. */
+/* Clickable demo purchase flow (product.md 2a) using isolated generated case-study data. */
 
-async function openEvent(page: Page, name: string): Promise<string> {
+async function openEvent(page: Page, kind: 'criterium' | 'omnium'): Promise<string> {
+  const eventId = await seedRegistrationCase(page.request, kind);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Open the rider demo' }).click();
+  await page.getByRole('button', { name: 'Browse rider events' }).click();
   await expect(page.getByRole('heading', { name: 'Choose an event' })).toBeVisible();
   // The event list covers demo and real events, so each demo event carries its own label.
-  await expect(page.getByRole('link', { name: new RegExp(name) }).locator('.tag--demo')).toHaveText('Demo data');
-  await page.getByRole('link', { name: new RegExp(name) }).click();
+  await expect(page.locator(`a[href="#/register/${eventId}"]`).locator('.tag--demo')).toHaveText('Demo data');
+  await page.locator(`a[href="#/register/${eventId}"]`).click();
   await expect(page.getByRole('heading', { name: 'About you' })).toBeVisible();
   // Inside a demo event the header says so.
   await expect(page.locator('.demo-badge')).toHaveText('Demo');
@@ -23,7 +25,7 @@ async function signAndReview(page: Page, name: string) {
 }
 
 test('two races on one day: second-race discount, fees, signature errors, back navigation, simulated payment', async ({ page }) => {
-  await openEvent(page, 'Demo Valley Criterium');
+  await openEvent(page, 'criterium');
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
   // Fixture registration opens Jan 1, 2027; the demo says so and lets testers try it anyway.
   if (new Date() < new Date('2027-01-01T17:00:00Z')) await expect(page.getByRole('note').filter({ hasText: 'Demo mode:' })).toContainText('opens Jan 1, 2027');
@@ -72,7 +74,7 @@ test('two races on one day: second-race discount, fees, signature errors, back n
 });
 
 test('weekend bundle needs both days; missing details show field messages and a summary', async ({ page }) => {
-  await openEvent(page, 'Demo Ridge Road Race Weekend');
+  await openEvent(page, 'omnium');
   await page.getByLabel('Racing age').fill('40');
   await page.getByLabel('License category').selectOption('3');
   await page.getByLabel(/I want the/).check();
@@ -100,7 +102,7 @@ test('weekend bundle needs both days; missing details show field messages and a 
 });
 
 test('junior with guardian: only the guardian’s typed name signs', async ({ page }) => {
-  await openEvent(page, 'Demo Valley Criterium');
+  await openEvent(page, 'criterium');
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-casey');
   await page.getByRole('checkbox', { name: /DVC-J1014/ }).click();
   await expect(page.locator('.tray .quote__total')).toContainText('$18.45');
@@ -117,7 +119,7 @@ test('junior with guardian: only the guardian’s typed name signs', async ({ pa
 });
 
 test('uncertain license: paid but needs review, and the organizer clears it', async ({ page }) => {
-  const eventId = await openEvent(page, 'Demo Valley Criterium');
+  const eventId = await openEvent(page, 'criterium');
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-sam');
   await page.getByRole('checkbox', { name: /DVC-W345/ }).click();
   await expect(page.locator('.tray .quote__total')).toContainText('$39.05');
@@ -140,7 +142,7 @@ test('uncertain license: paid but needs review, and the organizer clears it', as
 
 test('rider screens follow the theme toggle and remember it', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
-  await openEvent(page, 'Demo Valley Criterium');
+  await openEvent(page, 'criterium');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.getByRole('button', { name: /Switch to dark theme/ }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -173,7 +175,7 @@ test('with the demo setting off, categories outside their window cannot be chose
 });
 
 test('organizer creates a coupon code; the rider applies it at checkout and the redemption is counted', async ({ page }) => {
-  const eventId = await openEvent(page, 'Demo Valley Criterium');
+  const eventId = await openEvent(page, 'criterium');
 
   await page.goto(`/#/events/${eventId}/registrations`);
   const coupons = page.locator('section', { has: page.getByRole('heading', { name: 'Coupon codes' }) });
@@ -210,7 +212,7 @@ test('organizer creates a coupon code; the rider applies it at checkout and the 
 });
 
 test('organizer finds a registration by order number and corrects the rider’s name with a reason', async ({ page }) => {
-  const eventId = await openEvent(page, 'Demo Valley Criterium');
+  const eventId = await openEvent(page, 'criterium');
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
   await page.getByRole('checkbox', { name: /DVC-O45E/ }).click();
   await page.getByRole('button', { name: 'Continue to racer details' }).click();

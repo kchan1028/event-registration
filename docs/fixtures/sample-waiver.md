@@ -23,5 +23,5 @@ This text is a placeholder for usability testing. It is not the USA Cycling waiv
 
 - Shows the version above the text and records it with the signature.
 - Enables signing only after the rider scrolls to the end or confirms reading.
-- Signing takes a typed full name matching the rider (or guardian, for a minor) and a confirmation checkbox. See the messages in [demo-purchase-flow.yaml](demo-purchase-flow.yaml).
+- Signing takes a typed full name matching the rider (or guardian, for a minor) and a confirmation checkbox. Validation messages live in `src/shared/checkout.ts`.
 - Labels the confirmation status as "Sample waiver signed (demo)", never as a valid event waiver.

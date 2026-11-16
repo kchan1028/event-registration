@@ -260,7 +260,9 @@ Acceptance: an eligible rider can defer under the published policy with one trac
 
 ### 2a. Clickable demo purchase flow — Phase 1
 
-Status: Implemented locally using the fake fixtures in [docs/fixtures/](docs/fixtures/README.md); automated tests cover the acceptance criterion below, including both display themes, except testing with real people (see [roadmap.md](roadmap.md#rider-checkout)). The demo uses simulated payment for usability testing; it is not a live checkout.
+Status: Implemented locally using the generated case studies and shared fake riders in [docs/fixtures/](docs/fixtures/README.md); automated tests cover the acceptance criterion below, including both display themes, except testing with real people (see [roadmap.md](roadmap.md#rider-checkout)). The demo uses simulated payment for usability testing; it is not a live checkout.
+
+Fixture decision (November 15, 2026): remove the legacy Valley criterium and Ridge weekend events, their built-in purchase-flow loader, and their YAML definitions. Browsing lists only existing published events and never loads fixtures. Generated case studies and standalone Berkeley events remain available through their explicit loaders; checkout coverage uses generated cases.
 
 A rider can click through the whole purchase from start to finish using fake demonstration data only. The demo keeps the project's chosen visual design (set in `DESIGN.md` once one exists) and supports both [display themes](#display-themes).
 
