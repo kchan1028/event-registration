@@ -21,6 +21,6 @@ One independently eligible category in each race costs $130 as a fixed-price pac
 
 A rerun preserves IDs, organizer edits, and published versions. It does not delete older standalone events or other local data. Use a fresh database for a combined-only catalog.
 
-The owner-requested local cleanup on November 15, 2026 removed the two standalone Berkeley event records. The local catalog now lists only Berkeley Omnium 2027; riders open it to find BHRR and BSC. Both races and all 54 categories remain in the combined event. See [data behavior](../../DATA_MODEL.md#combined-berkeley-demo-seed).
+The owner-requested local cleanup on November 15, 2026 removed the two standalone Berkeley event records. Immediately after that cleanup the local catalog listed only Berkeley Omnium 2027; later historical seeds add their own examples. Riders open the Omnium to find BHRR and BSC. Both races and all 54 categories remain in the combined event. See [data behavior](../../DATA_MODEL.md#combined-berkeley-demo-seed).
 
 The separate `seed:omnium` command and home-page loader still create an organizer draft with simulated capacity entries.
