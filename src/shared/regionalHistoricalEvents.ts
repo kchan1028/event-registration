@@ -128,8 +128,8 @@ function sunset(): EventConfig {
 }
 
 export const regionalHistoricalDemos = [
-  { key: 'wente', organizationName: 'Wente historical setup sample (local demo)', build: wente },
-  { key: 'mount-hamilton', organizationName: 'Mount Hamilton historical case study (local demo)', build: mountHamilton },
-  { key: 'chico-stage-race', organizationName: 'Chico historical road/crit sample (local demo)', build: chico },
-  { key: 'sunset-criterium', organizationName: 'Sunset historical geared sample (local demo)', build: sunset },
+  { key: 'wente', organizationId: 'org_9213b4ba99b5', organizationName: 'Wente historical setup sample (local demo)', build: wente },
+  { key: 'mount-hamilton', organizationId: 'org_f8584ef11999', organizationName: 'Mount Hamilton historical case study (local demo)', build: mountHamilton },
+  { key: 'chico-stage-race', organizationId: 'org_38b17a676a0c', organizationName: 'Chico historical road/crit sample (local demo)', build: chico },
+  { key: 'sunset-criterium', organizationId: 'org_4ce505ab7cec', organizationName: 'Sunset historical geared sample (local demo)', build: sunset },
 ] as const;

@@ -44,6 +44,8 @@ This is a volunteer project with no response-time guarantee. The owner aims to:
 
 Please give the owner a reasonable chance to fix the problem before you discuss it publicly.
 
+Named demo loaders use reserved organization IDs for fixture workspace identity and refuse sharing a reserved workspace that contains non-demo events. User-chosen organization names are display labels only.
+
 The BBC and Pinole TTT research loaders require sign-in and use the existing demo-owner policy. They publish empty, explicitly read-only demo records, with no historical roster, rider/license, result, consent, or payment records. Public event views expose the research notice without entry forms; server order creation and shared selection checks reject registration. Validation only permits the research-only publication exception for empty demo configurations. Organizer editing/publication permissions remain unchanged. TT/team consent and registration are not implemented.
 
 The Wente, Mount Hamilton, Chico, and Sunset historical loaders use the same authenticated demo-owner policy. They seed event structure and declared test assumptions only, with no historical rider, license, result, or signature records. Simulated checkout does not approve licensing, professional admission, stage progression, or equipment-specific entry.

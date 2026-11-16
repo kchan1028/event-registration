@@ -64,6 +64,8 @@ Details: [check-in status](roadmap.md#check-in) and [start-list status](roadmap.
 
 ## Local demo and interface
 
+- Named demo workspaces use reserved organization IDs; ordinary matching names do not identify fixture workspaces. Completed simulated-order tests cover every published race-demo loader.
+
 - BBC and Pinole TTT studies load empty **published read-only research examples** with research labels, hidden placeholder dates, no registration form, and server-side order rejection. No road race is substituted. TT/team registration remains unbuilt. See [research setup](SETUP.md#team-time-trial-read-only-research-examples).
 
 - Historical Wente, Mount Hamilton, Chico, and San Rafael Sunset setup cases have explicit local seeds. Mount Hamilton has nine starts/14 categories; Wente uses three synthetic fields, Chico four selected road/crit category entries, and Sunset three geared-program slots. Empty published demos label test prices, caps, eligibility, and omissions. See [regional setup](SETUP.md#additional-northern-california-historical-demos).

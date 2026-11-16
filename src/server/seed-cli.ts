@@ -5,7 +5,7 @@ import { teamTimeTrialResearchDemos } from '../shared/teamTimeTrialResearch';
 import { scriptAuth, seedOwner } from './auth';
 import { DEFAULT_DATABASE_URL, ensureLocalDatabase } from './db';
 
-// Local PostgreSQL (DATABASE_URL). Named demo seeds create published examples or explicitly unpublished research drafts.
+// Local PostgreSQL (DATABASE_URL). Named demo seeds publish event demos or read-only research examples.
 // `--owner you@example.com` (or SEED_OWNER_EMAIL) makes that email an owner of the seeded
 // organization, so it appears after you sign in with it.
 if (existsSync('.env')) process.loadEnvFile('.env');

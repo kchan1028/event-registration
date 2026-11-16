@@ -15,6 +15,8 @@ The collection contains a multi-category criterium, shared-field road race, two-
 
 Previously loaded generated cases keep their published snapshots; loader reuse does not rewrite their old race labels. To get the updated labels, use a fresh local database, or deliberately reset and reload only the generated collection with `npm run seed:cases -- --reset` followed by the load command above. Reset removes that collection’s fictional orders and history; it does not reset the Berkeley Omnium.
 
+Named loaders use reserved fixture organization IDs. They preserve existing local workspace/event IDs; organization names are display labels, not lookup keys. A reserved workspace containing non-demo events refuses shared loading.
+
 ## Team time trial read-only research examples
 
 BBC TTT and Pinole TTT currently load **published read-only research examples**, not working TTT registration demos. TT/team entry, roster consent, team capacity, interval starts, and team timing are not implemented. No road race or criterium is substituted. Historical sources connect the two names as related versions; they are not verified separate upcoming events. See the [BBC case](docs/case-studies/organizer-templates/berkeley-bicycle-club-team-time-trial.md) and [Pinole case](docs/case-studies/organizer-templates/pinole-team-time-trial.md).

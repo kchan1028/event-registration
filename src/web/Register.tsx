@@ -288,7 +288,6 @@ export function Register({ eventId }: { eventId: string }) {
           <h2>Registration unavailable</h2>
           <p>{RESEARCH_REGISTRATION_MESSAGE}</p>
           <Pending>{config.event.demoNotice}</Pending>
-          <p>Team rosters, team capacity, timed start intervals, and team registration are not implemented.</p>
           <a className="btn btn--secondary" href={href({ page: 'events' })}>Back to events</a>
         </main>
       </div>
