@@ -23,10 +23,10 @@ async function setup() {
   const { config } = (await call(ORGANIZER, 'GET', `/api/events/${eventId}`)).json() as { config: EventConfig };
   const juniorCat = config.categories.find((c) => c.timingCode === 'RR-J1516')!.id;
   let n = 0;
-  const registerJunior = async (who: string, firstName: string) => {
+  const registerJunior = async (who: string, firstName: string, lastName = 'Example') => {
     const rider = {
       firstName,
-      lastName: 'Example',
+      lastName,
       email: '',
       team: '',
       racingAge: 16,
@@ -51,9 +51,12 @@ describe('guardian and junior access', () => {
     const first = await registerJunior(PARENT, 'Sam');
     await registerJunior(PARENT, 'sam '); // the same junior, typed differently
     await registerJunior(PARENT, 'Alex');
+    // Same letters, different first/last split: two juniors.
+    await registerJunior(PARENT, 'Sam Example', 'Jones');
+    await registerJunior(PARENT, 'Sam', 'Example Jones');
     const juniors = (await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string; firstName: string; viewerEmail: string | null }[];
-    expect(juniors.map((j) => j.firstName)).toEqual(['Sam', 'Alex']);
-    expect(((await call(PARENT, 'GET', '/api/rider/registrations')).json() as { placedByYou: boolean }[]).map((o) => o.placedByYou)).toEqual([true, true, true]);
+    expect(juniors.map((j) => j.firstName)).toEqual(['Sam', 'Alex', 'Sam Example', 'Sam']);
+    expect(((await call(PARENT, 'GET', '/api/rider/registrations')).json() as { placedByYou: boolean }[]).map((o) => o.placedByYou)).toEqual([true, true, true, true, true]);
 
     // Another household sees none of it, and cannot name a login for this junior.
     expect((await call(OTHER_PARENT, 'GET', `/api/orders/${first}`)).statusCode).toBe(404);

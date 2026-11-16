@@ -14,8 +14,8 @@ import { HttpError } from './repo';
  * that email can see the junior's registrations, read-only. Another household sees nothing.
  */
 
-/** The profile key: one profile per guardian and junior name. */
-const nameKey = (firstName: string, lastName: string) => `${normalizeText(firstName)} ${normalizeText(lastName)}`;
+/** The profile key: one profile per guardian and junior name. A JSON pair keeps "Ann Marie / Smith" and "Ann / Marie Smith" apart. */
+const nameKey = (firstName: string, lastName: string) => JSON.stringify([normalizeText(firstName), normalizeText(lastName)]);
 
 /** Serializes creating, linking, and renaming one guardian's junior profiles across events. */
 const guardianLock = (guardianAccountId: string) => `juniors:${guardianAccountId}`;
