@@ -1,49 +1,26 @@
 # Demo events
 
-Status: Implemented standalone local demo fixtures. Updated November 14, 2026.
+Status: Implemented local Berkeley Omnium fixture. Updated November 15, 2026.
 
-This file describes two simple, separate demo events: Berkeley Hills Road Race and Berkeley Streets Criterium. Each event contains one race on one day. The app does not read this Markdown file. The executable [standalone fixtures](../../src/shared/berkeleyEvents.ts) implement this reference; [SETUP.md](../../SETUP.md) explains how to seed and run them.
+The standard Berkeley demo contains only **Berkeley Omnium 2027**, one event with two race days. The executable [Berkeley fixture](../../src/shared/berkeleyOmnium.ts) supplies the shared configuration; [SETUP.md](../../SETUP.md) explains how to seed and run it. This Markdown file is a reference, not an input to the app.
 
-All entries and payments are simulated. Use fictional rider details only. The organizer supplied the prices below for demonstration purposes. Eligibility copied from Berkeley's working fixture remains draft configuration for review, not verified current federation rules.
+| Race | Date | Categories | Base entry price |
+|---|---|---|---|
+| Berkeley Hills Road Race | Saturday, April 17, 2027 | 26 | $80 |
+| Berkeley Streets Criterium | Sunday, April 18, 2027 | 28 | $60 |
 
-Product requirements belong in [product.md](../../product.md). Delivery status belongs in [roadmap.md](../../roadmap.md). The [Berkeley Omnium fixture](../../src/shared/berkeleyOmnium.ts) provides the category reference. Its separate loader still creates a combined event; the standalone seed filters each race into its own event.
+The road race uses Bear Creek Road near Orinda; the criterium uses downtown Berkeley. Both use America/Los_Angeles time. Fields, distances, start times, and limits come from 2026 race information dated for 2027. Eligibility remains draft configuration requiring organizer review, not verified current federation rules.
 
-## Berkeley Hills Road Race
+## Package and pricing
 
-| Setting | Demo value |
-|---|---|
-| Event name | Berkeley Hills Road Race |
-| Race count | One |
-| Race day | Saturday, April 17, 2027 |
-| Discipline | Road race |
-| Venue | Bear Creek Road near Orinda, California |
-| Time zone | America/Los_Angeles |
-| Base entry price | $80.00 (`8000` cents) |
-| Package | None; standalone event |
+One independently eligible category in each race costs $130 as a fixed-price package, saving $10. It records a podium nomination requiring organizer review; scoring, results, and award approval tools are not built. An additional criterium race costs $20. The fixture retains the $15 day-of surcharge, with zero platform and processing fees. See [product requirements](../../product.md#scope-of-the-first-release) for the authoritative package rules.
 
-Use only the road-race categories from the Berkeley working fixture, with their structured eligibility, distance, start groups, and separate classifications. Display groups remain presentation only and create no capacity limits. The fixture's schedule uses 2026 race information dated for 2027; it is not an approved current schedule.
+## Seed behavior and boundaries
 
-An eligible rider selecting one road-race category has a base entry total of **$80.00 before any fees or surcharges**. Registration creates one race entry, with no criterium entry or omnium nomination.
+`npm run seed:berkeley` publishes one combined event with no prefilled riders, orders, or simulated capacity entries. Demo mode permits registration outside the configured window. The sample waiver is not an official waiver. All rider information and payments must be fictional or simulated.
 
-## Berkeley Streets Criterium
+A rerun preserves IDs, organizer edits, and published versions. It does not delete older standalone events or other local data. Use a fresh database for a combined-only catalog.
 
-| Setting | Demo value |
-|---|---|
-| Event name | Berkeley Streets Criterium |
-| Race count | One |
-| Race day | Sunday, April 18, 2027 |
-| Discipline | Criterium |
-| Venue | Downtown Berkeley, California |
-| Time zone | America/Los_Angeles |
-| Base entry price | $60.00 (`6000` cents) |
-| Package | None; standalone event |
+The owner-requested local cleanup on November 15, 2026 removed the two standalone Berkeley event records. The local catalog now lists only Berkeley Omnium 2027; riders open it to find BHRR and BSC. Both races and all 54 categories remain in the combined event. See [data behavior](../../DATA_MODEL.md#combined-berkeley-demo-seed).
 
-Use only the criterium categories from the Berkeley working fixture, with their structured eligibility, race duration, start groups, field limits, and separate classifications. Do not assume these are identical to the road-race categories. The fixture's schedule uses 2026 race information dated for 2027; it is not an approved current schedule.
-
-An eligible rider selecting one criterium category has a base entry total of **$60.00 before any fees or surcharges**. Registration creates one race entry, with no road-race entry or omnium nomination.
-
-## Demo boundaries
-
-These two events are independent. Each has its own event, race, day, category, and start-group identifiers. Capacity usage, registrations, and orders belong to the selected event.
-
-The standalone fixtures configure no shared package, series, TT, podium nomination, or additional-entry discount. Fees and day-of surcharges are zero. Registration windows and the sample waiver are copied from the Berkeley working fixture, with demo mode enabled so testing can take place outside the windows. Seeding creates no prefilled entries and publishes both events once. Reruns preserve organizer edits and published versions. Other existing app fixtures and orders remain unchanged.
+The separate `seed:omnium` command and home-page loader still create an organizer draft with simulated capacity entries.

@@ -64,9 +64,19 @@ Details: [check-in status](roadmap.md#check-in) and [start-list status](roadmap.
 
 ## Local demo and interface
 
+- BBC and Pinole TTT studies load empty **published read-only research examples** with research labels, hidden placeholder dates, no registration form, and server-side order rejection. No road race is substituted. TT/team registration remains unbuilt. See [research setup](SETUP.md#team-time-trial-read-only-research-examples).
+
+- Historical Wente, Mount Hamilton, Chico, and San Rafael Sunset setup cases have explicit local seeds. Mount Hamilton has nine starts/14 categories; Wente uses three synthetic fields, Chico four selected road/crit category entries, and Sunset three geared-program slots. Empty published demos label test prices, caps, eligibility, and omissions. See [regional setup](SETUP.md#additional-northern-california-historical-demos).
+
+- A Red Kite historical criterium sample contains three selected 2017 rounds, 33 starts, and 42 categories. `seed:red-kite` publishes one empty event with separate shared-start classifications and independent per-round capacity. Test rules are explicit; the full 14-round mixed-format series, passes, and scoring are not implemented. See the [case study](docs/case-studies/organizer-templates/red-kite-series.md).
+
+- A historical San Francisco Grand Prix demo studies the 2005 road race and 108.1-mile course with varying loops. `seed:sf-grand-prix` publishes one empty event with explicit fictional time, price, capacity, and eligibility assumptions. Professional team admission remains unbuilt. See the [case study](docs/case-studies/organizer-templates/san-francisco-grand-prix.md).
+
+- A historical Burlingame Criterium demo uses the 2017 program: seven starts, nine categories, shared masters starts with separate classifications, and explicit fictional $40/60-rider assumptions. `seed:burlingame` publishes it without prefilled entries and preserves edits on rerun. The organizer lists the event as on hiatus. See the [case study](docs/case-studies/organizer-templates/burlingame-criterium.md).
+
 - A deterministic generated collection covers a single-day criterium, shared-field road race, two-day omnium, empty draft, and 120-category large event. It includes 1,000 simulated capacity entries and success, duplicate, decline/retry, expiry, and license-review states. Individual/full loaders and a collection-only reset are implemented and tested. See [fixture documentation](docs/fixtures/README.md#generated-race-case-studies).
-- Standalone Berkeley Hills Road Race ($80) and Berkeley Streets Criterium ($60) seeds are implemented. Each event has its own categories and no package, fees, surcharges, or prefilled registrations. See [SETUP.md](SETUP.md) and [demo events](docs/fixtures/events.md).
-- The separate Berkeley Omnium fixture includes a $130 two-race package and a podium nomination requiring organizer review. Award approval tools, points, and podium calculation are not built.
+- The standard Berkeley seed publishes only Berkeley Omnium 2027, containing Berkeley Hills Road Race ($80) and Berkeley Streets Criterium ($60), without prefilled registrations or simulated capacity entries. Reruns preserve edits and unrelated data. See [SETUP.md](SETUP.md) and [demo events](docs/fixtures/events.md).
+- The Berkeley Omnium fixture includes a $130 two-race package and a podium nomination requiring organizer review. Award approval tools, points, and podium calculation are not built.
 - Light and dark themes are implemented, with system preference, a visible toggle, and a saved device preference.
 - Automated accessibility checks cover main screens in both themes. Manual keyboard, screen-reader, and real-phone passes remain open. See [ACCESSIBILITY.md](ACCESSIBILITY.md).
 - Data is stored in a local PostgreSQL database (a Docker container on the developer's computer, per [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md)). Nothing is hosted. Every organizer page and checkout requires passwordless email sign-in (Clerk), and roles limit each person to their organization's tools. MFA is not built, so use fictional rider details only. See [DATA_MODEL.md](DATA_MODEL.md).

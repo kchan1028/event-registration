@@ -1,39 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { testApp, testDatabaseUrl } from './support/db';
-import { buildBerkeleyEvents } from '../src/shared/berkeleyEvents';
+import { buildBerkeleyOmniumEvent } from '../src/shared/berkeleyOmnium';
 import { eventConfigSchema } from '../src/shared/schema';
 import { validateConfig } from '../src/shared/validation';
 import { quote } from '../src/shared/pricing';
 
 const endpoint = '/api/demo/berkeley-events';
 
-describe('standalone Berkeley demo', () => {
-  it('keeps each race and its category, day, and start-group references inside its own event', () => {
-    const configs = buildBerkeleyEvents();
-    expect(configs.map((c) => c.event.name)).toEqual(['Berkeley Hills Road Race', 'Berkeley Streets Criterium']);
-    configs.forEach((c, index) => {
-      expect(eventConfigSchema.safeParse(c).success).toBe(true);
-      expect(validateConfig(c, []).filter((i) => i.level === 'error')).toEqual([]);
-      expect(c.days).toHaveLength(1);
-      expect(c.races).toHaveLength(1);
-      expect(c.registration.bundles).toEqual([]);
-      expect(c.registration.sameRaceExtraEntryCents).toBeNull();
-      expect(c.categories.length).toBeGreaterThan(10);
-      for (const cat of c.categories) {
-        expect(cat.raceId).toBe(c.races[0].id);
-        expect(c.startGroups.some((g) => g.id === cat.startGroupId && g.raceId === cat.raceId)).toBe(true);
-        expect(cat.pricing.baseCents).toBe(index === 0 ? 8000 : 6000);
-        const q = quote(c, [cat.id], c.days[0].date);
-        expect(q.totalCents).toBe(index === 0 ? 8000 : 6000);
-        expect(q.fees).toEqual([]);
-        expect(q.bundle).toBeNull();
-      }
-    });
-    const firstIds = new Set(configs[0].categories.map((c) => c.id));
-    expect(configs[1].categories.some((c) => firstIds.has(c.id))).toBe(false);
+describe('Berkeley Omnium demo', () => {
+  it('contains both races, valid category references, and the fixed-price weekend package', () => {
+    const { config } = buildBerkeleyOmniumEvent();
+    expect(eventConfigSchema.safeParse(config).success).toBe(true);
+    expect(validateConfig(config, []).filter((i) => i.level === 'error')).toEqual([]);
+    expect(config.event.name).toBe('Berkeley Omnium 2027');
+    expect(config.days.map((d) => d.date)).toEqual(['2027-04-17', '2027-04-18']);
+    expect(config.races.map((r) => r.name)).toEqual(['Berkeley Hills Road Race', 'Berkeley Streets Criterium']);
+    expect(config.races.map((r) => config.categories.filter((c) => c.raceId === r.id).length)).toEqual([26, 28]);
+    for (const cat of config.categories) {
+      expect(config.startGroups.some((g) => g.id === cat.startGroupId && g.raceId === cat.raceId)).toBe(true);
+      expect(cat.pricing.baseCents).toBe(cat.raceId === config.races[0].id ? 8000 : 6000);
+    }
+    const selections = config.races.map((r) => config.categories.find((c) => c.raceId === r.id)!.id);
+    expect(quote(config, selections, '2027-03-15').entriesTotalCents).toBe(13000);
   });
 
-  it('publishes both events, persists across restart, and reruns without changing edits or unrelated data', async () => {
+  it('publishes only the combined event, persists across restart, and reruns without changing edits or unrelated data', async () => {
     const databaseUrl = await testDatabaseUrl();
     let app = (await testApp({ databaseUrl })).app;
     try {
@@ -41,9 +32,9 @@ describe('standalone Berkeley demo', () => {
       const seeded = await app.inject({ method: 'POST', url: endpoint });
       expect(seeded.statusCode).toBe(201);
       const { organizationId, eventIds } = seeded.json();
-      expect(eventIds).toHaveLength(2);
+      expect(eventIds).toHaveLength(1);
       const catalog = (await app.inject({ method: 'GET', url: '/api/public/events' })).json();
-      expect(catalog.map((e: { name: string }) => e.name).sort()).toEqual(['Berkeley Hills Road Race', 'Berkeley Streets Criterium']);
+      expect(catalog.map((e: { name: string }) => e.name).sort()).toEqual(['Berkeley Omnium 2027']);
       const event = (await app.inject({ method: 'GET', url: `/api/events/${eventIds[0]}` })).json();
       expect(event.entries).toEqual([]);
       event.config.event.name = 'Organizer edited draft';

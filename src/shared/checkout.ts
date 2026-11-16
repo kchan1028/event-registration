@@ -1,3 +1,4 @@
+import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from './researchExamples';
 import { z } from 'zod';
 import { evaluateCategory, type EligibilityResult, type RiderProfile } from './eligibility';
 import { formatTime } from './format';
@@ -236,6 +237,7 @@ export interface SelectionCheck {
 
 /** Server-side gate for an order; the browser uses the same rules to explain them early. */
 export function checkSelection(config: EventConfig, categoryIds: readonly string[], profile: RiderProfile, opts: { nowLocal?: string } = {}): SelectionCheck {
+  if (isResearchExample(config)) return { ok: false, problems: [RESEARCH_REGISTRATION_MESSAGE], eligibility: {}, conflicts: [], needsGuardian: false };
   const problems: string[] = [];
   const eligibility: Record<string, EligibilityResult> = {};
   if (categoryIds.length === 0) problems.push('Choose at least one race.');

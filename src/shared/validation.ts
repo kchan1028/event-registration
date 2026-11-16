@@ -1,3 +1,4 @@
+import { isResearchExample } from './researchExamples';
 import { distinctRiders, poolCategoryIds, startGroupCategoryIds } from './capacity';
 import type { EventConfig, CapacityEntry } from './schema';
 
@@ -31,8 +32,12 @@ export function validateConfig(config: EventConfig, entries: readonly CapacityEn
   const sgById = new Map(config.startGroups.map((g) => [g.id, g]));
   const dgIds = new Set(config.displayGroups.map((g) => g.id));
 
-  if (config.races.length === 0) add('error', 'event.no-races', 'Add at least one race.', { kind: 'event' });
-  if (active.length === 0) add('error', 'event.no-categories', 'Add at least one registration category.', { kind: 'event' });
+  const researchOnly = isResearchExample(config);
+  if (researchOnly && (!config.event.isDemo || config.races.length > 0 || config.categories.length > 0 || config.startGroups.length > 0 || config.capacityPools.length > 0 || config.registration.bundles.length > 0)) {
+    add('error', 'event.research-only', 'A research example must be a demo with no races, categories, starts, capacity pools, or packages.', { kind: 'event' });
+  }
+  if (!researchOnly && config.races.length === 0) add('error', 'event.no-races', 'Add at least one race.', { kind: 'event' });
+  if (!researchOnly && active.length === 0) add('error', 'event.no-categories', 'Add at least one registration category.', { kind: 'event' });
 
   const eventYear = Number(config.days[0]?.date.slice(0, 4));
   if (!config.ruleSet.source.trim()) {

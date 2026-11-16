@@ -1,14 +1,19 @@
+import { isResearchExample } from '../shared/researchExamples';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z, ZodError } from 'zod';
-import { BERKELEY_DEMO_ORG, buildBerkeleyEvents } from '../shared/berkeleyEvents';
+import { buildBurlingameEvent } from '../shared/burlingame';
+import { buildSanFranciscoGrandPrixEvent } from '../shared/sanFranciscoGrandPrix';
+import { buildRedKiteSeriesEvent } from '../shared/redKiteSeries';
+import { regionalHistoricalDemos } from '../shared/regionalHistoricalEvents';
+import { teamTimeTrialResearchDemos } from '../shared/teamTimeTrialResearch';
 import { buildBerkeleyOmniumEvent, OMNIUM_ORG_NAME } from '../shared/berkeleyOmnium';
 import { buildDemoEvent } from '../shared/demo';
 import { buildCaseStudyScenarios, CASE_STUDY_ORG_ID, CASE_STUDY_REFERENCE_NOW } from '../shared/caseStudies';
 import { configFromTemplate } from '../shared/factory';
-import { bibNumberSchema, createEventInputSchema, eventConfigSchema } from '../shared/schema';
+import { type EventConfig, bibNumberSchema, createEventInputSchema, eventConfigSchema } from '../shared/schema';
 import { entriesCsv, ledgerCsv } from '../shared/exports';
 import { eventSummary } from '../shared/reports';
 import { riderCorrectionSchema } from '../shared/lookup';
@@ -349,6 +354,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       name: config.event.name,
       venue: config.event.venue,
       isDemo: config.event.isDemo,
+      researchOnly: isResearchExample(config),
       days: config.days.map((d) => ({ date: d.date, label: d.label, races: config.races.filter((r) => r.dayId === d.id).map((r) => r.name) })),
       categoryCount: config.categories.filter((c) => c.status !== 'archived').length,
     }));
@@ -698,24 +704,55 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return { organizationId: org.id, eventId: record.id };
   }
 
-  /** Seeds two published standalone events once, without touching other local data. */
-  app.post('/api/demo/berkeley-events', async (req, reply) => {
+  /** Publishes one empty named demo once; research examples remain unavailable for registration. */
+  async function seedPublishedDemo(req: { account?: Account }, orgName: string, build: () => EventConfig) {
     const result = await db.transaction(async () => {
-      await db.lock('demo:berkeley-events'); // two seed requests at once create the organization once
-      const existing = await repo.findOrganizationByName(BERKELEY_DEMO_ORG);
+      await db.lock(`demo:${orgName}`);
+      const existing = await repo.findOrganizationByName(orgName);
       if (existing) return { created: false, organizationId: existing.id, eventIds: existing.eventIds };
-      const org = await repo.createOrganization(BERKELEY_DEMO_ORG);
-      const eventIds: string[] = [];
-      for (const config of buildBerkeleyEvents()) {
-        const event = await repo.createEvent(org.id, config);
-        await repo.publish(event.id, true);
-        eventIds.push(event.id);
-      }
+      const org = await repo.createOrganization(orgName);
+      const event = await repo.createEvent(org.id, build());
+      await repo.publish(event.id, true);
+      const eventIds = [event.id];
       return { created: true, organizationId: org.id, eventIds };
     });
     await joinDemo(req, result.organizationId);
+    return result;
+  }
+
+  app.post('/api/demo/berkeley-events', async (req, reply) => {
+    const result = await seedPublishedDemo(req, 'Berkeley Omnium (local demo)', () => buildBerkeleyOmniumEvent().config);
     return reply.status(result.created ? 201 : 200).send(result);
   });
+
+  app.post('/api/demo/burlingame', async (req, reply) => {
+    const result = await seedPublishedDemo(req, 'Burlingame historical case study (local demo)', buildBurlingameEvent);
+    return reply.status(result.created ? 201 : 200).send(result);
+  });
+
+  app.post('/api/demo/san-francisco-grand-prix', async (req, reply) => {
+    const result = await seedPublishedDemo(req, 'San Francisco Grand Prix historical case study (local demo)', buildSanFranciscoGrandPrixEvent);
+    return reply.status(result.created ? 201 : 200).send(result);
+  });
+
+  app.post('/api/demo/red-kite-series', async (req, reply) => {
+    const result = await seedPublishedDemo(req, 'Red Kite historical criterium sample (local demo)', buildRedKiteSeriesEvent);
+    return reply.status(result.created ? 201 : 200).send(result);
+  });
+
+  for (const demo of regionalHistoricalDemos) {
+    app.post(`/api/demo/${demo.key}`, async (req, reply) => {
+      const result = await seedPublishedDemo(req, demo.organizationName, demo.build);
+      return reply.status(result.created ? 201 : 200).send(result);
+    });
+  }
+
+  for (const demo of teamTimeTrialResearchDemos) {
+    app.post(`/api/demo/${demo.key}`, async (req, reply) => {
+      const result = await seedPublishedDemo(req, demo.organizationName, demo.build);
+      return reply.status(result.created ? 201 : 200).send(result);
+    });
+  }
 
   /** Creates the labeled fictional demonstration organization and event. */
   app.post('/api/demo', async (req, reply) => reply.status(201).send(await seed(req, 'Example Cycling Club (demonstration)', buildDemoEvent())));

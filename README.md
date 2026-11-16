@@ -118,11 +118,21 @@ Local development needs no Clerk keys: without them, sign-in is a local test for
 npm run dev
 ```
 
-For two standalone Berkeley events ($80 road race, $60 criterium), follow [demo setup](SETUP.md) and run `npm run seed:berkeley -- --owner you@example.com` with the documented separate database.
+For one published Berkeley Omnium containing the road race ($80), criterium ($60), and $130 two-race package, follow [demo setup](SETUP.md) and run `npm run seed:berkeley -- --owner you@example.com` with the documented separate database.
+
+BBC and Pinole team-time-trial cases load [published read-only research examples](SETUP.md#team-time-trial-read-only-research-examples). Team/TT registration is not implemented, so these records appear in the event chooser with registration unavailable.
+
+Historical Wente, Mount Hamilton, Chico, and San Rafael Sunset setup cases and labeled local demos are available through [regional demo setup](SETUP.md#additional-northern-california-historical-demos). Their documented samples do not imply complete stage-race or official event admission.
+
+For a three-round historical Red Kite criterium sample and the full-series case study, see [setup](SETUP.md#red-kite-historical-criterium-sample). It does not implement the full mixed-format calendar or season scoring.
+
+For the historical San Francisco Grand Prix road-race demo, see [setup](SETUP.md#san-francisco-grand-prix-historical-demo). It uses the 2005 course with explicit test assumptions; individual checkout does not implement professional team admission.
+
+For the historical Burlingame Criterium case study and published local demo, see [setup](SETUP.md#burlingame-historical-demo). The event is on hiatus; the demo uses the 2017 program and explicit test assumptions.
 
 For deterministic road, criterium, omnium, empty, and large-event cases, run `npm run seed:cases -- --owner you@example.com`. Use `-- --list`, `-- --scenario <key>`, or `-- --reset` to inspect, load one case, or remove only the generated collection. See the [case-study fixture guide](docs/fixtures/README.md#generated-race-case-studies).
 
-Open `http://127.0.0.1:5273/`, sign in with your email, and select **Load Berkeley Omnium** (the 2026 fields and times, dated for 2027, with organizer-set $80 road race and $60 criterium fees and a $130 two-race package including a podium nomination subject to organizer review), or create your own organization. Select **Browse rider events** to view already-published events; it does not load fixtures. For additional fictional testing data, use the [generated case-study collection](SETUP.md#generated-case-study-collection). Any event you publish also appears in the rider event list. Run the checks with `npm run check` (typecheck, unit and API tests, build) and `npm run test:e2e` (browser tests).
+Open `http://127.0.0.1:5273/`, sign in with your email, and select **Load Berkeley Omnium** (the 2026 fields and times, dated for 2027, with organizer-set $80 road race and $60 criterium fees and a $130 two-race package including a podium nomination subject to organizer review), or create your own organization. Select **Browse rider events** to view already-published events; it does not load fixtures. For additional fictional testing data, use the [generated case-study collection](SETUP.md#generated-case-study-collection). Any event you publish also appears in the rider event list. For routine changes, run typechecking and the affected tests. Reserve `npm run check` and the full `npm run test:e2e` for pre-deployment validation.
 
 ## How it is meant to work
 

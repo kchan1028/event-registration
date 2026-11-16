@@ -1,3 +1,4 @@
+import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/researchExamples';
 import { randomInt } from 'node:crypto';
 import { canAdmit, remainingForCategory, type LimitUsage } from '../shared/capacity';
 import { evaluateCategory } from '../shared/eligibility';
@@ -389,6 +390,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         if (existing) return view(existing.id);
 
         const { config, version } = await repo.getPublished(eventId);
+        if (isResearchExample(config)) throw new HttpError(409, RESEARCH_REGISTRATION_MESSAGE);
         const rider = riderDetailsSchema.parse(input.rider);
         const waiver = waiverAcceptanceSchema.parse(input.waiver);
         if (waiver.version !== config.registration.waiverVersion) throw new HttpError(409, 'The waiver changed while you were registering. Read the current version and accept it again.');
