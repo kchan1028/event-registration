@@ -6,7 +6,7 @@ The project has its source documents and a local build covering the category bui
 
 ## The one rule that applies to every change
 
-Every change must review [product.md](product.md) and [roadmap.md](roadmap.md) for impact, and also [feature.md](feature.md), [SECURITY.md](SECURITY.md), [DATA_MODEL.md](DATA_MODEL.md), the [test plan](docs/testing/test-plan.md), and the [audit findings](AUDIT.md). AI agents start from [AGENTS.md](AGENTS.md), which links to the same rules.
+Every change must review [product.md](product.md) and [roadmap.md](roadmap.md) for impact, and also [feature.md](feature.md), [SECURITY.md](SECURITY.md), [DATA_MODEL.md](DATA_MODEL.md), the [test plan](docs/testing/test-plan.md), and the [audit findings](AUDIT.md). AI agents follow the same rules; their local instruction file is not tracked.
 
 - Update `product.md` when requirements, scope, user flows, business rules, acceptance criteria, or product decisions change.
 - Update `roadmap.md` when priorities, dependencies, milestones, blockers, or delivery status change.
