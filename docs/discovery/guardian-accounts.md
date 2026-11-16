@@ -1,6 +1,6 @@
 # Guardian and junior accounts: how other platforms do it
 
-Status: Research, November 15, 2026. The recommendation below is Proposed and waits for the owner's decision. Nothing here is built.
+Status: Research, November 15, 2026. The owner accepted the model below the same day, with one guardian per junior and an optional junior login to check their registrations. Steps 1 to 3 are implemented in the local build (see [roadmap.md](../../roadmap.md)); the junior login is the read-only viewer email in step 3, and a second guardian, the extra waiver fields in step 4, and the claim at the age of majority in step 5 are Planned.
 
 The question: how should a parent or guardian be linked to a junior rider (under 18) so the guardian can register the junior, sign waivers, and later see and manage the junior's registrations, while no other household can? [product.md](../../product.md#sign-in-and-account-security) requires that "a guardian sees only juniors they are authorized to manage" and that "a rider reaching the applicable age does not silently retain or lose another person's access".
 

@@ -208,22 +208,29 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
 
   /**
    * The one check for routes that act on an order or on one of its entries.
-   * `rider`: the account that placed the order may do this. `permission`: so may a member of the
+   * `rider`: the account that placed the order may do this. `juniorViewer`: so may the junior's own
+   * login, when the order is a junior's and the guardian named that email. `permission`: so may a member of the
    * event's organization whose role grants it. Someone who is neither the rider nor a member gets
    * 404, so order and entry IDs cannot be probed. A member who lacks the permission, or who tries
    * a rider-only action (paying, cancelling), gets 403: they can already see the order exists.
    */
-  async function requireOrderAccess(account: Account, target: { orderId: string } | { entryId: string }, allow: { rider?: boolean; permission?: Permission }): Promise<void> {
+  async function requireOrderAccess(
+    account: Account,
+    target: { orderId: string } | { entryId: string },
+    allow: { rider?: boolean; juniorViewer?: boolean; permission?: Permission },
+  ): Promise<void> {
     const byEntry = 'entryId' in target;
     const notFound = byEntry ? 'Entry not found.' : 'Order not found.';
-    const row = await db.get<{ account_id: string | null; organization_id: string }>(
+    const row = await db.get<{ account_id: string | null; organization_id: string; viewer_email: string | null }>(
       byEntry
-        ? `SELECT o.account_id, e.organization_id FROM order_entries oe JOIN orders o ON o.id = oe.order_id JOIN events e ON e.id = o.event_id WHERE oe.id = $1`
-        : `SELECT o.account_id, e.organization_id FROM orders o JOIN events e ON e.id = o.event_id WHERE o.id = $1`,
+        ? `SELECT o.account_id, e.organization_id, j.viewer_email FROM order_entries oe JOIN orders o ON o.id = oe.order_id JOIN events e ON e.id = o.event_id LEFT JOIN junior_profiles j ON j.id = o.junior_profile_id WHERE oe.id = $1`
+        : `SELECT o.account_id, e.organization_id, j.viewer_email FROM orders o JOIN events e ON e.id = o.event_id LEFT JOIN junior_profiles j ON j.id = o.junior_profile_id WHERE o.id = $1`,
       [byEntry ? target.entryId : target.orderId],
     );
     if (!row) throw new HttpError(404, notFound);
     if (allow.rider && row.account_id === account.id) return;
+    // The junior's own login may look, never act.
+    if (allow.juniorViewer && row.viewer_email !== null && row.viewer_email === account.email.toLowerCase()) return;
     const roles = await rolesIn(account.id, row.organization_id);
     // A member who may not view orders learns nothing about whether this one exists.
     if (roles.length === 0 || (!allow.permission && !can(roles, 'orders.view'))) throw new HttpError(404, notFound);

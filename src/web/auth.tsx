@@ -202,6 +202,9 @@ export function AccountMenu() {
       <span className="account__email" title={session.email ?? undefined}>
         {session.email ?? 'Signed in'}
       </span>
+      <a className="btn btn--ghost btn--small" href="#/my-registrations">
+        My registrations
+      </a>
       <button className="btn btn--ghost btn--small" type="button" onClick={session.signOut}>
         Sign out
       </button>

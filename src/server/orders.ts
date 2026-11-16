@@ -13,6 +13,7 @@ import type { EventConfig } from '../shared/schema';
 import { blocksPublicSale, effectiveWaitlistStatus, type StoredWaitlistStatus } from '../shared/waitlist';
 import { refundPolicyLines } from '../shared/refundPolicy';
 import type { Coupons } from './coupons';
+import type { Juniors } from './juniors';
 import type { Db } from './db';
 import { eventLock, HttpError, type Repo } from './repo';
 
@@ -50,6 +51,8 @@ interface OrderRow {
   confirmed_at: string | null;
   extras_json: OrderExtras | null;
   coupon_id: string | null;
+  account_id: string | null;
+  junior_profile_id: string | null;
 }
 
 interface ChangeRow {
@@ -126,7 +129,7 @@ function checkInCode(): string {
   return `${s.slice(0, 5)}-${s.slice(5)}`;
 }
 
-export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes: number, coupons: Coupons) {
+export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes: number, coupons: Coupons, juniors: Juniors) {
   const nowIso = () => clock().toISOString();
   const orderRow = (id: string) => db.get<OrderRow>(`SELECT * FROM orders WHERE id = $1`, [id]);
   const entryRows = (orderId: string) => db.all<EntryRow>(`SELECT * FROM order_entries WHERE order_id = $1 ORDER BY seq`, [orderId]);
@@ -446,6 +449,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
            VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
           [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null, accountId],
         );
+        // A guardian registering a junior: the order belongs to that guardian's profile for the junior.
+        if (accountId && rider.guardian) await juniors.adopt(accountId);
         // Demo riders on demo events carry a simulated license result from the fixtures; everyone else needs review.
         const fixture = config.event.isDemo ? demoRider(rider.demoRiderId) : undefined;
         const simulatedValid = !!fixture && fixture.licenseCheck === 'simulated_valid' && fixture.licenseNumber === rider.licenseNumber;
@@ -557,6 +562,16 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       });
     },
 
+    /** Orders the account placed, plus orders of juniors whose viewer email is the account's, newest first. */
+    async listForAccount(account: { id: string; email: string }) {
+      const rows = await db.all<OrderRow>(
+        `SELECT o.* FROM orders o LEFT JOIN junior_profiles j ON j.id = o.junior_profile_id WHERE o.account_id = $1 OR j.viewer_email = $2 ORDER BY o.created_at DESC, o.seq DESC`,
+        [account.id, account.email.toLowerCase()],
+      );
+      const views = await viewsOf(rows);
+      return views.map((v, i) => ({ ...v, placedByYou: rows[i].account_id === account.id }));
+    },
+
     /** Every order of the event, newest first. With `query`, only registrations it finds (see `matchesRegistration`). */
     async listOrders(eventId: string, query = '') {
       await repo.getEvent(eventId);
@@ -580,12 +595,17 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const parsed = riderDetailsSchema.safeParse(rider);
         if (!parsed.success) throw new HttpError(422, parsed.error.issues[0].message, parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));
         const t = nowIso();
+        // A junior's name change may merge profiles across events: take the guardian lock before touching any order row.
+        const juniorRename = !!row.junior_profile_id && !!row.account_id && changes.some((c) => c.field === 'firstName' || c.field === 'lastName');
+        if (juniorRename) await juniors.lockGuardian(row.account_id!);
         let cleared: { categoryId: string; note: string | null; reviewedAt: string | null }[] = [];
         if (changes.some((c) => c.field === 'licenseNumber')) {
           cleared = (await entryRows(orderId)).filter((e) => e.license_reviewed).map((e) => ({ categoryId: e.category_id, note: e.license_review_note, reviewedAt: e.license_reviewed_at }));
           if (cleared.length > 0) await db.run(`UPDATE order_entries SET license_reviewed = false, license_review_note = NULL, license_reviewed_at = NULL WHERE order_id = $1`, [orderId]);
         }
         await db.run(`UPDATE orders SET rider_json = $1, updated_at = $2 WHERE id = $3`, [JSON.stringify(parsed.data), t, orderId]);
+        // A corrected junior name follows to the guardian's profile, so the next registration finds it.
+        if (juniorRename) await juniors.renamed(row.junior_profile_id!, row.account_id!, parsed.data);
         await db.run(
           `INSERT INTO rider_corrections (id, event_id, order_id, changes_json, cleared_reviews_json, reason, corrected_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [newId('cor'), row.event_id, orderId, JSON.stringify(changes), cleared.length > 0 ? JSON.stringify(cleared) : null, reason, by, t],
