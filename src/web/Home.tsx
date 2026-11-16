@@ -31,7 +31,6 @@ export function Home() {
     }
   }
 
-
   return (
     <div className="home">
       <header className="home__bar">

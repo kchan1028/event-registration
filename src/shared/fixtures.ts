@@ -2,9 +2,6 @@ import type { LicenseCategory } from './schema';
 
 /** Shared fictional riders and sample waiver for local tests and generated case studies. */
 
-export const FIXTURE_NOTICE =
-  'Demo fixtures: fictional events, riders, prices, and fees from docs/fixtures for the clickable demo. Not real events, real prices, or current USA Cycling rules.';
-
 export const FIXTURE_WAIVER_VERSION = 'DEMO-WAIVER v1 (2026-11-14)';
 
 export const FIXTURE_WAIVER_TEXT = `SAMPLE TEXT FOR THE CLICKABLE DEMO. NOT A REAL WAIVER.

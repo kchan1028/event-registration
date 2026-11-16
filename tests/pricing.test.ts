@@ -147,7 +147,7 @@ describe('generated case-study purchase examples', () => {
     expect(quote(criterium, [byName(criterium, 'Women Cat 3/4/5')], '2027-03-01').totalCents).toBe(3905);
   });
 
-  it('applies the Valley second-race discount once, only for two entries on the same day', () => {
+  it('applies the generated criterium second-race discount once, only for two entries on the same day', () => {
     const one = quote(criterium, [byName(criterium, 'Men Cat 4/5')], '2027-03-01');
     expect(one.discountCents).toBe(0);
     const two = quote(criterium, [byName(criterium, 'Men Cat 4/5'), byName(criterium, 'Open Cat 4/5 Evening')], '2027-03-01');

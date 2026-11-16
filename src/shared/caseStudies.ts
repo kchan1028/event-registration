@@ -79,7 +79,7 @@ function planFor(config: EventConfig, requested: Array<{ timingCode: string; cou
 }
 
 function criterium(): CaseStudyScenario {
-  const source = buildCaseStudySources()[0].config;
+  const source = buildCaseStudySources()[0];
   const closed = structuredClone(source.categories[source.categories.length - 1]);
   closed.id = 'source-closed-category';
   closed.name = 'Closed demonstration field';
@@ -136,7 +136,7 @@ function roadSharedField(): CaseStudyScenario {
 }
 
 function omnium(): CaseStudyScenario {
-  const source = buildCaseStudySources()[1].config;
+  const source = buildCaseStudySources()[1];
   const config = stabilize(source, 'omnium');
   return {
     key: 'omnium',
@@ -150,7 +150,7 @@ function omnium(): CaseStudyScenario {
 }
 
 function emptyEvent(): CaseStudyScenario {
-  const source = buildCaseStudySources()[0].config;
+  const source = buildCaseStudySources()[0];
   source.event.name = 'Demo Empty Event';
   source.event.venue = '';
   source.categories = [];
@@ -170,7 +170,7 @@ function emptyEvent(): CaseStudyScenario {
 }
 
 function largeEvent(): CaseStudyScenario {
-  const source = buildCaseStudySources()[0].config;
+  const source = buildCaseStudySources()[0];
   source.event.name = 'Demo Grand Prix with an intentionally long but valid event name for layout and performance review';
   source.event.venue = 'Velódromo de Prueba José Example, 123 Long Demonstration Boulevard, Sample City, CA';
   source.races[0].name = 'Large field criterium';

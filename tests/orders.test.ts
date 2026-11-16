@@ -214,7 +214,7 @@ describe('rider checkout: holds and simulated payment', () => {
 });
 
 describe('generated case-study purchases through the API', () => {
-  it('loads the fixture events once, published, and orders reproduce the worked totals and simulated license results', async () => {
+  it('loads generated cases once and preserves checkout totals and simulated license results', async () => {
     const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z') });
     const first = await app.inject({ method: 'POST', url: '/api/demo/case-studies' });
     expect(first.statusCode).toBe(201);

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures';
 import { seedRegistrationCase } from './support/registration-case';
 
-/* Clickable demo purchase flow (product.md 2a) using the docs/fixtures data. */
+/* Clickable demo purchase flow (product.md 2a) using isolated generated case-study data. */
 
 async function openEvent(page: Page, kind: 'criterium' | 'omnium'): Promise<string> {
   const eventId = await seedRegistrationCase(page.request, kind);

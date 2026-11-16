@@ -1,6 +1,6 @@
 import { blankPath, newId } from './factory';
 import type { Category, EligibilityPath, EventConfig, LicenseCategory, RegistrationSettings } from './schema';
-import { FIXTURE_NOTICE, FIXTURE_WAIVER_TEXT, FIXTURE_WAIVER_VERSION } from './fixtures';
+import { FIXTURE_WAIVER_TEXT, FIXTURE_WAIVER_VERSION } from './fixtures';
 
 const FEES: Pick<RegistrationSettings, 'platformFeeCents' | 'platformFeeLabel' | 'processingFeeBasisPoints' | 'processingFeeLabel'> = {
   platformFeeCents: 300,
@@ -15,7 +15,6 @@ interface CaseStudyCategory {
   startTime: string;
   priceCents: number;
   cap: number;
-  confirmed: number;
   length: Category['length'];
   path: Partial<Omit<EligibilityPath, 'id'>>;
   guardian?: boolean;
@@ -26,20 +25,20 @@ const distance = (km: number, laps: number): Category['length'] => ({ kind: 'dis
 const cats = (...list: LicenseCategory[]) => list;
 
 const CRITERIUM_FIELDS: CaseStudyCategory[] = [
-  { code: 'DVC-M45', name: 'Men Cat 4/5', startTime: '09:00', priceCents: 3500, cap: 75, confirmed: 60, length: timed(35, 2), path: { genderClass: 'men', licenseCategories: cats('4', '5') } },
-  { code: 'DVC-W345', name: 'Women Cat 3/4/5', startTime: '09:50', priceCents: 3500, cap: 50, confirmed: 18, length: timed(30, 2), path: { genderClass: 'women', licenseCategories: cats('3', '4', '5') } },
-  { code: 'DVC-M35', name: 'Masters 35+ Cat 3/4', startTime: '10:40', priceCents: 4000, cap: 60, confirmed: 60, length: timed(40, 3), path: { minAge: 35, licenseCategories: cats('3', '4') } },
-  { code: 'DVC-J1014', name: 'Juniors 10-14', startTime: '11:40', priceCents: 1500, cap: 40, confirmed: 6, length: timed(20, 1), path: { minAge: 10, maxAge: 14 }, guardian: true },
-  { code: 'DVC-O45E', name: 'Open Cat 4/5 Evening', startTime: '17:30', priceCents: 3000, cap: 60, confirmed: 12, length: timed(30, 2), path: { licenseCategories: cats('4', '5') } },
+  { code: 'DVC-M45', name: 'Men Cat 4/5', startTime: '09:00', priceCents: 3500, cap: 75, length: timed(35, 2), path: { genderClass: 'men', licenseCategories: cats('4', '5') } },
+  { code: 'DVC-W345', name: 'Women Cat 3/4/5', startTime: '09:50', priceCents: 3500, cap: 50, length: timed(30, 2), path: { genderClass: 'women', licenseCategories: cats('3', '4', '5') } },
+  { code: 'DVC-M35', name: 'Masters 35+ Cat 3/4', startTime: '10:40', priceCents: 4000, cap: 60, length: timed(40, 3), path: { minAge: 35, licenseCategories: cats('3', '4') } },
+  { code: 'DVC-J1014', name: 'Juniors 10-14', startTime: '11:40', priceCents: 1500, cap: 40, length: timed(20, 1), path: { minAge: 10, maxAge: 14 }, guardian: true },
+  { code: 'DVC-O45E', name: 'Open Cat 4/5 Evening', startTime: '17:30', priceCents: 3000, cap: 60, length: timed(30, 2), path: { licenseCategories: cats('4', '5') } },
 ];
 
 const ROAD_FIELDS: CaseStudyCategory[] = [
-  { code: 'DRW-RR-M35', name: 'Masters 35+ Cat 3/4 Road Race', startTime: '08:30', priceCents: 5000, cap: 80, confirmed: 41, length: distance(64, 4), path: { minAge: 35, licenseCategories: cats('3', '4') } },
-  { code: 'DRW-RR-45', name: 'Cat 4/5 Road Race', startTime: '10:00', priceCents: 4500, cap: 80, confirmed: 55, length: distance(48, 3), path: { licenseCategories: cats('4', '5') } },
+  { code: 'DRW-RR-M35', name: 'Masters 35+ Cat 3/4 Road Race', startTime: '08:30', priceCents: 5000, cap: 80, length: distance(64, 4), path: { minAge: 35, licenseCategories: cats('3', '4') } },
+  { code: 'DRW-RR-45', name: 'Cat 4/5 Road Race', startTime: '10:00', priceCents: 4500, cap: 80, length: distance(48, 3), path: { licenseCategories: cats('4', '5') } },
 ];
 const WEEKEND_CRITERIUM_FIELDS: CaseStudyCategory[] = [
-  { code: 'DRW-CR-M35', name: 'Masters 35+ Cat 3/4 Criterium', startTime: '09:00', priceCents: 3500, cap: 60, confirmed: 33, length: timed(40, 3), path: { minAge: 35, licenseCategories: cats('3', '4') } },
-  { code: 'DRW-CR-45', name: 'Cat 4/5 Criterium', startTime: '10:00', priceCents: 3500, cap: 60, confirmed: 47, length: timed(35, 2), path: { licenseCategories: cats('4', '5') } },
+  { code: 'DRW-CR-M35', name: 'Masters 35+ Cat 3/4 Criterium', startTime: '09:00', priceCents: 3500, cap: 60, length: timed(40, 3), path: { minAge: 35, licenseCategories: cats('3', '4') } },
+  { code: 'DRW-CR-45', name: 'Cat 4/5 Criterium', startTime: '10:00', priceCents: 3500, cap: 60, length: timed(35, 2), path: { licenseCategories: cats('4', '5') } },
 ];
 
 function build(
@@ -47,13 +46,12 @@ function build(
   venue: string,
   days: { date: string; label: string; race: string; discipline: 'road_race' | 'criterium'; categories: CaseStudyCategory[] }[],
   registration: Partial<RegistrationSettings>,
-): { config: EventConfig; entryPlan: { categoryId: string; count: number }[] } {
+): EventConfig {
   const dayRows = days.map((d) => ({ id: newId('day'), date: d.date, label: d.label }));
   const races = days.map((d, i) => ({ id: newId('race'), dayId: dayRows[i].id, name: d.race, discipline: d.discipline, course: venue }));
   const dg = races.map((r, i) => ({ id: newId('dg'), name: r.name, sortOrder: i }));
   const startGroups: EventConfig['startGroups'] = [];
   const categories: Category[] = [];
-  const entryPlan: { categoryId: string; count: number }[] = [];
   let order = 0;
   days.forEach((d, i) => {
     const lastDay = new Date(`${d.date}T12:00:00Z`);
@@ -83,13 +81,12 @@ function build(
         needsReview: false,
         reviewReason: '',
       });
-      if (fc.confirmed > 0) entryPlan.push({ categoryId: id, count: fc.confirmed });
     }
   });
   const config: EventConfig = {
     schemaVersion: 1,
-    event: { name, timeZone: 'America/Los_Angeles', venue, isDemo: true, demoNotice: FIXTURE_NOTICE },
-    ruleSet: { source: 'Demo fixtures in docs/fixtures. Not a federation rulebook.', season: 2027 },
+    event: { name, timeZone: 'America/Los_Angeles', venue, isDemo: true, demoNotice: '' },
+    ruleSet: { source: 'Generated fictional case-study configuration. Not a federation rulebook.', season: 2027 },
     registration: {
       bundles: [],
       additionalRaceDiscountCents: 0,
@@ -111,7 +108,7 @@ function build(
     categories,
     capacityPools: [],
   };
-  return { config, entryPlan };
+  return config;
 }
 
 export function buildCaseStudySources() {
@@ -130,8 +127,8 @@ export function buildCaseStudySources() {
     ],
     {},
   );
-  weekend.config.registration.bundles = [
-    { id: newId('bundle'), name: 'Weekend bundle (one road race + one criterium)', raceIds: weekend.config.races.map((r) => r.id), discountCents: 0, priceCents: 7500 },
+  weekend.registration.bundles = [
+    { id: newId('bundle'), name: 'Weekend bundle (one road race + one criterium)', raceIds: weekend.races.map((r) => r.id), discountCents: 0, priceCents: 7500 },
   ];
   return [criterium, weekend];
 }
