@@ -105,6 +105,8 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 | Multi-race discount | Two non-conflicting criteriums get the additional-race discount exactly once and stay distinct entries |
 | Mixed-category weekend bundle | Each day's category passes its own rules; if any place is full, nothing is held |
 
+**Brand-link touch targets (#135, November 16, 2026):** Implemented for coarse pointers in registration, catalog and My registrations headers; native destinations and fine-pointer layout remain unchanged. Scoped evidence belongs in the fix PR. Physical-device and screen-reader checks remain open.
+
 **Registration mobile follow-up (#117, November 16, 2026):** Implemented: shared headers wrap when space runs out, retain account actions, and provide 44px account targets for coarse pointers. Author Chromium checks cover 320, 360, 390, 720, 768 and 1440px in both themes, keyboard navigation, and desktop geometry against the original CSS on Home, My registrations, event catalog and registration. Claude Code independently passed typecheck and all nine affected browser checks on `ca7d066`. Scoped automated and independent verification evidence belongs in the fix pull request under the test plan; real-phone and screen-reader checks remain open. No phase or launch-gate change.
 
 **Berkeley race discovery (November 15, 2026):** Implemented locally: an opt-in Find my races shortcut uses existing structured eligibility, preserves the complete schedule as default, and retains selected entries/shared-start context. Target scenario: six category choices for racing age 50, Cat 4. No phase priority or federation-verification change.

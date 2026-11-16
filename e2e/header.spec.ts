@@ -63,10 +63,11 @@ test.describe('touch header', () => {
 
   test('coarse-pointer account actions meet the mobile target without overflow', async ({ page }) => {
     const eventId = await seedRegistrationCase(page.request, 'criterium');
-    for (const route of ['/', '/#/my-registrations', `/#/register/${eventId}`]) {
+    for (const route of ['/', '/#/my-registrations', '/#/register', `/#/register/${eventId}`]) {
       await page.goto(route);
       await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
       expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+      await expect(page.locator('header a.brand')).toHaveCount(route === '/' ? 0 : 1);
       for (const width of [320, 390, 768]) {
         await page.setViewportSize({ width, height: 900 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
@@ -74,6 +75,7 @@ test.describe('touch header', () => {
           page.getByRole('button', { name: /Switch to .* theme/ }),
           page.getByRole('link', { name: 'My registrations', exact: true }),
           page.getByRole('button', { name: 'Sign out', exact: true }),
+          ...await page.locator('header a.brand').all(),
         ]) {
           const box = (await action.boundingBox())!;
           expect(box.height).toBeGreaterThanOrEqual(44);
@@ -85,5 +87,12 @@ test.describe('touch header', () => {
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('header').screenshot({ path: 'test-results/header-touch-390.png' });
+    await page.locator('header a.brand').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Choose an event' })).toBeVisible();
+    await page.goto('/#/my-registrations');
+    await page.locator('header a.brand').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Your organizations' })).toBeVisible();
   });
 });
