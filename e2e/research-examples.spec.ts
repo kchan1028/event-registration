@@ -27,7 +27,7 @@ for (const mode of ['light', 'dark']) {
       await expect(page.locator('main')).toContainText('NOT an event date');
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-      await page.screenshot({ path: `/private/tmp/ttt-research-${mode}-${viewport.width}.png`, fullPage: true });
+      await page.screenshot({ path: test.info().outputPath(`ttt-research-${mode}-${viewport.width}.png`), fullPage: true });
       await page.getByRole('link', { name: 'Back to events' }).click();
       await expect(page.getByRole('heading', { name: 'Choose an event' })).toBeVisible();
       await page.goto(`/#/register/${bbc.eventIds[0]}`);
