@@ -267,6 +267,8 @@ Build:
 - Transactional confirmations, receipts, waitlist offers, payment/refund/change notices, targeted operational email, delivery tracking, and suppression/retry handling. Marketing consent remains separate.
 - Signed-in rider self-service, policy/eligibility/capacity checks, financial previews, organizer approval where required, and an audit trail.
 - Basic fixed/percentage coupons with eligibility windows, explicit discount precedence, and atomic redemption caps.
+- Guardian follow-ups (Planned; owner request, November 15, 2026): a second guardian per junior, invited by email and pending until that person signs in with the invited address, with either guardian able to remove the other; and the junior claiming their own profile at the age of majority, which ends guardian access, is recorded, and leaves past registrations and waiver signers unchanged. Model: [guardian-accounts.md](docs/discovery/guardian-accounts.md).
+- Email delivery tracking (Planned; owner request, November 15, 2026): an SES configuration set publishing delivery, bounce, and complaint events into `email_messages`, the status shown to organizers, bounced or complained addresses suppressed, and a safe resend. Test-only (SES sandbox) until a live launch is approved ([ADR 0006](docs/decisions/0006-transactional-email-amazon-ses.md)).
 - Role-scoped operational and finance reports that distinguish riders, entries, orders, discounts, fees, refunds, and unsettled exceptions.
 
 Verification:
