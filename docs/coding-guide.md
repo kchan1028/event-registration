@@ -12,7 +12,7 @@ This guide sets the rules code must follow. Most of them protect three things vo
 | `tests/` | Vitest unit tests for `src/shared` and API tests using `app.inject` |
 | `e2e/` | Playwright browser tests |
 
-Commands (details in [runbooks/local-setup.md](runbooks/local-setup.md)): `npm run dev` to work locally, `npm run check` for typecheck plus unit and API tests plus build, `npm run test:e2e` for the browser tests. CI ([.github/workflows](../.github/workflows/ci.yml)) runs the same checks on every push to `main` and every pull request. For a documentation-only change (Markdown files and `docs/`, other than `docs/fixtures/`, which tests read) the test jobs report as skipped. The `main` ruleset requires a pull request, both test jobs to pass (skipped counts as passed), resolved review threads, and squash merges; no approval is needed. Locally, run only the tests for what you change; see [How much to test, and who verifies](#how-much-to-test-and-who-verifies).
+Commands (details in [runbooks/local-setup.md](runbooks/local-setup.md)): `npm run dev` to work locally, `npm run check` for typecheck plus unit and API tests plus build, `npm run test:e2e` for the browser tests. CI ([.github/workflows](../.github/workflows/ci.yml)) runs the same checks on every push to `main` and every pull request. For a documentation-only change (Markdown files and `docs/`, other than `docs/fixtures/`, which tests read) the test jobs report as skipped. The `main` ruleset requires a pull request, both test jobs to pass (skipped counts as passed), resolved review threads, and squash merges; no approval is needed. Locally, run only the tests for what you change; see the [test plan](testing/test-plan.md).
 
 Every rule traces to a requirement in [product.md](../product.md). When a rule here and `product.md` disagree, `product.md` wins and this guide must be corrected.
 
@@ -229,26 +229,7 @@ Current coverage (all passing November 14, 2026): category fixtures, eligibility
 
 ### How much to test, and who verifies
 
-**Test what you build.**
-
-- For a pull request, the author runs only the tests for what the change touches: `npm run typecheck`, the unit and API test files for the changed code (`npx vitest run tests/<file>.test.ts`), and, when a screen changes, the browser tests for that screen (`npx playwright test e2e/<file>.spec.ts`). New behavior gets a new or updated test.
-- When the change touches shared code (`src/shared/`), sign-in or roles, the database schema, dependencies, or a critical registration flow (checkout, capacity, eligibility, payments, refunds, check-in), also run the test files for every flow that uses what changed.
-- Do not run `npm run check` or the whole browser suite (`npm run test:e2e`) for a pull request. Run both, plus the critical user journeys, only before a deployment.
-- CI runs the whole suite on every pull request that changes more than documentation, so do not repeat it locally. GitHub will not merge a pull request until the CI test jobs pass. The unit and browser test jobs run at the same time, the Docker build runs only when a file it copies changes, and a newer push cancels the older run.
-- A documentation-only change runs no tests; say so in the summary.
-
-**Someone other than the author verifies.**
-
-- When Codex writes the change, Claude Code tests and reviews it. When Claude Code writes it, Codex does.
-- The author still runs the relevant checks before handing off. Independent verification is in addition to those checks, not instead of them.
-- The verifier checks the change against the requirements, edge cases, and possible regressions. Rerunning the author's commands is not enough.
-- If the other agent is unavailable, record independent verification as pending. Never say it passed.
-
-**Record the evidence.**
-
-- Report what was tested, the results, and anything untested or blocked.
-- Keep three things apart: automated tests, manual browser checks, and assumptions nobody verified.
-- Fix material findings and test again before calling verification complete.
+The [test plan](testing/test-plan.md) says what a pull request tests, the risk areas that widen it, independent verification by the other agent, the predeployment gate, manual checks, release blockers, and the evidence template.
 
 ### Review
 
