@@ -24,8 +24,10 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
+        # Each path segment is URL-encoded, so names like fix/issue#123 or fix/100% reach the right ref.
         run: |
-          if out=$(gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$BRANCH" 2>&1); then
+          ref=$(jq -rn --arg b "$BRANCH" '$b | split("/") | map(@uri) | join("/")')
+          if out=$(gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$ref" 2>&1); then
             echo "Deleted $BRANCH."
           elif grep -q "Reference does not exist" <<< "$out"; then
             echo "Branch $BRANCH was already deleted."
