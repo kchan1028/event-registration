@@ -1,0 +1,123 @@
+# Test plan
+
+Status: Implemented (adopted November 15, 2026). This plan says how changes to CycleReg are tested, who verifies them, and what evidence is kept. It applies only to this repository.
+
+It does not hold requirements or delivery status. [product.md](../../product.md) is the source for requirements and acceptance criteria, and [roadmap.md](../../roadmap.md) is the source for priorities, phase gates, and what is Verified. Domain test requirements (what each area must prove) stay in the [coding guide](../coding-guide.md#what-must-be-tested); this plan says when to run them.
+
+## Commands
+
+These are the repository's real commands ([package.json](../../package.json), [local setup](../runbooks/local-setup.md)). Unit and API tests need the local PostgreSQL server from the setup guide.
+
+| Purpose | Command |
+|---|---|
+| Typecheck | `npm run typecheck` |
+| Unit and API tests for one file | `npx vitest run tests/<file>.test.ts` |
+| Unit and API tests that import changed source files | `npx vitest related <src/file.ts> ... --run` |
+| Browser tests for one file | `npx playwright test e2e/<file>.spec.ts` |
+| Full unit and API suite | `npm test` |
+| Full check: typecheck, unit and API tests, build | `npm run check` |
+| Full browser suite (builds the app, resets the `cyclereg_e2e` database) | `npm run test:e2e` |
+
+Browser tests run in desktop Chrome (Playwright's `desktop` project). Several check-in tests also run at phone width inside that project. No other browser engine is automated.
+
+## 1. Pull request testing
+
+A pull request tests what it changes, not the whole application.
+
+- **Changed behavior.** Run `npm run typecheck` and the unit and API test files for the changed code. When a screen changes, run the browser tests for that screen. New or changed behavior gets a new or updated test, including the failure case for money, capacity, eligibility, waivers, permissions, or personal data.
+- **Affected integrations.** When the change touches shared code (`src/shared/`), sign-in or roles, the database schema, dependencies, or a flow in the [risk table](#2-risk-based-coverage), also run the test files listed there for every flow that uses what changed. `npx vitest related` finds the unit and API files that import a changed source file.
+- **Relevant regressions.** Add the test files for behavior the change could plausibly break, such as the flow that calls a changed function.
+- **Explain the scope.** The pull request says which test files ran and why that set covers the change, and names anything left out.
+- **Not for a pull request:** `npm run check` and the full `npm run test:e2e` run locally only at the [predeployment gate](#4-predeployment-testing).
+- **CI.** [CI](../../.github/workflows/ci.yml) runs the typecheck, the full unit and API suite, the build, and the full browser suite on every pull request that changes more than documentation. For a documentation-only change those jobs report as skipped. The `main` ruleset requires both test jobs to pass before a merge. Do not repeat CI's full run locally.
+- **Documentation-only changes** run no tests. Say so in the summary.
+
+## 2. Risk-based coverage
+
+When a change touches one of these areas, run that row's tests in addition to the changed files. What each area must prove is in the [coding guide](../coding-guide.md#what-must-be-tested) and the [acceptance criteria](../../product.md#core-flows-and-acceptance-criteria).
+
+| Area | Unit and API tests | Browser tests |
+|---|---|---|
+| Payments and refunds | `tests/payments.test.ts`, `tests/refunds.test.ts`, `tests/refundPolicy.test.ts`, `tests/orders.test.ts`, `tests/pricing.test.ts`, `tests/coupons.test.ts` | `e2e/checkout.spec.ts` |
+| Concurrent capacity reservations | `tests/capacity.test.ts`, `tests/api.test.ts` (last place across two connections), `tests/orders.test.ts`, `tests/waitlist.test.ts`, `tests/transfers.test.ts` | `e2e/organizer.spec.ts` (shared cap) |
+| Eligibility | `tests/eligibility.test.ts`, `tests/validation.test.ts`, `tests/impact.test.ts` | `e2e/checkout.spec.ts` (uncertain license) |
+| Guardian consent and waivers | `tests/juniors.test.ts`, `tests/categoryExtras.test.ts` (waiver addenda), `tests/orders.test.ts` | `e2e/checkout.spec.ts` (junior with guardian) |
+| Permissions | `tests/auth.test.ts`, `tests/lookup.test.ts`, `tests/juniors.test.ts` | `e2e/sign-in.spec.ts`, `e2e/checkin.spec.ts` (volunteer limits) |
+| Participant privacy | `tests/exports.test.ts`, `tests/startlists.test.ts`, `tests/roster.test.ts`, `tests/checkin.test.ts` (no contact or payment details) | `e2e/checkin.spec.ts` (fallback roster) |
+| Exports | `tests/exports.test.ts`, `tests/startlists.test.ts`, `tests/csv.test.ts` | `e2e/csv.spec.ts` |
+| Race-day check-in and bibs | `tests/checkin.test.ts`, `tests/automatic-bibs.test.ts`, `tests/bib-reassignment.test.ts`, `tests/roster.test.ts`, `tests/identity.test.ts` | `e2e/checkin.spec.ts` |
+| Published configuration changes | `tests/impact.test.ts`, `tests/resolutions.test.ts`, `tests/bulk.test.ts` | `e2e/organizer.spec.ts` |
+| Screens and themes | none | `e2e/accessibility.spec.ts` and the spec for the changed screen |
+
+Concurrency and idempotency tests must run requests in parallel or replay events; a single-threaded test does not prove them. Use fictional data only.
+
+## 3. Independent verification
+
+The agent that writes a change never verifies it alone.
+
+- **Who verifies.** Claude Code checks changes Codex wrote. Codex checks changes Claude Code wrote. From the repository root, the author asks for it with `codex review --base main` (Codex verifying) or `claude -p "Test and review the changes on this branch against main (PR #<n>). Do not edit, commit, push, or merge. Rank findings by severity and mark each blocking or non-blocking."` (Claude Code verifying). The verifier does not edit, commit, push, or merge.
+- **The author still tests.** The author runs the checks in [section 1](#1-pull-request-testing) before handing off. Verification is in addition to them.
+- **The verifier thinks independently.** It checks the change against the requirement in `product.md`, edge cases, and regressions in the [risk areas](#2-risk-based-coverage), and writes its own scenarios where they matter. Rerunning the author's commands is not enough.
+- **Findings.** Material findings are fixed in the same pull request and retested before verification counts as complete, for at most three rounds. A finding deferred past the merge becomes a GitHub issue, labeled as the [coding guide](../coding-guide.md#labels-and-milestones-on-issues) describes.
+- **Unavailable verifier.** If the other agent is unavailable, record verification as **Pending**. Never report it as passed.
+
+Each pull request records this in its description:
+
+```text
+Author: Claude Code | Codex
+Verifier: Codex | Claude Code | Pending (reason)
+Tested commit: <full SHA>
+Author checks: <commands run> -> <results>
+Verifier checks: <commands and scenarios> -> <results>
+Remaining gaps: <untested areas, blocked checks, assumptions>
+```
+
+## 4. Predeployment testing
+
+Nothing is deployed today ([deploy runbook](../runbooks/deploy-render.md)). Before any deployment, including a staging deploy, record evidence for all of these on the commit being deployed:
+
+1. **Full automated suite:** `npm run check` and `npm run test:e2e` pass locally on that commit, and CI passed on it.
+2. **Critical user journeys:** each flow in [product.md acceptance criteria](../../product.md#core-flows-and-acceptance-criteria) that the release includes, checked against the running build with fictional data. At minimum: publish a weekend, buy both days, last-place checkout, payment retry, refund, check in, and export to timer.
+3. **Applicable integration checks:** for each provider the release turns on (Clerk sign-in, Stripe test mode, Amazon SES), a check against that provider's test or sandbox instance, not a stub. A provider still Planned or unverified in [roadmap.md](../../roadmap.md) stays unverified until that check runs.
+4. **Operational readiness:** `GET /api/health` answers 200 on the deployed instance; backups and a demonstrated restore, monitoring, support owner, and a way back to the previous version, as [operations.md](../operations.md#changes-and-releases) requires for the environment.
+
+## 5. Manual checks
+
+Automated tests do not replace these. Record what was observed separately from what was not tested.
+
+| Check | Required when | How |
+|---|---|---|
+| Usability | Before a Phase 1 exit gate decision, and when a core rider, organizer, or volunteer flow changes in a way testers have not seen | [Usability test kit](../usability/README.md); thresholds in [roadmap.md](../../roadmap.md#phase-1--test-the-experience-without-live-money) |
+| Accessibility | Before calling a flow Verified; checkout and check-in first | The four checks in [ACCESSIBILITY.md](../../ACCESSIBILITY.md#how-accessibility-will-be-checked): automated, keyboard-only, a screen reader, a real phone |
+| Mobile and browser compatibility | When layout, navigation, forms, or check-in screens change; again before the pilot | Phone width (375 px) and desktop in Chromium for every such change; Safari on a real iPhone and one other desktop browser before calling a flow Verified or deploying |
+| Race-day rehearsal | Phase 3 exit gate, and before each pilot event | Mock weekend in [roadmap.md](../../roadmap.md#phase-3--make-race-day-operable), including blocked riders, bib issuance, fallback roster, timer handoff, and a backup restore |
+
+## 6. Release blockers
+
+A release does not go out while any of these is true:
+
+- A required CI check fails, or the [predeployment](#4-predeployment-testing) evidence is incomplete.
+- An open issue labeled `release-blocker`: a defect touching money, capacity, eligibility, waivers, permissions, or personal data ([labels](../coding-guide.md#labels-and-milestones-on-issues)).
+- A critical defect as [operations.md](../operations.md#incident-severity) defines it: oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, private data exposed.
+- Payment, entry, and capacity records disagree: the ledger, provider records, order state, and capacity counts do not reconcile.
+- Independent verification is Pending or Fail for a change in the release.
+- An unresolved launch dependency for the environment, as listed in [roadmap.md](../../roadmap.md): for example the merchant and settlement decision, the USA Cycling waiver and license path, a real Clerk instance, or the [final pre-launch security gate](../../roadmap.md#final-pre-launch-security-gate-planned) before real rider data or live payments.
+
+Security weaknesses are reported privately as [SECURITY.md](../../SECURITY.md) describes, never in this repository's public issues or documents.
+
+## 7. Evidence template
+
+Use one row per scenario in the pull request description, a linked file under `docs/testing/`, or the roadmap item's evidence link.
+
+| Requirement | Scenario | Expected result | Actual result | Environment | Commit | Verifier | Evidence | Status |
+|---|---|---|---|---|---|---|---|---|
+| [Last-place checkout](../../product.md#core-flows-and-acceptance-criteria) | Two riders pay for the final shared place at once | One order confirmed; the other refused; capacity not exceeded | | Local, PostgreSQL 17, fictional data | | | | Not Run |
+
+Status values:
+
+- **Pass:** ran, and the actual result matched the expected result.
+- **Fail:** ran, and the actual result did not match.
+- **Blocked:** could not run (missing provider keys, environment, or an earlier failure). Say what blocks it.
+- **Not Run:** in scope but not attempted yet.
+
+Only Pass is evidence that a requirement works. Planned integrations stay Not Run or Blocked until they run against a real test instance.

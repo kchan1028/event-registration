@@ -36,6 +36,7 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Significant technical decisions | [decisions/](decisions/README.md) | One file per decision |
 | Operating model: support, incidents, monitoring, backups, handoff | [operations.md](operations.md) | Labeled Proposed until there is a running system |
 | Domain rules for code | [coding-guide.md](coding-guide.md) | |
+| Test scope, independent verification, predeployment gate, release blockers, evidence | [testing/test-plan.md](testing/test-plan.md) | Requirements stay in product.md; status in roadmap.md |
 | Public page and copy rules | [content-guide.md](content-guide.md) | |
 | Writing rules, status vocabulary, glossary | This file | |
 | Setup and troubleshooting | [runbooks/](runbooks/local-setup.md) | Local setup and troubleshooting exist; race-day runbooks are planned |

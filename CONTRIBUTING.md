@@ -41,7 +41,7 @@ Reviewers will send back any change whose summary does not state its product and
 3. Follow [docs/coding-guide.md](docs/coding-guide.md) for domain rules and [docs/documentation-guide.md](docs/documentation-guide.md) for writing.
 4. Update `product.md`, `roadmap.md`, `README.md`, and affected guides in the same change when the rule above requires it.
 5. Use fake data only. Never commit secrets, `.env` files, or real rider information.
-6. Run the tests for what you changed, as [the coding guide](docs/coding-guide.md#how-much-to-test-and-who-verifies) describes. CI runs the whole suite; `npm run check` and the full `npm run test:e2e` run locally only before a deployment. Keep the visual system in [DESIGN.md](DESIGN.md) consistent.
+6. Run the tests for what you changed, as the [test plan](docs/testing/test-plan.md) describes, and record the scope and results in the pull request. CI runs the whole suite; `npm run check` and the full `npm run test:e2e` run locally only before a deployment. Keep the visual system in [DESIGN.md](DESIGN.md) consistent.
 7. Write the change summary (format below).
 
 ## Change summary
@@ -63,14 +63,14 @@ Example of a valid "no impact" line: `Product impact (product.md): None. This fi
 ## Review expectations
 
 - Every change gets at least one reviewer who did not write it. While the team is one person, the author reviews their own change a day later against the checklist below and says so in the summary.
-- Changes that touch money, capacity, eligibility, waivers, permissions, or personal data need a reviewer who understands that area (for example the treasurer for refunds, the registration lead for category rules). See [docs/coding-guide.md](docs/coding-guide.md#testing-and-review).
+- Changes that touch money, capacity, eligibility, waivers, permissions, or personal data need a reviewer who understands that area (for example the treasurer for refunds, the registration lead for category rules). See [docs/coding-guide.md](docs/coding-guide.md#testing-and-review). Changes written by an agent are independently verified by the other agent ([test plan](docs/testing/test-plan.md#3-independent-verification)).
 - Reviewers check:
   - [ ] Product and roadmap impact is stated and correct
   - [ ] Docs describe what exists, labeled Planned, Implemented, or Verified
   - [ ] Roadmap items are marked complete only with evidence that acceptance criteria pass
   - [ ] No secrets or real personal data
   - [ ] Relative links work and Mermaid diagrams render
-  - [ ] Tests cover the acceptance criteria the change claims, and CI is green
+  - [ ] Tests cover the acceptance criteria the change claims, the pull request explains the test scope and records evidence as the [test plan](docs/testing/test-plan.md) asks, and CI is green
 
 ## Architecture decisions
 

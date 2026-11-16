@@ -37,7 +37,7 @@ Berkeley Omnium remains a proposed design partner, not an approved migration. A 
 3. Check existing code and tests before adding functionality. Distinguish implemented local or simulated behavior from verified production integration.
 4. Keep the change small and reviewable. Never commit secrets or real rider information; follow the repository's test-data rules.
 5. Update `product.md` when requirements change and `roadmap.md` when priority, dependencies, or delivery status change. Otherwise explain why neither needs an edit.
-6. Run the tests for what you changed ([coding guide](docs/coding-guide.md#how-much-to-test-and-who-verifies)); `npm run check` and the full `npm run test:e2e` run only before a deployment. Report any check that could not run and why.
+6. Run the tests for what you changed ([test plan](docs/testing/test-plan.md)); `npm run check` and the full `npm run test:e2e` run only before a deployment. Report any check that could not run and why.
 7. Open a pull request using the contribution guide's change-summary format. Include evidence, remaining dependencies, and product and roadmap impact. Do not merge or deploy as part of opening the pull request.
 
 New requirements belong in `product.md`; new priorities and status changes belong in `roadmap.md`. Link to them here when needed rather than copying their details.
