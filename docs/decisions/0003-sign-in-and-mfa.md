@@ -104,6 +104,10 @@ Decided by the project owner on 2026-11-15, after D01 answered that an authentic
 Product impact (product.md): Sign-in and account security; acceptance criteria; the checkout success measure no longer excludes MFA enrollment; open question 7 is answered.
 Roadmap impact (roadmap.md): Phase 3 builds organizer MFA only; the Phase 3 exit gate and the P0 definition say organizer MFA.
 
+## Delivery scheduling note (2026-11-15): organizer security last before launch
+
+The project owner deferred organizer MFA and sensitive-action re-verification to the final pre-launch implementation and verification step, after other build work and fictional-data rehearsals. This updates the Phase 3 delivery timing recorded above; the accepted provider, organizer-only MFA, recovery, and enforcement decisions remain unchanged. The [roadmap gate](../../roadmap.md#final-pre-launch-security-gate-planned) is required before the Phase 4 pilot opens, any real rider data, or live payments. The provider spike and organizer security rehearsals move with this work. Riders and guardians keep email sign-in only.
+
 ## Consequences
 
 - Unblocks hosting and the role-based features (check-in volunteer, timer/export, finance roles, emergency-contact access).
