@@ -65,6 +65,9 @@ export function createJuniors(db: Db, clock: () => Date) {
     adopt,
     list,
 
+    /** Take the guardian's lock inside the caller's transaction, before it changes any of the guardian's junior orders (event lock first, then this). */
+    lockGuardian: (guardianAccountId: string) => db.lock(guardianLock(guardianAccountId)),
+
     /**
      * An organizer corrected a junior's name on one order. The profile takes the corrected name so
      * the next registration finds it. If the guardian already has a profile under that name, the two
