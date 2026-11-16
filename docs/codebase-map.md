@@ -2,7 +2,7 @@
 
 Where to start reading for a change, what tests cover each area, and constraints that are easy to miss. It is for navigation: open the files it names and check the current code before changing anything. System design and tradeoffs are in [architecture.md](architecture.md); domain rules are in the [coding guide](coding-guide.md).
 
-Paths verified against `main` at commit `740d0b9` (November 16, 2026). When a change makes an entry untrue, fix the entry in the same pull request. If this map and the code disagree, the code wins; correct the map.
+Initial path inventory verified against `main` at commit `740d0b9` (November 16, 2026); subsequent additions are checked in their own pull requests. When a change makes an entry untrue, fix the entry in the same pull request. If this map and the code disagree, the code wins; correct the map.
 
 ## How the pieces fit
 
@@ -23,7 +23,7 @@ Paths verified against `main` at commit `740d0b9` (November 16, 2026). When a ch
 | Organizer registrations queue | `src/web/Registrations.tsx`, `src/web/registrations/` | `lookup.ts`, `reports.ts`, `exports.ts` | `lookup.test.ts`, `exports.test.ts`, `transfers.test.ts`, `resolutions.test.ts` |
 | Waitlists | `src/server/waitlist.ts` | `waitlist.ts` | `waitlist.test.ts` |
 | Rider identity across orders | `src/server/identity.ts`, `src/web/registrations/SameRider.tsx` | `riderIdentity.ts` | `identity.test.ts` |
-| Sign-in, roles, team, guardians | `src/server/auth.ts`, `juniors.ts`, `src/web/auth.tsx`, `Team.tsx`, `MyRegistrations.tsx` | `roles.ts` (`can`, permissions), `juniors.ts` | `auth.test.ts`, `juniors.test.ts`; `e2e/sign-in.spec.ts` |
+| Sign-in, roles, team, guardians | `src/server/auth.ts`, `juniors.ts`, `src/web/auth.tsx`, `Team.tsx`, `MyRegistrations.tsx` | `roles.ts` (`can`, permissions), `juniors.ts` | `auth.test.ts`, `juniors.test.ts`; `e2e/sign-in.spec.ts`, `e2e/handoff.spec.ts` |
 | Email (test-only SES) | `src/server/email.ts` | | `auth.test.ts` (invitation emails) |
 | Check-in, bibs, roster | `src/server/checkin.ts`, `automaticBibs.ts`, `src/web/CheckIn.tsx`, `BibBatchPanel.tsx`, `Roster.tsx` | `checkin.ts`, `roster.ts` | `checkin.test.ts`, `automatic-bibs.test.ts`, `bib-reassignment.test.ts`, `roster.test.ts`; `e2e/checkin.spec.ts` |
 | Start lists and timer export | `src/server/startlists.ts`, `src/web/StartLists.tsx` | `startlist.ts` | `startlists.test.ts` |
