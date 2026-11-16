@@ -23,10 +23,10 @@ async function setup() {
   const { config } = (await call(ORGANIZER, 'GET', `/api/events/${eventId}`)).json() as { config: EventConfig };
   const juniorCat = config.categories.find((c) => c.timingCode === 'RR-J1516')!.id;
   let n = 0;
-  const registerJunior = async (who: string, firstName: string) => {
+  const registerJunior = async (who: string, firstName: string, lastName = 'Example') => {
     const rider = {
       firstName,
-      lastName: 'Example',
+      lastName,
       email: '',
       team: '',
       racingAge: 16,
@@ -51,9 +51,12 @@ describe('guardian and junior access', () => {
     const first = await registerJunior(PARENT, 'Sam');
     await registerJunior(PARENT, 'sam '); // the same junior, typed differently
     await registerJunior(PARENT, 'Alex');
+    // Same letters, different first/last split: two juniors.
+    await registerJunior(PARENT, 'Sam Example', 'Jones');
+    await registerJunior(PARENT, 'Sam', 'Example Jones');
     const juniors = (await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string; firstName: string; viewerEmail: string | null }[];
-    expect(juniors.map((j) => j.firstName)).toEqual(['Sam', 'Alex']);
-    expect(((await call(PARENT, 'GET', '/api/rider/registrations')).json() as { placedByYou: boolean }[]).map((o) => o.placedByYou)).toEqual([true, true, true]);
+    expect(juniors.map((j) => j.firstName)).toEqual(['Sam', 'Alex', 'Sam Example', 'Sam']);
+    expect(((await call(PARENT, 'GET', '/api/rider/registrations')).json() as { placedByYou: boolean }[]).map((o) => o.placedByYou)).toEqual([true, true, true, true, true]);
 
     // Another household sees none of it, and cannot name a login for this junior.
     expect((await call(OTHER_PARENT, 'GET', `/api/orders/${first}`)).statusCode).toBe(404);
@@ -123,5 +126,19 @@ describe('guardian and junior access', () => {
     const after = (await call(PARENT, 'GET', '/api/rider/juniors')).json() as { firstName: string; viewerEmail: string | null }[];
     expect(after).toEqual([expect.objectContaining({ firstName: 'Sam', viewerEmail: JUNIOR })]);
     expect(((await call(JUNIOR, 'GET', '/api/rider/registrations')).json() as { id: string }[]).map((o) => o.id).sort()).toEqual([typo1, typo2, right].sort());
+  });
+
+  it('finds a profile saved with the earlier space-joined key, keeping its viewer access', async () => {
+    const { call, registerJunior, databaseUrl } = await setup();
+    const first = await registerJunior(PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string }[];
+    await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/viewer`, { email: JUNIOR });
+    const client = new pg.Client({ connectionString: databaseUrl });
+    await client.connect();
+    await client.query(`UPDATE junior_profiles SET name_key = 'sam example'`);
+    await client.end();
+    const second = await registerJunior(PARENT, 'Sam');
+    expect(((await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string }[]).map((j) => j.id)).toEqual([sam.id]);
+    expect(((await call(JUNIOR, 'GET', '/api/rider/registrations')).json() as { id: string }[]).map((o) => o.id).sort()).toEqual([first, second].sort());
   });
 });
