@@ -321,7 +321,7 @@ Early independent build: the local API can preview and atomically assign bibs to
 ### Implemented locally, with operational verification still open
 
 - Search/QR check-in, ready/blocked results, bib ranges, repeat handling and timing collection: [check-in status](#check-in), [implementation](src/server/checkin.ts). Collected timing samples do not establish staff speed or complete attempt coverage.
-- Opt-in post-close allocation, deterministic previewed bulk assignment and protected corrections: [bib requirements](product.md#automatic-and-bulk-bib-assignment), [PR #101](https://github.com/kchan1028/event-registration/pull/101). Shared weekend overlap and inactive-entry correction were independently checked; staff/device rehearsals remain open.
+- Opt-in post-close allocation, deterministic previewed bulk assignment and protected corrections: [bib requirements](product.md#automatic-and-bulk-bib-assignment), [PR #101](https://github.com/kchan1028/event-registration/pull/101). Shared weekend overlap and inactive-entry correction were independently checked. Historical PR #101 evidence (November 15): author 311 unit/API and 36 browser checks plus typecheck/build; independent Claude verification eight scenarios and 68 targeted tests, with no blocking findings after fixes. Staff/device rehearsals remain open.
 - Timestamped start lists, change reports and sample CSV: [export status](#start-lists-and-timer-export). The sample is not timer-approved.
 - Minimal printable roster: [roster screen](src/web/Roster.tsx). This is a read-only fallback, not offline entry or synchronization.
 
@@ -334,20 +334,19 @@ These remain within the existing Phase 3 scope; this status clarification adds n
 | Walk-up/mobile/kiosk registration | Planned staff workflow under [existing requirements](product.md#race-day-registration); ordinary online registration is not proof of a complete desk workflow. Terminals and cash/check need separate approval. | Authorized staff complete a walk-up, guardian/review exception, full field and failed payment without duplicate entries, charges or start-list omissions. |
 | License/waiver exception resolution | Local review controls exist; accepted waiver/guardian resolution and license source/freshness workflow remain dependent on approval. | Missing requirements remain blocked until an accepted resolution is recorded; no bib issuance bypass. |
 | Timer handoff | Adapt the sample only after the timer agrees fields and identifiers. | Actual timer import, corrections/revisions and round trip accepted; [review packet](docs/timer-export-review.md). |
-| Continuity and alerts | Operational payment/email alerts, backup/restore procedure, restricted emergency-contact process and paper reconciliation remain unproved or Proposed. | Demonstrated failure detection, restore and contingency reconciliation; [operations](docs/operations.md). |
+| Continuity and alerts | Operational payment/email alerts, backup/restore procedure, incident handling/support runbook, restricted emergency-contact process and paper reconciliation remain unproved or Proposed. | Demonstrated failure detection, restore and contingency reconciliation; [operations](docs/operations.md). |
 | Volunteer and successor instructions | Role-specific race-day runbooks and named support/deputy ownership are not yet delivered/rehearsed. | A second organizer and volunteers operate without developer rescue or shared credentials. |
 
 Minor replacement-draft behavior remains an owner decision ([#98](https://github.com/kchan1028/event-registration/issues/98)); do not treat a proposed interaction preference as approved scope.
 
 ### Dependencies and external approvals
 
-- Phase 2 entry gates remain open: real Clerk development-instance rehearsal, approved merchant/settlement and retention rules, provider reconciliation and hosted recovery evidence. Local tests do not satisfy them.
+- Phase 2 exit gates (Phase 3 entry dependencies) remain open: real Clerk development-instance rehearsal, approved merchant/settlement and retention rules, provider reconciliation and hosted recovery evidence. Local tests do not satisfy them.
 - Before sanctioned use, agree the USA Cycling electronic-waiver/guardian/license path or approved alternative. No federation integration is claimed.
 - Assign the registration lead, timer liaison, treasurer, support owner and deputy before an operational rehearsal can be accepted. Unassigned responsibilities remain in [operations open questions](docs/operations.md#open-questions).
 - Organizer MFA and sensitive-action verification remain at the final pre-launch gate, after other build work and fictional-data rehearsals, as already decided.
 
 ### Rehearsals and exit evidence still required
-
 
 - Run an entire mock weekend with sample data and staff other than the developer.
 - Include field changes, missing licenses/signatures, refunds, duplicate names, and a lost-connection scenario.
