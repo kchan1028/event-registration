@@ -12,6 +12,10 @@ The existing per-tab registration draft also retains the exact pending reservati
 
 Concurrent requests use the existing order-scoped provider key and fixed request parameters. The Stripe SDK handles bounded conflict retries; an exhausted `idempotency_key_in_use` conflict returns a retryable 503 without creating a payment or changing entry/readiness state. The same authenticated order can be retried. Session expiry is described in [the data model](DATA_MODEL.md#payment_sessions); it does not extend capacity reservations. Tests use the real SDK with a fake HTTP transport and fictional data, not a real provider account. Live keys remain refused; permissions and webhook verification are unchanged.
 
+## Walk-up phone handoff (Implemented locally)
+
+Check-in staff can display only the public event registration address and QR. It contains no rider details, offer tokens or staff-page query parameters. Registration stays under the participant/guardian account; the staff session is not handed to the rider. No new API route, role, account access, payment method or waiver bypass is added. The published-event guard suppresses handoff for an unpublished event; server registration validation remains authoritative. Shared kiosks and staff-entered orders remain outside this increment. Local loopback addresses cannot serve another device; real-phone use requires reachable staging with the existing security gates.
+
 ## Supported versions
 
 | Version | Supported |

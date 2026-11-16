@@ -1,5 +1,5 @@
 import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/researchExamples';
-import QRCode from 'qrcode';
+import { QrCodeImage } from './QrCodeImage';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
 import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, MESSAGES, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
@@ -1459,7 +1459,7 @@ export function OrderPage({ orderId }: { orderId: string }) {
             <div className="ticket">
               <p className="ticket__label">Check-in code{order.isDemo ? ' (demo)' : ''}</p>
               <p className="ticket__code num">{order.checkInCode}</p>
-              {order.checkInCode && <CheckInQr code={order.checkInCode} />}
+              {order.checkInCode && <QrCodeImage value={order.checkInCode} alt={`QR code for check-in code ${order.checkInCode}`} />}
               <p className="muted small">Show this at check-in. It identifies your entry and contains no personal details.</p>
             </div>
             {order.entries.some((e) => e.status !== 'withdrawn' && e.readiness.some((r) => r.state !== 'done')) ? (
@@ -1677,20 +1677,4 @@ function JoinWaitlist({ ev, cat, draft }: { ev: PublicEvent; cat: Category; draf
       </div>
     </form>
   );
-}
-
-/** The check-in code as a QR image, for scanning at the check-in table. The text code above stays for typing. */
-function CheckInQr({ code }: { code: string }) {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    QRCode.toDataURL(code, { errorCorrectionLevel: 'M', margin: 2, width: 200, color: { dark: '#000000', light: '#ffffff' } })
-      .then((url) => live && setSrc(url))
-      .catch(() => live && setSrc(null));
-    return () => {
-      live = false;
-    };
-  }, [code]);
-  if (!src) return null;
-  return <img className="ticket__qr" src={src} width={200} height={200} alt={`QR code for check-in code ${code}`} />;
 }

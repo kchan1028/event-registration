@@ -3,6 +3,7 @@ import { BIB_SCOPES, rangeFor, changedBibAssignments, type BibChange, type BibRe
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
 import { can } from '../shared/roles';
+import { WalkUpRegistration } from './WalkUpRegistration';
 import { AutomaticBibs } from './AutomaticBibs';
 import { BibReassignmentPreview } from './BibReassignmentPreview';
 import { BibBatchPanel, type BibBatchMode } from './BibBatchPanel';
@@ -22,6 +23,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [batchMode, setBatchMode] = useState<BibBatchMode | null>(null);
   const [showBibs, setShowBibs] = useState(false);
+  const [showRegistration, setShowRegistration] = useState(false);
   const [scanning, setScanning] = useState(false);
   const detailRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -138,6 +140,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
         {data && can(data.roles, 'checkin.settings') && <button type="button" className="btn btn--secondary btn--small" aria-expanded={showBibs} onClick={() => setShowBibs((v) => !v)}>
           Bib ranges
         </button>}
+        {data && <button type="button" className="btn btn--secondary btn--small ci-walkup-trigger" aria-expanded={showRegistration} onClick={() => setShowRegistration((open) => !open)}>Register a walk-up</button>}
         <a className="btn btn--secondary btn--small" href={href({ page: 'roster', eventId })}>
           Fallback roster
         </a>
@@ -148,6 +151,8 @@ export function CheckIn({ eventId }: { eventId: string }) {
           <strong>Example data.</strong> Fictional riders, test payments, and simulated license reviews. Nothing here is a real entry or a real license check.
         </p>
       )}
+
+      {data && showRegistration && <WalkUpRegistration eventId={eventId} published={data.published} />}
 
       {data && batchMode && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId + batchMode} eventId={eventId} dayId={data.dayId} mode={batchMode} onChanged={() => refreshAfterBatch.current()} onClose={() => setBatchMode(null)} />}
 

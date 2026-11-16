@@ -38,6 +38,7 @@ Details and limits: [category builder](product.md#1a-road-race-and-criterium-cat
 | Feature | Status | What it does |
 |---|---|---|
 | Browse published events | Implemented | View already-published events and schedules; browsing does not create demo fixtures |
+| Walk-up phone handoff | Implemented locally | Check-in shares a published event registration QR/address; the rider/guardian registers on their own phone/account. Staff then check readiness and issue bibs. No staff-entered order or kiosk mode |
 | Responsive header navigation | Implemented | Shared headers wrap to keep theme, registration lookup and sign-out actions reachable; coarse-pointer account actions meet the 44px target; interactive brand links in registration, catalog and My registrations headers do too |
 | Choose entries | Implemented | Select eligible categories, see capacity and review requirements, and receive schedule-conflict warnings |
 | Order pricing | Implemented | Show entries, discounts, and configured fees before simulated payment; prevent discount stacking |

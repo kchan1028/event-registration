@@ -3661,7 +3661,14 @@ fieldset:disabled .field label {
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
 }
-.ci-automatic h2 { font-size: 17px; font-weight: 500; }
+.ci-walkup-trigger, .ci-walkup .btn { min-height: 44px; }
+.ci-walkup .btn { white-space: normal; justify-self: start; }
+.ci-walkup { display: grid; gap: var(--s-3); }
+.ci-walkup > p, .ci-walkup > ol, .ci-walkup > label { max-width: 72ch; }
+.ci-walkup > label { display: grid; gap: var(--s-1); min-width: 0; }
+.ci-walkup > ol { padding-inline-start: 1.5rem; }
+.ci-walkup li + li { margin-top: var(--s-2); }
+.ci-walkup h2, .ci-automatic h2 { font-size: 17px; font-weight: 500; }
 .ci-automatic p { max-width: 72ch; margin: var(--s-3) 0; }
 .ci-automatic label { display: grid; gap: var(--s-1); max-width: 28rem; }
 .ci-bibs fieldset {

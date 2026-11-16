@@ -51,6 +51,10 @@ When a change touches one of these areas, run that row's tests in addition to th
 
 Concurrency and idempotency tests must run requests in parallel or replay events; a single-threaded test does not prove them. Use fictional data only.
 
+### Walk-up phone handoff
+
+`e2e/walkup.spec.ts` verifies separate fictional staff/rider sessions, public event-only URL generation, QR fallback address, unpublished-event suppression, declined payment without bib issuance, participant-owned confirmation and staff check-in with one start-list entry. Run receipt QR/guardian and check-in browser regressions when changing the shared QR renderer. Existing server tests remain authoritative for windows, day-of pricing, capacity, guardian consent and readiness. A localhost emulation is not physical-phone scanning, real provider operation or a completed race-day rehearsal.
+
 ### Shared responsive account headers
 
 `e2e/header.spec.ts` checks Home, My registrations, event catalog and registration at 320, 360, 390, 720, 768 and 1440 CSS pixels in light/dark themes. Require no page overflow, horizontally contained theme/account actions, keyboard focus order, functional registration lookup/sign-out, and 44px account/interactive brand-link targets with an emulated coarse pointer. Verify the registration brand returns to the event catalog and the My registrations brand returns Home; the Home wordmark is a non-interactive span. Compare desktop header/control geometry and page height in the same DOM against the original CSS declarations; this is not a second baseline build or a claim about all application routes. Run the affected sign-in and organizer/rider accessibility scenarios because the Home header is shared. Real devices, screen readers and actual browser zoom remain separate manual checks.
