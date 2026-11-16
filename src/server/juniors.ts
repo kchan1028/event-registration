@@ -61,13 +61,19 @@ export function createJuniors(db: Db, clock: () => Date) {
 
     /**
      * An organizer corrected a junior's name on one order. The profile takes the corrected name so
-     * the next registration finds it; if the guardian already has a profile under that name, the
-     * order moves to it instead. Returns the order's profile.
+     * the next registration finds it. If the guardian already has a profile under that name, the two
+     * are the same junior: every order moves to that profile, it keeps its viewer email (or takes
+     * this one's), and this profile is removed. Returns the order's profile.
      */
     async renamed(profileId: string, guardianAccountId: string, rider: { firstName: string; lastName: string }): Promise<string> {
       const key = nameKey(rider.firstName, rider.lastName);
       const existing = await db.get<{ id: string }>(`SELECT id FROM junior_profiles WHERE guardian_account_id = $1 AND name_key = $2`, [guardianAccountId, key]);
-      if (existing && existing.id !== profileId) return existing.id;
+      if (existing && existing.id !== profileId) {
+        await db.run(`UPDATE orders SET junior_profile_id = $1 WHERE junior_profile_id = $2`, [existing.id, profileId]);
+        await db.run(`UPDATE junior_profiles d SET viewer_email = COALESCE(d.viewer_email, s.viewer_email) FROM junior_profiles s WHERE d.id = $1 AND s.id = $2`, [existing.id, profileId]);
+        await db.run(`DELETE FROM junior_profiles WHERE id = $1`, [profileId]);
+        return existing.id;
+      }
       await db.run(`UPDATE junior_profiles SET name_key = $1, first_name = $2, last_name = $3 WHERE id = $4`, [key, rider.firstName, rider.lastName, profileId]);
       return profileId;
     },

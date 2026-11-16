@@ -110,4 +110,18 @@ describe('guardian and junior access', () => {
     expect(juniors).toEqual([{ id: profile.id, firstName: 'Sam', lastName: 'Example', viewerEmail: JUNIOR }]);
     expect(((await call(JUNIOR, 'GET', '/api/rider/registrations')).json() as { id: string }[]).map((o) => o.id).sort()).toEqual([first, second].sort());
   });
+
+  it('merges two profiles of the same junior when a correction makes their names match', async () => {
+    const { call, registerJunior } = await setup();
+    const typo1 = await registerJunior(PARENT, 'Sma');
+    const typo2 = await registerJunior(PARENT, 'Sma');
+    const right = await registerJunior(PARENT, 'Sam');
+    const before = (await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string; firstName: string }[];
+    const typoProfile = before.find((j) => j.firstName === 'Sma')!;
+    await call(PARENT, 'POST', `/api/rider/juniors/${typoProfile.id}/viewer`, { email: JUNIOR });
+    expect((await call(ORGANIZER, 'POST', `/api/orders/${typo1}/rider-corrections`, { changes: { firstName: 'Sam' }, reason: 'Typo at checkout' })).statusCode).toBe(200);
+    const after = (await call(PARENT, 'GET', '/api/rider/juniors')).json() as { firstName: string; viewerEmail: string | null }[];
+    expect(after).toEqual([expect.objectContaining({ firstName: 'Sam', viewerEmail: JUNIOR })]);
+    expect(((await call(JUNIOR, 'GET', '/api/rider/registrations')).json() as { id: string }[]).map((o) => o.id).sort()).toEqual([typo1, typo2, right].sort());
+  });
 });
