@@ -597,7 +597,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const t = nowIso();
         // A junior's name change may merge profiles across events: take the guardian lock before touching any order row.
         const juniorRename = !!row.junior_profile_id && !!row.account_id && changes.some((c) => c.field === 'firstName' || c.field === 'lastName');
-        if (juniorRename) await juniors.lockGuardian(row.account_id!);
+        // Read the profile link again under the lock: a concurrent correction may have merged it into another profile.
+        const profileId = juniorRename ? (await juniors.lockGuardian(row.account_id!), (await orderRow(orderId))!.junior_profile_id) : null;
         let cleared: { categoryId: string; note: string | null; reviewedAt: string | null }[] = [];
         if (changes.some((c) => c.field === 'licenseNumber')) {
           cleared = (await entryRows(orderId)).filter((e) => e.license_reviewed).map((e) => ({ categoryId: e.category_id, note: e.license_review_note, reviewedAt: e.license_reviewed_at }));
@@ -605,7 +606,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         }
         await db.run(`UPDATE orders SET rider_json = $1, updated_at = $2 WHERE id = $3`, [JSON.stringify(parsed.data), t, orderId]);
         // A corrected junior name follows to the guardian's profile, so the next registration finds it.
-        if (juniorRename) await juniors.renamed(row.junior_profile_id!, row.account_id!, parsed.data);
+        if (profileId) await juniors.renamed(profileId, row.account_id!, parsed.data);
         await db.run(
           `INSERT INTO rider_corrections (id, event_id, order_id, changes_json, cleared_reviews_json, reason, corrected_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [newId('cor'), row.event_id, orderId, JSON.stringify(changes), cleared.length > 0 ? JSON.stringify(cleared) : null, reason, by, t],
