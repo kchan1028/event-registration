@@ -24,7 +24,7 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 | Phase 0: Establish the case to build | In progress | The [discovery kit](docs/discovery/README.md) is implemented (interview guides, workflow map, workload baseline, options comparison, USAC and payment questions, pilot selection, decision memo). One interview is done ([D01](docs/discovery/interviews/D01.md), November 14, 2026: the promoter answering as race director, registration lead, treasurer, and rider; all numbers are estimates). Its largest estimated costs are reconciliation (about 8 hours per event: reports, refund matching, merchandise) and bib assignment across multiple fields (about 1 hour). The current tool is BikeReg. Separate staff interviews, the timer, four more riders or parents, observation, and measurement remain. KC (project owner) owns the USAC contact as of November 15, 2026; no other owners are named. Public research on the USAC questions is recorded (November 15, 2026): electronic waivers need an approved platform, and approval criteria and license-data access are not public. The USAC questions were emailed on November 15, 2026 (no answer yet); nothing has been sent to payment providers. Public research on Stripe's terms is recorded in the [payment model questions](docs/payment-model-questions.md#findings) (November 15, 2026). The category builder milestone was built ahead of this gate at the owner's request; it does not replace discovery. Next actions are listed at the end of this document. Send-ready versions of the outreach questions: [questions for USA Cycling](docs/usac-questions.md) and [payment model questions](docs/payment-model-questions.md). |
 | Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented. The race-day check-in and sample timer exports are implemented too. Usability tests with people have not been run (the [test kit](docs/usability/README.md) is ready). A [pilot run of the kit](docs/usability/pilot-run-2026-11-14.md) on November 14, 2026 completed every task, fixed five problems (including check-in ignoring Enter from a scanner), and corrected the kit; it is not gate evidence. The export format is not yet agreed with a timer. |
 | Phase 2: Build the registration core | In progress | Decisions: ADR 0003 and 0004 accepted, 0005 Proposed. First build step done: the local build stores data in PostgreSQL with per-event transaction locks (November 15, 2026). Stripe hosted Checkout and refunds are implemented locally in test mode. Nothing is hosted. Depends on Phase 1 and a settled payment model. |
-| Phase 3: Make race day operable | Planned | USAC acceptance gates live sanctioned use. |
+| Phase 3: Make race day operable | In progress (partial local implementation ahead of gates) | Check-in, bib allocation, snapshots and printable roster exist. Phase 3 entry dependencies and operational exit evidence remain open; USAC acceptance gates live sanctioned use. |
 | Phase 4: Run a controlled live pilot | Planned | Depends on Phase 3. |
 | Phase 5: Prove a two-day weekend and handoff | Planned | Depends on a successful Phase 4. |
 | Phase 6: Expand only from observed demand | Planned | P2. |
@@ -318,21 +318,35 @@ Indicative effort: 3–5 weeks. Depends on Phase 2; USAC acceptance gates live s
 
 Early independent build: the local API can preview and atomically assign bibs to selected confirmed, unassigned riders on one day, optionally restricted to a race or category. It supports name, registration-time, or start-order sorting with an ID tie-breaker, rechecks the choices under the event lock, and refuses stale or exhausted batches. The check-in interface now lets owners and registration managers select unassigned confirmed riders by day/race/category, preview numbers and ranges, and apply the batch. Excluded riders show reasons; changed choices discard the preview, and server conflicts require a fresh preview. This is a partial Phase 3 implementation with fictional data; staff rehearsal remains open. Automatic allocation is opt-in under Bib ranges: a durable job waits for every published category to close, then atomically allocates confirmed unassigned riders, preserving existing and checked-in assignments. The running server checks once a minute and catches up pending jobs on restart. Individual corrections and manager bulk changes now require an approved fresh preview and reason, retain actor-attributed assignment history, and save affected start-list revisions. Explicit numbers and stable resequencing are supported; unchanged numbers retain their original history. Phase 3 has not passed its entry or exit gates.
 
-Build:
+### Implemented locally, with operational verification still open
 
-- Agreed license verification and exception-review workflow, with freshness/source visible.
-- Search and QR check-in, bib-range rules, conflict detection, and repeat-scan handling.
-- Opt-in automatic bib assignment after advance registration closes and outstanding checkout holds settle or expire; deterministic previewed bulk allocation with explicit scopes/ranges, stable tie-breaks, preservation of manual/issued/checked-in assignments, atomic apply, and historical reassignments.
-- Shared weekend range overlap and protected corrections after refund/withdrawal/cancellation are Implemented locally per the November 15 owner decisions ([issues #95 and #97](product.md#automatic-and-bulk-bib-assignment)); author checks pass (311 unit/API tests, typecheck/build, 36 browser tests; [PR #101](https://github.com/kchan1028/event-registration/pull/101)). Independent Claude API verification and review passed on November 15: eight independently authored scenarios and 68 targeted tests, with no blocking findings after the review fixes. Staff and real-device/screen-reader rehearsals remain required.
-- Minor replacement-draft behavior remains an owner decision ([issue #98](https://github.com/kchan1028/event-registration/issues/98)); the reassignment region name and whitespace findings are corrected.
-- Race-day walk-up/mobile/kiosk registration using the same rules as advance entry, staff permissions, explicit surcharges/windows, confirmed Stripe hosted payment, bib handoff, and start-list updates. Physical terminals and cash/check recording need a separate approved workflow.
-- Timer export fields agreed from the road-results research, so results uploads need no retyping.
-- Timestamped start lists, change reports, and tested timer exports.
-- Minimal printable fallback roster and an access-restricted emergency-contact process.
-- Payment/email failure alerts, backup/restore, incident handling, and support runbook, following the operating model in [docs/operations.md](docs/operations.md).
-- Organizer handoff guide and role-specific volunteer instructions.
+- Search/QR check-in, ready/blocked results, bib ranges, repeat handling and timing collection: [check-in status](#check-in), [implementation](src/server/checkin.ts). Collected timing samples do not establish staff speed or complete attempt coverage.
+- Opt-in post-close allocation, deterministic previewed bulk assignment and protected corrections: [bib requirements](product.md#automatic-and-bulk-bib-assignment), [PR #101](https://github.com/kchan1028/event-registration/pull/101). Shared weekend overlap and inactive-entry correction were independently checked. Historical PR #101 evidence (November 15): author 311 unit/API and 36 browser checks plus typecheck/build; independent Claude verification eight scenarios and 68 targeted tests, with no blocking findings after fixes. Staff/device rehearsals remain open.
+- Timestamped start lists, change reports and sample CSV: [export status](#start-lists-and-timer-export). The sample is not timer-approved.
+- Minimal printable roster: [roster screen](src/web/Roster.tsx). This is a read-only fallback, not offline entry or synchronization.
 
-Rehearsal:
+### Remaining implementation and operating preparation
+
+These remain within the existing Phase 3 scope; this status clarification adds no requirements or new completion gates.
+
+| Work | What remains | Completion evidence |
+|---|---|---|
+| Walk-up/mobile/kiosk registration | Planned staff workflow under [existing requirements](product.md#race-day-registration); ordinary online registration is not proof of a complete desk workflow. Terminals and cash/check need separate approval. | Authorized staff complete a walk-up, guardian/review exception, full field and failed payment without duplicate entries, charges or start-list omissions. |
+| License/waiver exception resolution | Local review controls exist; accepted waiver/guardian resolution and license source/freshness workflow remain dependent on approval. | Missing requirements remain blocked until an accepted resolution is recorded; no bib issuance bypass. |
+| Timer handoff | Adapt the sample only after the timer agrees fields and identifiers. | Actual timer import, corrections/revisions and round trip accepted; [review packet](docs/timer-export-review.md). |
+| Continuity and alerts | Operational payment/email alerts, backup/restore procedure, incident handling/support runbook, restricted emergency-contact process and paper reconciliation remain unproved or Proposed. | Demonstrated failure detection, restore and contingency reconciliation; [operations](docs/operations.md). |
+| Volunteer and successor instructions | Role-specific race-day runbooks and named support/deputy ownership are not yet delivered/rehearsed. | A second organizer and volunteers operate without developer rescue or shared credentials. |
+
+Minor replacement-draft behavior remains an owner decision ([#98](https://github.com/kchan1028/event-registration/issues/98)); do not treat a proposed interaction preference as approved scope.
+
+### Dependencies and external approvals
+
+- Phase 2 exit gates (Phase 3 entry dependencies) remain open: real Clerk development-instance rehearsal, approved merchant/settlement and retention rules, provider reconciliation and hosted recovery evidence. Local tests do not satisfy them.
+- Before sanctioned use, agree the USA Cycling electronic-waiver/guardian/license path or approved alternative. No federation integration is claimed.
+- Assign the registration lead, timer liaison, treasurer, support owner and deputy before an operational rehearsal can be accepted. Unassigned responsibilities remain in [operations open questions](docs/operations.md#open-questions).
+- Organizer MFA and sensitive-action verification remain at the final pre-launch gate, after other build work and fictional-data rehearsals, as already decided.
+
+### Rehearsals and exit evidence still required
 
 - Run an entire mock weekend with sample data and staff other than the developer.
 - Include field changes, missing licenses/signatures, refunds, duplicate names, and a lost-connection scenario.
