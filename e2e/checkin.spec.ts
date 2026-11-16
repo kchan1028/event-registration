@@ -259,7 +259,7 @@ for (const mobile of [false, true]) {
     await panel.getByRole('button', { name: 'Preview bib changes', exact: true }).click();
     await expect(panel.getByRole('note')).toContainText('Alex Demo (Saturday)');
     if (mobile) {
-      const ridersTable = panel.getByRole('region', { name: 'Riders for bib assignment', exact: true });
+      const ridersTable = panel.getByRole('region', { name: 'Riders for bib reassignment', exact: true });
       await ridersTable.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
       const selection = await panel.getByRole('checkbox', { name: 'Alex Demo', exact: true }).boundingBox();
       const tableBounds = await ridersTable.boundingBox();
@@ -325,3 +325,45 @@ test('individual correction previews a preassigned number without checking the r
   const after = await (await api.get(`/api/events/${eventId}/check-in`)).json();
   expect(after.riders.find((r: Rider) => r.orderId === alex.orderId)).toMatchObject({ bib: 130, checkedInAt: null });
 });
+
+for (const mobile of [false, true]) {
+  test(`issued bib correction after withdrawal preserves blocked readiness (${mobile ? 'mobile' : 'desktop'})`, async ({ page }) => {
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    const api = page.request;
+    const { eventId } = await (await api.post('/api/demo')).json();
+    await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+    await api.post(`/api/events/${eventId}/check-in-demo-riders`);
+    await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });
+    const initial = await (await api.get(`/api/events/${eventId}/check-in`)).json();
+    const alex = initial.riders.find((r: Rider) => r.name.startsWith('Alex'));
+    expect((await api.post(`/api/events/${eventId}/check-in/${alex.orderId}`, { data: { dayId: initial.dayId } })).ok()).toBe(true);
+    const order = await (await api.get(`/api/orders/${alex.orderId}`)).json();
+    for (const entry of order.entries) expect((await api.post(`/api/order-entries/${entry.id}/withdraw`, { data: { reason: 'Demo rider withdrew after bib handoff' } })).ok()).toBe(true);
+    await page.goto(`/#/events/${eventId}/check-in`);
+    const search = page.getByRole('searchbox', { name: 'Find a rider' });
+    await search.fill(alex.name);
+    await search.press('Enter');
+    const detail = page.getByRole('region', { name: 'Rider check-in', exact: true });
+    await expect(detail.getByText('No entry on this race day', { exact: true })).toBeVisible();
+    await detail.getByRole('button', { name: 'Change bib', exact: true }).click();
+    const form = detail.getByRole('form', { name: 'Change rider bib', exact: true });
+    await form.getByRole('textbox', { name: 'New bib', exact: true }).fill('130');
+    await form.getByRole('textbox', { name: 'Reason', exact: true }).fill('Record the replacement demo bib after withdrawal');
+    await form.getByRole('button', { name: 'Preview bib change', exact: true }).click();
+    await expect(detail.getByRole('alert')).toContainText('Acknowledge');
+    await form.getByRole('checkbox').check();
+    await form.getByRole('button', { name: 'Preview bib change', exact: true }).click();
+    await expect(form.getByRole('note')).toContainText('Alex Demo (Saturday)');
+    expect((await new AxeBuilder({ page }).include('[aria-label="Rider check-in"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: `test-results/bib-followups-${mobile ? 'mobile' : 'desktop'}.png`, fullPage: true, animations: 'disabled' });
+    if (mobile) {
+      await page.getByRole('button', { name: /Switch to dark/ }).click();
+      await page.screenshot({ path: 'test-results/bib-followups-mobile-dark.png', fullPage: true, animations: 'disabled' });
+    }
+    await form.getByRole('button', { name: 'Apply bib change', exact: true }).click();
+    await expect(detail.locator('.ci-bib__number')).toHaveText('130');
+    const after = await (await api.get(`/api/orders/${alex.orderId}`)).json();
+    expect(after.entries.map((e: { status: string }) => e.status)).toEqual(order.entries.map(() => 'withdrawn'));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}

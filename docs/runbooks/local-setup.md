@@ -2,7 +2,7 @@
 
 Last verified: November 15, 2026 on macOS 26 (Apple silicon) with Node.js 20.19, npm 10.8, Docker 27.4, and PostgreSQL 17, by the technical lead.
 
-This runs the organizer workspace on your own computer, listening on `127.0.0.1`. Sign-in is a passwordless emailed code or link through a Clerk development instance ([ADR 0003](../decisions/0003-sign-in-and-mfa.md), Phase 2). MFA is not built yet, so use fictional data only.
+This runs the organizer workspace on your own computer, listening on `127.0.0.1`. Without Clerk keys, sign-in is a local test form that takes any fictional address ending in `.test` and sends no email. With a Clerk development instance, sign-in is a passwordless emailed code or link ([ADR 0003](../decisions/0003-sign-in-and-mfa.md), Phase 2). MFA is not built yet, so use fictional data only.
 
 For the two standalone Berkeley demo events, follow [Set up the Berkeley demo](../../SETUP.md). It seeds a separate database and publishes both events for rider testing.
 
@@ -19,7 +19,7 @@ For the two standalone Berkeley demo events, follow [Set up the Berkeley demo](.
 
   Expected result: Docker prints a container ID. Check it with `docker exec cyclereg-postgres pg_isready -U cyclereg`, which prints `accepting connections`. After a restart, run `docker start cyclereg-postgres`. A PostgreSQL you installed another way works too; set `DATABASE_URL` (below) to match it.
 - Optional, for the browser test: about 300 MB of disk space for the Playwright Chromium download.
-- A Clerk development instance for sign-in (free plan). The project owner creates it; see [Sign-in keys](#sign-in-keys). The tests do not need it.
+- Optional: a Clerk development instance for real emailed sign-in (free plan). The project owner creates it; see [Sign-in keys](#sign-in-keys). Local development and the tests work without it.
 
 Nothing connects to USA Cycling or a payment provider. The app creates and migrates its tables on start ([DATA_MODEL.md](../../DATA_MODEL.md#storage-and-migrations)).
 
@@ -34,9 +34,9 @@ Nothing connects to USA Cycling or a payment provider. The app creates and migra
 
    Expected result: npm finishes without errors.
 
-3. Add the Clerk development keys to `.env` in the repository folder, as in [Sign-in keys](#sign-in-keys). Without them the API refuses to start and says `CLERK_SECRET_KEY is not set`.
+3. Optional: add the Clerk development keys to `.env` in the repository folder, as in [Sign-in keys](#sign-in-keys). Without them the API logs `Clerk keys are not set` and uses the local test sign-in.
 
-4. Optional: load the Berkeley Omnium into your local database, owned by the email you will sign in with:
+4. Optional: load the Berkeley Omnium into your local database, owned by the email you will sign in with (with the local test sign-in, an address ending in `.test`):
 
    ```bash
    npm run seed:omnium -- --owner you@example.com
@@ -52,7 +52,7 @@ Nothing connects to USA Cycling or a payment provider. The app creates and migra
 
    Expected result: the API logs `Server listening at http://127.0.0.1:3001` and Vite prints `Local: http://127.0.0.1:5273/`.
 
-6. Open `http://127.0.0.1:5273/` in a browser and select **Sign in with email**. Clerk emails you a code or link. Then create an organization (you become its owner), or select **Load Berkeley Omnium**. Use **Team and roles** under an organization to give other people a role by email.
+6. Open `http://127.0.0.1:5273/` in a browser and select **Sign in with email**. Without Clerk keys, type a fictional address such as `organizer@example.test`; with them, Clerk emails you a code or link. Then create an organization (you become its owner), or select **Load Berkeley Omnium**. Use **Team and roles** under an organization to give other people a role by email.
 
 To run the built app from one process instead (as the end-to-end test does):
 
@@ -109,13 +109,13 @@ SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts
 | `E2E_DATABASE_URL` | Throwaway database for the end-to-end test, reset on each run | `postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_e2e` | No |
 | `PORT` or `API_PORT` | API server port | `3001` (`10000` in the Docker image) | No |
 | `HOST` | Address the API listens on ([deploy runbook](deploy-render.md)) | `127.0.0.1` | No |
-| `CLERK_SECRET_KEY` | Clerk secret key (`sk_test_...` for a development instance). The API verifies sign-in with it and will not start without it | none | **Yes.** Only in `.env` or the platform's secret store; never commit, log, or paste it |
+| `CLERK_SECRET_KEY` | Clerk secret key (`sk_test_...` for a development instance). The API verifies sign-in with it. Without it, the API uses the local test sign-in on `127.0.0.1` outside production, and refuses to start anywhere else | none | **Yes.** Only in `.env` or the platform's secret store; never commit, log, or paste it |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Clerk publishable key (`pk_test_...`), built into the web app | none | No (public by design), but keep it in `.env` with the secret key |
 | `CLERK_AUTHORIZED_PARTIES` | Comma-separated origins allowed to send session tokens, for example `http://127.0.0.1:5273` locally or the site's own origin when hosted | unset (any origin) | No |
 | `SEED_OWNER_EMAIL` | Same as `--owner` for the seed scripts | unset | No |
 | `NODE_ENV=production` | Makes the API also serve the built web app from `dist/web` | unset | No |
 | `SERVE_WEB=1` | Serves the built web app without production mode (used by the end-to-end test) | unset | No |
-| `AUTH_MODE=test`, `VITE_AUTH_MODE=test` | Local-only test sign-in for the end-to-end test. Refused in production and on network addresses | unset | No |
+| `AUTH_MODE=test`, `VITE_AUTH_MODE=test` | Forces the local-only test sign-in even when Clerk keys are set (the end-to-end test uses it). Refused in production and on network addresses | unset | No |
 | `HOLD_MINUTES` | How long rider checkout holds places before payment | `10` | No |
 | `STRIPE_SECRET_KEY` | Stripe test-mode secret key (`sk_test_...` or `rk_test_...`). Set it to use Stripe hosted Checkout instead of the simulated payment. Live keys are refused | unset (simulated payment) | **Yes.** Only in `.env` or the platform's secret store |
 | `STRIPE_WEBHOOK_SECRET` | Webhook signing secret (`whsec_...`). Required when `STRIPE_SECRET_KEY` is set | none | **Yes** |
@@ -126,7 +126,7 @@ SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts
 
 ## Sign-in keys
 
-Sign-in uses a Clerk development instance on the free plan. The project owner creates the Clerk account and instance; agents and scripts never create accounts.
+Real emailed sign-in uses a Clerk development instance on the free plan; without it, local development uses the test sign-in. Set both keys or neither: the dev server picks its sign-in from the publishable key and the API from the secret key. The project owner creates the Clerk account and instance; agents and scripts never create accounts.
 
 1. In the Clerk Dashboard, create an application. Under sign-in options, turn on **Email address** with **Email verification code** and/or **Email verification link**. Turn off **Password**, **Phone number**, and social sign-in. Clerk applies its own sign-in attempt rate limits and lockout.
 2. Copy the two keys from **API keys** into a file named `.env` in the repository folder (the main checkout, or each worktree you run from). `.env` is gitignored:
@@ -195,6 +195,10 @@ Managers open **Reassign bibs** at check-in and select riders with existing assi
 
 Check-in staff can use **Change bib** on a rider card, including a number allocated before check-in. Individual corrections use the same preview and historical-change rules. A missing, conflicting, or stale preview is refused. Re-preview after changing any choice or after another staff action changes the relevant state. Every successful change records who requested it and why, and saves new start-list revisions; timer locks remain attached to the version originally sent. A number change never clears readiness or checks a rider in.
 
-For protected changes, Select all excludes checked-in riders. Select them individually and acknowledge changing issued bibs before previewing. The server enforces this acknowledgement across every day sharing the number. Shared weekend category ranges on other days still need conflict resolution before rehearsal ([issue #95](https://github.com/kchan1028/event-registration/issues/95)).
+For protected changes, Select all excludes checked-in riders. Select them individually and acknowledge changing issued bibs before previewing. The server enforces this acknowledgement across every day sharing the number.
 
-Protected-change review follow-ups (November 15, 2026; owner: unassigned): [issue #97](https://github.com/kchan1028/event-registration/issues/97) records the individual-correction limitation and owner decision in [product.md](../../product.md#automatic-and-bulk-bib-assignment). [Issue #98](https://github.com/kchan1028/event-registration/issues/98) records retained draft numbers after unticking riders, the generic rider-table region name, and a whitespace leftover. Draft numbers are never sent for unticked riders. Provisional behavior is unchanged; decide draft retention before that maintenance work, while normal protected-change testing can proceed. Revisit the correction limitation before staff rehearsal and draft behavior when picking up #98.
+Shared bibs must fit the overlap of every applicable entry range across their collision scope. A category without a range uses the event/day range. If ranges do not overlap, adjust them or configure separate bibs per day; no partial allocation is saved. Existing issued numbers are retained until a deliberate correction.
+
+To correct an issued bib after refund, withdrawal, or cancellation, search by rider name, bib, or check-in code. Inactive riders appear only if they still hold an active bib in the selected collision scope. Use **Change bib**, enter a reason, acknowledge a checked-in change, preview, and apply. Payment, refund, entry, readiness, and check-in states remain unchanged. These owner decisions resolve the questions in [issues #95 and #97](../../product.md#automatic-and-bulk-bib-assignment).
+
+Review follow-up (November 15, 2026; owner: unassigned; [issue #98](https://github.com/kchan1028/event-registration/issues/98)): should a replacement draft remain when a rider is unticked? Provisional behavior retains the draft but never sends it for an unticked rider. Other protected changes can proceed. Revisit when picking up #98; do not change draft retention without the owner’s decision. The region-name and whitespace findings from that issue are corrected.

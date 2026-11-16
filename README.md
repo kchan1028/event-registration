@@ -112,7 +112,7 @@ docker run -d --name cyclereg-postgres -e POSTGRES_USER=cyclereg -e POSTGRES_PAS
 npm ci
 ```
 
-Sign-in needs a Clerk development instance: put `CLERK_SECRET_KEY` and `VITE_CLERK_PUBLISHABLE_KEY` in a local `.env` ([sign-in keys](docs/runbooks/local-setup.md#sign-in-keys)). The tests do not need them.
+Local development needs no Clerk keys: without them, sign-in is a local test form for fictional `.test` addresses, refused in production and on network addresses. For real emailed sign-in, put `CLERK_SECRET_KEY` and `VITE_CLERK_PUBLISHABLE_KEY` in a local `.env` ([sign-in keys](docs/runbooks/local-setup.md#sign-in-keys)).
 
 ```bash
 npm run dev
@@ -255,7 +255,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | Phase 1 usability test kit | Implemented November 14, 2026; no sessions run yet. See [docs/usability/](docs/usability/README.md) |
 | Phase 0 discovery kit | Implemented November 14, 2026. One interview done ([D01](docs/discovery/interviews/D01.md)); no measurements yet; USAC questions sent November 15, 2026, no answer yet. See [docs/discovery/](docs/discovery/README.md) |
 | Stack | Chosen for the current local build only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
-| Email sign-in, organizations, and organizer roles | Implemented (Phase 2, Clerk free plan), including ownership hand-over, a role history with who made each change, and 14-day invitations an owner can resend by email (test-only: recorded locally, or sent through the Amazon SES sandbox); MFA is Phase 3 |
+| Email sign-in, organizations, and organizer roles | Implemented (Phase 2, Clerk free plan), including ownership hand-over, a role history with who made each change, and 14-day invitations an owner can resend by email (test-only: recorded locally, or sent through the Amazon SES sandbox); organizer MFA and sensitive-action re-verification are the final pre-launch security gate |
 | My registrations page, and guardian access to juniors (one guardian per junior; optional read-only login for the junior) | Implemented; second guardian and the claim at 18 Planned |
 | Real payments, USA Cycling checks, MFA, hosting | Not built |
 

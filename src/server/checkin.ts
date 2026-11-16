@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { bibScopeKey, bibSettingsSchema, bibBatchExclusion, changedBibAssignments, type BibChange, type BibReassignment, type BibReassignmentPlan, type BibReassignmentResult, type BibBatch, type BibPlan, type PaymentState, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, rangeFor, type BibSettings } from '../shared/checkin';
-import { categoryBibRange } from '../shared/categoryExtras';
+import { bibScopeKey, bibSettingsSchema, bibBatchExclusion, changedBibAssignments, type BibChange, type BibReassignment, type BibReassignmentPlan, type BibReassignmentResult, type BibBatch, type BibPlan, type PaymentState, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, bibRangeForEntries, type BibSettings } from '../shared/checkin';
 import { checkSelection, needsGuardian, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { evaluateCategory } from '../shared/eligibility';
 import { newId } from '../shared/factory';
@@ -39,12 +38,13 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   }
 
   /**
-   * One rider made from linked orders (rider identity): the earliest live order's details and the persisted rider key, every
-   * order's entries, and paid only when every linked order is paid. An unlinked order is unchanged.
+   * One rider made from linked orders: use live orders when present, otherwise retained historical orders.
+   * Keep the persisted rider key, the selected group's entries, and confirmed payment only when the whole group is confirmed.
    */
   type Rider = OrderView & { checkInCodes: string[] };
   function mergeRider(group: OrderView[], riderKey: string): Rider {
-    const sorted = [...group].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    const live = group.filter(isLiveOrder);
+    const sorted = [...(live.length ? live : group)].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
     const first = sorted[0];
     return {
       ...first,
@@ -53,6 +53,10 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       entries: sorted.flatMap((o) => o.entries),
       checkInCodes: sorted.map((o) => o.checkInCode).filter((c): c is string => !!c),
     };
+  }
+
+  function activeEntries(rider: Rider) {
+    return isLiveOrder(rider) ? rider.entries.filter((e) => e.status === 'held' || e.status === 'confirmed') : [];
   }
 
   type BibRow = { id: string; order_id: string; bib: number; assigned_at: string; released_at: string | null; release_reason: string | null };
@@ -99,16 +103,16 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     };
   }
 
-  /** Riders that matter at check-in: live orders (not cancelled or lapsed holds), with linked orders merged into one rider. */
+  /** Live riders and inactive riders who still hold a bib, with linked orders merged into one rider. */
   async function riders(eventId: string): Promise<Rider[]> {
     const key = await identity.keyOf(eventId);
     const groups = new Map<string, OrderView[]>();
+    const assigned = new Set((await db.all<{ order_id: string }>(`SELECT DISTINCT order_id FROM bib_assignments WHERE event_id = $1 AND released_at IS NULL`, [eventId])).map((r) => r.order_id));
     for (const o of await orders.listOrders(eventId)) {
-      if (!isLiveOrder(o)) continue;
       const k = key(o.id);
       groups.set(k, [...(groups.get(k) ?? []), o]);
     }
-    return [...groups].map(([id, group]) => mergeRider(group, id));
+    return [...groups].filter(([id, group]) => assigned.has(id) || group.some(isLiveOrder)).map(([id, group]) => mergeRider(group, id));
   }
 
   function matches(card: ReturnType<typeof riderCard>, q: string): boolean {
@@ -126,16 +130,22 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     return day;
   }
 
-  /** The rider card for an order or any order linked to it; bibs and check-ins live under the rider key. */
-  async function cardFor(eventId: string, orderId: string, dayId: string) {
+  /** Load a canonical rider once, retaining inactive orders only if the whole group is inactive. */
+  async function riderFor(eventId: string, orderId: string) {
     const o = await orders.getOrder(orderId);
     if (o.eventId !== eventId) throw new HttpError(404, 'Rider not found for this event.');
     const key = (await identity.keyOf(eventId))(orderId);
     const ids = await identity.groupOf(eventId, key);
     const byId = await orders.getOrders(ids);
-    const group = ids.map((id) => byId.get(id)).filter((x): x is OrderView => !!x && isLiveOrder(x));
+    const group = ids.map((id) => byId.get(id)).filter((x): x is OrderView => !!x);
+    return mergeRider(group, key);
+  }
+
+  /** Bibs and check-ins live under the canonical rider key. */
+  async function cardFor(eventId: string, orderId: string, dayId: string) {
+    const rider = await riderFor(eventId, orderId);
     const s = await settings(eventId);
-    return riderCard(mergeRider(group.length ? group : [o], key), dayId, await dayState(eventId, dayId, bibScopeKey(s, dayId)));
+    return riderCard(rider, dayId, await dayState(eventId, dayId, bibScopeKey(s, dayId)));
   }
 
   function requireBatchScope(cfg: EventConfig, { dayId, raceId, categoryId }: Pick<BibBatch, 'dayId' | 'raceId' | 'categoryId'>) {
@@ -160,16 +170,18 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     if (bib < range.first || bib > range.last) throw new HttpError(422, `Bib ${bib} is outside the range ${range.first}–${range.last}.`);
   }
 
-  function cardRange(cfg: EventConfig, card: ReturnType<typeof riderCard>, s: BibSettings, dayId: string) {
-    const range = categoryBibRange(card.entries.map((e) => ({ id: e.categoryId, bibRange: cfg.categories.find((c) => c.id === e.categoryId)?.bibRange ?? null, startTime: e.startTime }))) ?? rangeFor(s, dayId);
-    return range ? { scope: bibScopeKey(s, dayId), first: range.first, last: range.last } : null;
+  function riderRange(cfg: EventConfig, entries: Rider['entries'], s: BibSettings, dayId: string) {
+    const range = bibRangeForEntries(cfg, entries, s, dayId);
+    if (range && range.first > range.last) throw new HttpError(409, 'The rider’s category bib ranges do not overlap. Adjust the ranges or use separate bibs per day.');
+    return range;
   }
 
   /** Assign a bib inside the configured range without colliding with an active one. */
   async function assign(eventId: string, orderId: string, dayId: string, s: BibSettings, requested: number | null): Promise<number> {
     const scope = bibScopeKey(s, dayId);
-    const range = cardRange(await config(eventId), await cardFor(eventId, orderId, dayId), s, dayId);
-    if (!range) throw new HttpError(409, 'No bib range is set for this day. Set bib ranges before checking riders in.');
+    const rider = await riderFor(eventId, orderId);
+    const range = riderRange(await config(eventId), activeEntries(rider), s, dayId);
+    if (!range) throw new HttpError(409, 'No bib range covers every applicable entry. Set bib ranges before checking riders in.');
     const taken = await takenBibs(eventId, scope);
     let bib: number | null = requested;
     if (bib === null) {
@@ -218,8 +230,8 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     if (allocation === 'reassign') for (const { card } of sorted) taken.delete(card.bib!);
     const assignments = [];
     for (const { o, card } of sorted) {
-      const range = cardRange(cfg, card, s, dayId);
-      if (!range) throw new HttpError(409, 'Set a bib range before allocating.');
+      const range = riderRange(cfg, activeEntries(o), s, dayId);
+      if (!range) throw new HttpError(409, 'Set a bib range for every applicable entry before allocating.');
       const bib = nextFreeBib(range, taken);
       if (bib === null) throw new HttpError(409, `Not enough free bibs in ${range.first}–${range.last}; no assignments were made.`);
       taken.add(bib);
@@ -238,7 +250,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     );
   }
 
-  async function reassignmentPlan(eventId: string, input: BibReassignment): Promise<BibReassignmentPlan> {
+  async function reassignmentPlan(eventId: string, input: BibReassignment, operation: 'bulk' | 'individual'): Promise<BibReassignmentPlan> {
     const { config: cfg, version } = await repo.getPublished(eventId);
     const day = requireBatchScope(cfg, input);
     const s = await settings(eventId);
@@ -258,14 +270,16 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const rider = all.get(a.orderId);
       if (!rider) throw new HttpError(404, 'A selected rider was not found.');
       const card = riderCard(rider, day.id, state);
-      const exclusion = bibBatchExclusion(card, 'reassign');
+      const exclusion = bibBatchExclusion(card, operation === 'individual' ? 'individual' : 'reassign');
       if (exclusion) throw new HttpError(409, exclusion);
       requireRiderScope(cfg, card, input);
-      const range = cardRange(cfg, card, s, day.id);
-      if (!range) throw new HttpError(409, 'Set a bib range before changing numbers.');
+      const active = activeEntries(rider).filter((e) => days.some((d) => d.id === e.dayId));
+      const applicable = active.length ? active : rider.entries.filter((e) => e.status === 'withdrawn');
+      const range = riderRange(cfg, applicable, s, day.id);
+      if (!range) throw new HttpError(409, 'Set a bib range for every applicable entry before changing numbers.');
       requireBibInRange(a.bib, range);
       if (outside.has(a.bib)) throw new HttpError(409, `Bib ${a.bib} belongs to a rider outside this batch.`);
-      if (a.bib !== card.bib) for (const entry of rider.entries.filter((e) => e.status === 'confirmed')) {
+      if (a.bib !== card.bib) for (const entry of applicable.filter((e) => !active.length || e.status === 'confirmed')) {
         const race = cfg.races.find((r) => r.id === cfg.categories.find((c) => c.id === entry.categoryId)?.raceId);
         if (race && days.some((d) => d.id === race.dayId)) raceIds.add(race.id);
       }
@@ -274,12 +288,12 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     });
     if (!input.acknowledgeCheckedIn && assignments.some((a) => a.currentBib !== a.bib && a.checkedInDays.length)) throw new HttpError(409, 'Acknowledge changes to checked-in riders before previewing.');
     const races = cfg.races.filter((r) => raceIds.has(r.id)).map((r) => ({ id: r.id, name: r.name }));
-    const fingerprint = createHash('sha256').update(JSON.stringify({ eventId, input, version, scope, settings: s, checks, assignments, races })).digest('hex');
+    const fingerprint = createHash('sha256').update(JSON.stringify({ eventId, input, operation, version, scope, settings: s, checks, assignments, races, riders: [...ids].map((id) => { const r = all.get(id)!; return [id, r.status, r.entries.map((e) => [e.id, e.status])]; }) })).digest('hex');
     return { dayId: day.id, scope, scopeLabel: s.scope === 'weekend' ? 'Whole event' : day.label, reason: input.reason, publishedVersion: version, races, assignments, fingerprint };
   }
 
-  async function commitReassignment(eventId: string, input: BibReassignment, fingerprint: string, actorId: string): Promise<BibReassignmentResult> {
-    const plan = await reassignmentPlan(eventId, input);
+  async function commitReassignment(eventId: string, input: BibReassignment, fingerprint: string, actorId: string, operation: 'bulk' | 'individual'): Promise<BibReassignmentResult> {
+    const plan = await reassignmentPlan(eventId, input, operation);
     if (plan.fingerprint !== fingerprint) throw new HttpError(409, 'Bib preview changed. Review a new preview before applying.');
     const changes = changedBibAssignments(plan);
     if (!changes.length) return { ...plan, id: null, applied: 0, snapshots: [] };
@@ -301,16 +315,16 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
 
   return {
     async previewReassignments(eventId: string, input: BibReassignment) {
-      return db.transaction(async () => { await db.lock(eventLock(eventId)); return reassignmentPlan(eventId, input); });
+      return db.transaction(async () => { await db.lock(eventLock(eventId)); return reassignmentPlan(eventId, input, 'bulk'); });
     },
     async applyReassignments(eventId: string, input: BibReassignment, fingerprint: string, actorId: string) {
-      return db.transaction(async () => { await db.lock(eventLock(eventId)); return commitReassignment(eventId, input, fingerprint, actorId); });
+      return db.transaction(async () => { await db.lock(eventLock(eventId)); return commitReassignment(eventId, input, fingerprint, actorId, 'bulk'); });
     },
     async previewBibChange(eventId: string, orderId: string, input: BibChange) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
         const key = (await identity.keyOf(eventId))(orderId);
-        return reassignmentPlan(eventId, { mode: 'manual', dayId: input.dayId, reason: input.reason, acknowledgeCheckedIn: input.acknowledgeCheckedIn, assignments: [{ orderId: key, bib: input.bib }] });
+        return reassignmentPlan(eventId, { mode: 'manual', dayId: input.dayId, reason: input.reason, acknowledgeCheckedIn: input.acknowledgeCheckedIn, assignments: [{ orderId: key, bib: input.bib }] }, 'individual');
       });
     },
     /** Called by the post-close job under its event lock and transaction. */
@@ -350,7 +364,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const s = await settings(eventId);
       const state = await dayState(eventId, day.id, bibScopeKey(s, day.id));
       const checkedInScope = new Set((await db.all<{ order_id: string }>(`SELECT DISTINCT order_id FROM check_ins WHERE event_id = $1 AND day_id = ANY($2::text[])`, [eventId, cfg.days.filter((d) => bibScopeKey(s, d.id) === bibScopeKey(s, day.id)).map((d) => d.id)])).map((r) => r.order_id));
-      const all = (await riders(eventId)).map((o) => riderCard(o, day.id, state)).sort((a, b) => a.name.localeCompare(b.name));
+      const all = (await riders(eventId)).filter((o) => activeEntries(o).length || state.bibs.get(o.id)?.some((b) => b.released_at === null)).map((o) => riderCard(o, day.id, state)).sort((a, b) => a.name.localeCompare(b.name));
       const enteredToday = all.filter((c) => c.entries.length > 0);
       // A search also finds riders with no entry today, so the volunteer sees why; the plain list shows only today's riders.
       const cards = q.trim() ? all.filter((c) => matches(c, q)) : enteredToday;
@@ -466,7 +480,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
         const key = (await identity.keyOf(eventId))(orderId);
-        await commitReassignment(eventId, { mode: 'manual', dayId: input.dayId, reason: input.reason, acknowledgeCheckedIn: input.acknowledgeCheckedIn, assignments: [{ orderId: key, bib: input.bib }] }, fingerprint, actorId);
+        await commitReassignment(eventId, { mode: 'manual', dayId: input.dayId, reason: input.reason, acknowledgeCheckedIn: input.acknowledgeCheckedIn, assignments: [{ orderId: key, bib: input.bib }] }, fingerprint, actorId, 'individual');
         return cardFor(eventId, key, input.dayId);
       });
     },

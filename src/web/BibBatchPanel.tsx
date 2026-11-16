@@ -132,13 +132,13 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
       </fieldset>
       {reassigning && <label className="ci-batch__reason">Reason for bib changes<input className="input" disabled={busy} required value={reason} onChange={(e) => { setReason(e.target.value); invalidate(); }} /></label>}
       {reassigning && <label className="ci-batch__choice"><input type="checkbox" disabled={busy} checked={acknowledgeCheckedIn} onChange={(e) => { setAcknowledgeCheckedIn(e.target.checked); invalidate(); }} />I approve changing checked-in riders’ bibs. Select those riders individually.</label>}
-      <p className="muted small">Ranges follow each rider’s earliest category with a range on this day, then the event/day range. Narrowing the selection does not override that range.</p>
+      <p className="muted small">Numbers must fit every applicable category range, using the event/day range where a category has none. A weekend bib uses the overlap across days. Narrowing the selection does not widen that overlap.</p>
       <div className="ci-bib__actions">
         <button type="button" className="btn btn--secondary btn--small" disabled={busy || !selectable.length || selectable.length > MAX_BIB_BATCH_SIZE} onClick={() => { setSelected(selectable.map((r) => r.orderId)); invalidate(); }}>Select all {reassigning ? 'assigned' : 'unassigned'} ({selectable.length})</button>
         <button type="button" className="btn btn--ghost btn--small" disabled={busy || !selected.length} onClick={clearSelection}>Clear selection</button>
         <span role="status">{selected.length} selected · maximum {MAX_BIB_BATCH_SIZE.toLocaleString('en-US')} per batch</span>
       </div>
-      {!riders.length ? <p>No riders entered in this scope.</p> : <div className="table-wrap ci-batch__table" role="region" aria-label="Riders for bib assignment" tabIndex={0}>
+      {!riders.length ? <p>No riders entered in this scope.</p> : <div className="table-wrap ci-batch__table" role="region" aria-label={reassigning ? 'Riders for bib reassignment' : 'Riders for bib assignment'} tabIndex={0}>
         <table><thead><tr><th scope="col">Select rider</th><th scope="col">Categories</th><th scope="col">Current bib</th>{reassigning && choice === 'manual' && <th scope="col">New bib</th>}<th scope="col">Allocation status</th></tr></thead>
           <tbody>{riders.map((r) => {
             const exclusion = bibBatchExclusion(r, mode);
