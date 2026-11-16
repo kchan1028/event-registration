@@ -55,13 +55,64 @@ test('fallback roster lists every rider and puts blocked riders on the exception
   await page.goto(`/#/events/${eventId}/check-in`);
   await page.getByRole('link', { name: 'Fallback roster' }).click();
   const day = page.getByRole('region', { name: /^Roster for / }).first();
-  await expect(day).toContainText('Fallback roster printed');
+  const sections = page.getByRole('region', { name: /^Roster for / });
+  await expect(sections).toHaveCount(list.days.length);
+  for (const section of await sections.all()) {
+    await expect(section).toContainText('Fallback roster printed');
+    await expect(section).toContainText('This snapshot does not authorize offline registration');
+    await expect(section).toContainText('Without one, pause issuance and contact the registration lead');
+    await expect(section).toContainText('reconcile notes with current records');
+    await expect(section).toContainText('adding a name here does not create an entry, reserve capacity or authorize a bib');
+    await expect(section.getByRole('columnheader', { name: 'Snapshot status', exact: true })).toBeVisible();
+    await expect(section.getByRole('columnheader', { name: 'Recorded bib', exact: true })).toBeVisible();
+    expect(await section.getByRole('cell', { name: 'Not assigned', exact: true }).count()).toBeGreaterThan(0);
+    await expect(section.getByRole('columnheader', { name: 'Notes recorded', exact: true })).toHaveCount(0);
+  }
+  await expect(day).toContainText('notes on this sheet do not clear requirements');
+  await expect(day.getByRole('columnheader', { name: 'Lead review notes', exact: true })).toBeVisible();
+  await expect(page.getByText('Cleared by, how', { exact: true })).toHaveCount(0);
   for (const r of riders) await expect(day.getByRole('cell', { name: r.name, exact: true }).first()).toBeVisible();
   await expect(day.getByRole('heading', { name: 'Exception checklist' })).toBeVisible();
   await expect(day).toContainText(`NOT READY`);
   await expect(day.locator('table').nth(1)).toContainText(blocked.name);
   await expect(page.getByRole('button', { name: 'Print roster' })).toBeEnabled();
   await expect(page.locator('body')).not.toContainText('@example.com');
+  await page.screenshot({ path: 'test-results/roster-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('link', { name: 'Check-in', exact: true }).click();
+  await page.getByRole('button', { name: /Switch to dark/ }).click();
+  await page.getByRole('link', { name: 'Fallback roster' }).click();
+  await expect(page.getByRole('button', { name: 'Print roster' })).toBeEnabled();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: 'test-results/roster-mobile-dark.png', fullPage: true });
+  await page.setViewportSize({ width: 816, height: 1056 });
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.getByRole('button', { name: 'Print roster' })).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(816);
+  for (const section of await sections.all()) {
+    await expect(section.getByText('Reference only.', { exact: true })).toBeVisible();
+    await expect(section).toContainText('pause issuance and contact the registration lead');
+  }
+  await day.screenshot({ path: 'test-results/roster-print.png' });
+});
+
+test('empty fallback roster retains recording limits without riders or exceptions', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  await page.goto(`/#/events/${eventId}/roster`);
+  await expect(page.getByRole('button', { name: 'Print roster' })).toBeEnabled();
+  const sections = page.getByRole('region', { name: /^Roster for / });
+  expect(await sections.count()).toBeGreaterThan(0);
+  for (const section of await sections.all()) {
+    await expect(section).toContainText('No registered riders for this day');
+    await expect(section).toContainText('No riders are blocked for this day');
+    await expect(section).toContainText('This snapshot does not authorize offline registration');
+    await expect(section).toContainText('adding a name here does not create an entry');
+    await expect(section.getByRole('columnheader', { name: 'Question for registration lead', exact: true })).toBeVisible();
+  }
+  await page.emulateMedia({ media: 'print' });
+  for (const section of await sections.all()) {
+    await expect(section.getByText('Reference only.', { exact: true })).toBeVisible();
+  }
 });
 
 for (const mobile of [false, true]) {

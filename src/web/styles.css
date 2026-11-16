@@ -3913,17 +3913,6 @@ fieldset:disabled .field label {
 .roster__table--blank td {
   height: 30px;
 }
-.roster__tick {
-  width: 28px;
-  text-align: center;
-}
-.roster__box {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 1.5px solid currentColor;
-  border-radius: 2px;
-}
 .roster__num {
   width: 44px;
   text-align: right;

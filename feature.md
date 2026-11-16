@@ -58,7 +58,7 @@ Details: [demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-
 | Ready or blocked check-in | Implemented | Show outstanding requirements before check-in; repeated check-in is safe; undo requires a reason and retains history |
 | QR check-in scanning | Implemented locally | Scan the confirmation QR code in Chrome or Edge and use the same repeat-safe check-in path; live camera and volunteer rehearsal remain open |
 | Bib assignment | Implemented | Assign bibs by event or day, prevent active collisions, and retain change history |
-| Printable fallback roster | Implemented | Print a race-day roster and blocked-rider checklist without private contact or payment details; real-printer and rehearsal checks remain open |
+| Printable fallback roster | Implemented | Print a reference-only race-day snapshot, blocked-rider checklist and lead review notes without private contact or payment details. Paper notes do not clear requirements or create entries; real-printer and contingency rehearsal checks remain open |
 | Start lists | Implemented | List confirmed entries by race, with numbered snapshots and changes between versions |
 | Sample timer CSV | Implemented | Export stable entry identifiers and race data; the format is not yet agreed or round-tripped with a timer |
 
