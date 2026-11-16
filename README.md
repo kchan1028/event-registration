@@ -284,6 +284,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [ACCESSIBILITY.md](ACCESSIBILITY.md) | Accessibility target, how it will be checked, and how to report a barrier |
 | [LICENSE.md](LICENSE.md) | MIT License |
 | [DATA_MODEL.md](DATA_MODEL.md) | Current database: tables, relationships, constraints, and deletion behavior |
+| [docs/codebase-map.md](docs/codebase-map.md) | Where to start reading for a change: modules, rule locations, tests per area, and constraints that are easy to miss |
 | [docs/architecture.md](docs/architecture.md) | What is built, the proposed target architecture, and open technical questions |
 | [docs/csv-category-format.md](docs/csv-category-format.md) | Columns and rules for importing and exporting category schedules |
 | [SETUP.md](SETUP.md) | Quick start: install, run, and test the app |
