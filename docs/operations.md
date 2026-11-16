@@ -16,7 +16,9 @@ Every change must review both [product.md](../product.md) and [roadmap.md](../ro
 - Distinguish planned, implemented, and verified behavior.
 - Do not maintain a competing product roadmap elsewhere.
 
-This document describes the operating model. Step-by-step procedures belong in `docs/runbooks/`; the first phone handoff guide exists, while the broader race-day handoff and recovery runbooks remain Proposed. See [documentation-guide.md](documentation-guide.md#where-things-live).
+This document describes the operating model. Step-by-step procedures belong in `docs/runbooks/`; the phone handoff and check-in volunteer guides exist for local rehearsals, while accepted recovery procedures remain Proposed. See [documentation-guide.md](documentation-guide.md#where-things-live).
+
+The [check-in volunteer guide](runbooks/race-day-check-in.md) covers desk preparation, role boundaries, blocked riders, uncertain outcomes and shift handoff. It is source-checked documentation, not evidence of staff independence or an approved offline process.
 
 The first phone-first desk increment has a [walk-up registration runbook](runbooks/walkup-registration.md). It reuses participant checkout and existing check-in; it does not complete the operational rehearsals below.
 
