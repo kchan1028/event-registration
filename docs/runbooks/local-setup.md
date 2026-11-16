@@ -158,7 +158,7 @@ Without Stripe keys, checkout uses the simulated payment. To try Stripe hosted C
 2. Forward webhooks to the local API with the Stripe CLI and copy the `whsec_...` secret it prints into `.env` as `STRIPE_WEBHOOK_SECRET`:
 
    ```bash
-   stripe listen --forward-to 127.0.0.1:3001/api/payments/stripe/webhook --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired
+   stripe listen --forward-to 127.0.0.1:3001/api/payments/stripe/webhook --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired,refund.created,refund.updated,refund.failed
    ```
 
 3. Restart `npm run dev`. The review step now shows **Pay on Stripe (test mode)**. Pay with a Stripe test card such as `4242 4242 4242 4242`; the order confirms when the webhook arrives.
