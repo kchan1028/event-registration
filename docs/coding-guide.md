@@ -182,7 +182,7 @@ These are required outcomes, not proof that the corresponding real-provider chec
 | Payment succeeds after the reservation expired | Do not silently confirm or silently drop. Confirm if capacity still allows; otherwise route to the exception queue for an organizer to refund or resolve |
 | Duplicate notification | Recognized by event ID; no second order, charge, or entry |
 | Rider refreshes or double-clicks "pay" | Same checkout session reused; one charge at most |
-| Partial refund of one bundle entry | Record against that entry's paid amount and preserve its accepted price snapshot. A refund does not withdraw the entry or release capacity; withdrawal is separate |
+| Partial refund of one bundle entry | Record against that entry's paid amount and preserve its accepted price snapshot. A refund does not withdraw the entry or release capacity; withdrawal is separate. Show the bundle price effect before confirming |
 | Dispute (chargeback) | Payment state becomes disputed; entry state unchanged until an organizer acts. Provider dispute ingestion is not implemented |
 
 ### What the app implements
