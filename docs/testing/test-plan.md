@@ -51,6 +51,10 @@ When a change touches one of these areas, run that row's tests in addition to th
 
 Concurrency and idempotency tests must run requests in parallel or replay events; a single-threaded test does not prove them. Use fictional data only.
 
+### Shared responsive account headers
+
+`e2e/header.spec.ts` checks Home, My registrations, event catalog and registration at 320, 360, 390, 720, 768 and 1440 CSS pixels in light/dark themes. Require no page overflow, horizontally contained theme/account actions, keyboard focus order, functional registration lookup/sign-out, and 44px account targets with an emulated coarse pointer. Compare desktop header/control geometry and page height in the same DOM against the original CSS declarations; this is not a second baseline build or a claim about all application routes. Run the affected sign-in and organizer/rider accessibility scenarios because the Home header is shared. Real devices, screen readers and actual browser zoom remain separate manual checks.
+
 ### Checkout-session concurrency and retry parameters
 
 `tests/payments.test.ts` drives the installed Stripe SDK through a fake HTTP transport, not a mocked `sessions.create`, for simultaneous requests and exhausted conflict retries. Force two requests to overlap; return `idempotency_key_in_use` while the first runs; verify one recorded session, the same request key/body and both redirects. Exhaust the configured retry budget, verify a retryable 503 and unchanged held order, advance the clock, then retry successfully with exactly the same key/body and reuse the saved session. Verify signed expiry/late-success ordering and duplicate-charge refund handling. These checks do not replace a real-provider sandbox rehearsal. Apply the payment risk-table regressions above.
