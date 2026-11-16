@@ -2,6 +2,8 @@
 
 Status: Implemented (kit written November 14, 2026). No sessions have been run. Results become evidence for the [Phase 1 exit gate](../../roadmap.md#phase-1--test-the-experience-without-live-money) only after they are summarized and linked from `roadmap.md`.
 
+Find desk-research findings and other evidence collections in the [research index](../research/README.md). This folder holds usability protocols and results; research recommendations do not replace participant evidence.
+
 Use this kit to find out whether organizers, check-in volunteers, and riders or parents can complete the core tasks on their own. The Phase 1 exit gate needs at least 90% unassisted completion across the core tasks and no unresolved critical blocker.
 
 | File | Use it for |

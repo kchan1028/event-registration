@@ -2,6 +2,8 @@
 
 Status: Research documented; organizer template implementation remains Planned. Reviewed November 14, 2026.
 
+Find design, payment, guardian, and email reports in the [research index](../../research/README.md). This collection keeps event-specific source observations and setup exercises together.
+
 These fifteen cases test the [reusable organizer template requirements](../../../product.md#reusable-organizer-templates). They describe published event structures and proposed ways to configure them in CycleReg. They are not approved race templates, current federation rules, or evidence of organizer permission to reuse an event's identity. Several cases have explicitly labeled historical demos or limited samples, as their case documents explain; research cases do not imply complete executable templates. No participant, waiver, payment, or results records are copied.
 
 Use 2026 publications where available, with each source's season stated. Several websites already advertise 2027 while linking 2026 schedules. Never silently combine those editions. Published field names are evidence of presentation, not complete structured eligibility. A label alone does not settle license type, age calculation, competition class, shared capacity, or award eligibility.

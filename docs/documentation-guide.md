@@ -76,6 +76,7 @@ Current layout:
     │                             usac-questions.md, payment-model-questions.md
     ├── research/                 Research index, desk reports, and dated source notes
     ├── discovery/                Phase 0 field-discovery kit and evidence
+    ├── case-studies/             Event-specific research and setup exercises
     ├── decisions/                Architecture decision records
     ├── fixtures/                 Fake demo purchase flow data and sample waiver text
     ├── runbooks/                 Local setup, troubleshooting, and the planned Render deploy
@@ -224,6 +225,7 @@ Terms from the category model are defined in [product.md](../product.md#keep-the
 - [ ] Product and roadmap impact stated in the change summary
 - [ ] Status words match the [status vocabulary](#status-vocabulary)
 - [ ] Each fact lives in one home; other documents link to it
+- [ ] Research reports and evidence collections are reachable from the [research index](research/README.md); decision records keep their explicit status
 - [ ] Terms match the glossary
 - [ ] Relative links and anchors resolve
 - [ ] Every Mermaid diagram parses and has a plain-English explanation
