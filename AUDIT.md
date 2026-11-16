@@ -40,11 +40,11 @@ This repository is public. Security weaknesses are reported privately as [SECURI
 - **Severity:** Critical (oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, or exposed private data, as [operations.md](docs/operations.md#incident-severity) defines), High (wrong result in money, capacity, eligibility, waivers, permissions, or personal data, or a known exploitable dependency on a shipped path), Medium (a wrong or failed result with a workaround), Low (cosmetic, documentation, or maintenance).
 - **Launch impact:** Blocks live launch, Blocks hosted beta, Before pilot, or None.
 - **Owner:** a named role, or Unassigned.
-- **Status:** Open, Fixed (pending verification), Closed, Accepted risk (owner decision recorded in `roadmap.md`), or Invalidated.
+- **Status:** Open, Fixed (pending verification), Closed, Accepted risk (a dated owner decision, recorded in the finding or in `roadmap.md`), or Invalidated.
 
 ### Closure rule
 
-A finding is Closed only with verification evidence: a test, check, or rehearsal that someone other than the author ran or reviewed, linked in the Closure evidence column. Merging a fix moves a finding to **Fixed (pending verification)**; it does not close it. A pull request that introduces, fixes, or invalidates a finding updates this register in the same pull request ([AGENTS.md](AGENTS.md#documentation-impact-in-every-pull-request), [CONTRIBUTING.md](CONTRIBUTING.md)).
+A finding is Closed only with verification evidence: a test, check, or rehearsal that someone other than the author ran or reviewed, linked in the Closure evidence column. Merging a fix moves a finding to **Fixed (pending verification)**; it does not close it. A pull request that introduces, fixes, or invalidates a finding updates this register in the same pull request ([CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Observed defects
 
@@ -59,7 +59,7 @@ Defects seen in the code, tooling, or documents at the reviewed commit.
 | AUD-005 | Bib replacement drafts and the reassignment region are hard to tell apart in the bib batch panel | Issue #98 (`src/web/BibBatchPanel.tsx`) | Low | None | Unassigned | [#98](https://github.com/kchan1028/event-registration/issues/98) | Open | |
 | AUD-006 | README says Stripe integration is not built, but Stripe hosted Checkout and refunds exist in test mode | `README.md` line 25 versus `src/server/payments.ts` and [roadmap.md Delivery status](roadmap.md#delivery-status) | Low | None | Unassigned | None | Open | |
 | AUD-007 | A source comment says MFA ships in Phase 3; the roadmap moved organizer MFA to the final pre-launch security gate | `src/server/listen.ts` comment versus [roadmap.md](roadmap.md#final-pre-launch-security-gate-planned) | Low | None | Unassigned | None | Open | |
-| AUD-008 | Agent instructions were untracked (`AGENTS.md` was gitignored), so Claude Code and Codex could work from different, unreviewed rules | `.gitignore` at the reviewed commit | Low | None | Project owner | This pull request tracks `AGENTS.md` | Fixed (pending verification) | Needs: after merge, `git ls-files AGENTS.md` on `main` lists the file, verified by the other agent |
+| AUD-008 | Agent instructions are untracked (`AGENTS.md` is gitignored), so Claude Code and Codex can work from different, unreviewed rules | `.gitignore`; shared rules live in the tracked guides ([CONTRIBUTING.md](CONTRIBUTING.md), [coding guide](docs/coding-guide.md), [test plan](docs/testing/test-plan.md)) | Low | None | Project owner | Tracked briefly in #119, untracked again by owner decision | Accepted risk (owner decision, November 16, 2026: agent instructions stay local) | Not applicable |
 
 ## Documented readiness gaps
 
