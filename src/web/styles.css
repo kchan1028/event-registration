@@ -2858,6 +2858,27 @@ button.issue {
 .about__demo {
   max-width: 520px;
 }
+/* Package rates stay visible before riders choose their races. */
+.package-pricing { margin-block: var(--s-5); }
+.package-pricing h2 { font-size: 17px; font-weight: 500; margin-bottom: var(--s-2); }
+.package-pricing > p { margin-block: var(--s-2); }
+.package-pricing__table { width: 100%; border-collapse: collapse; margin-block: var(--s-3); }
+.package-pricing__table th, .package-pricing__table td { padding: 10px 0; border-bottom: 1px solid var(--hairline); text-align: left; }
+.package-pricing__table thead th { color: var(--muted); font-size: 13px; font-weight: 500; }
+.package-pricing__table tbody th { font-weight: 500; }
+.package-pricing__table th:last-child, .package-pricing__table td { text-align: right; }
+.package-pricing__table td { font-size: 24px; }
+
+.race-finder { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; margin-top: var(--s-3); }
+.race-finder p { margin: 0; }
+.schedule-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-top: var(--s-5); }
+.schedule-tools h2 { font-size: 17px; font-weight: 500; margin: 0; }
+.schedule-tools__views { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+
+/* Keep text and fill in sync when the selected view or theme changes. */
+.schedule-tools__views .btn { transition: transform 160ms var(--ease-out); }
+.schedule-tools__views .btn[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+
 .bundle-pick {
   padding: var(--s-2) var(--s-3);
   border: 1px solid var(--hairline);

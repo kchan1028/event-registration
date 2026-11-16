@@ -3,13 +3,13 @@ import QRCode from 'qrcode';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
 import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, MESSAGES, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
-import { evaluateCategory, licenseLabel, summarizeEligibility, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
+import { evaluateCategory, licenseLabel, summarizeEligibility, summarizePath, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories } from '../shared/format';
-import { categoryPrice, quote, type Quote } from '../shared/pricing';
+import { quote, type Quote } from '../shared/pricing';
 import type { CouponTerms } from '../shared/coupons';
 import { REFUND_STATUS_LABEL } from '../shared/refunds';
-import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, type Category, type EventConfig } from '../shared/schema';
+import { COLLEGIATE_DIVISIONS, LICENSE_CATEGORIES, type Bundle, type Category, type EventConfig } from '../shared/schema';
 import { OFFER_HOURS } from '../shared/waitlist';
 import { api, ApiError, type OrderView, type PaymentMode, type PublicEvent, type PublicEventSummary, type WaitlistOffer } from './api';
 import { href, navigate } from './App';
@@ -408,20 +408,37 @@ export function Register({ eventId }: { eventId: string }) {
 function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; update: Update }) {
   const { config } = ev;
   const [trayOpen, setTrayOpen] = useState(false);
+  const [matchesOnly, setMatchesOnly] = useState(false);
+  const scheduleRef = useRef<HTMLDivElement>(null);
   const [errors, setErrors] = useState<{ id: string; message: string }[]>([]);
   const checking = Object.values(draft.profile).some((v) => v !== null);
-  const q = useMemo(() => quote(config, draft.selected, ev.today, draft.coupon ?? null), [config, draft.selected, ev.today, draft.coupon]);
+  const q = useMemo(() => quote(config, draft.selected, ev.today, draft.coupon ?? null, draft.profile), [config, draft.selected, ev.today, draft.coupon, draft.profile]);
   const conflicts = useMemo(() => findConflicts(config, draft.selected), [config, draft.selected]);
-  const setProfile = (p: Partial<RiderProfile>) => update((d) => ({ ...d, profile: { ...d.profile, ...p } }));
+  const setProfile = (p: Partial<RiderProfile>) => {
+    if (p.racingAge === null || p.licenseCategory === null) setMatchesOnly(false);
+    update((d) => ({ ...d, profile: { ...d.profile, ...p } }));
+  };
   const toggle = (id: string) => update((d) => ({ ...d, selected: d.selected.includes(id) ? d.selected.filter((x) => x !== id) : [...d.selected, id] }));
   const result = (cat: Category): EligibilityResult | null => (checking ? evaluateCategory(cat, draft.profile) : null);
+  const matchesReady = draft.profile.racingAge !== null && draft.profile.licenseCategory !== null;
+  const matching = matchesOnly && matchesReady;
+  const matchingCount = config.categories.filter((cat) => cat.status !== 'archived' && result(cat)?.status === 'eligible').length;
+  const visible = (cat: Category) => !matching || result(cat)?.status === 'eligible' || draft.selected.includes(cat.id) || draft.offerCategoryId === cat.id;
+  const findMyRaces = () => {
+    setMatchesOnly(true);
+    scheduleRef.current?.focus();
+    scheduleRef.current?.scrollIntoView({ block: 'start' });
+  };
   const intent = config.registration.bundles.find((b) => b.id === draft.bundleIntent) ?? null;
   const selectedRaces = new Set(draft.selected.map((id) => config.categories.find((c) => c.id === id)?.raceId));
   const intentMissing = intent ? intent.raceIds.filter((r) => !selectedRaces.has(r)) : [];
 
   const applyDemoRider = (id: string) => {
     const r = DEMO_RIDERS.find((x) => x.id === id);
-    if (!r) return update((d) => ({ ...d, profile: EMPTY_PROFILE, details: EMPTY_DETAILS }));
+    if (!r) {
+      setMatchesOnly(false);
+      return update((d) => ({ ...d, profile: EMPTY_PROFILE, details: EMPTY_DETAILS }));
+    }
     update((d) => ({
       ...d,
       profile: { racingAge: r.racingAge, licenseCategory: r.licenseCategory, licenseType: 'annual', competitionClass: r.competitionClass, collegiateDivision: null },
@@ -476,7 +493,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
         <WindowBanner ev={ev} />
         <section className="about" aria-labelledby="about-title">
           <h2 id="about-title">About you</h2>
-          <p className="muted">These answers show which races you can enter. Every race stays visible.</p>
+          <p className="muted">Use your details to find matching races, or browse the full schedule.</p>
           <Field label="Use a demo rider (fake data)" id="f-demo-rider" className="about__demo">
             {(id) => (
               <select id={id} className="input" value={draft.details.demoRiderId ?? ''} onChange={(e) => applyDemoRider(e.target.value)}>
@@ -531,9 +548,41 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
             </Field>
           </div>
           <p className="muted small">Racing age is the age your federation uses for the season. It is not calculated from a birth date yet.</p>
+          <div className="race-finder">
+            <button className="btn btn--secondary" disabled={!matchesReady} aria-describedby="race-finder-hint" onClick={findMyRaces}>Find my races</button>
+            <p id="race-finder-hint" className="small muted">{matchesReady ? `${matchingCount} matching categories based on your answers.` : 'Enter your racing age and license category to find matches.'}</p>
+          </div>
         </section>
 
-        <div id="schedule" tabIndex={-1} className="schedule-anchor">
+        {config.registration.bundles.filter((b) => b.omnium && b.priceCents !== null).map((bundle) => {
+          const rates = packageRates(config, bundle);
+          if (rates.length === 0) return null;
+          return (
+            <section key={bundle.id} className="package-pricing" aria-labelledby={`pricing-${bundle.id}`}>
+              <h2 id={`pricing-${bundle.id}`}>Omnium pricing</h2>
+              <p>One entry in each race: {bundle.raceIds.map((id) => config.races.find((r) => r.id === id)?.name).join(' and ')}.</p>
+              <table className="package-pricing__table">
+                <caption className="sr-only">Omnium package prices</caption>
+                <thead><tr><th scope="col">Rider rate</th><th scope="col">Package price</th></tr></thead>
+                <tbody>
+                  {rates.map((rate) => <tr key={rate.eligibility.id}><th scope="row">{rate.eligibility.label || summarizePath(rate.eligibility)}</th><td className="num">{formatCents(rate.bundlePriceCents)}</td></tr>)}
+                  <tr><th scope="row">Standard</th><td className="num">{formatCents(bundle.priceCents!)}</td></tr>
+                </tbody>
+              </table>
+              <p className="small"><strong>Your lowest eligible price applies automatically.</strong> Your rider details and race categories determine your rate. {rates.some((r) => r.categoryGenderClass === 'women') && 'Women’s pricing applies to women’s race categories.'}</p>
+            </section>
+          );
+        })}
+
+        <div id="schedule" ref={scheduleRef} tabIndex={-1} className="schedule-anchor">
+          <div className="schedule-tools">
+            <h2>{matching ? 'Your matching races' : 'Race schedule'}</h2>
+            <div className="schedule-tools__views" role="group" aria-label="Schedule view">
+              <button className={`btn btn--small ${matching ? 'btn--ghost' : 'btn--primary'}`} aria-pressed={!matching} onClick={() => setMatchesOnly(false)}>All races</button>
+              <button className={`btn btn--small ${matching ? 'btn--primary' : 'btn--ghost'}`} aria-pressed={matching} disabled={!matchesReady} onClick={() => setMatchesOnly(true)}>Matching races</button>
+            </div>
+          </div>
+          <p className={matching ? 'small' : 'sr-only'} role="status">{matching ? `${matchingCount === 0 ? 'No categories match your current answers.' : `${matchingCount} categories match your answers.`} Selected entries stay visible. For races that need more details or organizer review, choose All races.` : ''}</p>
           {config.days.map((day, di) => (
             <section key={day.id} className="sched-day" style={{ ['--day' as string]: dayHue(di) }} aria-labelledby={`day-${day.id}`}>
               <h2 className="sched-day__title" id={`day-${day.id}`}>
@@ -549,9 +598,11 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                         {race.name}
                         {race.course && <span>{race.course}</span>}
                       </h3>
+                      {matching && !config.categories.some((cat) => cat.raceId === race.id && cat.status !== 'archived' && cat.startGroupId !== null && visible(cat)) && <p className="muted small">No matching categories in this race. Choose All races to review the full schedule.</p>}
                       <ol className="sched-list">
                         {groups.map((sg) => {
-                          const cats = sortCategories(config.categories.filter((c) => c.startGroupId === sg.id && c.status !== 'archived'));
+                          const allCats = sortCategories(config.categories.filter((c) => c.startGroupId === sg.id && c.status !== 'archived'));
+                          const cats = allCats.filter(visible);
                           if (cats.length === 0) return null;
                           return (
                             <li key={sg.id} className="start">
@@ -560,9 +611,9 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                                 {sg.stagingTime && <span className="start__staging">Staging {formatTime(sg.stagingTime)}</span>}
                               </div>
                               <div className="start__cats">
-                                {cats.length > 1 && (
+                                {allCats.length > 1 && (
                                   <p className="start__shared">
-                                    <Icon name="clip" size={14} /> {cats.length} categories start together and are scored separately
+                                    <Icon name="clip" size={14} /> {allCats.length} categories start together and are scored separately. Choose one category.
                                   </p>
                                 )}
                                 {cats.map((cat) => (
@@ -571,6 +622,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                                     config={config}
                                     cat={cat}
                                     today={ev.today}
+                                    profile={draft.profile}
                                     selected={draft.selected.includes(cat.id)}
                                     remaining={ev.remaining[cat.id] ?? null}
                                     window={windowState(cat, ev.nowLocal)}
@@ -612,7 +664,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
               <label className="check">
                 <input type="checkbox" checked={draft.bundleIntent === b.id} onChange={(e) => update((d) => ({ ...d, bundleIntent: e.target.checked ? b.id : null }))} />
                 <span>
-                  I want the <strong>{b.name}</strong> ({b.priceCents !== null ? `${formatCents(b.priceCents)} for one race each day` : `save ${formatCents(b.discountCents)}`})
+                  I want the <strong>{b.name}</strong> ({b.priceCents !== null ? packageRates(config, b).length ? 'one entry per race; see the Omnium pricing comparison' : `${formatCents(b.priceCents)} for one race each day` : `save ${formatCents(b.discountCents)}`})
                 </span>
               </label>
               {draft.bundleIntent === b.id && intentMissing.length > 0 && (
@@ -643,6 +695,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
 }
 
 function RaceOption({
+  profile,
   config,
   cat,
   today,
@@ -657,6 +710,7 @@ function RaceOption({
   waitlist,
 }: {
   config: EventConfig;
+  profile: RiderProfile;
   cat: Category;
   offered: boolean;
   waitlist: ReactNode;
@@ -669,9 +723,7 @@ function RaceOption({
   conflicts: ReturnType<typeof findConflicts>;
   onToggle: () => void;
 }) {
-  const race = config.races.find((r) => r.id === cat.raceId);
-  const day = config.days.find((d) => d.id === race?.dayId);
-  const price = categoryPrice(cat, today, day?.date ?? '');
+  const price = quote(config, [cat.id], today, null, profile).lines[0];
   // A waitlist offer reserves this rider's place, so the category is open to them even when it reads as full.
   const full = remaining === 0 && !offered;
   const outside = enforceWindows && window !== 'open';
@@ -711,8 +763,8 @@ function RaceOption({
           </span>
         </span>
         <span className="opt__price num">
-          {formatCents(price.cents)}
-          {price.dayOf && <span className="opt__sub">incl. race-day fee</span>}
+          {formatCents(price.priceCents)}
+          {price.dayOfSurcharge && <span className="opt__sub">incl. race-day fee</span>}
         </span>
       </button>
       <div className="opt__status" id={`opt-${cat.id}-why`}>
@@ -896,6 +948,11 @@ function CouponField({ eventId, draft, update, q }: { eventId: string; draft: Dr
   );
 }
 
+function packageRates(config: EventConfig, bundle: Bundle) {
+  if (!bundle.omnium || bundle.priceCents === null) return [];
+  return (config.registration.riderRates ?? []).filter((rate) => bundle.raceIds.every((id) => rate.racePrices.some((price) => price.raceId === id)));
+}
+
 function BundleHint({ config, selected, q }: { config: EventConfig; selected: string[]; q: Quote }) {
   if (q.bundle || selected.length === 0) return null;
   const races = new Set(selected.map((id) => config.categories.find((c) => c.id === id)?.raceId));
@@ -905,7 +962,7 @@ function BundleHint({ config, selected, q }: { config: EventConfig; selected: st
   return (
     <p className="note">
       Add an entry in {missing.join(' and ')} to get the {near.name}
-      {near.priceCents !== null ? ` for ${formatCents(near.priceCents)}` : ` and save ${formatCents(near.discountCents)}`}.
+      {near.priceCents !== null ? packageRates(config, near).length ? ' at your lowest eligible rate in the Omnium pricing comparison' : ` for ${formatCents(near.priceCents)}` : ` and save ${formatCents(near.discountCents)}`}.
     </p>
   );
 }

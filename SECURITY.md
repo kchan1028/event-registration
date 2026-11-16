@@ -79,3 +79,5 @@ Each rule has one home. The links below point to it; this list is a summary, not
 | Public pages | Private pages are not indexable | [docs/content-guide.md](docs/content-guide.md#keep-private-data-out-of-public-pages) |
 
 Retention and deletion rules are still an open decision and must be defined before the pilot ([product.md](product.md#open-decisions)).
+
+Berkeley rider-rate pricing is recalculated on the server from the accepted configuration and parsed rider facts; client totals are not trusted. Declared age, collegiate division and competition class do not constitute federation verification. Existing paid order quotes are preserved when revised prices are published. No live payment configuration or new access route is introduced.

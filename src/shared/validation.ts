@@ -176,6 +176,12 @@ export function validateConfig(config: EventConfig, entries: readonly CapacityEn
     }
   }
 
+  for (const rate of config.registration.riderRates ?? []) {
+    if (new Set(rate.racePrices.map((p) => p.raceId)).size !== rate.racePrices.length) add('error', 'event.rider-rate-duplicate', 'A rider rate repeats a race price.', { kind: 'event' });
+    if (rate.racePrices.some((p) => !raceById.has(p.raceId))) {
+      add('warning', 'event.rider-rate-reference', 'A rider price references a missing race and is ignored.', { kind: 'event' });
+    }
+  }
   // Registration settings: bundles, rider policies
   for (const b of config.registration.bundles) {
     const t = { kind: 'event' } as const;

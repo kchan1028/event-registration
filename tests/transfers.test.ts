@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
+import { blankPath } from '../src/shared/factory';
 import type { EventConfig } from '../src/shared/schema';
 
 /* Organizer transfers and withdrawals (product.md acceptance: "Category change"). */
@@ -35,6 +36,20 @@ async function setup() {
 }
 
 describe('organizer transfers', () => {
+  it('compares transfers using the rider rate without changing the paid total', async () => {
+    const s = await setup();
+    const ev = await s.get();
+    ev.config.registration.riderRates = [{ eligibility: blankPath(), categoryGenderClass: 'any', racePrices: [{ raceId: ev.config.races[0].id, cents: 3000, extraEntryCents: 1000 }], bundlePriceCents: 4000 }];
+    expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/config`, payload: { config: ev.config, revision: ev.revision } })).statusCode).toBe(200);
+    expect((await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    const order = await s.buy(['RR-M35-34']);
+    const res = await s.transfer(order.entries[0].id, 'RR-D23');
+    expect(res.statusCode).toBe(200);
+    const moved = res.json() as Order;
+    expect(moved.totalCents).toBe(order.totalCents);
+    expect(moved.entries[0].changes[0]).toMatchObject({ newPriceCents: 3000, differenceCents: 0 });
+  });
+
   it('moves a paid entry, keeps the price paid, logs the difference, and moves the place', async () => {
     const s = await setup();
     const order = await s.buy(['RR-M35-34']);

@@ -97,7 +97,7 @@ function categoryChanges(before: EventConfig, after: EventConfig, b: Category, a
     details.push('Shared capacity pool membership or limit changed.');
   }
 
-  if (!sameJson(b.pricing, a.pricing)) {
+  if (!sameJson(b.pricing, a.pricing) || !sameJson(before.registration.riderRates, after.registration.riderRates)) {
     kinds.add('price');
     const base = b.pricing.baseCents !== a.pricing.baseCents ? ` Base price ${formatDollars(b.pricing.baseCents)} → ${formatDollars(a.pricing.baseCents)}.` : '';
     details.push(`Price changed.${base} Paid entries keep the price they paid; only new entries use the new price.`);

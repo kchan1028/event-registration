@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
+import { blankPath } from '../src/shared/factory';
 import { buildDemoEvent } from '../src/shared/demo';
 import { changeImpact, type ChangeImpact, type ImpactEntry } from '../src/shared/impact';
 import type { EventConfig } from '../src/shared/schema';
@@ -18,6 +19,13 @@ function fixture() {
 }
 
 describe('change impact preview', () => {
+  it('reports rider-rate changes for entries without repricing them', () => {
+    const { published, entries } = fixture();
+    const draft = clone(published);
+    draft.registration.riderRates = [{ eligibility: blankPath(), categoryGenderClass: 'any', racePrices: [{ raceId: draft.races[0].id, cents: 3000, extraEntryCents: 1000 }], bundlePriceCents: 4000 }];
+    expect(changeImpact(published, draft, entries).categories[0].kinds).toContain('price');
+  });
+
   it('reports nothing when the draft matches the published version', () => {
     const { published, entries } = fixture();
     expect(changeImpact(published, clone(published), entries).categories).toEqual([]);

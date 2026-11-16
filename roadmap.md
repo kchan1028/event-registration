@@ -101,6 +101,14 @@ Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "c
 | Multi-race discount | Two non-conflicting criteriums get the additional-race discount exactly once and stay distinct entries |
 | Mixed-category weekend bundle | Each day's category passes its own rules; if any place is full, nothing is held |
 
+**Registration mobile follow-up (November 15, 2026):** existing signed-in account controls overflow a 390px viewport. Tracked in [issue #117](https://github.com/kchan1028/event-registration/issues/117), severity low, Phase 2. The Omnium pricing comparison itself fits. Owner unassigned; revisit before registration UI acceptance.
+
+**Berkeley race discovery (November 15, 2026):** Implemented locally: an opt-in Find my races shortcut uses existing structured eligibility, preserves the complete schedule as default, and retains selected entries/shared-start context. Target scenario: six category choices for racing age 50, Cat 4. No phase priority or federation-verification change.
+
+**Berkeley pricing visibility (November 15, 2026):** Implemented locally: show the configured Omnium rate comparison above race selection and remove the standard-price-only package presentation. This clarifies the existing rate matrix without changing checkout calculations or phase priorities.
+
+**Berkeley rider pricing update (November 15, 2026):** owner-approved junior, collegiate and women’s rates use the lowest eligible price, including packages and extra BSC entries. See the [case pricing matrix](docs/case-studies/organizer-templates/berkeley-omnium.md#organizer-approved-demo-pricing). Existing accepted orders retain their snapshots. This changes fixture pricing, not phase priority.
+
 **Berkeley Omnium package (added November 14, 2026):** implemented demo bundle for both races at an organizer-set fixed price of $130 ($80 road race + $60 criterium separately, saving $10), with a separate podium nomination saved in the accepted order quote. Nomination remains subject to organizer review. Pricing and order snapshot tests cover both-day pricing, single-day exclusion, an extra criterium entry, and simulated confirmation. Award rules, approval tools, and points/results calculation remain unbuilt.
 
 **Registration windows (added November 14, 2026):** checkout refuses categories outside their opening and closing times, read in the event's time zone; a hold taken while a window is open can still be paid within the hold, and a late payment after the window closed goes to the organizer's queue. Demo events can let testers register at any time; the rider page then says "Demo mode" and when real registration opens. Verified by unit, API, and Playwright tests.
