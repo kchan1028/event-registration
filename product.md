@@ -1,8 +1,8 @@
 # Product brief: cycling race registration
 
-Status: Draft for discovery and implementation planning
-Working name: CycleReg (name availability not checked)
-Date: November 14, 2026
+Status: Draft for discovery and implementation planning  
+Working name: CycleReg (name availability not checked)  
+Date: November 14, 2026  
 First design partner: Berkeley Omnium / Berkeley Bicycle Club (proposed)
 
 ## Product decision
