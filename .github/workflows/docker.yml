@@ -1,0 +1,25 @@
+name: Docker
+
+# Builds the image only when something it copies changes (see Dockerfile).
+on:
+  push:
+    branches: [main]
+    paths: [Dockerfile, .dockerignore, package.json, package-lock.json, tsconfig.json, vite.config.ts, 'src/**', .github/workflows/docker.yml]
+  pull_request:
+    paths: [Dockerfile, .dockerignore, package.json, package-lock.json, tsconfig.json, vite.config.ts, 'src/**', .github/workflows/docker.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Build only: nothing is pushed or deployed (docs/runbooks/deploy-render.md).
+      - run: docker build -t cyclereg:ci .
