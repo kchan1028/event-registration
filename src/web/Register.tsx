@@ -45,6 +45,8 @@ interface Draft {
   waiver: { read: boolean; signatureName: string; agreed: boolean };
   orderId: string | null;
   clientRequestId: string;
+  /** Exact submission and waiver text to recover after an uncertain response. */
+  pendingReservation: { request: Parameters<typeof api.createOrder>[1]; waiverText: string } | null;
   /** Private link token from a waitlist offer; lets this rider take the reserved place. */
   offerToken?: string | null;
   offerCategoryId?: string | null;
@@ -78,6 +80,7 @@ function freshDraft(): Draft {
     waiver: { read: false, signatureName: '', agreed: false },
     orderId: null,
     clientRequestId: crypto.randomUUID(),
+    pendingReservation: null,
   };
 }
 
@@ -247,7 +250,7 @@ export function Register({ eventId }: { eventId: string }) {
         if (o.eventId !== eventId) return;
         setOffer(o);
         if (o.status !== 'offered') return;
-        update((d) => ({
+        update((d) => d.pendingReservation ? d : ({
           ...d,
           offerToken: token,
           offerCategoryId: o.categoryId,
@@ -297,13 +300,17 @@ export function Register({ eventId }: { eventId: string }) {
 
   /** Going back keeps everything entered. Leaving the review step releases the held places first. */
   const goTo = async (step: Step) => {
+    if (draft.pendingReservation) return;
     if (draft.step === 'review' && draft.orderId) {
       try {
         await api.cancelOrder(draft.orderId);
       } catch {
         /* the hold expires on its own */
       }
-      update((d) => ({ ...d, step, orderId: null, clientRequestId: crypto.randomUUID() }));
+      const latest = await api.publicEvent(eventId).catch(() => null);
+      const changedWaiver = !latest || latest.config.registration.waiverVersion !== ev.config.registration.waiverVersion || latest.config.registration.waiverText !== ev.config.registration.waiverText;
+      if (latest) setEv(latest);
+      update((d) => ({ ...d, step, orderId: null, clientRequestId: crypto.randomUUID(), waiver: changedWaiver ? { ...d.waiver, read: false, agreed: false } : d.waiver }));
     } else update((d) => ({ ...d, step }));
   };
 
@@ -361,7 +368,7 @@ export function Register({ eventId }: { eventId: string }) {
               return (
                 <li key={s.key} className={current ? 'is-current' : i < stepIndex ? 'is-done' : ''}>
                   {reachable ? (
-                    <button className="stepper__btn" onClick={() => goTo(s.key)}>
+                    <button className="stepper__btn" disabled={!!draft.pendingReservation} onClick={() => goTo(s.key)}>
                       <span className="stepper__num num" aria-hidden="true">
                         {i < stepIndex ? <Icon name="check" size={14} /> : i + 1}
                       </span>
@@ -394,7 +401,7 @@ export function Register({ eventId }: { eventId: string }) {
         ) : (
           <>
         {draft.step === 'details' && <DetailsStep config={config} draft={draft} update={update} goTo={goTo} />}
-        {draft.step === 'waiver' && <Waiver ev={ev} draft={draft} update={update} goTo={goTo} />}
+        {draft.step === 'waiver' && <Waiver ev={ev} draft={draft} update={update} goTo={goTo} setEvent={setEv} />}
         {draft.step === 'review' && draft.orderId && <Review orderId={draft.orderId} eventId={eventId} goTo={goTo} paymentMode={ev.paymentMode} />}
           </>
         )}
@@ -1024,7 +1031,7 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
     update((x) => ({ ...x, step: 'waiver', reached: Math.max(x.reached, 2) }));
   };
 
-  const summary = Object.entries(errors).map(([k, message]) => ({ id: FIELD_IDS[k] ?? (k.startsWith('q-') ? k : 'f-first-name'), message }));
+  const summary = useMemo(() => Object.entries(errors).map(([k, message]) => ({ id: FIELD_IDS[k] ?? (k.startsWith('q-') ? k : 'f-first-name'), message })), [errors]);
 
   return (
     <form
@@ -1143,9 +1150,10 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
 
 /* Step 3: waiver, typed signature, then hold places ----------------------- */
 
-function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; update: Update; goTo: (s: Step) => void }) {
+function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft: Draft; update: Update; goTo: (s: Step) => void; setEvent: (event: PublicEvent) => void }) {
   const { config } = ev;
-  const needsGuardian = guardianNeeded(config, draft.selected, draft.profile.racingAge);
+  const pending = draft.pendingReservation;
+  const needsGuardian = pending ? pending.request.waiver.signerRole === 'guardian' : guardianNeeded(config, draft.selected, draft.profile.racingAge);
   const signer = needsGuardian ? (draft.details.guardian?.name ?? '') : `${draft.details.firstName} ${draft.details.lastName}`.trim();
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<{ id: string; message: string }[]>([]);
@@ -1159,7 +1167,7 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
   }, []);
 
   const extras = draft.extras ?? EMPTY_EXTRAS;
-  const addendumCats = draft.selected.map((id) => config.categories.find((c) => c.id === id)).filter((c): c is NonNullable<typeof c> => !!c?.addendum);
+  const addendumCats = pending ? [] : draft.selected.map((id) => config.categories.find((c) => c.id === id)).filter((c): c is NonNullable<typeof c> => !!c?.addendum);
   const toggleAddendum = (catId: string, on: boolean) =>
     update((x) => {
       const ex = x.extras ?? EMPTY_EXTRAS;
@@ -1167,29 +1175,45 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
     });
 
   const hold = async () => {
-    const errs: { id: string; message: string }[] = [];
-    for (const p of checkExtras(config, draft.selected, extras).filter((x) => x.field.startsWith('addendum-'))) errs.push({ id: p.field, message: p.message });
-    if (!w.read) errs.push({ id: 'f-waiver-read', message: MESSAGES.waiverRead });
-    if (!w.signatureName.trim()) errs.push({ id: 'f-signature', message: MESSAGES.waiverSignature });
-    else if (checkSignature(draft.details, { signatureName: w.signatureName, signerRole: needsGuardian ? 'guardian' : 'rider' }, needsGuardian)) errs.push({ id: 'f-signature', message: MESSAGES.signatureMismatch });
-    if (!w.agreed) errs.push({ id: 'f-agree', message: MESSAGES.waiverAgree });
-    setErrors(errs);
-    if (errs.length) return;
-    setBusy(true);
-    try {
-      const order = await api.createOrder(ev.eventId, {
+    if (busy) return;
+    // Recovery must reach server idempotency before validating newly published requirements.
+    if (!pending) {
+      const errs: { id: string; message: string }[] = [];
+      for (const p of checkExtras(config, draft.selected, extras).filter((x) => x.field.startsWith('addendum-'))) errs.push({ id: p.field, message: p.message });
+      if (!w.read) errs.push({ id: 'f-waiver-read', message: MESSAGES.waiverRead });
+      if (!w.signatureName.trim()) errs.push({ id: 'f-signature', message: MESSAGES.waiverSignature });
+      else if (checkSignature(draft.details, { signatureName: w.signatureName, signerRole: needsGuardian ? 'guardian' : 'rider' }, needsGuardian)) errs.push({ id: 'f-signature', message: MESSAGES.signatureMismatch });
+      if (!w.agreed) errs.push({ id: 'f-agree', message: MESSAGES.waiverAgree });
+      setErrors(errs);
+      if (errs.length) return;
+    } else setErrors([]);
+    const submission = pending ?? {
+      request: {
         clientRequestId: draft.clientRequestId,
         categoryIds: draft.selected,
         rider: riderFrom(draft, needsGuardian) as RiderDetails,
-        waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: w.signatureName.trim(), signerRole: needsGuardian ? 'guardian' : 'rider' },
+        waiver: { version: config.registration.waiverVersion, read: true as const, agreed: true as const, signatureName: w.signatureName.trim(), signerRole: needsGuardian ? 'guardian' as const : 'rider' as const },
         offerToken: draft.offerToken ?? null,
         extras,
         couponCode: draft.coupon?.code ?? null,
-      });
-      update((x) => ({ ...x, orderId: order.id, step: 'review', reached: Math.max(x.reached, 3) }));
+      },
+      waiverText: config.registration.waiverText,
+    };
+    setBusy(true);
+    update((x) => ({ ...x, pendingReservation: submission }));
+    try {
+      const order = await api.createOrder(ev.eventId, submission.request);
+      const changedWaiver = submission.request.waiver.version !== config.registration.waiverVersion || submission.waiverText !== config.registration.waiverText;
+      update((x) => ({ ...x, orderId: order.id, pendingReservation: null, step: 'review', reached: Math.max(x.reached, 3), waiver: changedWaiver ? { ...x.waiver, read: false, agreed: false } : x.waiver }));
     } catch (e) {
-      setErrors([{ id: 'f-signature', message: (e as ApiError).message }]);
-      update((x) => ({ ...x, clientRequestId: crypto.randomUUID() }));
+      setErrors([{ id: 'reservation-status', message: (e as ApiError).message }]);
+      if (e instanceof ApiError && e.status >= 400 && e.status < 500 && ![401, 403, 408, 425, 429].includes(e.status)) {
+        const latest = await api.publicEvent(ev.eventId).catch(() => null);
+        if (latest) setEvent(latest);
+        else setErrors([{ id: 'reservation-status', message: `${(e as ApiError).message} Reload this page to get the latest event information before trying again.` }]);
+        const changedWaiver = !latest || submission.request.waiver.version !== latest.config.registration.waiverVersion || submission.waiverText !== latest.config.registration.waiverText;
+        update((x) => ({ ...x, pendingReservation: null, clientRequestId: crypto.randomUUID(), waiver: changedWaiver ? { ...x.waiver, read: false, agreed: false } : x.waiver }));
+      }
     } finally {
       setBusy(false);
     }
@@ -1199,8 +1223,9 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
     <section className="reg__panel" aria-labelledby="waiver-title">
       <ErrorSummary errors={errors} />
       <h2 id="waiver-title">Waiver</h2>
+      {draft.pendingReservation && <p className="note" role="status">Your reservation request is pending. Retry to recover the same order before changing your entries. Your original details, waiver and signature are saved. If retries keep failing, contact the event organizer before starting another registration.</p>}
       <p className="muted small">
-        Version <code className="code">{config.registration.waiverVersion || 'none'}</code>.{config.event.isDemo ? ' Sample text for the demo: a signature here has no legal effect.' : ''}
+        Version <code className="code">{(pending?.request.waiver.version ?? config.registration.waiverVersion) || 'none'}</code>.{config.event.isDemo ? ' Sample text for the demo: a signature here has no legal effect.' : ''}
       </p>
       <div
         ref={boxRef}
@@ -1209,13 +1234,13 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
         aria-label="Waiver text. Scroll to the end to enable signing."
         onScroll={(e) => {
           const el = e.currentTarget;
-          if (!w.read && el.scrollTop + el.clientHeight >= el.scrollHeight - 8) setW({ read: true });
+          if (!draft.pendingReservation && !w.read && el.scrollTop + el.clientHeight >= el.scrollHeight - 8) setW({ read: true });
         }}
       >
-        {config.registration.waiverText || 'The organizer has not added waiver text.'}
+        {(pending?.waiverText ?? config.registration.waiverText) || 'The organizer has not added waiver text.'}
       </div>
       <label className="check">
-        <input id="f-waiver-read" type="checkbox" checked={w.read} onChange={(e) => setW({ read: e.target.checked })} />I have read the whole waiver
+        <input id="f-waiver-read" type="checkbox" disabled={busy || !!draft.pendingReservation} checked={w.read} onChange={(e) => setW({ read: e.target.checked })} />I have read the whole waiver
       </label>
       {addendumCats.map((cat) => (
         <fieldset className="subfields" key={cat.id}>
@@ -1224,12 +1249,12 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
           </legend>
           <p className="small addendum-text">{cat.addendum!.text}</p>
           <label className="check">
-            <input id={`addendum-${cat.id}`} type="checkbox" checked={extras.addenda.includes(cat.id)} onChange={(e) => toggleAddendum(cat.id, e.target.checked)} />
+            <input id={`addendum-${cat.id}`} type="checkbox" disabled={busy || !!draft.pendingReservation} checked={extras.addenda.includes(cat.id)} onChange={(e) => toggleAddendum(cat.id, e.target.checked)} />
             {needsGuardian ? 'As parent or guardian, I accept this for the rider' : 'I accept this'}
           </label>
         </fieldset>
       ))}
-      <fieldset className="subfields" disabled={!w.read}>
+      <fieldset className="subfields" disabled={!w.read || busy || !!draft.pendingReservation}>
         <legend>{needsGuardian ? 'Signature of parent or guardian' : 'Your signature'}</legend>
         {!w.read && <p className="muted small">Scroll to the end of the waiver, or tick the box above, to sign.</p>}
         <Field label={`Type your full name to sign${signer ? `: ${signer}` : ''}`} id="f-signature">
@@ -1241,14 +1266,14 @@ function Waiver({ ev, draft, update, goTo }: { ev: PublicEvent; draft: Draft; up
         </label>
       </fieldset>
       <div className="form-actions">
-        <button className="btn btn--ghost" onClick={() => goTo('details')}>
+        <button className="btn btn--ghost" disabled={busy || !!draft.pendingReservation} onClick={() => goTo('details')}>
           <Icon name="arrow-left" /> Back
         </button>
         <button className="btn btn--primary" disabled={busy} onClick={hold}>
-          {busy ? 'Holding your places…' : 'Sign and review the order'}
+          {busy ? 'Holding your places…' : draft.pendingReservation ? 'Retry reservation' : 'Sign and review the order'}
         </button>
       </div>
-      <p className="muted small">Your places are held for {ev.holdMinutes} minutes while you review.</p>
+      <p id="reservation-status" tabIndex={-1} className="muted small">{pending ? 'Your reservation outcome is not confirmed. Retry to recover the same order before making changes.' : `Places will be held for ${ev.holdMinutes} minutes after the reservation is confirmed.`}</p>
     </section>
   );
 }
@@ -1286,7 +1311,8 @@ function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; even
 
   if (!order) return err ? <p className="note note--error">{err}</p> : <div className="skeleton" aria-label="Loading your order" />;
 
-  const expired = order.status === 'expired' || (left === 0 && (order.status === 'held' || order.status === 'payment_failed'));
+  const cancelled = order.status === 'cancelled';
+  const expired = cancelled || order.status === 'expired' || (left === 0 && (order.status === 'held' || order.status === 'payment_failed'));
   const pay = async (outcome: 'success' | 'failure') => {
     setBusy(true);
     setErr(null);
@@ -1324,7 +1350,7 @@ function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; even
         </p>
       ) : (
         <p className="note note--warn" role="alert">
-          {stripe
+          {cancelled ? 'Your reservation was cancelled. Change your entries to start again.' : stripe
             ? 'Your hold has ended and the places were released. Start a new registration to pay.'
             : 'Your hold has ended and the places were released. You can still complete the simulated payment: if every place is still free, your entry is confirmed. Otherwise nothing is charged and the organizer is told.'}
         </p>
@@ -1366,17 +1392,17 @@ function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; even
         <p className="muted small">A real event would open the payment provider’s page here. This simulated payment asks for no card details and contacts no provider.</p>
         <PaymentNote mode="simulated" />
         <div className="form-actions">
-          <button className="btn btn--primary" disabled={busy} onClick={() => pay('success')}>
+          <button className="btn btn--primary" disabled={busy || cancelled} onClick={() => pay('success')}>
             {busy ? 'Processing…' : `Complete simulated payment (${formatCents(order.totalCents)})`}
           </button>
-          <button className="btn btn--secondary" disabled={busy} onClick={() => pay('failure')}>
+          <button className="btn btn--secondary" disabled={busy || cancelled} onClick={() => pay('failure')}>
             Simulate a declined payment
           </button>
         </div>
       </div>
       )}
       <button className="btn btn--ghost" disabled={busy} onClick={() => goTo('races')}>
-        <Icon name="arrow-left" /> Change my entries (releases the hold)
+        <Icon name="arrow-left" /> {cancelled ? 'Change my entries' : 'Change my entries (releases the hold)'}
       </button>
     </section>
   );

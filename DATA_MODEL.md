@@ -254,7 +254,7 @@ A rider's checkout in the app. Payment is simulated; no money moves.
 | `created_at`, `updated_at`, `confirmed_at` | |
 | `account_id` | Migration 16. The signed-in account that placed the order; indexed. Only that account can pay for or cancel it. It, organizers with the orders permission for the event, and (for a junior's order) the junior's viewer login can read it. Null for orders made before sign-in and for simulated demo riders. Set to null if the account is deleted |
 
-A retried checkout with the same `client_request_id` returns the first order only to the account that placed it; another account gets 409. Each order still carries its own copy of the rider's details: there is no separate rider profile table, and one account can register other riders (for example a parent).
+A retried checkout with the same `client_request_id` returns the first order only to the account that placed it; another account gets 409. The browser retains the exact pending request and displayed waiver text in its existing per-tab draft until recovery or definitive rejection; same-tab refresh preserves the original ID when session storage is available. This adds no database column or migration. Each order still carries its own copy of the rider's details: there is no separate rider profile table, and one account can register other riders (for example a parent).
 
 ### coupons
 

@@ -339,3 +339,221 @@ test('Berkeley matching view retains selected categories when rider details chan
   await page.getByLabel('License category').selectOption('4');
   await expect(page.locator('#schedule').getByRole('checkbox')).toHaveCount(54);
 });
+
+test('validation recovery keeps keyboard focus and typed details', async ({ page }) => {
+  await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  const first = page.getByLabel('First name (required)');
+  await first.fill('');
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await expect(page.locator('.error-summary')).toBeFocused();
+  await page.locator('.error-summary').getByRole('link', { name: 'Enter your first name.' }).click();
+  await expect(first).toBeFocused();
+  await first.pressSequentially('Racer');
+  await expect(first).toHaveValue('Racer');
+  await expect(first).toBeFocused();
+  await page.getByLabel('Last name (required)').fill('');
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await expect(page.locator('.error-summary')).toBeFocused();
+  await expect(page.locator('.error-summary')).toContainText('Enter your last name.');
+  await page.screenshot({ path: 'test-results/recovery-desktop-errors.png' });
+  await page.getByLabel('Last name (required)').fill('Demo');
+  await page.reload();
+  await expect(first).toHaveValue('Racer');
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await expect(page.getByRole('heading', { name: 'Waiver', exact: true })).toBeVisible();
+});
+
+test('lost hold response retries the same reservation across refresh', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const eventId = await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  const attempts: string[] = [];
+  const orders: string[] = [];
+  await page.route('**/api/rider/events/*/orders', async (route) => {
+    attempts.push(route.request().postDataJSON().clientRequestId);
+    if (attempts.length === 2) {
+      await route.fulfill({ status: 403, json: { error: 'Sign in again to recover your reservation.' } });
+      return;
+    }
+    const response = await route.fetch();
+    orders.push((await response.json()).id);
+    if (attempts.length === 1) await route.abort('failed');
+    else await route.fulfill({ response });
+  });
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.locator('.error-summary')).toContainText('Cannot reach');
+  await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeDisabled();
+  await page.screenshot({ path: 'test-results/recovery-mobile-pending.png', fullPage: true });
+  const beforeOffer = await page.evaluate((id) => JSON.parse(sessionStorage.getItem(`cyclereg.register.${id}`)!), eventId);
+  await page.route('**/api/rider/offers/pending-test', async (route) => {
+    await route.fulfill({ json: { eventId, categoryId: 'another-offer-category', categoryName: 'Other fictional race', status: 'offered', offerExpiresAt: '2027-04-17T18:00:00Z', rider: { firstName: 'Other', lastName: 'Rider', email: 'other@example.test', racingAge: 60, licenseCategory: '5', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null } } });
+  });
+  // A new document restores the draft while an offer link also tries to prefill it.
+  await page.goto(`/?recovery-offer=1#/register/${eventId}?offer=pending-test`);
+  await expect(page.getByText(/Other fictional race/)).toBeVisible();
+  const afterOffer = await page.evaluate((id) => JSON.parse(sessionStorage.getItem(`cyclereg.register.${id}`)!), eventId);
+  expect(afterOffer).toEqual(beforeOffer);
+  await expect(page.getByLabel(/Type your full name to sign/)).toHaveValue('Alex Demo');
+  await page.getByRole('button', { name: /Retry.*reservation/ }).click();
+  await expect(page.locator('.error-summary')).toContainText('Sign in again');
+  await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: /Retry.*reservation/ }).click();
+  await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
+  expect(attempts).toHaveLength(3);
+  expect(new Set(attempts).size).toBe(1);
+  expect(orders[1]).toBe(orders[0]);
+  await page.screenshot({ path: 'test-results/recovery-mobile-review.png', fullPage: true });
+  await page.getByRole('button', { name: /Complete simulated payment/ }).click();
+  await expect(page.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
+});
+
+test('a rejected reservation keeps details editable and rapid submission creates one hold', async ({ page }) => {
+  await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await page.route('**/api/rider/events/*/orders', async (route) => {
+    await route.fulfill({ status: 422, json: { error: 'Reservation rejected. Review your entries.' } });
+  }, { times: 1 });
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.locator('.error-summary')).toContainText('Reservation rejected');
+  await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeEnabled();
+  await expect(page.getByLabel(/Type your full name to sign/)).toBeEnabled();
+  let posts = 0;
+  await page.route('**/api/rider/events/*/orders', async (route) => {
+    posts++;
+    await route.fulfill({ response: await route.fetch() });
+  });
+  await page.getByRole('button', { name: 'Sign and review the order' }).dblclick();
+  await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
+  expect(posts).toBe(1);
+});
+
+for (const committed of [true, false]) {
+  test(`publication changes do not alter uncertain consent (${committed ? 'committed' : 'not committed'})`, async ({ page }) => {
+    const eventId = await openEvent(page, 'criterium');
+    await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+    await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+    await page.getByRole('button', { name: 'Continue to racer details' }).click();
+    await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+    const bodies: { clientRequestId: string; categoryIds: string[]; waiver: { version: string } }[] = [];
+    const orderIds: string[] = [];
+    await page.route('**/api/rider/events/*/orders', async (route) => {
+      bodies.push(route.request().postDataJSON());
+      if (bodies.length === 1) {
+        if (committed) orderIds.push((await (await route.fetch()).json()).id);
+        await route.abort('failed');
+      } else {
+        const response = await route.fetch();
+        if (response.ok()) orderIds.push((await response.json()).id);
+        await route.fulfill({ response });
+      }
+    });
+    await signAndReview(page, 'Alex Demo');
+    await expect(page.locator('.error-summary')).toContainText('Cannot reach');
+    const current = await (await page.request.get(`/api/events/${eventId}`)).json();
+    current.config.registration.waiverVersion = 'CRO-UPDATED-SAMPLE';
+    current.config.registration.waiverText = 'New fictional waiver text, not real event policy.';
+    current.config.categories.find((cat: { id: string }) => cat.id === bodies[0].categoryIds[0]).addendum = { title: 'New sample condition', text: 'Fictional new condition.' };
+    expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision: current.revision, config: current.config } })).ok()).toBe(true);
+    expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
+    await page.reload();
+    await page.getByRole('button', { name: 'Retry reservation' }).click();
+    if (committed) {
+      await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
+      expect(orderIds[1]).toBe(orderIds[0]);
+      await page.getByRole('button', { name: /Change my entries/ }).click();
+      await page.getByRole('button', { name: 'Continue to racer details' }).click();
+      await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+      await expect(page.locator('.waiver')).toHaveText(current.config.registration.waiverText);
+      await expect(page.getByLabel('I agree to this waiver', { exact: true })).not.toBeChecked();
+      await expect(page.getByLabel(/Type your full name to sign/)).toHaveValue('Alex Demo');
+    } else {
+      await expect(page.locator('.error-summary')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeEnabled();
+      await expect(page.getByLabel('I have read the whole waiver')).not.toBeChecked();
+      await expect(page.getByLabel('I agree to this waiver', { exact: true })).not.toBeChecked();
+      expect(orderIds).toHaveLength(0);
+    }
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toEqual(bodies[0]);
+  });
+}
+
+test('recovering a cancelled reservation disables payment and allows reselection', async ({ page }) => {
+  await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  let id = '';
+  await page.route('**/api/rider/events/*/orders', async (route) => {
+    const response = await route.fetch();
+    id = (await response.json()).id;
+    await route.abort('failed');
+  }, { times: 1 });
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.locator('.error-summary')).toContainText('Cannot reach');
+  expect((await page.request.post(`/api/orders/${id}/cancel`)).ok()).toBe(true);
+  await page.getByRole('button', { name: 'Retry reservation' }).click();
+  await expect(page.getByRole('alert')).toContainText('cancelled');
+  await expect(page.getByRole('button', { name: /Complete simulated payment/ })).toBeDisabled();
+  await page.getByRole('button', { name: /Change my entries/ }).click();
+  await expect(page.getByRole('heading', { name: 'About you', exact: true })).toBeVisible();
+});
+
+test('persistent server and rate-limit failures preserve recovery and explain the unknown outcome', async ({ page }) => {
+  await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  const attempts: string[] = [];
+  await page.route('**/api/rider/events/*/orders', async (route) => {
+    attempts.push(route.request().postDataJSON().clientRequestId);
+    await route.fulfill({ status: [500, 429, 408, 425, 500][attempts.length - 1], json: { error: 'Temporary request failure. Try again.' } });
+  });
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.locator('.error-summary')).toContainText('Temporary request failure');
+  await page.locator('.error-summary a').click();
+  await expect(page.locator('#reservation-status')).toBeFocused();
+  await expect(page.locator('#reservation-status')).toContainText('not confirmed');
+  await page.reload();
+  await expect(page.getByLabel(/Type your full name to sign/)).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Choose races/ })).toBeDisabled();
+  for (let i = 0; i < 4; i++) {
+    await page.getByRole('button', { name: 'Retry reservation' }).click();
+    await expect(page.locator('.error-summary')).toContainText('Temporary request failure');
+  }
+  expect(attempts).toHaveLength(5);
+  expect(new Set(attempts).size).toBe(1);
+});
+
+test('stale waiver rejection refreshes terms without reload and requires fresh agreement', async ({ page }) => {
+  const eventId = await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await page.getByLabel('I have read the whole waiver').check();
+  await page.getByLabel(/Type your full name to sign/).fill('Alex Demo');
+  await page.getByLabel('I agree to this waiver', { exact: true }).check();
+  const current = await (await page.request.get(`/api/events/${eventId}`)).json();
+  current.config.registration.waiverVersion = 'CRO-STALE-SAMPLE';
+  current.config.registration.waiverText = 'Updated fictional waiver requiring renewed agreement.';
+  expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision: current.revision, config: current.config } })).ok()).toBe(true);
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  await page.getByRole('button', { name: 'Sign and review the order' }).click();
+  await expect(page.locator('.waiver')).toHaveText(current.config.registration.waiverText);
+  await expect(page.getByLabel('I have read the whole waiver')).not.toBeChecked();
+  await expect(page.getByLabel('I agree to this waiver', { exact: true })).not.toBeChecked();
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
+});

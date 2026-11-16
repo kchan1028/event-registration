@@ -4,6 +4,10 @@ CycleReg will handle rider contact details, emergency contacts, license numbers,
 
 > **Status: local build with email sign-in, fictional data only.** Every API route except the health check, the public event list, rider event pages, and the Stripe webhook (trusted only by its verified signature) requires passwordless email sign-in (Clerk, [ADR 0003](docs/decisions/0003-sign-in-and-mfa.md) Phase 2), and organizer routes check the caller's role in the event's organization on the server (`src/server/auth.ts`, `src/shared/roles.ts`). Data is stored in a local PostgreSQL database ([setup](docs/runbooks/local-setup.md)). There is no deployed website, no payments with real money, and no real rider data. Payments are simulated or use Stripe test mode; live keys are refused. Email sign-in is one factor: anyone who controls an account's inbox can sign in as it. So the app must not hold real rider data or take live payments until MFA and sensitive-action re-verification are enforced for every organizer role at the final pre-launch security gate; riders and guardians stay on email sign-in by owner decision; until then hosted use is limited to staging and rehearsals with fictional data, and the [Render deploy](docs/runbooks/deploy-render.md) still waits on its other gates. Unless a section says otherwise, the security requirements below are Planned, not Implemented.
 
+## Reservation recovery (Implemented locally)
+
+The existing per-tab registration draft also retains the exact pending reservation payload and displayed waiver text until its outcome is known. Unknown network/server, authentication and rate-limit failures retain that request ID; pending entries and consent cannot be edited. Recovery uses the existing account-protected order endpoint and server idempotency checks. A definitive rejection refreshes published terms and clears agreement if the waiver changed. This adds no route, role, database field, logging or card storage. Browser storage remains best effort; blocked storage or closing the tab cannot guarantee refresh recovery. Use fictional data only.
+
 ## Supported versions
 
 | Version | Supported |

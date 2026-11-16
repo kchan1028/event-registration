@@ -40,9 +40,9 @@ Details and limits: [category builder](product.md#1a-road-race-and-criterium-cat
 | Browse published events | Implemented | View already-published events and schedules; browsing does not create demo fixtures |
 | Choose entries | Implemented | Select eligible categories, see capacity and review requirements, and receive schedule-conflict warnings |
 | Order pricing | Implemented | Show entries, discounts, and configured fees before simulated payment; prevent discount stacking |
-| Rider and guardian details | Implemented | Enter fictional rider details once per order, with guardian details for minors |
+| Rider and guardian details | Implemented | Enter fictional rider details once per order, with guardian details for minors; validation corrections retain keyboard focus |
 | Sample waiver | Implemented | Confirm reading and sign a versioned sample waiver; it is not an official federation waiver |
-| Capacity reservation | Implemented | Hold all selected places together; an incomplete bundle is not sold silently |
+| Capacity reservation | Implemented | Hold all selected places together; an incomplete bundle is not sold silently; recover uncertain submissions with the original request across same-tab refresh |
 | Simulated payment | Implemented | Exercise success, decline, retry, and duplicate notifications without charging money or collecting card details |
 | Confirmation and receipt | Implemented | Show a demo receipt, check-in code, entries, and independent readiness items; payment does not clear an unreviewed license |
 
