@@ -268,6 +268,16 @@ Every new GitHub issue gets:
 
 Milestones only group issues. Scope, priority, and status stay in `roadmap.md`, and there is no GitHub Project board, so there is no second roadmap. Security weaknesses never become public issues; see [SECURITY.md](../SECURITY.md).
 
+### Branches after a pull request
+
+- GitHub deletes a pull request's branch when it merges (the repository setting "Automatically delete head branches") or closes without merging ([delete-closed-branch.yml](../.github/workflows/delete-closed-branch.yml)). Branches from forks are left alone.
+- Locally, the author removes its worktree and branch as soon as the pull request merges or closes: `git worktree remove <path>`, only when the worktree has no uncommitted work, then `git branch -D <branch>`.
+- To clear every local branch whose remote branch is gone, run the command below. A branch still checked out in a worktree is skipped until that worktree is removed. Set `git config fetch.prune true` once per clone so fetches drop deleted remote branches.
+
+  ```bash
+  git fetch --prune && git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads | while read -r b t; do [ "$t" = "[gone]" ] && git branch -D "$b"; done
+  ```
+
 ## Architecture decision records
 
 Write an ADR before making a choice that is expensive to reverse: the stack, data store, capacity-locking approach, payment provider, hosting, authentication, or an integration pattern. Process and template: [decisions/README.md](decisions/README.md).
