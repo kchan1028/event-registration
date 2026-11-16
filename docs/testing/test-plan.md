@@ -58,10 +58,10 @@ When changing these workflows, cover the approved [Berkeley pricing](../../produ
 - Single-race, fixed-package and extra-criterium prices for each rider rate, overlapping qualifications, unknown facts, and day-of pricing. Check coupon precedence and accepted-order snapshot preservation.
 - Rate scopes after category deletion/duplication, changed-rate publication impact, and transfer price comparisons. Missing-race rate references must remain an ignored-price warning rather than a publication dead end.
 - The rate comparison is visible before selection and reads published configuration; check phone/desktop widths, both themes, table semantics and contrast.
-- All races remains the default. The opt-in shortcut for racing age 50/Cat 4 shows the six expected category choices, preserves shared-start counts, and moves focus to the results heading.
+- All races remains the default. The opt-in shortcut for racing age 50/Cat 4 shows the six expected category choices, preserves shared-start counts, and moves focus to the schedule and brings the results heading into view.
 - Review-required choices remain reachable in All races. Keep selected/offered entries visible after profile changes, support empty matches, and retain All races after required details are cleared and re-entered.
 
-Focused coverage lives in `tests/pricing.test.ts`, `tests/berkeley-events.test.ts`, `tests/orders.test.ts`, `tests/transfers.test.ts`, `tests/impact.test.ts`, `tests/validation.test.ts` and the Berkeley scenarios in `e2e/checkout.spec.ts`. Apply the risk table above for affected integrations; these scenario lists do not replace it. Browser automation is not a real-phone or assistive-technology rehearsal.
+Focused coverage lives in `tests/pricing.test.ts`, `tests/berkeley-events.test.ts`, `tests/orders.test.ts`, `tests/transfers.test.ts`, `tests/impact.test.ts` and the Berkeley scenarios in `e2e/checkout.spec.ts`. Existing validator regression checks remain in `tests/validation.test.ts`; the missing-race rider-rate case is in `tests/pricing.test.ts`. Apply the risk table above for affected integrations; these scenario lists do not replace it. Browser automation is not a real-phone or assistive-technology rehearsal.
 
 ## 3. Independent verification
 
