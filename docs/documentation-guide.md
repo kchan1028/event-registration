@@ -72,6 +72,7 @@ Current layout:
 └── docs/
     ├── architecture.md, coding-guide.md, content-guide.md, documentation-guide.md, operations.md, timer-export-review.md,
     │                             usac-questions.md, payment-model-questions.md
+    ├── discovery/                Research reports, interviews, and dated source notes
     ├── decisions/                Architecture decision records
     ├── fixtures/                 Fake demo purchase flow data and sample waiver text
     ├── runbooks/                 Local setup, troubleshooting, and the planned Render deploy
