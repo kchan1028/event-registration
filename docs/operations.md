@@ -111,6 +111,8 @@ Implemented in the local build (November 15, 2026): `GET /api/health` runs a dat
 
 ## Backups and recovery
 
+The [local fictional-data restore procedure](runbooks/local-backup-restore.md) exercises a separate logical archive/restore, record comparison and application recovery checks without touching the working database. It is technical rehearsal preparation; hosted scheduled/off-site recovery, agreed targets and staff acceptance remain open.
+
 - Back up the primary datastore on a schedule set by the hosting ADR, and keep copies somewhere a single failure cannot remove.
 - A backup counts only after a restore has been demonstrated. Phase 3 requires that demonstration during the mock-weekend rehearsal ([roadmap.md](../roadmap.md#phase-3--make-race-day-operable)).
 - Record a target for how much data may be lost and how long a restore may take, agreed with the pilot organizer before the pilot.

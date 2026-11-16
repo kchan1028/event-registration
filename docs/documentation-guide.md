@@ -42,7 +42,7 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Test scope, independent verification, predeployment gate, release blockers, evidence | [testing/test-plan.md](testing/test-plan.md) | Requirements stay in product.md; status in roadmap.md |
 | Public page and copy rules | [content-guide.md](content-guide.md) | |
 | Writing rules, status vocabulary, glossary | This file | |
-| Setup and troubleshooting | [runbooks/](runbooks/local-setup.md) | Local setup, troubleshooting, phone handoff and check-in volunteer guides exist; accepted recovery procedures remain Proposed |
+| Setup and troubleshooting | [runbooks/](runbooks/local-setup.md) | Local setup, troubleshooting, a technical local restore rehearsal, phone handoff and check-in volunteer guides exist; hosted/accepted recovery procedures remain Proposed |
 | Visual system of the interface | [DESIGN.md](../DESIGN.md) | Tokens, type, components; distinguishes the built baseline from Planned design direction |
 | Timer export format review and answers | [timer-export-review.md](timer-export-review.md) | Proposed until the timer accepts the format |
 | USA Cycling questions and answers | [usac-questions.md](usac-questions.md) | Proposed until answered; confirmed requirements move to product.md with source and date |
