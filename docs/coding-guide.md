@@ -156,7 +156,7 @@ Document the permitted transitions for each state machine (as a table or diagram
 
 ## Payments, retries, duplicate events, and reconciliation
 
-Payments use a provider's hosted payment flow. The application never sees or stores card details. The provider has not been chosen; see the [decisions backlog](decisions/README.md#decision-backlog).
+Payments use a provider's hosted payment flow. The application never sees or stores card details. Stripe hosted Checkout is selected in [ADR 0002](decisions/0002-stripe-payments.md). The local build supports simulated and Stripe test-mode payment; live payments are not enabled.
 
 ### Confirm only on authoritative confirmation
 
@@ -174,18 +174,20 @@ Idempotent means doing the same thing twice has the same effect as doing it once
 
 ### Handle the awkward cases explicitly
 
+These are required outcomes, not proof that the corresponding real-provider checks have passed. See [AUD-001](../AUDIT.md#observed-defects) and the [recovery evidence matrix](research/prelaunch-readiness.md#payment-and-failure-recovery-matrix).
+
 | Case | Expected behavior |
 |---|---|
 | Payment fails or the rider abandons checkout | Reservation expires and the place is released; rider sees a clear message |
 | Payment succeeds after the reservation expired | Do not silently confirm or silently drop. Confirm if capacity still allows; otherwise route to the exception queue for an organizer to refund or resolve |
 | Duplicate notification | Recognized by event ID; no second order, charge, or entry |
 | Rider refreshes or double-clicks "pay" | Same checkout session reused; one charge at most |
-| Partial refund of one bundle entry | Refund recorded against that entry; capacity released for that race only; bundle price effect shown before confirming |
-| Dispute (chargeback) | Payment state becomes disputed; entry state unchanged until an organizer acts |
+| Partial refund of one bundle entry | Record against that entry's paid amount and preserve its accepted price snapshot. A refund does not withdraw the entry or release capacity; withdrawal is separate |
+| Dispute (chargeback) | Payment state becomes disputed; entry state unchanged until an organizer acts. Provider dispute ingestion is not implemented |
 
 ### What the app implements
 
-The checkout (`src/server/orders.ts`) follows these rules with a simulated provider: order creation carries a client request ID so a retried request returns the same order; each payment notification carries an attempt ID stored in `payment_attempts` and is processed once; a success after the hold expired re-checks every place in one transaction and either confirms or moves the order to `needs_attention`; a success after the rider cancelled always goes to `needs_attention`; a decline keeps the hold. Real provider signatures, refunds, disputes, and reconciliation are not built.
+The checkout (`src/server/orders.ts`) follows these rules with a simulated provider: order creation carries a client request ID so a retried request returns the same order; each payment notification carries an attempt ID stored in `payment_attempts` and is processed once; a success after the hold expired re-checks every place in one transaction and either confirms or moves the order to `needs_attention`; a success after the rider cancelled always goes to `needs_attention`; a decline keeps the hold. The [Stripe test-mode integration](../src/server/payments.ts) also implements signature verification, repeated-event handling, exact session totals and duplicate-charge recording; [refunds](../src/server/refunds.ts) include retry/status handling. These are source-inspected implementation facts, not a provider operational pass. Real-provider credentials, settlement, dispute handling, bank reconciliation and operating rehearsals remain unverified; live payments are not enabled. See the [readiness assessment](research/prelaunch-readiness.md#payment-and-failure-recovery-matrix) and [test plan](testing/test-plan.md).
 
 ### Reconciliation
 

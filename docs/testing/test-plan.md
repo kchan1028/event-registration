@@ -113,6 +113,8 @@ Automated tests do not replace these. Record what was observed separately from w
 | Mobile and browser compatibility | When layout, navigation, forms, or check-in screens change; again before the pilot | Phone width (375 px) and desktop in Chromium for every such change; Safari on a real iPhone and one other desktop browser before calling a flow Verified or deploying |
 | Race-day rehearsal | Phase 3 exit gate, and before each pilot event | Mock weekend in [roadmap.md](../../roadmap.md#phase-3--make-race-day-operable), including blocked riders, bib issuance, fallback roster, timer handoff, and a backup restore |
 
+The [prelaunch readiness assessment](../research/prelaunch-readiness.md) maps existing requirements to focused interrupted-reservation, provider/reconciliation and race-day recovery scenarios. Its [measurement specification](../research/prelaunch-readiness.md#proposed-launch-measurement-specification) is Proposed: use synthetic replay and report timing coverage/exclusions; it does not add instrumentation, new sample thresholds or an accepted release gate. Keep execution results in the PR or dated rehearsal report.
+
 ## 6. Release blockers
 
 A release does not go out while any of these is true:

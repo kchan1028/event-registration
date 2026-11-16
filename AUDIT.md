@@ -15,6 +15,12 @@ This repository is public. Security weaknesses are reported privately as [SECURI
 | Methods | Read `product.md`, `roadmap.md`, `feature.md`, `SECURITY.md`, `ACCESSIBILITY.md`, `DATA_MODEL.md`, and the [test plan](docs/testing/test-plan.md); reviewed open GitHub issues; checked specific claims against the source and tests named in each finding; ran `npm audit` for dependency advisories |
 | Limitations | No application run, no regression suite, no penetration test, no load test, no manual accessibility pass, no real-device check, and no review against real provider instances (Clerk, Stripe, SES). A document saying a feature is Implemented was not taken as evidence that it works. Coverage below says what was and was not examined |
 
+## Supplemental prelaunch research
+
+November 16, 2026, Codex, baseline `028d7e2`: [registration and operational readiness](docs/research/prelaunch-readiness.md). Scope: source and existing-document inspection, dated primary-source research, runtime provenance checks, and five filtered roster/check-in tests (five passed, 23 skipped). No fresh rendered journey, real provider, staff rehearsal or restore was checked. The running local UI was a separate uncommitted variant; historical variant checks do not validate main. Independent verification of this supplemental documentation is Pending. The historical coverage table below describes the original audit, not this supplement.
+
+The supplement partially examines capacity/eligibility/pricing/refund implementation and race-day controls; it does not verify their complete correctness. It does not close GAP-001–011. Two newly tracked main defects are added below. AUD-006 is corrected in documentation, pending independent verification.
+
 ## Coverage
 
 | Area | Status | What was examined |
@@ -57,9 +63,11 @@ Defects seen in the code, tooling, or documents at the reviewed commit.
 | AUD-003 | The signed-in rider registration header overflows at phone width | Issue #117 (390 px viewport, `src/web/Register.tsx`) | Low | Before pilot | Unassigned | [#117](https://github.com/kchan1028/event-registration/issues/117) | Open | |
 | AUD-004 | `DATA_MODEL.md` still says role-change audit history does not exist | Issue #105 | Low | None | Unassigned | [#105](https://github.com/kchan1028/event-registration/issues/105) | Open | |
 | AUD-005 | Bib replacement drafts and the reassignment region are hard to tell apart in the bib batch panel | Issue #98 (`src/web/BibBatchPanel.tsx`) | Low | None | Unassigned | [#98](https://github.com/kchan1028/event-registration/issues/98) | Open | |
-| AUD-006 | README says Stripe integration is not built, but Stripe hosted Checkout and refunds exist in test mode | `README.md` line 25 versus `src/server/payments.ts` and [roadmap.md Delivery status](roadmap.md#delivery-status) | Low | None | Unassigned | None | Open | |
+| AUD-006 | README says Stripe integration is not built, but Stripe hosted Checkout and refunds exist in test mode | Historical README claim versus `src/server/payments.ts` and roadmap; README now distinguishes local test mode from unverified live operation | Low | None | Unassigned | Documentation readiness PR | Fixed (pending verification) | Independent documentation review Pending |
 | AUD-007 | A source comment says MFA ships in Phase 3; the roadmap moved organizer MFA to the final pre-launch security gate | `src/server/listen.ts` comment versus [roadmap.md](roadmap.md#final-pre-launch-security-gate-planned) | Low | None | Unassigned | None | Open | |
 | AUD-008 | Agent instructions are untracked (`AGENTS.md` is gitignored), so Claude Code and Codex can work from different, unreviewed rules | `.gitignore`; shared rules live in the tracked guides ([CONTRIBUTING.md](CONTRIBUTING.md), [coding guide](docs/coding-guide.md), [test plan](docs/testing/test-plan.md)) | Low | None | Project owner | Tracked briefly in #119, untracked again by owner decision | Accepted risk (owner decision, November 16, 2026: agent instructions stay local) | Not applicable |
+| AUD-009 | Details-form error summary can regain focus while the rider types a correction | Current `Register.tsx` ErrorSummary dependency and fresh DetailsStep array; historical expert walkthrough, not fresh main runtime | Medium | Blocks live launch (release-blocker) | Unassigned | [#127](https://github.com/kchan1028/event-registration/issues/127) | Open | |
+| AUD-010 | Reservation retry rotates request identity after an unknown response, risking another hold | Current `Register.tsx` Waiver catch; code-inspected risk, no duplicate real charge demonstrated | High | Blocks live launch (release-blocker) | Unassigned | [#128](https://github.com/kchan1028/event-registration/issues/128) | Open | |
 
 ## Documented readiness gaps
 
@@ -81,7 +89,7 @@ Work the documents say is not done yet. These are not defects; each is tracked i
 
 ## Not assessed
 
-These areas were not examined in this audit. No conclusion, positive or negative, should be drawn about them: capacity, eligibility, pricing, and refund correctness; start list and timer export behavior; application security; privacy and data handling; manual accessibility; performance; and operations. See [Coverage](#coverage). A later audit adds findings here, with its own scope, date, and reviewed commit.
+These areas were not examined in the original audit; the supplemental research above records its narrower additional coverage. No conclusion, positive or negative, should be drawn about them: capacity, eligibility, pricing, and refund correctness; start list and timer export behavior; application security; privacy and data handling; manual accessibility; performance; and operations. See [Coverage](#coverage). A later audit adds findings here, with its own scope, date, and reviewed commit.
 
 ## Later work
 
