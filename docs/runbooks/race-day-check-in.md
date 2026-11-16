@@ -66,7 +66,7 @@ If the request times out or the connection drops after a click, stop handing out
 
 Live registration and changes require connectivity. Do not reload away from an uncertain submission just to start a new one. Do not assume a cached screen or old printout reflects later withdrawals, reviews, bib changes or payments.
 
-Known wording conflict ([#142](https://github.com/kchan1028/event-registration/issues/142)): the current printout says to enter paper-issued bibs and record cleared exceptions. Those instructions assume an accepted paper process that remains unapproved; they do not grant that approval. The registration lead must brief staff on this limitation before using the printout in a fictional rehearsal.
+The printout identifies its limits as **Reference only**, labels readiness and bibs as snapshot records, and provides **Lead review notes** rather than a paper clearance field ([wording correction #142](https://github.com/kchan1028/event-registration/issues/142)). The registration lead must still brief staff on the unapproved contingency and reconciliation process before using it in a fictional rehearsal.
 
 Use the printed roster to identify its snapshot time and the affected riders for the registration lead. A paper tick does not update the application. The blank rows and exception checklist are recording aids; they do not authorize new offline entries, capacity exceptions, waiver clearance or payment collection. The lead must use an approved contingency process before authorizing any paper bib issuance. That process and paper reconciliation remain Proposed in [operations](../operations.md#handling-an-incident); no live fallback is approved by this guide. If none is accepted, pause affected issuance and escalate.
 

@@ -70,6 +70,10 @@ The [check-in guide](../runbooks/race-day-check-in.md) is documentation for exis
 
 Real phone, printer, sign-in/provider, timer and staff-independence checks remain manual under section 5; source review and automated scenarios do not satisfy them. No new product acceptance threshold is added.
 
+### Printable roster recording limits
+
+When changing the fallback roster, run `tests/roster.test.ts` and the fallback-roster scenario in `e2e/checkin.spec.ts`. Check the notice on every day, including no-entrant/no-exception states: printed notes do not register a rider, record payment, clear requirements or record check-in. Missing-rider rows are lookup questions, not a paper entry/bib form. Preserve NOT READY blockers and snapshot status/bib labels. Check desktop, phone width and print media; the notice must print while navigation controls do not. Real pagination, printer output and accepted staff contingency/reconciliation remain separate manual evidence. No paper policy is approved by a rendering check.
+
 ### Shared responsive account headers
 
 `e2e/header.spec.ts` checks Home, My registrations, event catalog and registration at 320, 360, 390, 720, 768 and 1440 CSS pixels in light/dark themes. Require no page overflow, horizontally contained theme/account actions, keyboard focus order, functional registration lookup/sign-out, and 44px account/interactive brand-link targets with an emulated coarse pointer. Verify the registration brand returns to the event catalog and the My registrations brand returns Home; the Home wordmark is a non-interactive span. Compare desktop header/control geometry and page height in the same DOM against the original CSS declarations; this is not a second baseline build or a claim about all application routes. Run the affected sign-in and organizer/rider accessibility scenarios because the Home header is shared. Real devices, screen readers and actual browser zoom remain separate manual checks.

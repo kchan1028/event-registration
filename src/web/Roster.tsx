@@ -9,7 +9,7 @@ import { Icon } from './ui';
 /**
  * Printable race-day fallback roster and exception checklist, one race day per
  * printed section. For when check-in cannot be restored quickly; it is a
- * snapshot, so the print time is on every page. No contact, license, or payment details.
+ * snapshot, so each day shows its timestamp and recording limits. No contact, license, or payment details.
  */
 export function Roster({ eventId }: { eventId: string }) {
   const [days, setDays] = useState<CheckInList[] | null>(null);
@@ -63,7 +63,12 @@ export function Roster({ eventId }: { eventId: string }) {
             <header className="roster__head">
               <h1>{title}</h1>
               <p className="roster__stamp">
-                Fallback roster printed {stamp}. Changes after this time are not shown. When check-in is back, enter every bib issued on paper.
+                Fallback roster printed {stamp}. Changes after this time are not shown.
+              </p>
+              <p className="roster__hint">
+                <strong>Reference only.</strong> This snapshot does not authorize offline registration, payment, waiver clearance or check-in.
+                Paper bib issuance requires an approved event contingency. Without one, pause issuance and contact the registration lead.
+                After service returns, the lead must reconcile notes with current records before normal issuance resumes.
               </p>
               {d.isDemo && <p className="roster__demo">Example data: fictional riders.</p>}
               <p className="roster__counts">
@@ -79,14 +84,14 @@ export function Roster({ eventId }: { eventId: string }) {
                 <thead>
                   <tr>
                     <th scope="col" className="roster__tick">
-                      <span className="sr-only">Checked in on paper</span>
+                      <span className="sr-only">Notes recorded</span>
                     </th>
                     <th scope="col">Rider</th>
                     <th scope="col">Team</th>
                     <th scope="col" className="roster__num">Age</th>
                     <th scope="col">Races</th>
-                    <th scope="col">Status</th>
-                    <th scope="col" className="roster__bib">Bib</th>
+                    <th scope="col">Snapshot status</th>
+                    <th scope="col" className="roster__bib">Recorded bib</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -121,14 +126,14 @@ export function Roster({ eventId }: { eventId: string }) {
               <p>No riders are blocked for this day.</p>
             ) : (
               <>
-                <p className="roster__hint">Do not issue a bib to these riders until the registration desk clears every item and records it here.</p>
+                <p className="roster__hint">Do not issue a bib while requirements remain unresolved. Refer these riders to the registration lead; notes on this sheet do not clear requirements.</p>
                 <table className="roster__table">
                   <thead>
                     <tr>
                       <th scope="col">Rider</th>
                       <th scope="col">What is missing</th>
                       <th scope="col">What to do</th>
-                      <th scope="col" className="roster__resolve">Cleared by, how</th>
+                      <th scope="col" className="roster__resolve">Lead review notes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -146,14 +151,13 @@ export function Roster({ eventId }: { eventId: string }) {
             )}
 
             <h2 className="roster__sub">Riders not on this list</h2>
-            <p className="roster__hint">Send them to the registration desk. Write each one here so they can be entered when check-in is back.</p>
+            <p className="roster__hint">Send riders to the registration lead. Record lookup questions only; adding a name here does not create an entry, reserve capacity or authorize a bib.</p>
             <table className="roster__table roster__table--blank">
               <thead>
                 <tr>
                   <th scope="col">Rider</th>
                   <th scope="col">Race</th>
-                  <th scope="col" className="roster__bib">Bib</th>
-                  <th scope="col">Note</th>
+                  <th scope="col">Question for registration lead</th>
                 </tr>
               </thead>
               <tbody>
@@ -161,7 +165,6 @@ export function Roster({ eventId }: { eventId: string }) {
                   <tr key={k}>
                     <td />
                     <td />
-                    <td className="roster__bib" />
                     <td />
                   </tr>
                 ))}
