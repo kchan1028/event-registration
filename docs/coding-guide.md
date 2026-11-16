@@ -256,6 +256,18 @@ Current coverage (all passing November 14, 2026): category fixtures, eligibility
 - Changes to money, capacity, eligibility, waivers, permissions, or personal data need a reviewer familiar with that area and a test for the failure case, not only the success case.
 - Reviewers confirm the change summary states product and roadmap impact.
 
+### Labels and milestones on issues
+
+Every new GitHub issue gets:
+
+- One type: `bug`, `documentation`, `accessibility`, `ci`, `enhancement`, or `usability` (an observation, not a bug; the owner decides before anyone codes).
+- One severity on a bug: `sev:high` (wrong money, capacity, eligibility, or data with no workaround), `sev:medium` (wrong behavior with a workaround, or limited reach), or `sev:low` (minor or cosmetic).
+- `release-blocker` when the bug touches money, capacity, eligibility, waivers, permissions, or personal data. It blocks a release until fixed.
+- The `area:` labels it touches: `area:payments`, `area:checkin`, `area:auth`, `area:categories`, `area:registration`.
+- The milestone for the [roadmap](../roadmap.md) phase that must fix it (for example "Phase 2 — Build the registration core").
+
+Milestones only group issues. Scope, priority, and status stay in `roadmap.md`, and there is no GitHub Project board, so there is no second roadmap. Security weaknesses never become public issues; see [SECURITY.md](../SECURITY.md).
+
 ## Architecture decision records
 
 Write an ADR before making a choice that is expensive to reverse: the stack, data store, capacity-locking approach, payment provider, hosting, authentication, or an integration pattern. Process and template: [decisions/README.md](decisions/README.md).
