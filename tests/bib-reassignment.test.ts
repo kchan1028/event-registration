@@ -92,6 +92,42 @@ describe('protected bib reassignment', () => {
     }
   });
 
+  it('revises only remaining confirmed races while an active entry remains', async () => {
+    const { app, eventId, alex, before } = await setup();
+    const order = (await app.inject({ method: 'GET', url: `/api/orders/${alex}` })).json() as { entries: { id: string; dayId: string }[] };
+    const saturday = order.entries.find((e) => e.dayId === before.dayId)!;
+    expect((await app.inject({ method: 'POST', url: `/api/order-entries/${saturday.id}/withdraw`, payload: { reason: 'Withdraw from the demo road race only' } })).statusCode).toBe(200);
+    const input = { dayId: before.dayId, bib: 130, reason: 'Correct the retained weekend number', acknowledgeCheckedIn: true };
+    const plan = (await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex}/bib/preview`, payload: input })).json() as BibReassignmentPlan;
+    expect(plan.races.map((r) => r.name)).toEqual(['Sunday criterium']);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex}/bib`, payload: { ...input, fingerprint: plan.fingerprint } })).statusCode).toBe(200);
+  });
+
+  it('ignores released unpaid entry ranges and hides inactive day bibs from another day', async () => {
+    const { app, db, eventId, alex, before, checkIn } = await setup();
+    const [sat, sun] = before.days.map((d) => d.id);
+    await app.inject({ method: 'PUT', url: `/api/events/${eventId}/bib-settings`, payload: { scope: 'day', ranges: [{ scope: sat, first: 100, last: 199 }, { scope: sun, first: 200, last: 299 }] } });
+    expect((await checkIn(alex, sat)).statusCode).toBe(200);
+    const order = (await app.inject({ method: 'GET', url: `/api/orders/${alex}` })).json() as { entries: { id: string; categoryId: string }[] };
+    const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
+    const unused = event.config.categories.find((c) => !order.entries.some((e) => e.categoryId === c.id) && event.config.races.find((r) => r.id === c.raceId)!.dayId === sat)!;
+    unused.bibRange = { first: 500, last: 599 };
+    expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: event })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    for (const e of order.entries) expect((await app.inject({ method: 'POST', url: `/api/order-entries/${e.id}/withdraw`, payload: { reason: 'Demo rider withdrew' } })).statusCode).toBe(200);
+    await db.run(`INSERT INTO order_entries (id, order_id, event_id, category_id, rider_ref, status) VALUES ('released-demo-hold', $1, $2, $3, $1, 'released')`, [alex, eventId, unused.id]);
+    await db.run(`UPDATE orders SET status = 'cancelled' WHERE id = $1`, [alex]);
+    const search = async (dayId: string) => (await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in?day=${dayId}&q=Alex` })).json() as CheckInList;
+    expect((await search(sun)).riders.some((r) => r.orderId === alex)).toBe(false);
+    expect((await search(sat)).riders.find((r) => r.orderId === alex)?.bib).toBe(100);
+    const input = { dayId: sat, bib: 130, reason: 'Correct the issued Saturday number', acknowledgeCheckedIn: true };
+    const plan = (await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex}/bib/preview`, payload: input })).json() as BibReassignmentPlan;
+    expect(plan.assignments[0].range).toEqual({ first: 100, last: 199 });
+    expect(plan.races.map((r) => r.name)).toEqual(['Saturday road race']);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${alex}/bib`, payload: { ...input, fingerprint: plan.fingerprint } })).statusCode).toBe(200);
+    expect((await search(sat)).riders.find((r) => r.orderId === alex)?.bib).toBe(130);
+  });
+
   it('previews and atomically swaps checked-in and preassigned riders, audits the actor, and revises locked lists across the weekend', async () => {
     const { app, db, eventId, before, list, alex, blake, dana, preview, apply, swap } = await setup();
     const races = (await app.inject({ method: 'GET', url: `/api/events/${eventId}/start-lists` })).json() as { races: { raceId: string }[] };

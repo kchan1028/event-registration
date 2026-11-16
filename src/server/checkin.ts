@@ -55,6 +55,10 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     };
   }
 
+  function activeEntries(rider: Rider) {
+    return isLiveOrder(rider) ? rider.entries.filter((e) => e.status === 'held' || e.status === 'confirmed') : [];
+  }
+
   type BibRow = { id: string; order_id: string; bib: number; assigned_at: string; released_at: string | null; release_reason: string | null };
   type UndoRow = { order_id: string; checked_in_at: string; undone_at: string; bib: number | null; bib_released: boolean; reason: string };
 
@@ -176,7 +180,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   async function assign(eventId: string, orderId: string, dayId: string, s: BibSettings, requested: number | null): Promise<number> {
     const scope = bibScopeKey(s, dayId);
     const rider = await riderFor(eventId, orderId);
-    const range = riderRange(await config(eventId), rider.entries.filter((e) => e.status !== 'released' && e.status !== 'withdrawn'), s, dayId);
+    const range = riderRange(await config(eventId), activeEntries(rider), s, dayId);
     if (!range) throw new HttpError(409, 'No bib range covers every applicable entry. Set bib ranges before checking riders in.');
     const taken = await takenBibs(eventId, scope);
     let bib: number | null = requested;
@@ -226,7 +230,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     if (allocation === 'reassign') for (const { card } of sorted) taken.delete(card.bib!);
     const assignments = [];
     for (const { o, card } of sorted) {
-      const range = riderRange(cfg, o.entries.filter((e) => e.status !== 'released' && e.status !== 'withdrawn'), s, dayId);
+      const range = riderRange(cfg, activeEntries(o), s, dayId);
       if (!range) throw new HttpError(409, 'Set a bib range for every applicable entry before allocating.');
       const bib = nextFreeBib(range, taken);
       if (bib === null) throw new HttpError(409, `Not enough free bibs in ${range.first}–${range.last}; no assignments were made.`);
@@ -269,12 +273,13 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const exclusion = bibBatchExclusion(card, operation === 'individual' ? 'individual' : 'reassign');
       if (exclusion) throw new HttpError(409, exclusion);
       requireRiderScope(cfg, card, input);
-      const active = rider.entries.filter((e) => e.status !== 'released' && e.status !== 'withdrawn' && days.some((d) => d.id === e.dayId));
-      const range = riderRange(cfg, active.length ? active : rider.entries, s, day.id);
+      const active = activeEntries(rider).filter((e) => days.some((d) => d.id === e.dayId));
+      const applicable = active.length ? active : rider.entries.filter((e) => e.status === 'withdrawn');
+      const range = riderRange(cfg, applicable, s, day.id);
       if (!range) throw new HttpError(409, 'Set a bib range for every applicable entry before changing numbers.');
       requireBibInRange(a.bib, range);
       if (outside.has(a.bib)) throw new HttpError(409, `Bib ${a.bib} belongs to a rider outside this batch.`);
-      if (a.bib !== card.bib) for (const entry of rider.entries.filter((e) => operation === 'individual' || e.status === 'confirmed')) {
+      if (a.bib !== card.bib) for (const entry of applicable.filter((e) => !active.length || e.status === 'confirmed')) {
         const race = cfg.races.find((r) => r.id === cfg.categories.find((c) => c.id === entry.categoryId)?.raceId);
         if (race && days.some((d) => d.id === race.dayId)) raceIds.add(race.id);
       }
@@ -359,7 +364,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const s = await settings(eventId);
       const state = await dayState(eventId, day.id, bibScopeKey(s, day.id));
       const checkedInScope = new Set((await db.all<{ order_id: string }>(`SELECT DISTINCT order_id FROM check_ins WHERE event_id = $1 AND day_id = ANY($2::text[])`, [eventId, cfg.days.filter((d) => bibScopeKey(s, d.id) === bibScopeKey(s, day.id)).map((d) => d.id)])).map((r) => r.order_id));
-      const all = (await riders(eventId)).map((o) => riderCard(o, day.id, state)).sort((a, b) => a.name.localeCompare(b.name));
+      const all = (await riders(eventId)).filter((o) => activeEntries(o).length || state.bibs.get(o.id)?.some((b) => b.released_at === null)).map((o) => riderCard(o, day.id, state)).sort((a, b) => a.name.localeCompare(b.name));
       const enteredToday = all.filter((c) => c.entries.length > 0);
       // A search also finds riders with no entry today, so the volunteer sees why; the plain list shows only today's riders.
       const cards = q.trim() ? all.filter((c) => matches(c, q)) : enteredToday;
