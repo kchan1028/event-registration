@@ -17,6 +17,9 @@ import { HttpError } from './repo';
 /** The profile key: one profile per guardian and junior name. */
 const nameKey = (firstName: string, lastName: string) => `${normalizeText(firstName)} ${normalizeText(lastName)}`;
 
+/** Serializes creating, linking, and renaming one guardian's junior profiles across events. */
+const guardianLock = (guardianAccountId: string) => `juniors:${guardianAccountId}`;
+
 export function createJuniors(db: Db, clock: () => Date) {
   /** The guardian's profile for this junior, created on first use. */
   async function profileFor(guardianAccountId: string, rider: { firstName: string; lastName: string }): Promise<string> {
@@ -34,16 +37,19 @@ export function createJuniors(db: Db, clock: () => Date) {
    * name, one update per junior. Covers the order just placed and any placed before profiles existed.
    */
   async function adopt(guardianAccountId: string): Promise<void> {
-    const orders = await db.all<{ id: string; rider_json: { firstName: string; lastName: string } }>(
-      `SELECT id, rider_json FROM orders WHERE account_id = $1 AND junior_profile_id IS NULL AND jsonb_typeof(rider_json->'guardian') = 'object'`,
-      [guardianAccountId],
-    );
-    const byJunior = new Map<string, { rider: { firstName: string; lastName: string }; ids: string[] }>();
-    for (const o of orders) {
-      const key = nameKey(o.rider_json.firstName, o.rider_json.lastName);
-      byJunior.set(key, { rider: o.rider_json, ids: [...(byJunior.get(key)?.ids ?? []), o.id] });
-    }
-    for (const { rider, ids } of byJunior.values()) await db.run(`UPDATE orders SET junior_profile_id = $1 WHERE id = ANY($2)`, [await profileFor(guardianAccountId, rider), ids]);
+    await db.transaction(async () => {
+      await db.lock(guardianLock(guardianAccountId));
+      const orders = await db.all<{ id: string; rider_json: { firstName: string; lastName: string } }>(
+        `SELECT id, rider_json FROM orders WHERE account_id = $1 AND junior_profile_id IS NULL AND jsonb_typeof(rider_json->'guardian') = 'object'`,
+        [guardianAccountId],
+      );
+      const byJunior = new Map<string, { rider: { firstName: string; lastName: string }; ids: string[] }>();
+      for (const o of orders) {
+        const key = nameKey(o.rider_json.firstName, o.rider_json.lastName);
+        byJunior.set(key, { rider: o.rider_json, ids: [...(byJunior.get(key)?.ids ?? []), o.id] });
+      }
+      for (const { rider, ids } of byJunior.values()) await db.run(`UPDATE orders SET junior_profile_id = $1 WHERE id = ANY($2)`, [await profileFor(guardianAccountId, rider), ids]);
+    });
   }
 
   async function list(guardianAccountId: string): Promise<JuniorProfile[]> {
@@ -66,6 +72,8 @@ export function createJuniors(db: Db, clock: () => Date) {
      * this one's), and this profile is removed. Returns the order's profile.
      */
     async renamed(profileId: string, guardianAccountId: string, rider: { firstName: string; lastName: string }): Promise<string> {
+      // Called inside the correction's transaction; the guardian lock keeps a registration at another event from creating the same name meanwhile.
+      await db.lock(guardianLock(guardianAccountId));
       const key = nameKey(rider.firstName, rider.lastName);
       const existing = await db.get<{ id: string }>(`SELECT id FROM junior_profiles WHERE guardian_account_id = $1 AND name_key = $2`, [guardianAccountId, key]);
       if (existing && existing.id !== profileId) {
