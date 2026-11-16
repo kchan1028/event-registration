@@ -158,6 +158,10 @@ Automated tests do not replace these. Record what was observed separately from w
 
 The [prelaunch readiness assessment](../research/prelaunch-readiness.md) maps existing requirements to focused interrupted-reservation, provider/reconciliation and race-day recovery scenarios. Its [measurement specification](../research/prelaunch-readiness.md#proposed-launch-measurement-specification) is Proposed: use synthetic replay and report timing coverage/exclusions; it does not add instrumentation, new sample thresholds or an accepted release gate. Keep execution results in the PR or dated rehearsal report.
 
+### Local logical restore rehearsal
+
+Use the [isolated restore procedure](../runbooks/local-backup-restore.md) with fresh fictional source/target/rejection databases. Verify table hashes/counts and selected schema/sequence metadata before opening the recovered application; then verify health, persisted check-in/bib and start-list lock, paid-but-blocked readiness and repeat-safe operations. Reject a populated source and demonstrate single-transaction rollback on a deliberate target conflict. A second operator repeats it with a new run ID. Do not touch working/hosted databases or use real rider records. Application suites need not run for procedure-only documentation; execute the specific rehearsal instead. Keep individual results and limits in the PR/rehearsal record. Hosted backups, off-site copies, recovery objectives, provider reconciliation and staff acceptance remain separate gates.
+
 ## 6. Release blockers
 
 A release does not go out while any of these is true:
