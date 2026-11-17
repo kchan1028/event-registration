@@ -1,5 +1,6 @@
 import type { LimitUsage } from '../shared/capacity';
 import type { RefundStatus, RefundRequest, RefundRequestResult } from '../shared/refunds';
+import type { RefundPolicyPreview } from '../shared/refundPolicy';
 import type { CreateEventInput, EventConfig, CapacityEntry, PublicEventSummary } from '../shared/schema';
 import type { Issue } from '../shared/validation';
 import type { ReadinessItem, RiderDetails, WaiverAcceptance, WaiverEvidence } from '../shared/checkout';
@@ -375,6 +376,7 @@ export const api = {
   pay: (id: string, attemptId: string, outcome: 'success' | 'failure') => request<OrderView>('POST', `/api/orders/${id}/payment`, { attemptId, outcome }),
   startCheckout: (id: string) => request<{ kind: 'redirect'; url: string } | { kind: 'confirmed' }>('POST', `/api/orders/${id}/checkout-session`),
   refunds: (orderId: string) => request<{ payments: RefundablePaymentView[]; refunds: OrganizerRefundView[] }>('GET', `/api/orders/${orderId}/refunds`),
+  refundPolicyPreview: (orderId: string, reason: RefundPolicyPreview['reason']) => request<RefundPolicyPreview>('GET', `/api/orders/${orderId}/refund-policy-preview?reason=${reason}`),
   requestRefund: (orderId: string, body: RefundRequest) => request<OrderView & RefundRequestResult>('POST', `/api/orders/${orderId}/refunds`, body),
   retryRefund: (refundId: string) => request<OrderView>('POST', `/api/refunds/${refundId}/retry`),
   cancelOrder: (id: string) => request<OrderView>('POST', `/api/orders/${id}/cancel`),

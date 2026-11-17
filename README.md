@@ -58,7 +58,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Organizer transfers and withdrawals of paid entries, with price differences logged | Implemented; automated tests in CI |
 | Event summary on Registrations: riders, entries, unpaid holds, payment exceptions, license reviews to do, waitlist activity, per-category counts, and (for ledger roles) money that adds up to the ledger CSV | Implemented; automated tests in CI |
 | Organizer refunds of an entry or an order, for simulated and Stripe test-mode payments (no real money moves) | Implemented; automated tests in CI. Not yet checked against a real Stripe sandbox account |
-| Refund and credit rules set by the organizer from templates (full refund until a deadline, tiered, credit only), shown to riders before paying and kept with each order | Implemented; refund amounts are still entered by the organizer |
+| Refund and credit rules set by the organizer from templates (full refund until a deadline, tiered, credit only), shown to riders before paying and kept with each order | Implemented; whole-order policy preview in the organizer refund form, with refund amounts still entered by the organizer |
 | Category builder: copy a day's races to another day, bulk edit with before/after preview | Implemented; automated tests in CI |
 | Same-rider suggestions across orders, linked only when the organizer confirms | Implemented; automated tests in CI |
 | Organizer CSV exports: entries and a simulated ledger, without contact details | Implemented; automated tests in CI |

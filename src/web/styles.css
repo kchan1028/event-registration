@@ -4270,6 +4270,14 @@ fieldset:disabled .field label {
   font-weight: 500;
   color: var(--ink);
 }
+.refund-policy-preview {
+  margin-top: var(--s-4);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--hairline);
+}
+.refund-policy-preview h4 { margin: 0 0 var(--s-2); }
+.refund-policy-preview p { margin: var(--s-2) 0; }
+
 .correction {
   display: grid;
   gap: var(--s-3);

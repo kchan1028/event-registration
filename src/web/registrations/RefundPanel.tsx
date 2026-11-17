@@ -6,6 +6,7 @@ import { REFUND_STATUS_LABEL, refundableCents, refundRequestSchema, type RefundR
 import { api, type ApiError, type OrderView, type OrganizerRefundView, type RefundablePaymentView } from '../api';
 import { formatDateTime } from '../format';
 import { Field, moneyText, parseMoney, ReasonForm } from '../ui';
+import { RefundPolicyPreview } from './RefundPolicyPreview';
 
 /**
  * Refunds for one order. A refund returns money from one payment, optionally for one entry; it never
@@ -213,6 +214,7 @@ export function RefundPanel({ order, canRefund, onChange }: { order: OrderView; 
               {(id, d) => <input id={id} aria-describedby={d} className="input num" inputMode="decimal" autoComplete="off" value={amount} onChange={(e) => setAmount(e.target.value)} />}
             </Field>
           </div>
+          {canRefund && !entryId && payment?.kind === 'order' && <RefundPolicyPreview orderId={order.id} refundKey={refundKey} />}
         </ReasonForm>
       ) : (
         canRefund && (
