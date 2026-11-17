@@ -453,6 +453,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           : null;
         const q = quote(config, input.categoryIds, todayIn(config.event.timeZone, clock()), coupon ? termsOf(coupon) : null, profileOf(rider));
         if (q.coupon?.unappliedReason) throw new HttpError(422, `${q.coupon.unappliedReason} Go back to Choose races and remove the code to continue. Nothing was held.`);
+        if (accountId && rider.guardian) await juniors.requireRegistrationAllowed(accountId, rider);
         const t = nowIso();
         const expires = new Date(clock().getTime() + holdMinutes * 60_000).toISOString();
         await db.run(
