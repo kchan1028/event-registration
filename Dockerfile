@@ -1,7 +1,7 @@
 # CycleReg web service image (ADR 0004: a plain Node.js container that can move between platforms).
 # Builds the React app, then runs the Fastify API, which also serves the built app.
 # Not deployed anywhere yet: see docs/runbooks/deploy-render.md.
-FROM node:20.19.6-bookworm-slim
+FROM node:22.23.4-bookworm-slim
 
 WORKDIR /app
 

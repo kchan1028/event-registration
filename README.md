@@ -102,7 +102,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 
 ### Try it locally
 
-You need Node.js 20 or later and a local PostgreSQL 17 database (Docker is the simplest way). Full steps and troubleshooting: [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
+You need Node.js 22 or later and a local PostgreSQL 17 database (Docker is the simplest way). Full steps and troubleshooting: [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
 
 ```bash
 docker run -d --name cyclereg-postgres -e POSTGRES_USER=cyclereg -e POSTGRES_PASSWORD=cyclereg -e POSTGRES_DB=cyclereg -p 127.0.0.1:5432:5432 postgres:17
