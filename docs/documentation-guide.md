@@ -27,7 +27,8 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Phases, priorities, dependencies, risks, delivery status | [roadmap.md](../roadmap.md) | Source of truth; the only roadmap |
 | Feature overview | [feature.md](../feature.md) | Summarizes existing requirements and status; not a competing roadmap |
 | Project summary, status snapshot, document map | [README.md](../README.md) | Summarizes; must match the two sources |
-| How to propose and review changes | [CONTRIBUTING.md](../CONTRIBUTING.md) | |
+| How to propose and review changes | [CONTRIBUTING.md](../CONTRIBUTING.md) | Issue forms in `.github/ISSUE_TEMPLATE/` and the pull request template in `.github/pull_request_template.md` follow it |
+| Expected behavior and conduct reports | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1; reports go through the private channel in SECURITY.md |
 | Audit findings, coverage, and closure evidence | [AUDIT.md](../AUDIT.md) | Public-safe; requirements stay in product.md, priorities in roadmap.md, defects in GitHub issues |
 | Security reporting and security requirement summary | [SECURITY.md](../SECURITY.md) | Summary links to the rules' homes |
 | Accessibility target, checks, and barrier reports | [ACCESSIBILITY.md](../ACCESSIBILITY.md) | Detailed rules stay in the coding guide |

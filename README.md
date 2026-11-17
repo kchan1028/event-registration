@@ -278,6 +278,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [product.md](product.md) | Source of truth for requirements, scope, flows, business rules, and acceptance criteria |
 | [roadmap.md](roadmap.md) | Source of truth for phases, priorities, dependencies, risks, and delivery status |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose, make, and review a change |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1: expected behavior and how to report a problem privately |
 | [AUDIT.md](AUDIT.md) | Public-safe audit findings register: scope, coverage, findings, and closure evidence |
 | [docs/testing/test-plan.md](docs/testing/test-plan.md) | Test scope, independent verification, predeployment gate, release blockers, and evidence |
 | [SECURITY.md](SECURITY.md) | How to report a security problem privately, and a summary of security requirements |

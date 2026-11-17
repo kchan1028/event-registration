@@ -1,0 +1,77 @@
+name: Bug
+description: Something does not work as product.md or the documentation says it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Leave out real rider names, emails, license numbers, emergency contacts, waivers, and payment details; describe them instead. A security weakness or exposed private data is never a public issue: report it privately as [SECURITY.md](https://github.com/kchan1028/event-registration/blob/main/SECURITY.md#how-to-report) describes. A failed acceptance criterion in product.md is a bug.
+  - type: textarea
+    id: what
+    attributes:
+      label: What is wrong
+      description: One or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: Where
+      description: Screen and route, or file and function, and the commit or date if you know it.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Numbered steps with fictional data.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual result
+      description: What should happen, what happened instead, and the product.md section that says so if there is one.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: As the coding guide defines them. A maintainer adds the matching sev label.
+      options:
+        - "High: wrong money, capacity, eligibility, or data with no workaround"
+        - "Medium: wrong behavior with a workaround, or limited reach"
+        - "Low: minor or cosmetic"
+        - "Not sure"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Payments
+        - Check-in
+        - Sign-in and roles
+        - Categories and event setup
+        - Registration
+        - Other
+  - type: checkboxes
+    id: blocker
+    attributes:
+      label: Release blocker
+      options:
+        - label: It touches money, capacity, eligibility, waivers, permissions, or personal data (a maintainer adds release-blocker).
+  - type: checkboxes
+    id: safe
+    attributes:
+      label: Before you submit
+      options:
+        - label: This contains no real rider data and is not a security weakness.
+          required: true
