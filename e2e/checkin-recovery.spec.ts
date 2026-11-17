@@ -18,6 +18,7 @@ for (const mobile of [false, true]) {
         await context.addInitScript((user) => sessionStorage.setItem('cyclereg.test-session', user), email);
         const volunteer = await context.newPage();
         const list: CheckInList = await (await volunteer.request.get(`/api/events/${eventId}/check-in`)).json();
+        expect(list.roles).toEqual(['check_in_volunteer']);
         const [rider, next] = list.riders.filter((r) => r.result.ready && r.bib === null);
         if (!rider?.checkInCode || !next?.checkInCode) throw new Error('The fictional fixture needs two ready, unassigned riders with check-in codes');
         await volunteer.goto(`/#/events/${eventId}/check-in`);
@@ -49,6 +50,7 @@ for (const mobile of [false, true]) {
         expect(recorded.payment).toBe(rider.payment);
         expect(recorded.entries).toEqual(rider.entries);
         expect(recorded.result).toEqual(rider.result);
+        expect(recorded.readiness).toEqual(rider.readiness);
 
         // Follow the desk guide: look up the existing rider before another action.
         await search.press('Enter');
@@ -69,6 +71,10 @@ for (const mobile of [false, true]) {
         await search.press('Enter');
         await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
         await expect(detail.locator('.ci-bib__number')).toHaveText('101');
+        const final: CheckInList = await (await volunteer.request.get(`/api/events/${eventId}/check-in`)).json();
+        expect(final.riders.find((r) => r.orderId === next.orderId)).toMatchObject({ bib: 101 });
+        expect(final.riders.filter((r) => r.bib === 100).map((r) => r.orderId)).toEqual([rider.orderId]);
+        expect(final.riders.filter((r) => r.bib === 101).map((r) => r.orderId)).toEqual([next.orderId]);
       } finally { await context.close(); }
     });
   }
