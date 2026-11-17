@@ -35,7 +35,7 @@ export function createCancellationAllocations(db: Db, repo: Repo, clock: () => D
         }) }));
         const selected = placed.map((p) => ({ ...p, affected: p.entries.filter(({ race }) => selection.scope === 'event' || (selection.scope === 'day' ? race.dayId === selection.dayId : race.id === selection.raceId)) })).filter((p) => p.affected.length);
         const versions = selected.length ? await repo.getVersions(eventId, selected.map((p) => p.order.published_version)) : new Map<number, EventConfig>();
-        const refunds = selected.length ? await db.all<{ order_id: string }>(`SELECT DISTINCT order_id FROM refunds WHERE order_id = ANY($1)`, [selected.map((p) => p.order.id)]) : [];
+        const refunds = selected.length ? await db.all<{ order_id: string }>(`SELECT DISTINCT order_id FROM refunds WHERE order_id = ANY($1) AND status <> 'failed'`, [selected.map((p) => p.order.id)]) : [];
         const withRefunds = new Set(refunds.map((r) => r.order_id));
         const entries = selected.flatMap(({ order, affected }) => {
           const accepted = versions.get(order.published_version)!;
@@ -49,7 +49,7 @@ export function createCancellationAllocations(db: Db, repo: Repo, clock: () => D
             if (!policy) reviewReasons.push('No structured cancellation policy was accepted.');
             if (policy?.returnAs === 'credit' || policy?.returnAs === 'rider_choice') reviewReasons.push('Credit or rider-choice fulfillment is outside this preview.');
             if (withRefunds.has(order.id)) reviewReasons.push('Refund history exists; reconcile the ledger before returning value.');
-            if (acceptedCategory && (acceptedCategory.raceId !== race.id || acceptedRace?.dayId !== race.dayId)) reviewReasons.push('Published placement differs from the accepted version; review event changes before cancellation.');
+            if (!acceptedCategory || acceptedCategory.raceId !== race.id || acceptedRace?.dayId !== race.dayId) reviewReasons.push('Published placement differs from the accepted version; review event changes before cancellation.');
             return { entryId: entry.id, orderId: order.id, currentCategoryId: category.id, currentRaceId: race.id, currentDayId: race.dayId,
               acceptedVersion: order.published_version, acceptedPriceCategoryId: line.categoryId, acceptedEntryCents: line.totalCents, policy, reviewReasons };
           });

@@ -16,7 +16,8 @@ async function setup() {
     const record = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json();
     change(record.config);
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: record.revision, config: record.config } })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    const published = await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } });
+    expect(published.statusCode, published.body).toBe(200);
     return record.config as EventConfig;
   };
   const config = await edit((c) => { c.registration.platformFeeCents = 123; });
@@ -58,6 +59,8 @@ describe('paid cancellation allocation preview', () => {
     try {
       await db.query(`UPDATE order_entries SET category_id='cat_unknown_placement' WHERE id=$1`, [order.entries[0].id]);
       expect((await s.preview({ scope: 'event' })).statusCode).toBe(409);
+      // Without a current placement, no race scope can safely establish exclusion.
+      expect((await s.preview({ scope: 'race', raceId: s.cat('CR-M35-34').raceId })).statusCode).toBe(409);
       await db.query(`UPDATE order_entries SET category_id=$1 WHERE id=$2`, [order.entries[0].categoryId, order.entries[0].id]);
       await db.query(`UPDATE orders SET quote_json=jsonb_set(quote_json,'{lines}','[]'::jsonb) WHERE id=$1`, [order.id]);
       expect((await s.preview({ scope: 'event' })).statusCode).toBe(409);
@@ -110,6 +113,35 @@ describe('paid cancellation allocation preview', () => {
     expect(plan.requiresFinancialReconciliation).toBe(true);
     expect(plan).not.toHaveProperty('suggestedCashCents');
     expect(await s.get(paid.id)).toEqual(before);
+    const db = new pg.Client({ connectionString: s.databaseUrl }); await db.connect();
+    try { await db.query(`UPDATE refunds SET status='failed' WHERE order_id=$1`, [paid.id]); }
+    finally { await db.end(); }
+    const failedOnly = (await s.preview({ scope: 'event' })).json();
+    expect(failedOnly.entries[0].reviewReasons).not.toContain('Refund history exists; reconcile the ledger before returning value.');
+    expect(failedOnly.requiresFinancialReconciliation).toBe(true);
+  });
+
+  it('flags a published race placement change without changing accepted allocation', async () => {
+    const s = await setup(); const order = await s.order(['RR-M35-34']);
+    await s.edit((c) => {
+      const category = c.categories.find((x) => x.id === s.cat('RR-M35-34').id)!;
+      category.raceId = s.cat('CR-M35-34').raceId;
+      category.startGroupId = s.cat('CR-M35-34').startGroupId;
+    });
+    const result = (await s.preview({ scope: 'race', raceId: s.cat('CR-M35-34').raceId })).json();
+    expect(result.entries[0]).toMatchObject({ acceptedEntryCents: order.quote.entriesTotalCents });
+    expect(result.entries[0].reviewReasons).toContain('Published placement differs from the accepted version; review event changes before cancellation.');
+  });
+
+  it('flags a transfer target added after purchase while retaining the original allocation', async () => {
+    const s = await setup(); const order = await s.order(['RR-M35-34']);
+    const targetId = 'cat_new_allocation_target';
+    await s.edit((c) => { c.categories.push({ ...structuredClone(s.cat('CR-M35-34')), id: targetId, timingCode: 'CR-NEW-ALLOCATION', classifications: [{ code: 'CR-NEW-ALLOCATION', label: 'Fictional added classification' }] }); });
+    const transfer = await s.app.inject({ method: 'POST', url: `/api/order-entries/${order.entries[0].id}/transfer`, payload: { toCategoryId: targetId, reason: 'Fictional new category transfer' } });
+    expect(transfer.statusCode, transfer.body).toBe(200);
+    const result = (await s.preview({ scope: 'race', raceId: s.cat('CR-M35-34').raceId })).json();
+    expect(result.entries[0]).toMatchObject({ currentCategoryId: targetId, acceptedPriceCategoryId: order.entries[0].categoryId, acceptedEntryCents: order.quote.entriesTotalCents });
+    expect(result.entries[0].reviewReasons).toContain('Published placement differs from the accepted version; review event changes before cancellation.');
   });
 
   it.each(['credit', 'rider_choice', null] as const)('keeps accepted cancellation mode %s explicit', async (mode) => {
@@ -129,9 +161,13 @@ describe('paid cancellation allocation preview', () => {
       expect((await s.preview({ scope: 'event' }, as(email))).statusCode).toBe(status);
     }
     expect((await s.preview({ scope: 'event' }, as(RIDER))).statusCode).toBe(404);
+    const outsider = as('other-owner@allocation.test');
+    expect((await s.app.inject({ method: 'POST', url: '/api/organizations', headers: outsider, payload: { name: 'Other Fictional Organization' } })).statusCode).toBe(201);
+    expect((await s.preview({ scope: 'event' }, outsider)).statusCode).toBe(404);
     expect((await s.preview({ scope: 'event' }, { authorization: 'Bearer invalid' })).statusCode).toBe(401);
     expect((await s.preview({ scope: 'day' })).statusCode).toBe(400);
     expect((await s.preview({ scope: 'race', raceId: s.cat('RR-M35-34').raceId, dayId: 'extra' })).statusCode).toBe(400);
     expect((await s.preview({ scope: 'day', dayId: 'day_not_in_this_event' })).statusCode).toBe(422);
+    expect((await s.preview({ scope: 'race', raceId: 'race_not_in_this_event' })).statusCode).toBe(422);
   });
 });
