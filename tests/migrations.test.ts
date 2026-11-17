@@ -150,6 +150,7 @@ describe('migration 28: explicit guardian grant foundation', () => {
       const grant = await db.get(`SELECT junior_profile_id,account_id,granted_by,granted_at,revoked_by,revoked_at FROM junior_guardians`);
       expect(grant).toEqual({ junior_profile_id: 'old_junior', account_id: 'old_parent', granted_by: null, granted_at: '2026-01-02T00:00:00.000Z', revoked_by: null, revoked_at: null });
       expect(await db.all(`SELECT id FROM junior_guardians`)).toHaveLength(1);
+      expect(await db.all(`SELECT id FROM junior_guardian_invitations`)).toEqual([]);
       expect(await db.get(`SELECT account_id,junior_profile_id,status,total_cents,waiver_evidence_json FROM orders WHERE id='old_order'`)).toEqual({ account_id: 'old_parent', junior_profile_id: 'old_junior', status: 'confirmed', total_cents: 3000, waiver_evidence_json: evidence });
       expect(await db.get(`SELECT viewer_email FROM junior_profiles WHERE id='old_junior'`)).toEqual({ viewer_email: 'junior@migration.test' });
       await expect(db.run(`INSERT INTO junior_guardians(id,junior_profile_id,account_id,granted_at) VALUES ('duplicate','old_junior','old_parent',now())`)).rejects.toMatchObject({ code: '23505' });

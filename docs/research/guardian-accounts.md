@@ -1,6 +1,6 @@
 # Guardian and junior accounts: how other platforms do it
 
-Status: Research, November 15, 2026. The owner accepted the model below the same day, with one guardian per junior and an optional junior login to check their registrations. Steps 1 to 3 are implemented in the local build (see [roadmap.md](../../roadmap.md)); the junior login is the read-only viewer email in step 3, and a second guardian, the extra waiver fields in step 4, and the claim at the age of majority in step 5 are Planned.
+Status: Research, November 15, 2026; implementation note updated November 16. One guardian and optional read-only junior viewing exist locally. Explicit initial relationship records and private invitation create/list/replace/cancel APIs are Implemented locally; invitations grant nothing and send no mail. Second-guardian acceptance, removal, configurable-DOB-age claims and their screens remain Planned. Current requirements and approved owner decisions live in [product.md](../../product.md#sign-in-and-account-security); status lives in [roadmap.md](../../roadmap.md).
 
 The question: how should a parent or guardian be linked to a junior rider (under 18) so the guardian can register the junior, sign waivers, and later see and manage the junior's registrations, while no other household can? [product.md](../../product.md#sign-in-and-account-security) requires that "a guardian sees only juniors they are authorized to manage" and that "a rider reaching the applicable age does not silently retain or lose another person's access".
 
@@ -24,12 +24,10 @@ The common pattern: **the junior is a profile under an adult's account, not a se
 
 1. **A junior is a rider profile with no sign-in.** Only adults sign in, each with their own email. This matches RunSignup, ACTIVE, SportsEngine, and NICA, and avoids collecting data directly from children (a legal check is still needed before real minors' data).
 2. **Access is an explicit guardianship record:** guardian account, junior profile, who granted it, when, and when it was revoked. A guardian sees only juniors with an active record and only their registrations. No "household" object is needed; another household has no record and sees nothing.
-3. **A second guardian joins by email invitation**, pending until that person signs in with the invited email (the SportsEngine pattern, and the same mechanism as organizer invitations). Either guardian, or an organizer with a reason, can revoke. This can wait: one guardian per junior is a valid first step.
+3. **A second guardian joins by email invitation**, pending until that person signs in with the invited email and explicitly accepts (the SportsEngine pattern, and the same mechanism as organizer invitations). The approved later lifecycle allows either guardian to remove the other with a reason and acknowledgement. The original organizer-override proposal was rejected by the owner on November 16: disputed access restoration requires product-owner/support review. Private invitation records are implemented; acceptance and access removal remain Planned.
 4. **Waivers** keep signer name and role. Implemented locally November 16, 2026: new acceptance evidence records the accepting account, declared racing age and server timestamp. Racing age is not actual legal age. Legal-age/self-sign policy and real identity/waiver approval remain separate gates; historical evidence is not reconstructed.
 5. **At the age of majority, nothing changes silently.** Guardian access continues until the rider claims their profile with their own email; the claim ends the guardianship records and is recorded. Past registrations and waivers keep the original signer.
 
-## Open questions for the owner
+## Owner decisions and remaining validation
 
-- Accept the profile-plus-guardianship model above, or require every junior to have their own login?
-- One guardian per junior first, or two from the start?
-- Ask BikeReg and USA Cycling membership directly if matching their behaviour matters for the pilot.
+The owner accepted a junior profile with optional read-only viewing, then requested up to two guardians through explicit invitation acceptance. November 16 decisions require DOB calendar age and an explicitly configured minimum for claims, with no default threshold, and product-owner/support-only disputed-access review. These are product decisions, not federation or legal approval. The governing requirements and outstanding real-identity, minor-consent and retention gates remain in [product.md](../../product.md#sign-in-and-account-security). No external outreach has been performed or authorized by this work.
