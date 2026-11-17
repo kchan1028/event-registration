@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { guardianRemovalSchema, type GuardianRelationship, type JuniorProfile } from '../shared/juniors';
 import { api, type ApiError } from './api';
-import { useSession } from './auth';
 import { formatDateTime } from './format';
 import { Field } from './ui';
 import { useLoad } from './useLoad';
 
 /** Current guardians manage invitations and the other guardian without changing purchase evidence. */
 export function GuardianManagement({ junior }: { junior: JuniorProfile }) {
-  const session = useSession();
   const { data, error, setError, reload } = useLoad(() => Promise.all([api.guardianRelationships(junior.id), api.juniorGuardianInvitations(junior.id)]), [junior.id]);
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
@@ -49,14 +47,13 @@ export function GuardianManagement({ junior }: { junior: JuniorProfile }) {
   return <section className="guardian-management" aria-label={`Guardian access for ${junior.firstName} ${junior.lastName}`}>
     <h3>Guardian access</h3>
     <p className="small muted">Up to two guardians can manage this junior. Each uses their own account; a junior’s viewer login stays read-only.</p>
-    <p role="status" tabIndex={-1} ref={status}>{notice}</p>
+    <p role="status" tabIndex={notice ? -1 : undefined} ref={status} className={!notice && (data || error) ? 'sr-only' : undefined}>{notice || (!data && !error ? 'Loading guardian access…' : '')}</p>
     {error && <p className="alert alert--error" role="alert">{error}</p>}
     <button className="btn btn--secondary" type="button" disabled={busy} onClick={refresh}>Refresh guardian access</button>
-    {!data && !error && <p role="status">Loading guardian access…</p>}
     {active && <ul className="orders" aria-label={`Current guardians for ${junior.firstName}`}>
       {active.map((g) => <li key={g.id}>
-        <p>{g.email}{g.email.toLowerCase() === session.email?.toLowerCase() ? ' (you)' : ''}</p>
-        {g.email.toLowerCase() !== session.email?.toLowerCase() && !removing && <button className="btn btn--secondary" type="button" disabled={busy} onClick={() => { setRemoving(g); setReason(''); setReasonError(null); setAcknowledge(false); setNotice(''); }}>Remove guardian access for {g.email}</button>}
+        <p>{g.email}{g.isYou ? ' (you)' : ''}</p>
+        {!g.isYou && !removing && <button className="btn btn--secondary" type="button" disabled={busy} onClick={() => { setRemoving(g); setReason(''); setReasonError(null); setAcknowledge(false); setNotice(''); }}>Remove guardian access for {g.email}</button>}
       </li>)}
     </ul>}
     {removing && <form className="guardian-invitation" onSubmit={remove} aria-label={`Remove guardian access for ${removing.email}`}>

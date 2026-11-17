@@ -542,6 +542,9 @@ describe('explicit guardian removal', () => {
     const { call, url, relationships } = await shared();
     const target = relationships.find((g) => g.email === OTHER_PARENT)!;
     const own = relationships.find((g) => g.email === PARENT)!;
+    const current = (await call(PARENT, 'GET', url)).json();
+    expect(current.find((g: { id: string }) => g.id === own.id).isYou).toBe(true);
+    expect(current.find((g: { id: string }) => g.id === target.id).isYou).toBe(false);
     const payload = { reason: 'End fictional shared access', acknowledge: true };
     for (const body of [{ reason: payload.reason }, { ...payload, acknowledge: false }, { ...payload, reason: '  ' }, { ...payload, reason: '😀😀' }, { ...payload, reason: 'x'.repeat(301) }]) {
       expect((await call(PARENT, 'POST', `${url}/${target.id}/remove`, body)).statusCode).toBe(400);

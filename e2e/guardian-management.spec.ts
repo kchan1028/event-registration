@@ -2,9 +2,9 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import type { EventConfig } from '../src/shared/schema';
 
-// Separate fictional sessions exercise recipient acceptance through the screen and actual local API.
-test('guardians manage invitations and recover an interrupted removal', async ({ page, browser }, testInfo) => {
-  const recoveryAction = 'management';
+// Management uses the screen; a separate fictional guardian accepts through the existing API.
+for (const recovery of ['refresh', 'retry'] as const) test(`guardians manage invitations and recover an interrupted removal by ${recovery}`, async ({ page, browser }, testInfo) => {
+  const recoveryAction = `management-${recovery}`;
   const { eventId } = await (await page.request.post('/api/demo')).json();
   expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
   const { config } = await (await page.request.get(`/api/events/${eventId}`)).json() as { config: EventConfig };
@@ -35,7 +35,11 @@ test('guardians manage invitations and recover an interrupted removal', async ({
       await expect(management.getByRole('status').filter({ hasText: 'Guardian invitation recorded' })).toBeVisible();
       await expect(management.getByRole('button', { name: `Cancel invitation for ${second}` })).toBeVisible();
     };
+    await management.getByLabel('Other guardian’s email', { exact: true }).fill(junior);
+    await management.getByRole('button', { name: 'Record guardian invitation' }).click();
+    await expect(management.getByRole('alert')).toContainText('different guardian email');
     await invite();
+    await expect(management.getByRole('status').filter({ hasText: 'Guardian invitation recorded' })).toBeFocused();
     expect((await guardian.request.get(`/api/orders/${original.id}`, { headers: headers(second) })).status()).toBe(404);
     await management.getByRole('button', { name: `Cancel invitation for ${second}` }).click();
     await expect(management.getByRole('status').filter({ hasText: 'cancelled' })).toBeVisible();
@@ -48,6 +52,10 @@ test('guardians manage invitations and recover an interrupted removal', async ({
     await management.getByRole('button', { name: 'Refresh guardian access' }).click();
     const removeButton = management.getByRole('button', { name: `Remove guardian access for ${second}` });
     await expect(removeButton).toBeVisible();
+    await expect(management.getByRole('button', { name: `Remove guardian access for ${parent}` })).toHaveCount(0);
+    await removeButton.click();
+    await management.getByRole('button', { name: 'Keep guardian access' }).click();
+    await expect(management.getByRole('status').filter({ hasText: 'Guardian access kept' })).toBeFocused();
     await removeButton.click();
     const removal = management.getByRole('form', { name: `Remove guardian access for ${second}` });
     await expect(removal.getByLabel('Reason for removing guardian access', { exact: true })).toBeFocused();
@@ -67,13 +75,16 @@ test('guardians manage invitations and recover an interrupted removal', async ({
       }
       expect((await new AxeBuilder({ page: guardian }).include('[aria-label="Guardian access for Sam Example"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
     }
+    let removalRequests = 0;
     await guardian.route('**/api/rider/juniors/*/guardians/*/remove', async (route) => {
-      expect((await route.fetch()).ok()).toBe(true);
-      await route.abort('failed');
+      removalRequests++;
+      if (removalRequests === 1) { expect((await route.fetch()).ok()).toBe(true); await route.abort('failed'); }
+      else await route.continue();
     });
     await removal.getByRole('button', { name: 'Confirm guardian removal' }).click();
     await expect(management.getByRole('alert')).toContainText('Refresh guardian access');
-    await management.getByRole('button', { name: 'Refresh guardian access' }).click();
+    if (recovery === 'refresh') await management.getByRole('button', { name: 'Refresh guardian access' }).click();
+    else await removal.getByRole('button', { name: 'Confirm guardian removal' }).click();
     await expect(removeButton).toHaveCount(0);
     await expect(removal).toHaveCount(0);
     expect((await page.request.get(`/api/orders/${original.id}`, { headers: headers(second) })).status()).toBe(404);

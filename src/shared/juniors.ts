@@ -56,3 +56,8 @@ export const guardianRemovalSchema = z.object({
   reason: z.string().trim().refine((value) => { const length = Array.from(value).length; return length >= 3 && length <= 300; }, 'Write a reason of 3 to 300 characters for removing guardian access.'),
   acknowledge: z.literal(true),
 });
+
+/** Relationship display identity derived from the authenticated account on the server. */
+export interface GuardianAccess extends GuardianRelationship {
+  isYou: boolean;
+}
