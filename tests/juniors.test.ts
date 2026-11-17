@@ -555,6 +555,19 @@ describe('explicit guardian removal', () => {
     expect((await call(PARENT, 'GET', url)).json().filter((g: { revokedAt: string | null }) => !g.revokedAt)).toHaveLength(2);
   });
 
+  it('uses Unicode character counts for both reason boundaries with actionable validation errors', async () => {
+    const { call, url, relationships } = await shared();
+    const target = relationships.find((g) => g.email === OTHER_PARENT)!;
+    for (const reason of ['😀😀', '😀'.repeat(301)]) {
+      const response = await call(PARENT, 'POST', `${url}/${target.id}/remove`, { reason, acknowledge: true });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().details).toContainEqual({ path: 'reason', message: 'Write a reason of 3 to 300 characters for removing guardian access.' });
+    }
+    const response = await call(PARENT, 'POST', `${url}/${target.id}/remove`, { reason: '😀'.repeat(300), acknowledge: true });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json().find((g: { id: string }) => g.id === target.id).removalReason).toBe('😀'.repeat(300));
+  });
+
   it('serializes competing removals so one guardian always remains', async () => {
     const { call, url, relationships, orderId } = await shared();
     const payload = { reason: 'End fictional shared access', acknowledge: true };

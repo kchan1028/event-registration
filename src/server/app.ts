@@ -460,7 +460,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.get('/api/rider/juniors/:id/guardians', async (req) => juniors.relationships(me(req), idParam.parse(req.params).id));
   app.post('/api/rider/juniors/:id/guardians/:relationshipId/remove', async (req) => {
     const { id, relationshipId } = idParam.extend({ relationshipId: idStr }).parse(req.params);
-    const { reason } = z.object({ reason: z.string().trim().max(300).refine((value) => Array.from(value).length >= 3, 'Write at least three characters explaining why guardian access is being removed.'), acknowledge: z.literal(true) }).parse(req.body);
+    const { reason } = z.object({ reason: z.string().trim().refine((value) => { const length = Array.from(value).length; return length >= 3 && length <= 300; }, 'Write a reason of 3 to 300 characters for removing guardian access.'), acknowledge: z.literal(true) }).parse(req.body);
     return juniors.removeGuardian(me(req), id, relationshipId, reason);
   });
   app.get('/api/rider/juniors/:id/guardian-invitations', async (req) => juniors.invitations(me(req), idParam.parse(req.params).id));
