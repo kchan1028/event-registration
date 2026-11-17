@@ -34,6 +34,8 @@ import { createWaitlist } from './waitlist';
 import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
 import { createMailer, emailFromEnv, type EmailSender } from './email';
 import { createJuniors } from './juniors';
+import { createCancellationAllocations } from './cancellationAllocations';
+import { cancellationSelectionSchema } from '../shared/cancellations';
 import { createProfileClaims, profileClaimSettingsFromEnv, validateProfileClaimSettings, type ProfileClaimSettings } from './profileClaims';
 import { guardianRemovalSchema } from '../shared/juniors';
 import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
@@ -98,6 +100,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const access = createAccess(db, provider, clock, createMailer(db, emailSender, clock), appUrl || (emailSender.mode === 'ses' ? publicAppUrl() : ''));
   const automaticBibs = createAutomaticBibs(db, repo, checkIn, access, clock);
   const refunds = createRefunds(db, paymentProvider, clock, repo);
+  const cancellationAllocations = createCancellationAllocations(db, repo, clock);
   const payments = createPayments(db, orders, paymentProvider, clock, appUrl, refunds.onRefundEvent);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
@@ -501,6 +504,11 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { orderId: id }, { rider: true });
     return payments.startCheckout(id);
+  });
+
+  app.post('/api/events/:id/cancellation-allocation-preview', async (req) => {
+    const { id } = await onEvent(req, 'payments.refund');
+    return cancellationAllocations.preview(id, cancellationSelectionSchema.parse(req.body));
   });
 
   // Refunds: money back to the rider from one payment, optionally for one entry. Owner or finance role.

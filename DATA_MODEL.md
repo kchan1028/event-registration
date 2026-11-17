@@ -360,6 +360,8 @@ One row per category in an order.
 | `withdrawn_at` | When the organizer withdrew the entry |
 | `license_reviewed`, `license_review_note`, `license_reviewed_at` | Organizer's manual license review. Defaults to not reviewed. A withdrawn entry cannot be marked reviewed |
 
+The read-only paid cancellation allocation preview uses `order_entries.category_id` for current published race/day selection, `original_category_id` (or unchanged category) to locate the accepted line in `orders.quote_json`, and `orders.published_version` for the accepted cancellation rules. It selects confirmed entries on confirmed orders, excludes whole-order fees and does not rewrite allocation when only one package component is selected. There is no preview/cancellation/credit row or state mutation from this endpoint; nominal allocation is not a refundable balance.
+
 ### entry_changes
 
 Log of organizer transfers and withdrawals of paid entries (migration 6). The order's price is never changed; money differences are recorded here and settled outside the app while payments are simulated.
