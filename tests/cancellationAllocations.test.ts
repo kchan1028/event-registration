@@ -121,15 +121,18 @@ describe('paid cancellation allocation preview', () => {
     expect(failedOnly.requiresFinancialReconciliation).toBe(true);
   });
 
-  it('flags a published race placement change without changing accepted allocation', async () => {
+  it.each(['race', 'day'] as const)('flags a published %s placement change without changing accepted allocation', async (kind) => {
     const s = await setup(); const order = await s.order(['RR-M35-34']);
+    const targetDay = s.config.races.find((r) => r.id === s.cat('CR-M35-34').raceId)!.dayId;
     await s.edit((c) => {
       const category = c.categories.find((x) => x.id === s.cat('RR-M35-34').id)!;
-      category.raceId = s.cat('CR-M35-34').raceId;
-      category.startGroupId = s.cat('CR-M35-34').startGroupId;
+      if (kind === 'race') {
+        category.raceId = s.cat('CR-M35-34').raceId;
+        category.startGroupId = s.cat('CR-M35-34').startGroupId;
+      } else c.races.find((r) => r.id === category.raceId)!.dayId = targetDay;
     });
-    const result = (await s.preview({ scope: 'race', raceId: s.cat('CR-M35-34').raceId })).json();
-    expect(result.entries[0]).toMatchObject({ acceptedEntryCents: order.quote.entriesTotalCents });
+    const result = (await s.preview({ scope: 'day', dayId: targetDay })).json();
+    expect(result.entries[0]).toMatchObject({ acceptedEntryCents: order.quote.entriesTotalCents, currentDayId: targetDay });
     expect(result.entries[0].reviewReasons).toContain('Published placement differs from the accepted version; review event changes before cancellation.');
   });
 
