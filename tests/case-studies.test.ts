@@ -108,7 +108,7 @@ describe('generated race case studies', () => {
     expect(order.couponCode).toBe('RESET10');
     await ok(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/payment`, payload: { attemptId: 'case-reset-attempt-1', outcome: 'success' } }));
     await ok(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/rider-corrections`, payload: { changes: { team: 'Corrected Wheel Club' }, reason: 'Team name typed wrong' } }));
-    await ok(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/refunds`, payload: { amountCents: 100, reason: 'Goodwill refund' } }));
+    await ok(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/refunds`, payload: { clientRequestId: 'refund-local-case-studies-test-ts', amountCents: 100, reason: 'Goodwill refund' } }));
 
     const reset = await app.inject({ method: 'DELETE', url: '/api/demo/case-studies' });
     await ok(reset);

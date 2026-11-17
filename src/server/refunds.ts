@@ -1,7 +1,7 @@
 import { newId } from '../shared/factory';
 import { formatCents } from '../shared/format';
 import type { Quote } from '../shared/pricing';
-import { refundableCents, refundCanMove, refundRequestSchema, type RefundStatus } from '../shared/refunds';
+import { refundableCents, refundCanMove, refundRequestSchema, type RefundStatus, type RefundRequest } from '../shared/refunds';
 import type { Db } from './db';
 import { paidLine } from './orders';
 import type { PaymentProvider, ProviderEvent, ProviderRefund } from './payments';
@@ -11,11 +11,17 @@ import { HttpError } from './repo';
  * Refunds (ADR 0002, Phase 2). Simulated payments refund at once with no money moved. Stripe
  * test-mode payments are refunded through Stripe: the refund row is saved first (reserving the
  * amount), then Stripe is called with the refund ID as idempotency key, so a retry after a
- * timeout cannot refund twice. Stripe's refund events then move the status on.
+ * timeout reuses the same provider operation within the guarded retry window. Stripe's refund
+ * events then move the status on.
  */
+
+// Stripe API v1 keys are retained at least 24 hours. Stop an hour early so SDK/network
+// retries cannot start close to that boundary; unresolved money then needs reconciliation.
+const REFUND_RETRY_HOURS = 23;
 
 interface RefundRow {
   id: string;
+  request_json: RefundRequest | null;
   order_id: string;
   entry_id: string | null;
   provider: 'simulated' | 'stripe_test';
@@ -105,6 +111,11 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
   async function send(id: string): Promise<void> {
     const r = await db.get<RefundRow>(`SELECT * FROM refunds WHERE id = $1`, [id]);
     if (!r || r.status !== 'requested' || !r.payment_ref) return;
+    if (clock().getTime() - new Date(r.created_at).getTime() >= REFUND_RETRY_HOURS * 60 * 60 * 1000) {
+      const message = `Refund retry window ended after ${REFUND_RETRY_HOURS} hours. Finance must reconcile this request with Stripe before any further reimbursement; do not create a replacement refund.`;
+      await db.run(`UPDATE refunds SET failure_reason = $1, updated_at = $2 WHERE id = $3 AND status = 'requested'`, [message, nowIso(), id]);
+      throw new HttpError(409, message);
+    }
     let result: ProviderRefund;
     try {
       result = await provider.refund({ paymentRef: r.payment_ref, amountCents: r.amount_cents, refundId: r.id, orderId: r.order_id });
@@ -129,6 +140,7 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
       const payments = await paymentsOf(orderId);
       const refunds = (await rowsOf(orderId)).map((r) => ({
         id: r.id,
+        clientRequestId: r.request_json?.clientRequestId ?? null,
         entryId: r.entry_id,
         paymentRef: r.payment_ref,
         provider: r.provider,
@@ -147,6 +159,14 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
       const input = refundRequestSchema.parse(body);
       const id = await db.transaction(async () => {
         await db.lock(`refunds:${orderId}`);
+        const prior = await db.get<{ id: string; same_request: boolean }>(
+          `SELECT id, request_json = $3::jsonb AS same_request FROM refunds WHERE order_id = $1 AND request_json->>'clientRequestId' = $2`,
+          [orderId, input.clientRequestId, JSON.stringify(input)],
+        );
+        if (prior) {
+          if (!prior.same_request) throw new HttpError(409, 'This refund request was already used with different details. Recover the original request before starting another.');
+          return prior.id;
+        }
         const order = await db.get<{ status: string; quote_json: Quote }>(`SELECT status, quote_json FROM orders WHERE id = $1`, [orderId]);
         if (!order) throw new HttpError(404, 'Order not found.');
         const payments = await paymentsOf(orderId);
@@ -169,8 +189,8 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
         const refundId = newId('ref');
         const t = nowIso();
         await db.run(
-          `INSERT INTO refunds (id, order_id, entry_id, provider, payment_ref, amount_cents, reason, status, requested_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)`,
-          [refundId, orderId, input.entryId, pay.provider, pay.ref, input.amountCents, input.reason, pay.provider === 'simulated' ? 'succeeded' : 'requested', accountId, t],
+          `INSERT INTO refunds (id, order_id, entry_id, provider, payment_ref, amount_cents, reason, status, requested_by, created_at, updated_at, request_json) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11)`,
+          [refundId, orderId, input.entryId, pay.provider, pay.ref, input.amountCents, input.reason, pay.provider === 'simulated' ? 'succeeded' : 'requested', accountId, t, JSON.stringify(input)],
         );
         return refundId;
       });

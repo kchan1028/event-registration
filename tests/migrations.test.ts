@@ -101,3 +101,27 @@ describe('migration 26: server-recorded waiver evidence', () => {
     } finally { await db.close(); }
   });
 });
+
+
+describe('migration 27: recoverable refund creation', () => {
+  it('preserves historical money without inventing a client request', async () => {
+    const url = await testDatabaseUrl({ empty: true });
+    const client = new pg.Client({ connectionString: url }); await client.connect();
+    try {
+      await client.query(`CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
+      for (let v = 0; v < 26; v++) {
+        await client.query(MIGRATIONS[v]);
+        await client.query(`INSERT INTO schema_migrations(version) VALUES ($1)`, [v + 1]);
+      }
+      await client.query(`INSERT INTO organizations(id,name,created_at) VALUES ('old_org','Fictional migration club','2026-01-01Z')`);
+      await client.query(`INSERT INTO events(id,organization_id,draft_json,revision,created_at,updated_at) VALUES ('old_event','old_org','{}',1,'2026-01-01Z','2026-01-01Z')`);
+      await client.query(`INSERT INTO orders(id,event_id,published_version,client_request_id,status,rider_json,waiver_json,quote_json,total_cents,hold_expires_at,created_at,updated_at) VALUES ('old_order','old_event',1,'old_request','confirmed','{}','{}','{}',1000,'2026-01-01Z','2026-01-01Z','2026-01-01Z')`);
+      await client.query(`INSERT INTO refunds(id,order_id,provider,amount_cents,reason,status,created_at,updated_at) VALUES ('old_refund','old_order','simulated',100,'Fictional old refund','succeeded','2026-01-01Z','2026-01-01Z')`);
+    } finally { await client.end(); }
+    const db = openDb(url);
+    try {
+      await db.migrate(); await db.migrate();
+      expect(await db.get(`SELECT amount_cents, status, request_json FROM refunds WHERE id = 'old_refund'`)).toEqual({ amount_cents: 100, status: 'succeeded', request_json: null });
+    } finally { await db.close(); }
+  });
+});

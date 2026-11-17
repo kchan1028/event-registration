@@ -410,7 +410,7 @@ Acceptance: allocate a full confirmed field in stable order, repeat without chan
 - A Stripe payment confirms an order only if it comes from a session the app opened for that order and matches the order total exactly. A mismatch, a payment after the rider cancelled, or a late payment for places no longer free goes to the organizer's exception queue. A second paid session for one order is recorded as a duplicate charge for refund and never creates a second entry.
 - Establish who collects funds, who is merchant of record, who handles payouts, and who bears disputes before taking live payments.
 - Record order totals, line items, discounts, processing/platform fees, refunds, and settlement references.
-- Support partial refunds against specific entries with an explicit effect on capacity and bundle pricing.
+- Support partial refunds against specific entries with an explicit effect on capacity and bundle pricing. New refund creation uses a stable client request ID: identical replay reuses the saved refund, while changed payment/entry/amount/reason is refused. The finance screen retains an unresolved original request in the current tab (account/order scoped) for lookup or exact retry; ordinary submission progress is distinct from an unknown response. Historical evidence is not reconstructed. Existing permission and payment/entry caps still apply. Implemented locally; verification belongs to the focused refund-recovery PR. Provider-unknown requests remain reserved and need reconciliation before alternative reimbursement.
 - Export a reconciliation report that a treasurer can match to provider statements.
 
 ### Communications

@@ -68,7 +68,7 @@ describe('protected bib reassignment', () => {
     const { app, db, eventId, alex, before, list } = await setup();
     type Order = { status: string; entries: { id: string; status: string }[]; refunds: unknown[] };
     const original = (await app.inject({ method: 'GET', url: `/api/orders/${alex}` })).json() as Order;
-    expect((await app.inject({ method: 'POST', url: `/api/orders/${alex}/refunds`, payload: { amountCents: 100, reason: 'Demo rider refund' } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: `/api/orders/${alex}/refunds`, payload: { clientRequestId: 'refund-local-bib-reassignment-test-ts', amountCents: 100, reason: 'Demo rider refund' } })).statusCode).toBe(200);
     for (const e of original.entries) expect((await app.inject({ method: 'POST', url: `/api/order-entries/${e.id}/withdraw`, payload: { reason: 'Demo rider withdrew' } })).statusCode).toBe(200);
     const state = (await app.inject({ method: 'GET', url: `/api/orders/${alex}` })).json() as Order;
     // Preserve a cancelled historical order with an issued bib as well as the normal withdrawn-entry case.

@@ -964,6 +964,7 @@ fieldset {
 }
 .topbar__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
 }
 .save {

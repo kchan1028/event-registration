@@ -288,7 +288,7 @@ describe('Stripe hosted Checkout (test mode)', () => {
     await checkout(o.id);
     await webhook('evt_test_first', 'checkout.session.completed', paidSession(o, 'cs_test_1'));
     await webhook('evt_test_second', 'checkout.session.completed', paidSession(o, 'cs_test_2', { payment_intent: 'pi_test_2' }));
-    const refunded = await app.inject({ method: 'POST', url: `/api/orders/${o.id}/refunds`, payload: { amountCents: o.totalCents, reason: 'Charged twice', paymentRef: 'pi_test_2' } });
+    const refunded = await app.inject({ method: 'POST', url: `/api/orders/${o.id}/refunds`, payload: { clientRequestId: 'refund-local-payments-test-ts', amountCents: o.totalCents, reason: 'Charged twice', paymentRef: 'pi_test_2' } });
     expect(refunded.statusCode).toBe(200);
     expect(((await get(o.id)) as unknown as { refunds: { duplicateCharge: boolean }[] }).refunds).toMatchObject([{ duplicateCharge: true }]);
   });

@@ -214,3 +214,12 @@ Shared bibs must fit the overlap of every applicable entry range across their co
 To correct an issued bib after refund, withdrawal, or cancellation, search by rider name, bib, or check-in code. Inactive riders appear only if they still hold an active bib in the selected collision scope. Use **Change bib**, enter a reason, acknowledge a checked-in change, preview, and apply. Payment, refund, entry, readiness, and check-in states remain unchanged. These owner decisions resolve the questions in [issues #95 and #97](../../product.md#automatic-and-bulk-bib-assignment).
 
 Review follow-up (November 15, 2026; owner: unassigned; [issue #98](https://github.com/kchan1028/event-registration/issues/98)): should a replacement draft remain when a rider is unticked? Provisional behavior retains the draft but never sends it for an unticked rider. Other protected changes can proceed. Revisit when picking up #98; do not change draft retention without the owner’s decision. The region-name and whitespace findings from that issue are corrected.
+
+
+### Unresolved refund recovery
+
+The finance refund panel distinguishes an ordinary in-flight submission from an unconfirmed response. If interrupted, use **Check refund status** or **Retry original refund**. The exact original request stays in this tab, scoped to signed-in email/order. If browser storage is blocked, keep the page open; refresh recovery is not guaranteed. A refund never withdraws an entry.
+
+Unresolved provider requests stop sending after 23 hours from creation, reserving a one-hour margin before Stripe API v1 may prune its key. Money remains reserved. Finance must inspect the original provider operation/events and reconcile before any alternative reimbursement; do not create a replacement request blindly. Late signed updates still apply. An operator reconciliation/override tool is not implemented; real-provider and support acceptance remain launch gates.
+
+Primary sources checked November 16, 2026: [Stripe idempotent requests](https://docs.stripe.com/api/idempotent_requests) and [low-level error handling](https://docs.stripe.com/error-low-level). API v1 keys are retained at least 24 hours, can then be removed, and reuse after removal can execute a new operation. Tests make no real refunds.

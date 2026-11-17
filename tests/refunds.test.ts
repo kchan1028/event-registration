@@ -4,7 +4,7 @@ import { stripePayments } from '../src/server/payments';
 import { refundableCents, refundCanMove } from '../src/shared/refunds';
 import { can } from '../src/shared/roles';
 import type { EventConfig } from '../src/shared/schema';
-import { as } from './support/auth';
+import { as, DEFAULT_TEST_ORGANIZER } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
 
 /* Refunds (product.md "Money and reporting"; ADR 0002). Stripe calls are stubbed; webhooks are signed locally. */
@@ -25,7 +25,7 @@ async function setup(opts: { stripe?: boolean } = {}) {
   const { app } = await testApp({ databaseUrl: await testDatabaseUrl(), now: () => now, payments, appUrl: 'http://app.test' });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
-  const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
+  const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; organizationId: string };
   const code = (c: string) => event.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
   const order = async (codes: string[]) =>
@@ -40,9 +40,9 @@ async function setup(opts: { stripe?: boolean } = {}) {
     return webhook(`evt_paid_${o.id}`, 'checkout.session.completed', { object: 'checkout.session', id: 'cs_test_1', amount_total: o.totalCents, currency: 'usd', payment_status: 'paid', payment_intent: 'pi_test_1', metadata: { order_id: o.id } });
   };
   const paySimulated = (id: string) => app.inject({ method: 'POST', url: `/api/orders/${id}/payment`, payload: { attemptId: `att-${id}-ok`, outcome: 'success' } });
-  const refund = (orderId: string, body: Record<string, unknown>, headers: Record<string, string> = {}) => app.inject({ method: 'POST', url: `/api/orders/${orderId}/refunds`, payload: body, headers });
+  const refund = (orderId: string, body: Record<string, unknown>, headers: Record<string, string> = {}) => app.inject({ method: 'POST', url: `/api/orders/${orderId}/refunds`, payload: { clientRequestId: crypto.randomUUID(), ...body }, headers });
   const list = async (orderId: string) => (await app.inject({ method: 'GET', url: `/api/orders/${orderId}/refunds` })).json() as RefundList;
-  return { app, order, payStripe, paySimulated, refund, list, refundCall, webhook };
+  return { app, order, payStripe, paySimulated, refund, list, refundCall, webhook, now, organizationId: event.organizationId };
 }
 
 describe('refund rules (shared)', () => {
@@ -107,4 +107,84 @@ describe('refunds', () => {
     expect((await app.inject({ method: 'POST', url: `/api/refunds/${l.refunds[0].id}/retry` })).statusCode).toBe(200);
     expect(refundCall.mock.calls.map((c) => (c[1] as Stripe.RequestOptions).idempotencyKey)).toEqual([`refund-${l.refunds[0].id}`, `refund-${l.refunds[0].id}`]);
   });
+});
+
+
+describe('refund request recovery', () => {
+  it('requires a request key, replays a lost response, and rejects changed payloads without another refund', async () => {
+    const { app, order, paySimulated, refund, list } = await setup();
+    const o = await order(['RR-M35-34']); await paySimulated(o.id);
+    expect((await app.inject({ method: 'POST', url: `/api/orders/${o.id}/refunds`, payload: { amountCents: 100, reason: 'Missing request key' } })).statusCode).toBe(400);
+    const body = { clientRequestId: 'refund-lost-response', amountCents: 100, entryId: o.entries[0].id, reason: 'Fictional partial refund' };
+    expect((await refund(o.id, body)).statusCode).toBe(200); // response deliberately discarded
+    const replay = await refund(o.id, body);
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json().refunds).toHaveLength(1);
+    for (const change of [{ amountCents: 101 }, { reason: 'Different reason' }, { entryId: null }, { paymentRef: 'other-payment' }])
+      expect((await refund(o.id, { ...body, ...change })).statusCode).toBe(409);
+    expect((await list(o.id)).refunds).toHaveLength(1);
+    expect((await refund(o.id, { ...body, clientRequestId: 'refund-legitimate-second' })).statusCode).toBe(200);
+    expect((await list(o.id)).refunds).toHaveLength(2);
+    expect((await refund(o.id, body, as('stranger@example.test'))).statusCode).toBe(404);
+  });
+
+  it('serializes simultaneous creation of the same request across pooled transactions', async () => {
+    const { app, order, paySimulated, list } = await setup();
+    const o = await order(['RR-M35-34']); await paySimulated(o.id);
+    // Same app has separate pooled transactions; both requests compete for the order lock.
+    const payload = { clientRequestId: 'refund-concurrent-create', amountCents: 100, reason: 'Fictional concurrent refund' };
+    const results = await Promise.all([1,2].map(() => app.inject({ method: 'POST', url: `/api/orders/${o.id}/refunds`, payload })));
+    expect(results.map((r) => r.statusCode)).toEqual([200,200]);
+    expect((await list(o.id)).refunds).toHaveLength(1);
+  });
+
+  it('replays a partial Stripe request after an uncertain result using the original provider key', async () => {
+    const { order, payStripe, refund, refundCall, list } = await setup({ stripe: true });
+    const o = await order(['RR-M35-34']); await payStripe(o);
+    const body = { clientRequestId: 'refund-provider-uncertain', amountCents: 100, reason: 'Fictional timeout recovery' };
+    refundCall.mockRejectedValueOnce(new Error('Request timed out'));
+    expect((await refund(o.id, body)).statusCode).toBe(502);
+    expect((await refund(o.id, body)).statusCode).toBe(200);
+    expect((await refund(o.id, body)).statusCode).toBe(200);
+    const saved = await list(o.id);
+    expect(saved.refunds).toHaveLength(1);
+    expect(refundCall).toHaveBeenCalledTimes(2);
+    expect(refundCall.mock.calls.map((c) => (c[1] as Stripe.RequestOptions).idempotencyKey)).toEqual([`refund-${saved.refunds[0].id}`, `refund-${saved.refunds[0].id}`]);
+  });
+});
+
+
+it('stops unresolved Stripe retries before key retention expires, preserving the reserve and late webhook recovery', async () => {
+  const { app, order, payStripe, refund, list, refundCall, webhook, now } = await setup({ stripe: true });
+  const o = await order(['RR-M35-34']); await payStripe(o);
+  const body = { clientRequestId: 'refund-old-uncertain', amountCents: 100, reason: 'Fictional old uncertain refund' };
+  refundCall.mockRejectedValue(new Error('Unknown provider response'));
+  expect((await refund(o.id, body)).statusCode).toBe(502);
+  now.setTime(now.getTime() + (23 * 60 - 1) * 60_000);
+  expect((await refund(o.id, body)).statusCode).toBe(502);
+  now.setTime(now.getTime() + 60_000);
+  const id = (await list(o.id)).refunds[0].id;
+  expect((await refund(o.id, body)).statusCode).toBe(409);
+  expect((await app.inject({ method: 'POST', url: `/api/refunds/${id}/retry` })).statusCode).toBe(409);
+  expect(refundCall).toHaveBeenCalledTimes(2);
+  expect((await list(o.id)).refunds).toMatchObject([{ id, status: 'requested', failureReason: expect.stringContaining('reconcile') }]);
+  const result = await webhook('evt_old_refund_recovery', 'refund.updated', { object: 'refund', id: 're_old_recovered', amount: 100, currency: 'usd', status: 'succeeded', metadata: { refund_id: id } });
+  expect(result.json()).toMatchObject({ result: 'refund_succeeded' });
+  expect((await list(o.id)).refunds).toMatchObject([{ id, status: 'succeeded' }]);
+});
+
+
+it('allows a different finance actor to replay without changing the original requester, and denies registration managers', async () => {
+  const s = await setup(); const o = await s.order(['RR-M35-34']); await s.paySimulated(o.id);
+  const body = { clientRequestId: 'refund-authorized-replay', amountCents: 100, reason: 'Fictional original finance request' };
+  expect((await s.refund(o.id,body)).statusCode).toBe(200);
+  for (const [email,role] of [['finance@refund.test','finance'],['manager@refund.test','registration_manager']]) {
+    expect((await s.app.inject({ method: 'POST',url: `/api/organizations/${s.organizationId}/members`,payload: { email,role } })).statusCode).toBe(200);
+    expect((await s.app.inject({ method: 'GET',url: '/api/me',headers: as(email) })).statusCode).toBe(200);
+  }
+  expect((await s.refund(o.id,body,as('finance@refund.test'))).statusCode).toBe(200);
+  expect((await s.refund(o.id,body,as('manager@refund.test'))).statusCode).toBe(403);
+  const saved = (await s.app.inject({ method: 'GET',url: `/api/orders/${o.id}/refunds`,headers: as('finance@refund.test') })).json();
+  expect(saved.refunds).toHaveLength(1);
+  expect(saved.refunds[0]).toMatchObject({ amountCents: 100,requestedBy: DEFAULT_TEST_ORGANIZER });
 });

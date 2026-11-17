@@ -548,6 +548,9 @@ export const MIGRATIONS: string[] = [
   -- Server-recorded acceptance evidence; historical rows stay unknown rather than reconstructed.
   ALTER TABLE orders ADD COLUMN waiver_evidence_json jsonb;
   `,
+  // 27: stable creation request evidence, with no inferred historical identity.
+  `ALTER TABLE refunds ADD COLUMN request_json jsonb;
+   CREATE UNIQUE INDEX refunds_request ON refunds(order_id, (request_json->>'clientRequestId')) WHERE request_json IS NOT NULL;`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
