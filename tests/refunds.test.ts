@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { stripePayments } from '../src/server/payments';
 import { refundableCents, refundCanMove } from '../src/shared/refunds';
 import { can } from '../src/shared/roles';
+import { REFUND_TEMPLATES } from '../src/shared/refundPolicy';
 import type { EventConfig } from '../src/shared/schema';
 import { as, DEFAULT_TEST_ORGANIZER } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
@@ -42,7 +43,7 @@ async function setup(opts: { stripe?: boolean } = {}) {
   const paySimulated = (id: string) => app.inject({ method: 'POST', url: `/api/orders/${id}/payment`, payload: { attemptId: `att-${id}-ok`, outcome: 'success' } });
   const refund = (orderId: string, body: Record<string, unknown>, headers: Record<string, string> = {}) => app.inject({ method: 'POST', url: `/api/orders/${orderId}/refunds`, payload: { clientRequestId: crypto.randomUUID(), ...body }, headers });
   const list = async (orderId: string) => (await app.inject({ method: 'GET', url: `/api/orders/${orderId}/refunds` })).json() as RefundList;
-  return { app, order, payStripe, paySimulated, refund, list, refundCall, webhook, now, organizationId: event.organizationId };
+  return { app, order, payStripe, paySimulated, refund, list, refundCall, webhook, now, eventId, organizationId: event.organizationId };
 }
 
 describe('refund rules (shared)', () => {
@@ -57,6 +58,85 @@ describe('refund rules (shared)', () => {
   it('owners and finance may refund; registration managers may not', () => {
     expect(can(['finance'], 'payments.refund')).toBe(true);
     expect(can(['registration_manager'], 'payments.refund')).toBe(false);
+  });
+});
+
+describe('whole-order policy preview', () => {
+  it('uses the paid bundle allocation and frozen policy without changing entries, evidence or money', async () => {
+    const s = await setup();
+    const o = await s.order(['RR-M35-34', 'CR-M35-34']);
+    await s.paySimulated(o.id);
+    const get = async () => (await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}` })).json();
+    const before = await get();
+    const event = (await s.app.inject({ method: 'GET', url: `/api/events/${before.eventId}` })).json();
+    event.config.registration.refundRules = REFUND_TEMPLATES.credit_only.rules;
+    expect((await s.app.inject({ method: 'PUT', url: `/api/events/${before.eventId}/config`, payload: { revision: event.revision, config: event.config } })).statusCode).toBe(200);
+    expect((await s.app.inject({ method: 'POST', url: `/api/events/${before.eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    for (const reason of ['withdrawal', 'organizer_cancellation']) {
+      const res = await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}/refund-policy-preview?reason=${reason}` });
+      expect(res.statusCode).toBe(200);
+      const p = res.json();
+      expect(p).toMatchObject({ publishedVersion: before.publishedVersion, scope: 'whole_order', reason, entitlement: { returnAs: 'cash', percent: 100 }, reviewReasons: [] });
+      expect(p.entryCents).toBe(before.quote.entriesTotalCents);
+      expect(p.suggestedCashCents).toBe(before.quote.entriesTotalCents);
+      expect(p.excludedFeesCents).toBe(before.totalCents - before.quote.entriesTotalCents);
+    }
+    expect(await get()).toEqual(before);
+    expect((await s.list(o.id)).refunds).toEqual([]);
+    expect(s.refundCall).not.toHaveBeenCalled();
+  });
+
+  it('requires reconciliation for an unpaid order or an existing refund', async () => {
+    const s = await setup(); const o = await s.order(['RR-M35-34']);
+    const preview = async () => (await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}/refund-policy-preview?reason=withdrawal` })).json();
+    expect((await preview()).suggestedCashCents).toBeNull();
+    await s.paySimulated(o.id);
+    expect((await preview()).suggestedCashCents).toBeGreaterThan(0);
+    expect((await s.refund(o.id, { amountCents: 100, reason: 'Fictional partial refund' })).statusCode).toBe(200);
+    expect(await preview()).toMatchObject({ suggestedCashCents: null, reviewReasons: expect.arrayContaining([expect.stringContaining('Existing refunds')]) });
+  });
+
+  it.each(['credit', 'rider_choice', null] as const)('does not suggest cash for cancellation policy %s', async (mode) => {
+    const s = await setup();
+    const eventId = s.eventId;
+    const event = (await s.app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json();
+    event.config.registration.refundRules = mode === null ? null : { ...REFUND_TEMPLATES.tiered.rules, organizerCancellation: mode };
+    expect((await s.app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config: event.config } })).statusCode).toBe(200);
+    await s.app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    const o = await s.order(['RR-M35-34']); await s.paySimulated(o.id);
+    const res = await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}/refund-policy-preview?reason=organizer_cancellation` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().suggestedCashCents).toBeNull();
+    expect(res.json().entitlement?.returnAs ?? null).toBe(mode);
+    expect(res.json().reviewReasons).not.toEqual([]);
+  });
+
+  it('uses the accepted event time zone for the inclusive deadline', async () => {
+    const s = await setup(); const o = await s.order(['RR-M35-34']); await s.paySimulated(o.id);
+    const before = (await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}` })).json();
+    const event = (await s.app.inject({ method: 'GET', url: `/api/events/${before.eventId}` })).json();
+    expect(event.config.event.timeZone).toBe('America/Los_Angeles');
+    const firstDay = event.config.days.map((d: { date: string }) => d.date).sort()[0];
+    const deadline = new Date(`${firstDay}T00:00:00Z`); deadline.setUTCDate(deadline.getUTCDate() - event.config.registration.refundRules.tiers[0].daysBefore);
+    // The UTC date has advanced, but the accepted event is still on its deadline until 07:00Z (PDT).
+    deadline.setUTCDate(deadline.getUTCDate() + 1); deadline.setUTCHours(6, 59, 59);
+    s.now.setTime(deadline.getTime());
+    const preview = async () => (await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}/refund-policy-preview?reason=withdrawal` })).json();
+    expect((await preview()).entitlement.percent).toBe(100);
+    s.now.setTime(deadline.getTime() + 1000);
+    expect((await preview()).entitlement.percent).toBe(0);
+  });
+
+  it('permits finance but denies other roles and another household; requires explicit scenario', async () => {
+    const s = await setup(); const o = await s.order(['RR-M35-34']); await s.paySimulated(o.id);
+    for (const [email, role, status] of [['finance@preview.test', 'finance', 200], ['manager@preview.test', 'registration_manager', 403]] as const) {
+      await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members`, payload: { email, role } });
+      const res = await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}/refund-policy-preview?reason=withdrawal`, headers: as(email) });
+      expect(res.statusCode).toBe(status);
+    }
+    expect((await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}/refund-policy-preview?reason=withdrawal`, headers: as('outsider@preview.test') })).statusCode).toBe(404);
+    expect((await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}/refund-policy-preview` })).statusCode).toBe(400);
+    expect((await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}/refund-policy-preview?reason=withdrawal`, headers: { authorization: 'Bearer invalid' } })).statusCode).toBe(401);
   });
 });
 

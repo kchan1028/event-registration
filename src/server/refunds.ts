@@ -1,11 +1,12 @@
 import { newId } from '../shared/factory';
 import { formatCents } from '../shared/format';
-import type { Quote } from '../shared/pricing';
+import { todayIn, type Quote } from '../shared/pricing';
+import { refundPolicyEntitlement } from '../shared/refundPolicy';
 import { refundableCents, refundCanMove, refundRequestSchema, type RefundStatus, type RefundRequest, type RefundRequestResult } from '../shared/refunds';
 import type { Db } from './db';
 import { paidLine } from './orders';
 import type { PaymentProvider, ProviderEvent, ProviderRefund } from './payments';
-import { HttpError } from './repo';
+import { HttpError, type Repo } from './repo';
 
 /**
  * Refunds (ADR 0002, Phase 2). Simulated payments refund at once with no money moved. Stripe
@@ -46,7 +47,7 @@ interface RefundablePayment {
   remainingCents: number;
 }
 
-export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Date) {
+export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Date, repo: Repo) {
   const nowIso = () => clock().toISOString();
   const rowsOf = (orderId: string) =>
     db.all<RefundRow>(
@@ -135,6 +136,36 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
   }
 
   return {
+    /** Read-only whole-order policy preview. It neither reserves a refund nor authorizes a payment. */
+    async policyPreview(orderId: string, reason: 'withdrawal' | 'organizer_cancellation') {
+      return db.transaction(async () => {
+        await db.lock(`refunds:${orderId}`);
+        const order = await db.get<{ event_id: string; published_version: number; status: string; quote_json: Quote }>(
+          `SELECT event_id,published_version,status,quote_json FROM orders WHERE id = $1`, [orderId],
+        );
+        if (!order) throw new HttpError(404, 'Order not found.');
+        const config = await repo.getVersion(order.event_id, order.published_version);
+        const onDate = todayIn(config.event.timeZone, clock());
+        const entryCents = order.quote_json.lines.reduce((sum, line) => sum + line.totalCents, 0);
+        const entitlement = refundPolicyEntitlement(config.registration.refundRules, config.days.map((d) => d.date).sort()[0], onDate, entryCents, reason);
+        const payments = await paymentsOf(orderId);
+        const refunds = await rowsOf(orderId);
+        const reviewReasons: string[] = [];
+        if (!entitlement) reviewReasons.push('No structured refund policy was accepted with this order.');
+        if (entitlement && entitlement.returnAs !== 'cash') reviewReasons.push('Credit issuance and rider choice require an external process; no cash amount is suggested.');
+        if (order.status !== 'confirmed') reviewReasons.push('The order is not confirmed; reconcile its entry and payment state first.');
+        if (payments.length !== 1 || payments[0]?.kind !== 'order') reviewReasons.push('Reconcile missing or multiple payments before applying the policy.');
+        if (refunds.some((r) => r.status !== 'failed')) reviewReasons.push('Existing refunds require allocation and reconciliation before another policy amount can be suggested.');
+        const cashCents = entitlement?.returnAs === 'cash' ? entitlement.amountCents : null;
+        if (cashCents !== null && payments.length === 1 && cashCents > payments[0].remainingCents) reviewReasons.push('The policy amount exceeds the remaining payment; reconcile it first.');
+        return {
+          orderId, publishedVersion: order.published_version, reason, onDate, timeZone: config.event.timeZone,
+          entryCents, excludedFeesCents: order.quote_json.fees.reduce((sum, fee) => sum + fee.cents, 0),
+          entitlement, reviewReasons, suggestedCashCents: reviewReasons.length ? null : cashCents,
+          scope: 'whole_order' as const,
+        };
+      });
+    },
     /** Payments and refunds for the organizer's refund panel, with who asked for each refund. */
     async list(orderId: string) {
       const payments = await paymentsOf(orderId);

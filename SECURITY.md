@@ -10,6 +10,8 @@ The signed-in recipient reads only their own latest expiry notices through `/api
 
 ## Refund request recovery (Implemented locally)
 
+The read-only whole-order refund-policy preview requires the same owner/finance `payments.refund` permission as refund creation. It reads the accepted event version and payment/refund state under the per-order refund lock. It reserves nothing, calls no provider and grants no authority to refund; creation still rechecks its existing caps. Rider/guardian status alone does not authorize this preview.
+
 New refund POSTs require a client request ID. The existing per-order refund lock and a database uniqueness index preserve one accepted normalized request; identical replay reuses the saved row before cap checks, while changed details are refused. Existing owner/finance authorization applies before replay, and the original requester is preserved. Different deliberate request IDs remain subject to payment/entry caps; this is not cross-device duplicate-intent detection.
 
 Unresolved requests are retained in session storage scoped to signed-in email/order; no card data is stored. Storage includes the organizer reason and financial references, so real-data retention remains a gate. Blocked storage gives in-memory recovery only. New refunds are unavailable while this tab's result is unresolved; loss of refund permission keeps read-only guidance. Provider-unknown refunds stop being sent 23 hours after creation, leaving a margin before Stripe API v1 may prune its key; the amount stays reserved and late signed updates can still resolve it. Finance must reconcile before another reimbursement. No automatic replacement refund, support override or real payment is added.

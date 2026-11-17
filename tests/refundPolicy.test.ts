@@ -1,10 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { describeRefundRules, refundPolicyLines, REFUND_TEMPLATES } from '../src/shared/refundPolicy';
+import { describeRefundRules, refundPolicyLines, refundPolicyEntitlement, REFUND_TEMPLATES } from '../src/shared/refundPolicy';
 import type { EventConfig } from '../src/shared/schema';
 import { validateConfig } from '../src/shared/validation';
 import { testApp } from './support/db';
 
 // Refund and credit rules set by the organizer from templates (product.md "Event and race cancellation").
+
+describe('nominal refund policy amounts', () => {
+  it.each([['2027-03-25', 100, 1001], ['2027-03-26', 50, 501], ['2027-04-17', 50, 501], ['2027-04-18', 0, 0]])('uses inclusive tier deadlines on %s', (date, percent, amountCents) => {
+    expect(refundPolicyEntitlement(REFUND_TEMPLATES.tiered.rules, '2027-04-24', date, 1001, 'withdrawal')).toEqual({ returnAs: 'cash', percent, amountCents });
+  });
+  it('keeps cancellation separate from withdrawal deadlines and never combines cash with credit', () => {
+    for (const [organizerCancellation, returnAs] of [['full_refund', 'cash'], ['credit', 'credit'], ['rider_choice', 'rider_choice']] as const) {
+      expect(refundPolicyEntitlement({ ...REFUND_TEMPLATES.tiered.rules, organizerCancellation }, '2027-04-24', '2027-05-01', 1001, 'organizer_cancellation')).toEqual({ returnAs, percent: 100, amountCents: 1001 });
+    }
+    expect(refundPolicyEntitlement(null, '2027-04-24', '2027-03-01', 1001, 'withdrawal')).toBeNull();
+    expect(refundPolicyEntitlement(REFUND_TEMPLATES.credit_only.rules, '2027-04-24', '2027-04-24', 1001, 'withdrawal')).toEqual({ returnAs: 'credit', percent: 100, amountCents: 1001 });
+  });
+});
 
 describe('refund rule templates', () => {
   it('describe the tiered template with dates counted back from the first race day', () => {
