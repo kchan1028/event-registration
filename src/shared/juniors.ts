@@ -35,3 +35,16 @@ export interface RegistrationAccess {
   placedByYou: boolean;
   canManage: boolean;
 }
+
+/** Private relationship history visible only to a current guardian. */
+export interface GuardianRelationship {
+  id: string;
+  accountId: string;
+  email: string;
+  grantedBy: string | null;
+  grantedAt: string;
+  revokedBy: string | null;
+  revokedAt: string | null;
+  removalReason: string | null;
+  removalAcknowledgedAt: string | null;
+}

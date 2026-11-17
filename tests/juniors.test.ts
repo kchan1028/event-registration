@@ -490,3 +490,90 @@ it('serializes guardian acceptance against cancellation without a partial grant'
     else { expect(history.status).toBe('cancelled'); expect(accept.statusCode).toBe(409); expect(history.acceptedAt).toBeNull(); expect(count).toBe(1); }
   } finally { await client.end(); }
 });
+
+
+describe('explicit guardian removal', () => {
+  async function shared() {
+    const context = await setup();
+    const orderId = await context.registerJunior(PARENT, 'Sam');
+    const [profile] = (await context.call(PARENT, 'GET', '/api/rider/juniors')).json();
+    await context.call(PARENT, 'POST', `/api/rider/juniors/${profile.id}/viewer`, { email: JUNIOR });
+    const [invitation] = (await context.call(PARENT, 'POST', `/api/rider/juniors/${profile.id}/guardian-invitations`, { email: OTHER_PARENT })).json();
+    expect((await context.call(OTHER_PARENT, 'POST', `/api/rider/guardian-invitations/${invitation.id}/accept`, { acknowledge: true })).statusCode).toBe(200);
+    const url = `/api/rider/juniors/${profile.id}/guardians`;
+    const relationships = (await context.call(PARENT, 'GET', url)).json() as { id: string; email: string }[];
+    return { ...context, orderId, profile, invitation, url, relationships };
+  }
+
+  it.each([PARENT, OTHER_PARENT])('lets %s remove the other guardian while retaining original order evidence', async (remaining) => {
+    const { call, orderId, url, relationships, invitation, eventId, databaseUrl } = await shared();
+    const removed = remaining === PARENT ? OTHER_PARENT : PARENT;
+    const target = relationships.find((g) => g.email === removed)!;
+    const endpoint = `${url}/${target.id}/remove`;
+    const payload = { reason: 'End fictional shared access', acknowledge: true };
+    const original = (await call(remaining, 'GET', `/api/orders/${orderId}`)).json();
+    const result = await call(remaining, 'POST', endpoint, payload);
+    expect(result.statusCode, result.body).toBe(200);
+    const record = result.json().find((g: { id: string }) => g.id === target.id);
+    expect(record).toMatchObject({ removalReason: payload.reason, revokedBy: (await call(remaining, 'GET', '/api/me')).json().account.id });
+    expect(record.removalAcknowledgedAt).toBe(record.revokedAt);
+    expect((await call(remaining, 'POST', endpoint, payload)).json()).toEqual(result.json());
+    expect((await call(remaining, 'POST', endpoint, { ...payload, reason: 'Different removal reason' })).statusCode).toBe(409);
+    expect((await call(remaining, 'GET', `/api/orders/${orderId}`)).json()).toEqual(original);
+    expect((await call(removed, 'GET', `/api/orders/${orderId}`)).statusCode).toBe(404);
+    expect((await call(removed, 'GET', '/api/rider/registrations')).json()).toEqual([]);
+    expect((await call(removed, 'GET', url)).statusCode).toBe(404);
+    expect((await call(removed, 'POST', `/api/orders/${orderId}/cancel`)).statusCode).toBe(404);
+    expect((await call(removed, 'POST', `/api/orders/${orderId}/payment`, { attemptId: 'removed-guardian-attempt', outcome: 'success' })).statusCode).toBe(404);
+    expect((await call(JUNIOR, 'GET', `/api/orders/${orderId}`)).statusCode).toBe(200);
+    // Replaying an accepted invitation cannot restore the removed grant.
+    expect((await call(OTHER_PARENT, 'POST', `/api/rider/guardian-invitations/${invitation.id}/accept`, { acknowledge: true })).statusCode).toBe(200);
+    expect((await call(removed, 'GET', `/api/orders/${orderId}`)).statusCode).toBe(404);
+    if (removed === PARENT) {
+      const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();
+      let requestId: string;
+      try { requestId = (await client.query('SELECT client_request_id FROM orders WHERE id=$1', [orderId])).rows[0].client_request_id; }
+      finally { await client.end(); }
+      expect((await call(removed, 'POST', `/api/rider/events/${eventId}/orders`, { clientRequestId: requestId!, rider: original.rider, waiver: original.waiver, categoryIds: [original.entries[0].categoryId] })).statusCode).toBe(404);
+    }
+  });
+
+  it('requires acknowledgement and reason, hides family history and refuses self-removal', async () => {
+    const { call, url, relationships } = await shared();
+    const target = relationships.find((g) => g.email === OTHER_PARENT)!;
+    const own = relationships.find((g) => g.email === PARENT)!;
+    const payload = { reason: 'End fictional shared access', acknowledge: true };
+    for (const body of [{ reason: payload.reason }, { ...payload, acknowledge: false }, { ...payload, reason: '  ' }, { ...payload, reason: '😀😀' }, { ...payload, reason: 'x'.repeat(301) }]) {
+      expect((await call(PARENT, 'POST', `${url}/${target.id}/remove`, body)).statusCode).toBe(400);
+    }
+    expect((await call(PARENT, 'POST', `${url}/${own.id}/remove`, payload)).statusCode).toBe(422);
+    for (const outsider of [ORGANIZER, JUNIOR, 'unrelated@fictional.test']) {
+      expect((await call(outsider, 'GET', url)).statusCode).toBe(404);
+      expect((await call(outsider, 'POST', `${url}/${target.id}/remove`, payload)).statusCode).toBe(404);
+    }
+    expect((await call(PARENT, 'POST', `${url}/unknown/remove`, payload)).statusCode).toBe(404);
+    expect((await call(PARENT, 'GET', url)).json().filter((g: { revokedAt: string | null }) => !g.revokedAt)).toHaveLength(2);
+  });
+
+  it('uses Unicode character counts for both reason boundaries with actionable validation errors', async () => {
+    const { call, url, relationships } = await shared();
+    const target = relationships.find((g) => g.email === OTHER_PARENT)!;
+    for (const reason of ['😀😀', '😀'.repeat(301)]) {
+      const response = await call(PARENT, 'POST', `${url}/${target.id}/remove`, { reason, acknowledge: true });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().details).toContainEqual({ path: 'reason', message: 'Write a reason of 3 to 300 characters for removing guardian access.' });
+    }
+    const response = await call(PARENT, 'POST', `${url}/${target.id}/remove`, { reason: '😀'.repeat(300), acknowledge: true });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json().find((g: { id: string }) => g.id === target.id).removalReason).toBe('😀'.repeat(300));
+  });
+
+  it('serializes competing removals so one guardian always remains', async () => {
+    const { call, url, relationships, orderId } = await shared();
+    const payload = { reason: 'End fictional shared access', acknowledge: true };
+    const replies = await Promise.all(relationships.map((g) => call(g.email === PARENT ? OTHER_PARENT : PARENT, 'POST', `${url}/${g.id}/remove`, payload)));
+    expect(replies.map((r) => r.statusCode).sort()).toEqual([200, 404]);
+    const survivors = await Promise.all([PARENT, OTHER_PARENT].map((who) => call(who, 'GET', `/api/orders/${orderId}`)));
+    expect(survivors.map((r) => r.statusCode).sort()).toEqual([200, 404]);
+  });
+});
