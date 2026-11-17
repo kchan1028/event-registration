@@ -91,7 +91,7 @@ Run `tests/refunds.test.ts`, `tests/payments.test.ts` and `tests/migrations.test
 
 ### Guardian invitation records
 
-Run `tests/juniors.test.ts`, `tests/auth.test.ts`, `tests/orders.test.ts` and `tests/migrations.test.ts` for private invitation creation/list/cancellation, schema upgrade without inferred invitations, normalized address validation, exact expiry boundary, same-address concurrent replay without extending the period, concurrent replacement with one pending record, and cancellation replay not closing a replacement. Check household/viewer/organizer isolation, no access on recipient sign-in, no outgoing mail or extra grant, and source-profile merge cancellation/history preservation with the correcting actor. Recipient acceptance coverage follows below; removal and management screens remain separate increments. No real email-provider behavior is established.
+Run `tests/juniors.test.ts`, `tests/auth.test.ts`, `tests/orders.test.ts` and `tests/migrations.test.ts` for private invitation creation/list/cancellation, schema upgrade without inferred invitations, normalized address validation, exact expiry boundary, same-address concurrent replay without extending the period, concurrent replacement with one pending record, and cancellation replay not closing a replacement. Check household/viewer/organizer isolation, no access on recipient sign-in, no outgoing mail or extra grant, and source-profile merge cancellation/history preservation with the correcting actor. Recipient acceptance, removal and management screen coverage are described below. No real email-provider behavior is established.
 
 ### Explicit guardian acceptance and shared access
 
@@ -102,6 +102,10 @@ Run the guardian/auth/order/migration files and `tests/payments.test.ts` for sch
 ### Guardian removal API
 
 Run `tests/juniors.test.ts`, `tests/auth.test.ts`, `tests/orders.test.ts` and `tests/migrations.test.ts` for either guardian removing the other, actor/reason/acknowledgement evidence, identical and changed replay, self-removal refusal, outsider/viewer/organizer isolation, opposing concurrent removals leaving one guardian, and preserved purchase/waiver/viewer state. Removed original purchasers cannot read/pay/cancel/replay linked orders; accepted invitation replay must not restore authority. Verify schema-30 upgrades leave historical revocation evidence unknown and incomplete/invalid explicit removal evidence fails constraints. This API increment does not prove screens, mail, disputed restoration, claims, real identity or legal guardianship.
+
+### Guardian management controls
+
+Run `e2e/guardian-management.spec.ts` with the guardian invitation/acceptance browser regression and relevant sign-in/header/accessibility checks. Exercise screen invitation creation/cancellation, refused junior-viewer invitations, success focus and a fresh invitation accepted by a separate fictional account; current guardian refresh and server-derived own-account identity; cancellation of a removal; reason/acknowledgement before removal; shared Unicode reason validation; lost committed removal response followed by either saved-state refresh or identical removal replay; one remaining guardian and one removal record; unchanged quote/waiver evidence; both themes, phone/desktop widths and region-scoped axe. Run guardian/auth/orders/migrations/payments API regressions for the shared removal schema. Local browser interception does not prove real network loss, email delivery, legal guardianship, physical-device or manual screen-reader acceptance.
 
 ### Guardian relationship foundation
 

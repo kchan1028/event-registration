@@ -1,5 +1,5 @@
 import { newId } from '../shared/factory';
-import type { GuardianInvitation, GuardianRelationship, JuniorProfile, ReceivedGuardianInvitation } from '../shared/juniors';
+import type { GuardianAccess, GuardianInvitation, GuardianRelationship, JuniorProfile, ReceivedGuardianInvitation } from '../shared/juniors';
 import { normalizeText } from '../shared/lookup';
 import { INVITATION_DAYS } from '../shared/roles';
 import type { Account } from './auth';
@@ -83,9 +83,9 @@ export function createJuniors(db: Db, clock: () => Date) {
     adopt,
     list,
     lockProfiles: () => db.lock(FAMILY_LOCK),
-    async relationships(account: Account, profileId: string): Promise<GuardianRelationship[]> {
+    async relationships(account: Account, profileId: string): Promise<GuardianAccess[]> {
       await requireGuardian(account.id, profileId);
-      return relationshipRows(profileId);
+      return (await relationshipRows(profileId)).map((relationship) => ({ ...relationship, isYou: relationship.accountId === account.id }));
     },
     async removeGuardian(account: Account, profileId: string, relationshipId: string, reason: string): Promise<GuardianRelationship[]> {
       return db.transaction(async () => {

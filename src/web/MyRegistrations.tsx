@@ -7,6 +7,7 @@ import { href } from './App';
 import { formatDateTime } from './format';
 import { Field, ThemeToggle } from './ui';
 import { useLoad } from './useLoad';
+import { GuardianManagement } from './GuardianManagement';
 
 const STATUS_LABEL: Record<string, string> = {
   held: 'Places held, not paid',
@@ -129,6 +130,7 @@ function JuniorRow({ junior, onChange }: { junior: JuniorProfile; onChange: (lis
           </button>
         </form>
       )}
+      <GuardianManagement junior={junior} />
       {err && (
         <p className="alert alert--error" role="alert">
           {err}

@@ -14,7 +14,7 @@ import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
 import type { EventSummary } from '../shared/reports';
 import type { Invitation, MembershipChange, Role, ExpiredInvitationNotice } from '../shared/roles';
-import type { JuniorProfile, ReceivedGuardianInvitation, RegistrationAccess } from '../shared/juniors';
+import type { GuardianAccess, GuardianInvitation, GuardianRelationship, JuniorProfile, ReceivedGuardianInvitation, RegistrationAccess } from '../shared/juniors';
 
 /** simulated: the labeled demo button. stripe_test: Stripe hosted Checkout in test mode. */
 export type { CheckInRider, CheckInList } from '../shared/checkin';
@@ -365,6 +365,11 @@ export const api = {
   myRegistrations: () => request<(OrderView & RegistrationAccess)[]>('GET', '/api/rider/registrations'),
   guardianInvitations: () => request<ReceivedGuardianInvitation[]>('GET', '/api/rider/guardian-invitations'),
   acceptGuardianInvitation: (id: string) => request<JuniorProfile[]>('POST', `/api/rider/guardian-invitations/${id}/accept`, { acknowledge: true }),
+  guardianRelationships: (id: string) => request<GuardianAccess[]>('GET', `/api/rider/juniors/${id}/guardians`),
+  juniorGuardianInvitations: (id: string) => request<GuardianInvitation[]>('GET', `/api/rider/juniors/${id}/guardian-invitations`),
+  inviteJuniorGuardian: (id: string, email: string) => request<GuardianInvitation[]>('POST', `/api/rider/juniors/${id}/guardian-invitations`, { email }),
+  cancelJuniorGuardianInvitation: (id: string, invitationId: string) => request<GuardianInvitation[]>('POST', `/api/rider/juniors/${id}/guardian-invitations/${invitationId}/cancel`),
+  removeJuniorGuardian: (id: string, relationshipId: string, reason: string) => request<GuardianRelationship[]>('POST', `/api/rider/juniors/${id}/guardians/${relationshipId}/remove`, { reason, acknowledge: true }),
   juniors: () => request<JuniorProfile[]>('GET', '/api/rider/juniors'),
   setJuniorViewer: (id: string, email: string | null) => request<JuniorProfile[]>('POST', `/api/rider/juniors/${id}/viewer`, { email }),
   pay: (id: string, attemptId: string, outcome: 'success' | 'failure') => request<OrderView>('POST', `/api/orders/${id}/payment`, { attemptId, outcome }),

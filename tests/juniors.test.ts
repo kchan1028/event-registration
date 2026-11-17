@@ -4,6 +4,8 @@ import type { GuardianInvitation } from '../src/shared/juniors';
 import type { EventConfig } from '../src/shared/schema';
 import { as, fakeAuth } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
+import { openDb } from '../src/server/db';
+import { createJuniors } from '../src/server/juniors';
 
 // Guardian access to juniors (owner decision, November 15, 2026; docs/discovery/guardian-accounts.md):
 // one guardian per junior, and an optional read-only login for the junior. Sessions are faked.
@@ -539,9 +541,19 @@ describe('explicit guardian removal', () => {
   });
 
   it('requires acknowledgement and reason, hides family history and refuses self-removal', async () => {
-    const { call, url, relationships } = await shared();
+    const { call, url, relationships, databaseUrl, profile } = await shared();
     const target = relationships.find((g) => g.email === OTHER_PARENT)!;
     const own = relationships.find((g) => g.email === PARENT)!;
+    const current = (await call(PARENT, 'GET', url)).json();
+    expect(current.find((g: { id: string }) => g.id === own.id).isYou).toBe(true);
+    expect(current.find((g: { id: string }) => g.id === target.id).isYou).toBe(false);
+    const account = (await call(PARENT, 'GET', '/api/me')).json().account;
+    const identityDb = openDb(databaseUrl);
+    try {
+      const identity = await createJuniors(identityDb, () => new Date()).relationships({ ...account, email: OTHER_PARENT.toUpperCase() }, profile.id);
+      expect(identity.find((g) => g.id === own.id)?.isYou).toBe(true);
+      expect(identity.find((g) => g.id === target.id)?.isYou).toBe(false);
+    } finally { await identityDb.close(); }
     const payload = { reason: 'End fictional shared access', acknowledge: true };
     for (const body of [{ reason: payload.reason }, { ...payload, acknowledge: false }, { ...payload, reason: '  ' }, { ...payload, reason: '😀😀' }, { ...payload, reason: 'x'.repeat(301) }]) {
       expect((await call(PARENT, 'POST', `${url}/${target.id}/remove`, body)).statusCode).toBe(400);
