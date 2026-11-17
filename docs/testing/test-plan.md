@@ -103,13 +103,13 @@ Run the guardian/auth/order/migration files and `tests/payments.test.ts` for sch
 
 Run `tests/juniors.test.ts`, `tests/auth.test.ts`, `tests/orders.test.ts` and `tests/migrations.test.ts` for either guardian removing the other, actor/reason/acknowledgement evidence, identical and changed replay, self-removal refusal, outsider/viewer/organizer isolation, opposing concurrent removals leaving one guardian, and preserved purchase/waiver/viewer state. Removed original purchasers cannot read/pay/cancel/replay linked orders; accepted invitation replay must not restore authority. Verify schema-30 upgrades leave historical revocation evidence unknown and incomplete/invalid explicit removal evidence fails constraints. This API increment does not prove screens, mail, disputed restoration, claims, real identity or legal guardianship.
 
-### Guardian write rollback
-
-`tests/guardian-rollback.test.ts` installs rejecting triggers only in per-test disposable databases. Fail the initial grant insert after profile creation; fail acceptance-evidence update after the second grant insert; fail replacement insertion after cancelling the old invitation. Require no partial profile/order/grant, unchanged open invitation and purchase/waiver evidence, no recipient access after failed acceptance, and safe successful retry once the injected failure is removed. Database cleanup follows the existing test harness. These checks establish local transaction rollback, not approved privacy/retention, identity evidence or deletion/support policy; issue [#170](https://github.com/kchan1028/event-registration/issues/170) remains open for those gates.
-
 ### Guardian relationship foundation
 
 Run `tests/migrations.test.ts`, `tests/juniors.test.ts`, `tests/orders.test.ts` and `tests/auth.test.ts` for a schema-27 upgrade preserving order/payment/waiver evidence and junior viewing, one historical relationship per profile with unknown actor, one atomic initial relationship on profile creation, no duplicate on profile reuse, and existing household isolation/name-correction behavior. Verify unique active pairs and account references. Migration 30 changes authority to active explicit grants; acceptance coverage follows below. Explicit removal API coverage is described above; claim workflows and real identity-provider verification remain separate.
+
+### Guardian write rollback
+
+`tests/guardian-rollback.test.ts` installs rejecting triggers only in per-test disposable databases. Fail the initial grant insert after profile creation; fail acceptance-evidence update after the second grant insert; fail replacement insertion after cancelling the old invitation. Require no partial profile/order/grant, unchanged open invitation and purchase/waiver evidence, no recipient access after failed acceptance, and safe successful retry once the injected failure is removed. Database cleanup follows the existing test harness. These checks establish local transaction rollback, not approved privacy/retention, identity evidence or deletion/support policy; issue [#170](https://github.com/kchan1028/event-registration/issues/170) remains open for those gates.
 
 ### Waiver acceptance evidence
 
