@@ -452,6 +452,15 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   // Juniors this guardian manages (one guardian per junior), and the junior's own login.
   app.get('/api/rider/juniors', async (req) => juniors.list(me(req).id));
+  app.get('/api/rider/juniors/:id/guardian-invitations', async (req) => juniors.invitations(me(req), idParam.parse(req.params).id));
+  app.post('/api/rider/juniors/:id/guardian-invitations', async (req) => {
+    const { email } = z.object({ email: z.string().trim().email('Enter a guardian email address.').max(254) }).parse(req.body);
+    return juniors.invite(me(req), idParam.parse(req.params).id, email);
+  });
+  app.post('/api/rider/juniors/:id/guardian-invitations/:invitationId/cancel', async (req) => {
+    const { id, invitationId } = idParam.extend({ invitationId: idStr }).parse(req.params);
+    return juniors.cancelInvitation(me(req), id, invitationId);
+  });
   app.post('/api/rider/juniors/:id/viewer', async (req) => {
     const { id } = idParam.parse(req.params);
     const { email } = z.object({ email: z.string().trim().email('Enter the junior’s email.').max(254).nullable() }).parse(req.body);

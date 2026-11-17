@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { describe, expect, it } from 'vitest';
+import type { GuardianInvitation } from '../src/shared/juniors';
 import type { EventConfig } from '../src/shared/schema';
 import { as, fakeAuth } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
@@ -14,9 +15,9 @@ const JUNIOR = 'sam@family-a.test';
 
 type Method = 'GET' | 'POST';
 
-async function setup() {
+async function setup(now?: () => Date) {
   const databaseUrl = await testDatabaseUrl();
-  const { app } = await testApp({ auth: fakeAuth(), databaseUrl });
+  const { app } = await testApp({ auth: fakeAuth(), databaseUrl, now });
   const call = (who: string, method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(who), payload });
   const { eventId } = (await call(ORGANIZER, 'POST', '/api/demo')).json() as { eventId: string };
   await call(ORGANIZER, 'POST', `/api/events/${eventId}/publish`, { acknowledgeWarnings: true });
@@ -178,5 +179,129 @@ describe('guardian and junior access', () => {
     const second = await registerJunior(PARENT, 'Sam');
     expect(((await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string }[]).map((j) => j.id)).toEqual([sam.id]);
     expect(((await call(JUNIOR, 'GET', '/api/rider/registrations')).json() as { id: string }[]).map((o) => o.id).sort()).toEqual([first, second].sort());
+  });
+});
+
+
+describe('guardian invitation records without access grants', () => {
+  it('normalizes a pending invitation, preserves replay identity and grants no account access or email', async () => {
+    let time = new Date('2027-01-01T12:00:00Z');
+    const { call, registerJunior, databaseUrl } = await setup(() => time);
+    const order = await registerJunior(PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    const parent = (await call(PARENT, 'GET', '/api/me')).json().account;
+    await call(OTHER_PARENT, 'GET', '/api/me');
+    const url = `/api/rider/juniors/${sam.id}/guardian-invitations`;
+    const first = await call(PARENT, 'POST', url, { email: `  ${OTHER_PARENT.toUpperCase()}  ` });
+    expect(first.statusCode, first.body).toBe(200);
+    const [invite] = first.json() as GuardianInvitation[];
+    expect(invite).toMatchObject({ email: OTHER_PARENT, invitedBy: parent.id, status: 'pending', createdAt: time.toISOString(), expiresAt: '2027-01-15T12:00:00.000Z', cancelledAt: null, cancelledBy: null, cancellationReason: null });
+    time = new Date('2027-01-01T13:00:00Z');
+    const repeated = await Promise.all([call(PARENT, 'POST', url, { email: OTHER_PARENT }), call(PARENT, 'POST', url, { email: OTHER_PARENT })]);
+    for (const response of repeated) expect(response.json()).toEqual([invite]);
+    expect((await call(OTHER_PARENT, 'GET', `/api/orders/${order}`)).statusCode).toBe(404);
+    expect((await call(OTHER_PARENT, 'POST', `/api/orders/${order}/cancel`)).statusCode).toBe(404);
+    expect((await call(OTHER_PARENT, 'POST', `/api/orders/${order}/payment`, { attemptId: 'invited-parent-payment', outcome: 'success' })).statusCode).toBe(404);
+    expect((await call(OTHER_PARENT, 'GET', '/api/rider/registrations')).json()).toEqual([]);
+    const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();
+    try {
+      expect((await client.query(`SELECT id FROM junior_guardians`)).rowCount).toBe(1);
+      expect((await client.query(`SELECT id FROM email_messages`)).rowCount).toBe(0);
+    } finally { await client.end(); }
+  });
+
+  it('serializes replacements, keeps cancellation history and does not let an old cancellation close the new invitation', async () => {
+    let time = new Date('2027-01-01T12:00:00Z');
+    const { call, registerJunior } = await setup(() => time);
+    await registerJunior(PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    const parent = (await call(PARENT, 'GET', '/api/me')).json().account;
+    const url = `/api/rider/juniors/${sam.id}/guardian-invitations`;
+    const [first] = (await call(PARENT, 'POST', url, { email: OTHER_PARENT })).json() as GuardianInvitation[];
+    time = new Date('2027-01-02T12:00:00Z');
+    const responses = await Promise.all(['one@invited.test', 'two@invited.test'].map((email) => call(PARENT, 'POST', url, { email })));
+    for (const response of responses) expect(response.statusCode, response.body).toBe(200);
+    let history = (await call(PARENT, 'GET', url)).json() as GuardianInvitation[];
+    expect(history).toHaveLength(3);
+    expect(history.filter((i) => i.status === 'pending')).toHaveLength(1);
+    expect(history.find((i) => i.id === first.id)).toMatchObject({ status: 'cancelled', cancelledBy: parent.id, cancelledAt: time.toISOString(), cancellationReason: 'replaced' });
+    await call(PARENT, 'POST', `${url}/${first.id}/cancel`);
+    history = (await call(PARENT, 'GET', url)).json();
+    const current = history.find((i) => i.status === 'pending')!;
+    const cancelled = await call(PARENT, 'POST', `${url}/${current.id}/cancel`);
+    expect(cancelled.statusCode).toBe(200);
+    const snapshot = cancelled.json();
+    time = new Date('2027-01-03T12:00:00Z');
+    expect((await call(PARENT, 'POST', `${url}/${current.id}/cancel`)).json()).toEqual(snapshot);
+    expect((await call(PARENT, 'GET', url)).json().filter((i: GuardianInvitation) => i.status === 'pending')).toEqual([]);
+  });
+
+  it('expires at the exact deadline and requires a new record rather than rewriting the original period', async () => {
+    let time = new Date('2027-01-01T12:00:00Z');
+    const { call, registerJunior } = await setup(() => time);
+    await registerJunior(PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    const url = `/api/rider/juniors/${sam.id}/guardian-invitations`;
+    const [original] = (await call(PARENT, 'POST', url, { email: OTHER_PARENT })).json() as GuardianInvitation[];
+    time = new Date(original.expiresAt);
+    expect((await call(PARENT, 'GET', url)).json()).toEqual([{ ...original, status: 'expired' }]);
+    const renewed = (await call(PARENT, 'POST', url, { email: OTHER_PARENT })).json() as GuardianInvitation[];
+    expect(renewed).toHaveLength(2);
+    expect(renewed.find((i) => i.status === 'pending')!.id).not.toBe(original.id);
+    expect(renewed.find((i) => i.id === original.id)).toMatchObject({ createdAt: original.createdAt, expiresAt: original.expiresAt, status: 'cancelled', cancellationReason: 'replaced' });
+  });
+
+  it('isolates household invitation history from other guardians, junior viewers and organizers', async () => {
+    const { call, registerJunior } = await setup();
+    await registerJunior(PARENT, 'Sam');
+    await registerJunior(OTHER_PARENT, 'Alex');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    const [alex] = (await call(OTHER_PARENT, 'GET', '/api/rider/juniors')).json();
+    await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/viewer`, { email: JUNIOR });
+    const url = `/api/rider/juniors/${sam.id}/guardian-invitations`;
+    const [invite] = (await call(PARENT, 'POST', url, { email: 'invited@fictional.test' })).json();
+    for (const who of [OTHER_PARENT, JUNIOR, ORGANIZER]) {
+      expect((await call(who, 'GET', url)).statusCode).toBe(404);
+      expect((await call(who, 'POST', url, { email: 'intruder@fictional.test' })).statusCode).toBe(404);
+      expect((await call(who, 'POST', `${url}/${invite.id}/cancel`)).statusCode).toBe(404);
+    }
+    expect((await call(OTHER_PARENT, 'POST', `/api/rider/juniors/${alex.id}/guardian-invitations/${invite.id}/cancel`)).statusCode).toBe(404);
+    expect((await call(PARENT, 'GET', url)).json()).toEqual([invite]);
+  });
+
+  it('rejects invalid, self and junior-viewer addresses without replacing a valid invitation', async () => {
+    const { call, registerJunior } = await setup();
+    await registerJunior(PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/viewer`, { email: JUNIOR });
+    const url = `/api/rider/juniors/${sam.id}/guardian-invitations`;
+    const snapshot = (await call(PARENT, 'POST', url, { email: OTHER_PARENT })).json();
+    for (const email of ['invalid', '', `${'x'.repeat(250)}@fictional.test`]) expect((await call(PARENT, 'POST', url, { email })).statusCode).toBe(400);
+    for (const email of [PARENT.toUpperCase(), JUNIOR.toUpperCase()]) expect((await call(PARENT, 'POST', url, { email })).statusCode).toBe(422);
+    expect((await call(PARENT, 'GET', url)).json()).toEqual(snapshot);
+  });
+
+  it('cancels source-profile invitations on a name merge while retaining history and the target invitation', async () => {
+    const { call, registerJunior, databaseUrl } = await setup();
+    const typoOrder = await registerJunior(PARENT, 'Sma');
+    await registerJunior(PARENT, 'Sam');
+    const profiles = (await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string; firstName: string }[];
+    const source = profiles.find((p) => p.firstName === 'Sma')!;
+    const target = profiles.find((p) => p.firstName === 'Sam')!;
+    const url = (id: string) => `/api/rider/juniors/${id}/guardian-invitations`;
+    const [old] = (await call(PARENT, 'POST', url(source.id), { email: 'source@invited.test' })).json();
+    const [current] = (await call(PARENT, 'POST', url(target.id), { email: 'target@invited.test' })).json();
+    const corrected = await call(ORGANIZER, 'POST', `/api/orders/${typoOrder}/rider-corrections`, { changes: { firstName: 'Sam' }, reason: 'Correct fictional name' });
+    expect(corrected.statusCode, corrected.body).toBe(200);
+    const actor = (await call(ORGANIZER, 'GET', '/api/me')).json().account;
+    const history = (await call(PARENT, 'GET', url(target.id))).json() as GuardianInvitation[];
+    expect(history).toHaveLength(2);
+    expect(history.find((i) => i.id === old.id)).toMatchObject({ status: 'cancelled', cancellationReason: 'profile_merged', cancelledBy: actor.id, invitedBy: old.invitedBy, createdAt: old.createdAt });
+    expect(history.find((i) => i.id === current.id)).toEqual(current);
+    expect((await call(PARENT, 'GET', url(source.id))).statusCode).toBe(404);
+    const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();
+    try {
+      expect((await client.query(`SELECT junior_profile_id FROM junior_guardians`)).rows).toEqual([{ junior_profile_id: target.id }]);
+    } finally { await client.end(); }
   });
 });

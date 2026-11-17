@@ -610,7 +610,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         }
         await db.run(`UPDATE orders SET rider_json = $1, updated_at = $2 WHERE id = $3`, [JSON.stringify(parsed.data), t, orderId]);
         // A corrected junior name follows to the guardian's profile, so the next registration finds it.
-        if (profileId) await juniors.renamed(profileId, row.account_id!, parsed.data);
+        if (profileId) await juniors.renamed(profileId, row.account_id!, parsed.data, by);
         await db.run(
           `INSERT INTO rider_corrections (id, event_id, order_id, changes_json, cleared_reviews_json, reason, corrected_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [newId('cor'), row.event_id, orderId, JSON.stringify(changes), cleared.length > 0 ? JSON.stringify(cleared) : null, reason, by, t],

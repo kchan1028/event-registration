@@ -566,6 +566,21 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX junior_guardians_by_account ON junior_guardians(account_id) WHERE revoked_at IS NULL;
   INSERT INTO junior_guardians(id,junior_profile_id,account_id,granted_at)
     SELECT 'jgd_migrated_' || id,id,guardian_account_id,created_at FROM junior_profiles;`,
+  // 29: private guardian invitation records, without granting access or sending mail.
+  `CREATE TABLE junior_guardian_invitations (
+    id text PRIMARY KEY,
+    junior_profile_id text NOT NULL REFERENCES junior_profiles(id) ON DELETE CASCADE,
+    email text NOT NULL,
+    invited_by text NOT NULL REFERENCES accounts(id),
+    created_at timestamptz NOT NULL,
+    expires_at timestamptz NOT NULL,
+    cancelled_by text REFERENCES accounts(id),
+    cancelled_at timestamptz,
+    cancellation_reason text CHECK (cancellation_reason IN ('replaced','cancelled','profile_merged')),
+    CHECK ((cancelled_at IS NULL AND cancelled_by IS NULL AND cancellation_reason IS NULL)
+      OR (cancelled_at IS NOT NULL AND cancelled_by IS NOT NULL AND cancellation_reason IS NOT NULL))
+  );
+  CREATE UNIQUE INDEX junior_guardian_invitation_pending ON junior_guardian_invitations(junior_profile_id) WHERE cancelled_at IS NULL;`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

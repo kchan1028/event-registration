@@ -20,7 +20,9 @@ New orders record the authenticated accepting account ID, validated declared rac
 
 ## Guardian relationship foundation (Implemented locally)
 
-Migration 28 and new-profile creation mirror existing single-guardian ownership in `junior_guardians`. Historical actors remain unknown; new initial records identify the creating account. No route, access check, organization override or sharing capability is added. The mirror is not yet an entitlement source or an immutable audit; existing source-profile merges delete their mirror rows. Second-guardian invitation/acceptance, removal and claims require a separate authorization/lifecycle change before being enabled.
+Migration 28 and new-profile creation mirror existing single-guardian ownership in `junior_guardians`. Historical actors remain unknown; new initial records identify the creating account. The foundation changes no access check, organization override or sharing capability. The mirror is not yet an entitlement source or an immutable audit; existing source-profile merges delete their mirror rows.
+
+Private invitation APIs now allow only the existing profile guardian to create/list/cancel; invited accounts, junior viewers and organization roles get no family access. Pending invitations do not send email or grant permission. Same-address pending replays retain identity/expiry; replacement, cancellation and merge cancellation retain actor/time. Name correction may cancel a source-profile invitation as a protective merge effect, not as a family-access override. Acceptance, removal and claims still require a separate authorization/lifecycle change. Future acceptance must recheck authority, expiry, cancellation and viewer address. Approved disputed-access restoration belongs to product-owner/support review only; no organizer override is approved.
 
 ## Reservation recovery (Implemented locally)
 

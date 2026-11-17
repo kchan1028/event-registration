@@ -1,12 +1,14 @@
 import { newId } from '../shared/factory';
-import type { JuniorProfile } from '../shared/juniors';
+import type { GuardianInvitation, JuniorProfile } from '../shared/juniors';
 import { normalizeText } from '../shared/lookup';
+import { INVITATION_DAYS } from '../shared/roles';
+import type { Account } from './auth';
 import type { Db } from './db';
 import { HttpError } from './repo';
 
 /**
  * Guardian access to juniors (product.md "Sign-in and account security"; owner decision,
- * November 15, 2026, from docs/discovery/guardian-accounts.md). A junior is a profile owned by
+ * November 15, 2026, from docs/research/guardian-accounts.md). A junior is a profile owned by
  * one guardian account, created the first time that guardian registers the junior (or, for
  * registrations made before profiles existed, the next time the guardian registers or opens
  * their juniors). The junior
@@ -24,6 +26,24 @@ const nameKey = (firstName: string, lastName: string) => `${normalizeText(firstN
 const guardianLock = (guardianAccountId: string) => `juniors:${guardianAccountId}`;
 
 export function createJuniors(db: Db, clock: () => Date) {
+  async function requireGuardian(accountId: string, profileId: string) {
+    const profile = await db.get<{ viewer_email: string | null }>(`SELECT viewer_email FROM junior_profiles WHERE id = $1 AND guardian_account_id = $2`, [profileId, accountId]);
+    if (!profile) throw new HttpError(404, 'Junior not found.');
+    return profile;
+  }
+
+  async function invitationRows(profileId: string): Promise<GuardianInvitation[]> {
+    return db.all<GuardianInvitation>(`SELECT id,email,invited_by AS "invitedBy",created_at AS "createdAt",expires_at AS "expiresAt",
+      cancelled_by AS "cancelledBy",cancelled_at AS "cancelledAt",cancellation_reason AS "cancellationReason",
+      CASE WHEN cancelled_at IS NOT NULL THEN 'cancelled' WHEN expires_at <= $2 THEN 'expired' ELSE 'pending' END AS status
+      FROM junior_guardian_invitations WHERE junior_profile_id = $1 ORDER BY created_at DESC,id`, [profileId, clock().toISOString()]);
+  }
+
+  async function cancelInvitations(profileId: string, by: string, reason: NonNullable<GuardianInvitation['cancellationReason']>, invitationId: string | null) {
+    await db.run(`UPDATE junior_guardian_invitations SET cancelled_by = $1,cancelled_at = $2,cancellation_reason = $3
+      WHERE junior_profile_id = $4 AND cancelled_at IS NULL AND ($5::text IS NULL OR id = $5)`, [by, clock().toISOString(), reason, profileId, invitationId]);
+  }
+
   /**
    * Profiles saved before the tab-separated key (first and last name joined by a space) get the
    * current key, in one statement. Call under the guardian lock, before any lookup by key.
@@ -89,6 +109,37 @@ export function createJuniors(db: Db, clock: () => Date) {
     adopt,
     list,
 
+    async invitations(account: Account, profileId: string): Promise<GuardianInvitation[]> {
+      await requireGuardian(account.id, profileId);
+      return invitationRows(profileId);
+    },
+
+    async invite(account: Account, profileId: string, email: string): Promise<GuardianInvitation[]> {
+      return db.transaction(async () => {
+        await db.lock(guardianLock(account.id));
+        const profile = await requireGuardian(account.id, profileId);
+        const normalized = email.trim().toLowerCase();
+        if (normalized === account.email.toLowerCase() || normalized === profile.viewer_email) throw new HttpError(422, 'Use a different guardian email, not your own or the junior’s viewer email.');
+        const now = clock();
+        const current = await db.get<{ email: string; expires_at: string }>(`SELECT email,expires_at FROM junior_guardian_invitations WHERE junior_profile_id = $1 AND cancelled_at IS NULL`, [profileId]);
+        if (current?.email === normalized && current.expires_at > now.toISOString()) return invitationRows(profileId);
+        await cancelInvitations(profileId, account.id, 'replaced', null);
+        await db.run(`INSERT INTO junior_guardian_invitations(id,junior_profile_id,email,invited_by,created_at,expires_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+          [newId('jinv'), profileId, normalized, account.id, now.toISOString(), new Date(now.getTime() + INVITATION_DAYS * 86_400_000).toISOString()]);
+        return invitationRows(profileId);
+      });
+    },
+
+    async cancelInvitation(account: Account, profileId: string, invitationId: string): Promise<GuardianInvitation[]> {
+      return db.transaction(async () => {
+        await db.lock(guardianLock(account.id));
+        await requireGuardian(account.id, profileId);
+        if (!(await db.get(`SELECT 1 FROM junior_guardian_invitations WHERE id = $1 AND junior_profile_id = $2`, [invitationId, profileId]))) throw new HttpError(404, 'Guardian invitation not found.');
+        await cancelInvitations(profileId, account.id, 'cancelled', invitationId);
+        return invitationRows(profileId);
+      });
+    },
+
     /** Take the guardian's lock inside the caller's transaction, before it changes any of the guardian's junior orders (event lock first, then this). */
     lockGuardian: (guardianAccountId: string) => db.lock(guardianLock(guardianAccountId)),
 
@@ -98,13 +149,15 @@ export function createJuniors(db: Db, clock: () => Date) {
      * are the same junior: every order moves to that profile, it keeps its viewer email (or takes
      * this one's), and this profile is removed. Returns the order's profile.
      */
-    async renamed(profileId: string, guardianAccountId: string, rider: { firstName: string; lastName: string }): Promise<string> {
+    async renamed(profileId: string, guardianAccountId: string, rider: { firstName: string; lastName: string }, by: string): Promise<string> {
       // Called inside the correction's transaction; the guardian lock keeps a registration at another event from creating the same name meanwhile.
       await db.lock(guardianLock(guardianAccountId));
       await rekey(guardianAccountId);
       const key = nameKey(rider.firstName, rider.lastName);
       const existing = await db.get<{ id: string }>(`SELECT id FROM junior_profiles WHERE guardian_account_id = $1 AND name_key = $2`, [guardianAccountId, key]);
       if (existing && existing.id !== profileId) {
+        await cancelInvitations(profileId, by, 'profile_merged', null);
+        await db.run(`UPDATE junior_guardian_invitations SET junior_profile_id = $1 WHERE junior_profile_id = $2`, [existing.id, profileId]);
         await db.run(`UPDATE orders SET junior_profile_id = $1 WHERE junior_profile_id = $2`, [existing.id, profileId]);
         await db.run(`UPDATE junior_profiles d SET viewer_email = COALESCE(d.viewer_email, s.viewer_email) FROM junior_profiles s WHERE d.id = $1 AND s.id = $2`, [existing.id, profileId]);
         await db.run(`DELETE FROM junior_profiles WHERE id = $1`, [profileId]);
@@ -116,7 +169,7 @@ export function createJuniors(db: Db, clock: () => Date) {
 
     /** Only the junior's guardian may name or clear the viewer email; anyone else gets 404. */
     async setViewer(guardian: { id: string; email: string }, profileId: string, email: string | null): Promise<JuniorProfile[]> {
-      if (!(await db.get(`SELECT 1 FROM junior_profiles WHERE id = $1 AND guardian_account_id = $2`, [profileId, guardian.id]))) throw new HttpError(404, 'Junior not found.');
+      await requireGuardian(guardian.id, profileId);
       const normalized = email?.trim().toLowerCase() || null;
       if (normalized && normalized === guardian.email.toLowerCase()) throw new HttpError(422, 'Use the junior’s own email. You already see their registrations.');
       await db.run(`UPDATE junior_profiles SET viewer_email = $1 WHERE id = $2`, [normalized, profileId]);
