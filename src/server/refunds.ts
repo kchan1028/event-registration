@@ -1,7 +1,7 @@
 import { newId } from '../shared/factory';
 import { formatCents } from '../shared/format';
 import { todayIn, type Quote } from '../shared/pricing';
-import { refundPolicyEntitlement } from '../shared/refundPolicy';
+import { refundPolicyEntitlement, type RefundPolicyPreview } from '../shared/refundPolicy';
 import { refundableCents, refundCanMove, refundRequestSchema, type RefundStatus, type RefundRequest, type RefundRequestResult } from '../shared/refunds';
 import type { Db } from './db';
 import { paidLine } from './orders';
@@ -137,7 +137,7 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
 
   return {
     /** Read-only whole-order policy preview. It neither reserves a refund nor authorizes a payment. */
-    async policyPreview(orderId: string, reason: 'withdrawal' | 'organizer_cancellation') {
+    async policyPreview(orderId: string, reason: 'withdrawal' | 'organizer_cancellation'): Promise<RefundPolicyPreview> {
       return db.transaction(async () => {
         await db.lock(`refunds:${orderId}`);
         const order = await db.get<{ event_id: string; published_version: number; status: string; quote_json: Quote }>(
