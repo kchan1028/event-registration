@@ -146,11 +146,11 @@ Where a finding from any kind of testing (QA, security, user acceptance, usabili
 - **A failed acceptance criterion** from `product.md` is a bug, not an observation; the roadmap item stays incomplete until it passes.
 - Never name a tester or include real rider data in an issue.
 
-Each pull request records this in its description:
+Each pull request records this in its description, naming roles rather than AI tools or agents ([CONTRIBUTING.md](../../CONTRIBUTING.md#change-summary)):
 
 ```text
-Author: Claude Code | Codex
-Verifier: Codex | Claude Code | Pending (reason)
+Author: <author>
+Verifier: <independent verifier> | Pending (reason)
 Tested commit: <full SHA>
 Author checks: <commands run> -> <results>
 Verifier checks: <commands and scenarios> -> <results>

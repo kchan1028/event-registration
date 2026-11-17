@@ -67,6 +67,8 @@ Status: Planned | Implemented | Verified (say what was checked and how)
 Open questions:
 ```
 
+Commit messages, pull request titles and descriptions, pull request comments, issues, and milestones never name AI tools or agents. Describe roles instead: author, verifier, reviewer.
+
 Example of a valid "no impact" line: `Product impact (product.md): None. This fixes a broken link in the coding guide and changes no requirement.`
 
 The `Test plan` line follows [keeping the test plan current](docs/testing/test-plan.md#8-keeping-this-plan-current): update the plan in the same pull request when the change alters workflows, integrations, risks, test commands, environments, fixtures, CI, coverage, verification, or release gates.
