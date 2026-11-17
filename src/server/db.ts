@@ -627,6 +627,24 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE junior_guardian_invitations DROP CONSTRAINT junior_guardian_invitations_cancellation_reason_check;
   ALTER TABLE junior_guardian_invitations ADD CONSTRAINT junior_guardian_invitations_cancellation_reason_check
     CHECK (cancellation_reason IN ('replaced','cancelled','profile_merged','profile_claimed'));`,
+  // 33: stable registration-block names, captured now for prior claims and at insertion thereafter.
+  `ALTER TABLE junior_profile_claims ADD COLUMN registration_name_json jsonb;
+  UPDATE junior_profile_claims c SET registration_name_json = jsonb_build_object('firstName',p.first_name,'lastName',p.last_name)
+    FROM junior_profiles p WHERE p.id = c.junior_profile_id;
+  CREATE FUNCTION capture_claim_registration_name() RETURNS trigger LANGUAGE plpgsql AS $$
+  BEGIN
+    SELECT jsonb_build_object('firstName',p.first_name,'lastName',p.last_name) INTO NEW.registration_name_json
+      FROM junior_profiles p WHERE p.id = NEW.junior_profile_id;
+    RETURN NEW;
+  END $$;
+  CREATE TRIGGER capture_claim_registration_name BEFORE INSERT ON junior_profile_claims
+    FOR EACH ROW EXECUTE FUNCTION capture_claim_registration_name();
+  ALTER TABLE junior_profile_claims ALTER COLUMN registration_name_json SET NOT NULL;
+  ALTER TABLE junior_profile_claims ADD CONSTRAINT claim_registration_name_complete CHECK (
+    jsonb_typeof(registration_name_json) = 'object' AND registration_name_json ? 'firstName' AND registration_name_json ? 'lastName'
+    AND jsonb_typeof(registration_name_json->'firstName') = 'string' AND jsonb_typeof(registration_name_json->'lastName') = 'string'
+  );
+  CREATE INDEX junior_guardians_history_by_account ON junior_guardians(account_id,junior_profile_id);`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

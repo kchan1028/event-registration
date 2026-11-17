@@ -35,6 +35,34 @@ describe('migration 32: support-approved profile claims', () => {
   });
 });
 
+describe('migration 33: stable post-claim registration names', () => {
+  it('captures an enforcement baseline for old claims and supports an older writer without rewriting approval evidence', async () => {
+    const url = await testDatabaseUrl({ empty: true });
+    const client = new pg.Client({ connectionString: url }); await client.connect();
+    let before: object;
+    try {
+      await client.query(`CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
+      for (let v = 0; v < 32; v++) { await client.query(MIGRATIONS[v]); await client.query(`INSERT INTO schema_migrations(version) VALUES ($1)`, [v + 1]); }
+      await client.query(`INSERT INTO accounts(id,provider_user_id,email,created_at) VALUES ('acc_name_support','test|support@name.test','support@name.test','2026-02-28T12:00Z'),('acc_name_rider','test|rider@name.test','rider@name.test','2026-02-28T12:00Z')`);
+      await client.query(`INSERT INTO junior_profiles(id,created_by_account_id,name_key,first_name,last_name,created_at) VALUES ('jun_name_old','acc_name_support','before snapshot','Before','Snapshot','2026-02-28T12:00Z')`);
+      await client.query(`INSERT INTO junior_profile_claims(id,junior_profile_id,rider_account_id,approved_by,client_request_id,birth_date,time_zone,review_reference,minimum_age,approved_at) VALUES ('clm_name_old','jun_name_old','acc_name_rider','acc_name_support','legacy-name-request','2008-02-29','UTC','FICTIONAL-CASE-33',18,'2026-03-01T00:00Z')`);
+      before = (await client.query(`SELECT to_jsonb(c) AS value FROM junior_profile_claims c WHERE id='clm_name_old'`)).rows[0].value;
+    } finally { await client.end(); }
+    const db = openDb(url);
+    try {
+      await db.migrate();
+      expect(await db.get(`SELECT registration_name_json FROM junior_profile_claims WHERE id='clm_name_old'`)).toEqual({ registration_name_json: { firstName: 'Before', lastName: 'Snapshot' } });
+      expect(await db.get(`SELECT to_jsonb(c)-'registration_name_json' AS value FROM junior_profile_claims c WHERE id='clm_name_old'`)).toEqual({ value: before! });
+      await db.run(`UPDATE junior_profiles SET first_name='Private',last_name='Correction' WHERE id='jun_name_old'`);
+      expect(await db.get(`SELECT registration_name_json FROM junior_profile_claims WHERE id='clm_name_old'`)).toEqual({ registration_name_json: { firstName: 'Before', lastName: 'Snapshot' } });
+      await db.run(`INSERT INTO junior_profiles(id,created_by_account_id,name_key,first_name,last_name,created_at) VALUES ('jun_name_new','acc_name_support','after capture','After','Capture','2026-02-28T12:00Z')`);
+      // A schema-32 application does not send the new column; the trigger captures it atomically.
+      await db.run(`INSERT INTO junior_profile_claims(id,junior_profile_id,rider_account_id,approved_by,client_request_id,birth_date,time_zone,review_reference,minimum_age,approved_at) VALUES ('clm_name_new','jun_name_new','acc_name_rider','acc_name_support','new-name-request','2008-02-29','UTC','FICTIONAL-NEW-33',18,'2026-03-01T00:00Z')`);
+      expect(await db.get(`SELECT registration_name_json FROM junior_profile_claims WHERE id='clm_name_new'`)).toEqual({ registration_name_json: { firstName: 'After', lastName: 'Capture' } });
+    } finally { await db.close(); }
+  });
+});
+
 describe('migration 13: timestamps become timestamptz', () => {
   it('converts text timestamps written before the change without altering them', async () => {
     const url = await testDatabaseUrl({ empty: true });
