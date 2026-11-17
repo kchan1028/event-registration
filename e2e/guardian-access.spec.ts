@@ -3,14 +3,14 @@ import { expect, test } from './fixtures';
 import type { EventConfig } from '../src/shared/schema';
 
 // Separate fictional sessions exercise recipient acceptance through the screen and actual local API.
-test('an explicitly accepted guardian sees shared orders with accurate provenance on desktop and phone', async ({ page, browser }, testInfo) => {
+for (const recoveryAction of ['retry', 'refresh'] as const) test(`guardian acceptance recovers by ${recoveryAction} with accurate shared access on desktop and phone`, async ({ page, browser }, testInfo) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
   expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
   const { config } = await (await page.request.get(`/api/events/${eventId}`)).json() as { config: EventConfig };
   const categoryId = config.categories.find((c) => c.timingCode === 'RR-J1516')!.id;
-  const parent = 'parent@guardian-browser.test';
-  const second = 'second@guardian-browser.test';
-  const junior = 'junior@guardian-browser.test';
+  const parent = `parent-${recoveryAction}@guardian-browser.test`;
+  const second = `second-${recoveryAction}@guardian-browser.test`;
+  const junior = `junior-${recoveryAction}@guardian-browser.test`;
   const headers = (email: string) => ({ Authorization: `Bearer test:${email}` });
   const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { headers: headers(parent), data: {
     clientRequestId: 'guardian-browser-original', categoryIds: [categoryId],
@@ -59,14 +59,21 @@ test('an explicitly accepted guardian sees shared orders with accurate provenanc
     });
     await invitationForm.getByRole('button').click();
     await expect(guardian.getByRole('alert')).toContainText('Refresh invitations to check the current status');
-    await invitationForm.getByRole('button').focus();
-    await guardian.keyboard.press('Enter');
-    const accepted = guardian.getByRole('status').filter({ hasText: 'Guardian access accepted for Sam Example' });
-    await expect(accepted).toBeVisible();
-    await expect(accepted).toBeFocused();
+    if (recoveryAction === 'retry') {
+      await invitationForm.getByRole('button').focus();
+      await guardian.keyboard.press('Enter');
+      const accepted = guardian.getByRole('status').filter({ hasText: 'Guardian access accepted for Sam Example' });
+      await expect(accepted).toBeVisible();
+      await expect(accepted).toBeFocused();
+    } else {
+      await guardian.getByRole('button', { name: 'Refresh guardian invitations' }).click();
+      await expect(guardian.getByRole('heading', { name: 'Juniors you manage' })).toBeVisible();
+      await expect(guardian.getByRole('list', { name: 'Your registrations' }).getByRole('link')).toHaveCount(1);
+      await expect(guardian.getByRole('alert')).toHaveCount(0);
+    }
     await expect(invitationForm).toHaveCount(0);
-    expect(requests).toBe(2);
-    expect((await page.request.post(`/api/orders/${original.id}/payment`, { headers: headers(second), data: { attemptId: 'guardian-browser-payment', outcome: 'success' } })).ok()).toBe(true);
+    expect(requests).toBe(recoveryAction === 'retry' ? 2 : 1);
+    expect((await page.request.post(`/api/orders/${original.id}/payment`, { headers: headers(second), data: { attemptId: `guardian-browser-payment-${recoveryAction}`, outcome: 'success' } })).ok()).toBe(true);
     expect((await page.request.post(`/api/rider/juniors/${sam.id}/viewer`, { headers: headers(second), data: { email: junior } })).ok()).toBe(true);
     await guardian.reload();
     for (const theme of ['light', 'dark']) {

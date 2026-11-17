@@ -601,6 +601,15 @@ export const MIGRATIONS: string[] = [
     ((merged_into_id IS NULL AND merged_by IS NULL AND merged_at IS NULL) OR (merged_into_id IS NOT NULL AND merged_by IS NOT NULL AND merged_at IS NOT NULL AND merged_into_id <> id));
   ALTER TABLE orders DROP CONSTRAINT orders_junior_profile_id_fkey;
   ALTER TABLE orders ADD FOREIGN KEY (junior_profile_id) REFERENCES junior_profiles(id) ON DELETE RESTRICT;`,
+  // 31: explicit guardian removal evidence; historical and merge revocations stay unknown.
+  `ALTER TABLE junior_guardians ADD COLUMN removal_reason text;
+  ALTER TABLE junior_guardians ADD COLUMN removal_acknowledged_at timestamptz;
+  ALTER TABLE junior_guardians ADD CONSTRAINT guardian_removal_complete CHECK (
+    (removal_reason IS NULL AND removal_acknowledged_at IS NULL) OR
+    (removal_reason IS NOT NULL AND char_length(btrim(removal_reason)) BETWEEN 3 AND 300
+      AND removal_acknowledged_at IS NOT NULL AND revoked_by IS NOT NULL AND revoked_at IS NOT NULL
+      AND revoked_by <> account_id AND removal_acknowledged_at = revoked_at)
+  );`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

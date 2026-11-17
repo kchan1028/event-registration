@@ -22,7 +22,7 @@ const STATUS_LABEL: Record<string, string> = {
  * login (named by the guardian) sees that junior's registrations here, read-only.
  */
 export function MyRegistrations() {
-  const { data: orders, error, reload: reloadOrders } = useLoad(() => api.myRegistrations(), []);
+  const { data: orders, error, setData: setOrders } = useLoad(() => api.myRegistrations(), []);
   const { data: juniors, setData: setJuniors } = useLoad(() => api.juniors(), []);
   return (
     <div className="home">
@@ -65,7 +65,10 @@ export function MyRegistrations() {
             ))}
           </ul>
         )}
-        <GuardianInvitations onAccepted={(list) => { setJuniors(list); reloadOrders(); }} />
+        <GuardianInvitations
+          onAccepted={async (list) => { const currentOrders = await api.myRegistrations(); setJuniors(list); setOrders(currentOrders); }}
+          onRefresh={async () => { const [currentJuniors, currentOrders] = await Promise.all([api.juniors(), api.myRegistrations()]); setJuniors(currentJuniors); setOrders(currentOrders); }}
+        />
         {juniors && juniors.length > 0 && (
           <section className="settings__section" aria-labelledby="juniors-title">
             <h2 id="juniors-title">Juniors you manage</h2>

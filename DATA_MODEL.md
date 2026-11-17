@@ -184,7 +184,7 @@ A name correction may merge only profiles sharing an active guardian and having 
 
 ### junior_guardians
 
-Migration 28 backfilled one initial grant per existing profile using profile creation time and an unknown `granted_by`. Migration 30 makes active grants on unmerged profiles the authority for junior orders and family APIs. New profile creation writes its initial grant atomically. Explicit invitation acceptance adds the second grant under the shared family lock, with inviter and acceptance time; signing in alone adds nothing. There is no removal API yet.
+Migration 28 backfilled one initial grant per existing profile using profile creation time and an unknown `granted_by`. Migration 30 makes active grants on unmerged profiles the authority for junior orders and family APIs. New profile creation writes its initial grant atomically. Explicit invitation acceptance adds the second grant under the shared family lock, with inviter and acceptance time; signing in alone adds nothing. Migration 31 adds the explicit removal API evidence described below.
 
 | Column | Notes |
 |---|---|
@@ -195,6 +195,8 @@ Migration 28 backfilled one initial grant per existing profile using profile cre
 | `revoked_by`, `revoked_at` | Actor/time for redundant grants on a soft merge; no general access-removal endpoint is implemented |
 
 The partial unique index permits one active grant per profile/account; the two-guardian cap is enforced by serialized application acceptance. The shared `orderManagerSql` in `src/server/juniors.ts` allows the placing account for an unlinked adult order, or an active guardian for a linked junior order. Private reads, payment/cancellation authorization and registration lists reuse it. Original placer identity alone never authorizes a linked junior order; checkout nonce replay also rechecks active authority. `placedByYou` remains provenance and `canManage` is the independent current permission. Read-only junior viewing remains separate. Account deletion/retention is not implemented; actor references may block deletion.
+
+Migration 31 adds nullable `removal_reason` and `removal_acknowledged_at` to `junior_guardians`. Explicit removals require a different authenticated guardian, 3–300 character trimmed reason and acknowledgement timestamp equal to revocation time; a check constraint requires complete evidence. Historical and profile-merge revocations keep both fields null, without inferred acknowledgement. Private relationship history exposes these records to current guardians. The removal transaction takes the family lock and targets a relationship ID, never an account-wide revocation: identical retry retains evidence, changed replay conflicts, and opposing removals leave one guardian. It does not rewrite orders, payments, waiver evidence, viewer access or accepted invitations.
 
 ### junior_guardian_invitations
 
@@ -717,7 +719,7 @@ The app does not delete operational records during ordinary organizer or rider w
 
 ## Not in the database yet
 
-These are in [product.md](product.md#data-model) but do not exist in the app: sign-in factors and MFA records (final pre-launch security gate; Clerk holds sign-in), rider profiles separate from orders for adult riders (juniors have [`junior_profiles`](#junior_profiles) with up to two explicit guardians; acceptance APIs exist, while management screens/removal/claims remain Planned), live payments (Stripe test-mode payments and refunds are recorded in `payment_sessions`, `provider_events`, `payment_attempts`, and `refunds`; no real money moves), automated waitlist promotion, USA Cycling license and waiver checks, and a general audit log.
+These are in [product.md](product.md#data-model) but do not exist in the app: sign-in factors and MFA records (final pre-launch security gate; Clerk holds sign-in), rider profiles separate from orders for adult riders (juniors have [`junior_profiles`](#junior_profiles) with up to two explicit guardians; acceptance APIs exist, while management screens/claims remain Planned), live payments (Stripe test-mode payments and refunds are recorded in `payment_sessions`, `provider_events`, `payment_attempts`, and `refunds`; no real money moves), automated waitlist promotion, USA Cycling license and waiver checks, and a general audit log.
 
 Per-feature histories exist instead of a general log. These record who made the change: [`membership_changes`](#membership_changes) (role changes, invitations, and ownership hand-over), `rider_corrections.corrected_by`, `refunds.requested_by`, `bib_reassignments.requested_by`, and `automatic_bib_jobs.configured_by` and `cancelled_by`. These do not record an actor yet: `entry_changes` (transfers and withdrawals), `check_in_undos`, and `bib_assignments`, although each of those actions already requires a signed-in organizer with the right role.
 

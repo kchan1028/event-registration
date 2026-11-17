@@ -5,8 +5,8 @@ import { formatDateTime } from './format';
 import { useLoad } from './useLoad';
 
 /** Invited recipients explicitly accept before any junior orders are loaded for them. */
-export function GuardianInvitations({ onAccepted }: { onAccepted: (list: JuniorProfile[]) => void }) {
-  const { data, error, reload, setError } = useLoad(() => api.guardianInvitations(), []);
+export function GuardianInvitations({ onAccepted, onRefresh }: { onAccepted: (list: JuniorProfile[]) => Promise<void>; onRefresh: () => Promise<void> }) {
+  const { data, error, reload, setError } = useLoad(async () => { const invitations = await api.guardianInvitations(); await onRefresh(); return invitations; }, []);
   const [message, setMessage] = useState('');
   const status = useRef<HTMLParagraphElement>(null);
   useEffect(() => { if (message) status.current?.focus(); }, [message]);
@@ -17,10 +17,10 @@ export function GuardianInvitations({ onAccepted }: { onAccepted: (list: JuniorP
     {error && <p className="alert alert--error" role="alert">Could not load guardian invitations. {error}</p>}
     <button className="btn btn--secondary" type="button" onClick={() => { setError(null); reload(); }}>Refresh guardian invitations</button>
     {!data && !error && <p role="status">Loading guardian invitations…</p>}
-    {data?.length === 0 && <p className="small">No open invitations for this signed-in email. Ask a current guardian to invite the email you use here.</p>}
+    {data?.length === 0 && <p className="small">No open invitations for this signed-in email. Existing access appears under Juniors you manage. If you expected a new invitation, ask a current guardian to check the invited address.</p>}
     {data && data.length > 0 && <ul className="orders" aria-label="Pending guardian invitations">
-      {data.map((invitation) => <Invitation key={invitation.id} invitation={invitation} onAccepted={(list) => {
-        onAccepted(list);
+      {data.map((invitation) => <Invitation key={invitation.id} invitation={invitation} onAccepted={async (list) => {
+        await onAccepted(list);
         setMessage(`Guardian access accepted for ${invitation.firstName} ${invitation.lastName}. The registrations list has been refreshed.`);
         reload();
       }} />)}
@@ -28,7 +28,7 @@ export function GuardianInvitations({ onAccepted }: { onAccepted: (list: JuniorP
   </section>;
 }
 
-function Invitation({ invitation, onAccepted }: { invitation: ReceivedGuardianInvitation; onAccepted: (list: JuniorProfile[]) => void }) {
+function Invitation({ invitation, onAccepted }: { invitation: ReceivedGuardianInvitation; onAccepted: (list: JuniorProfile[]) => Promise<void> }) {
   const [acknowledge, setAcknowledge] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +37,7 @@ function Invitation({ invitation, onAccepted }: { invitation: ReceivedGuardianIn
     event.preventDefault();
     if (!acknowledge || busy) return;
     setBusy(true); setError(null);
-    try { onAccepted(await api.acceptGuardianInvitation(invitation.id)); }
+    try { await onAccepted(await api.acceptGuardianInvitation(invitation.id)); }
     catch (e) { setError(`${(e as ApiError).message} Refresh invitations to check the current status. If needed, ask a current guardian for a new invitation.`); }
     finally { setBusy(false); }
   };

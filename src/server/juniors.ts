@@ -1,5 +1,5 @@
 import { newId } from '../shared/factory';
-import type { GuardianInvitation, JuniorProfile, ReceivedGuardianInvitation } from '../shared/juniors';
+import type { GuardianInvitation, GuardianRelationship, JuniorProfile, ReceivedGuardianInvitation } from '../shared/juniors';
 import { normalizeText } from '../shared/lookup';
 import { INVITATION_DAYS } from '../shared/roles';
 import type { Account } from './auth';
@@ -26,6 +26,11 @@ export function createJuniors(db: Db, clock: () => Date) {
   }
   async function guardians(profileId: string) {
     return db.all<{ account_id: string; email: string }>(`SELECT g.account_id,a.email FROM junior_guardians g JOIN accounts a ON a.id = g.account_id WHERE g.junior_profile_id = $1 AND g.revoked_at IS NULL ORDER BY g.account_id`, [profileId]);
+  }
+  async function relationshipRows(profileId: string): Promise<GuardianRelationship[]> {
+    return db.all<GuardianRelationship>(`SELECT g.id,g.account_id AS "accountId",a.email,g.granted_by AS "grantedBy",g.granted_at AS "grantedAt",
+      g.revoked_by AS "revokedBy",g.revoked_at AS "revokedAt",g.removal_reason AS "removalReason",g.removal_acknowledged_at AS "removalAcknowledgedAt"
+      FROM junior_guardians g JOIN accounts a ON a.id = g.account_id WHERE g.junior_profile_id = $1 ORDER BY g.granted_at,g.id`, [profileId]);
   }
   async function invitationRows(profileId: string): Promise<GuardianInvitation[]> {
     return db.all<GuardianInvitation>(`SELECT id,email,invited_by AS "invitedBy",created_at AS "createdAt",expires_at AS "expiresAt",
@@ -78,6 +83,26 @@ export function createJuniors(db: Db, clock: () => Date) {
     adopt,
     list,
     lockProfiles: () => db.lock(FAMILY_LOCK),
+    async relationships(account: Account, profileId: string): Promise<GuardianRelationship[]> {
+      await requireGuardian(account.id, profileId);
+      return relationshipRows(profileId);
+    },
+    async removeGuardian(account: Account, profileId: string, relationshipId: string, reason: string): Promise<GuardianRelationship[]> {
+      return db.transaction(async () => {
+        await db.lock(FAMILY_LOCK);
+        await requireGuardian(account.id, profileId);
+        const relationship = (await relationshipRows(profileId)).find((g) => g.id === relationshipId);
+        if (!relationship) throw new HttpError(404, 'Guardian relationship not found.');
+        if (relationship.accountId === account.id) throw new HttpError(422, 'You can only remove the other guardian.');
+        if (relationship.revokedAt) {
+          if (relationship.revokedBy !== account.id || relationship.removalReason !== reason) throw new HttpError(409, 'This relationship is already inactive.');
+          return relationshipRows(profileId);
+        }
+        const removedAt = at();
+        await db.run(`UPDATE junior_guardians SET revoked_by = $1,revoked_at = $2,removal_reason = $3,removal_acknowledged_at = $2 WHERE id = $4`, [account.id, removedAt, reason, relationshipId]);
+        return relationshipRows(profileId);
+      });
+    },
     async invitations(account: Account, profileId: string): Promise<GuardianInvitation[]> {
       await requireGuardian(account.id, profileId);
       return invitationRows(profileId);
