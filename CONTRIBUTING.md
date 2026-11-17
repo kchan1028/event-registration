@@ -46,7 +46,7 @@ Reviewers will send back any change whose summary does not state its product and
 3. Follow [docs/coding-guide.md](docs/coding-guide.md) for domain rules and [docs/documentation-guide.md](docs/documentation-guide.md) for writing.
 4. Update `product.md`, `roadmap.md`, `README.md`, and affected guides in the same change when the rule above requires it.
 5. Use fake data only. Never commit secrets, `.env` files, or real rider information.
-6. Run the tests for what you changed, as the [test plan](docs/testing/test-plan.md) describes, and record the scope and results in the pull request. CI runs the whole suite; `npm run check` and the full `npm run test:e2e` run locally only before a deployment. Keep the visual system in [DESIGN.md](DESIGN.md) consistent.
+6. Run the tests for what you changed, as the [test plan](docs/testing/test-plan.md) describes, and record the scope and results in the pull request. CI runs the whole suite; `npm run check` and the full `npm run test:e2e` run locally only at phase completion, before deployment, or when the owner explicitly requests them. Keep the visual system in [DESIGN.md](DESIGN.md) consistent.
 7. Write the change summary (format below).
 
 ## Change summary

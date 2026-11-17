@@ -88,6 +88,8 @@ Stopping the app with Ctrl+C (or a `SIGTERM` from a hosting platform) lets reque
 
 ## Run the checks
 
+For routine changes, run typechecking and the affected test files as the [test plan](../testing/test-plan.md) requires. Run the full local suites below only at phase completion, before deployment, or when the owner explicitly requests them.
+
 ```bash
 npm run check
 ```

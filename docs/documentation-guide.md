@@ -41,7 +41,7 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Operating model: support, incidents, monitoring, backups, handoff | [operations.md](operations.md) | Labeled Proposed until there is a running system |
 | Domain rules for code | [coding-guide.md](coding-guide.md) | |
 | Where code lives: modules, entry points, rule locations, tests per area, easy-to-miss constraints | [codebase-map.md](codebase-map.md) | Navigation only; verify against current code, which wins; design stays in architecture.md |
-| Test scope, independent verification, predeployment gate, release blockers, evidence | [testing/test-plan.md](testing/test-plan.md) | Requirements stay in product.md; status in roadmap.md |
+| Test scope, independent verification, phase-completion/full-run timing, predeployment gate, release blockers, evidence | [testing/test-plan.md](testing/test-plan.md) | Requirements stay in product.md; status in roadmap.md |
 | Public page and copy rules | [content-guide.md](content-guide.md) | |
 | Writing rules, status vocabulary, glossary | This file | |
 | Setup and troubleshooting | [runbooks/](runbooks/local-setup.md) | Local setup, troubleshooting, a technical local restore rehearsal, phone handoff and check-in volunteer guides exist; hosted/accepted recovery procedures remain Proposed |

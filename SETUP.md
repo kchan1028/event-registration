@@ -131,7 +131,7 @@ curl http://127.0.0.1:5273/api/public/events
 
 Expected result: a JSON array containing Berkeley Omnium 2027, with two race days, two races, and 54 categories. Category definitions and fixture notes are in [events.md](docs/fixtures/events.md).
 
-For changes to this seed, run `npm run typecheck` and `npx vitest run tests/berkeley-events.test.ts`. Reserve `npm run check` and the full browser suite for pre-deployment validation. The seed tests verify the isolated category references, prices, published catalog, persistence, safe reruns, and preservation of unrelated local data.
+For changes to this seed, run `npm run typecheck` and `npx vitest run tests/berkeley-events.test.ts`. Reserve `npm run check` and the full browser suite for phase completion, before deployment, or when the owner explicitly requests them ([test plan](docs/testing/test-plan.md)). The seed tests verify the isolated category references, prices, published catalog, persistence, safe reruns, and preservation of unrelated local data.
 
 ## Configuration and troubleshooting
 
