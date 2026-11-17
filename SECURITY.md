@@ -41,7 +41,7 @@ General bugs, typos, and feature ideas are not security issues. File those as no
 
 **Do not open a public issue, pull request, or discussion for a security problem.**
 
-1. Contact the repository owner privately through their GitHub profile ([kchan1028](https://github.com/kchan1028)). GitHub private vulnerability reporting is not enabled for this repository yet.
+1. Use GitHub's private vulnerability reporting: on the repository's **Security** tab, choose **Report a vulnerability** ([direct link](https://github.com/kchan1028/event-registration/security/advisories/new)). Only the owner sees the report. If you cannot use it, contact the repository owner privately through their GitHub profile ([kchan1028](https://github.com/kchan1028)).
 2. Describe what you found, where it is (file and commit, or URL), and how it could be misused.
 3. Leave out real personal data. Describe it ("a rider's license number appears in fixture X") rather than copying it.
 4. If you found an exposed secret, do not use it to test access.

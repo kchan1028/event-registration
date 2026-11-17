@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security problem or exposed private data
-    url: https://github.com/kchan1028/event-registration/blob/main/SECURITY.md#how-to-report
-    about: Never file these in public. Report privately as SECURITY.md describes.
+    url: https://github.com/kchan1028/event-registration/security/advisories/new
+    about: Never file these in public. Report privately through GitHub's private vulnerability reporting (see SECURITY.md).
   - name: Accessibility barrier
     url: https://github.com/kchan1028/event-registration/blob/main/ACCESSIBILITY.md#report-a-barrier
     about: How to report something you could not use with a keyboard, screen reader, zoom, or voice control.
