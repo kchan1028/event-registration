@@ -18,6 +18,10 @@ Unresolved requests are retained in session storage scoped to signed-in email/or
 
 New orders record the authenticated accepting account ID, validated declared racing age and server acceptance timestamp beside the original waiver. Client-supplied evidence is ignored; checkout replay and rider corrections preserve the original snapshot. Historical records remain null rather than being reconstructed. Existing private order-access rules govern this evidence, including read-only junior viewing; no public field, access override or federation approval is added. Demo/case-study fixture orders, including organizer demo actions, have no inferred accepting account. Preservation is enforced by application writes, not a database immutability trigger. Retention, real identity and legal/minor acceptance remain launch gates.
 
+## Guardian relationship foundation (Implemented locally)
+
+Migration 28 and new-profile creation mirror existing single-guardian ownership in `junior_guardians`. Historical actors remain unknown; new initial records identify the creating account. No route, access check, organization override or sharing capability is added. The mirror is not yet an entitlement source or an immutable audit; existing source-profile merges delete their mirror rows. Second-guardian invitation/acceptance, removal and claims require a separate authorization/lifecycle change before being enabled.
+
 ## Reservation recovery (Implemented locally)
 
 The existing per-tab registration draft also retains the exact pending reservation payload and displayed waiver text until its outcome is known. Unknown network/server, authentication and rate-limit failures retain that request ID; pending entries and consent cannot be edited. Recovery uses the existing account-protected order endpoint and server idempotency checks. A definitive rejection refreshes published terms and clears agreement if the waiver changed. This adds no route, role, database field, logging or card storage. Browser storage remains best effort; blocked storage or closing the tab cannot guarantee refresh recovery. Use fictional data only.
