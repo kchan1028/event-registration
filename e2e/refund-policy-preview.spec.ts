@@ -17,7 +17,28 @@ for (const mode of ['full_refund', 'credit', 'rider_choice', null] as const) tes
   let refundPosts = 0;
   page.on('request', (request) => { if (request.method() === 'POST' && request.url().endsWith(`/api/orders/${order.id}/refunds`)) refundPosts++; });
   let fail = true;
-  await page.route(`**/api/orders/${order.id}/refund-policy-preview?*`, (route) => fail ? route.abort('failed') : route.continue());
+  let previewGets = 0;
+  let holdNext = false;
+  let releaseOld!: () => void;
+  let capturedOld!: () => void;
+  let fulfilledOld!: () => void;
+  const held = new Promise<void>((resolve) => { releaseOld = resolve; });
+  const captured = new Promise<void>((resolve) => { capturedOld = resolve; });
+  const fulfilled = new Promise<void>((resolve) => { fulfilledOld = resolve; });
+  await page.route(`**/api/orders/${order.id}/refund-policy-preview?*`, async (route) => {
+    previewGets++;
+    if (fail) return route.abort('failed');
+    if (holdNext) {
+      holdNext = false;
+      const response = await route.fetch();
+      capturedOld();
+      await held;
+      await route.fulfill({ response });
+      fulfilledOld();
+      return;
+    }
+    return route.continue();
+  });
   await page.goto(`/#/events/${eventId}/registrations`);
   await page.getByRole('button', { name: 'Refund Policy Fictional', exact: true }).click();
   const region = page.getByRole('region', { name: 'Whole-order refund policy', exact: true });
@@ -27,16 +48,16 @@ for (const mode of ['full_refund', 'credit', 'rider_choice', null] as const) tes
   await expect(button).toBeFocused();
   fail = false;
   await button.click();
-  await expect(region.getByRole('status')).toContainText('Accepted version');
+  await expect(region).toContainText('Accepted version');
   await expect(page.getByLabel('Amount (USD)')).toHaveValue('');
   await region.getByLabel('Policy scenario').selectOption('organizer_cancellation');
-  await expect(region.getByRole('status')).toHaveCount(0);
+  await expect(region.getByRole('status')).toBeEmpty();
   await button.click();
-  await expect(region.getByRole('status')).toContainText('Assessed');
+  await expect(region).toContainText('Assessed');
   if (mode === 'full_refund') await expect(region.getByRole('status')).toContainText('Policy cash amount:');
   else {
-    await expect(region.getByRole('status')).toContainText('Review required; no cash amount suggested.');
-    await expect(region.getByRole('status')).toContainText(mode === null ? 'No structured refund policy' : mode === 'credit' ? 'as credit' : 'rider’s choice of cash or credit');
+    await expect(region).toContainText('Review required; no cash amount suggested.');
+    await expect(region).toContainText(mode === null ? 'No structured refund policy' : mode === 'credit' ? 'as credit' : 'rider’s choice of cash or credit');
   }
   for (const theme of ['light', 'dark']) {
     const toggle = page.getByRole('button', { name: /^Theme: / });
@@ -54,18 +75,34 @@ for (const mode of ['full_refund', 'credit', 'rider_choice', null] as const) tes
   await expect(region).toHaveCount(0);
   await page.getByLabel('For', { exact: true }).selectOption('');
   await expect(region).toBeVisible();
-  await expect(region.getByRole('status')).toHaveCount(0);
+  await expect(region.getByRole('status')).toBeEmpty();
   expect(refundPosts).toBe(0);
   expect((await (await page.request.get(`/api/orders/${order.id}/refunds`)).json()).refunds).toEqual([]);
   expect(await (await page.request.get(`/api/orders/${order.id}`)).json()).toEqual(before);
   if (mode === 'full_refund') {
-    expect((await page.request.post(`/api/order-entries/${before.entries[0].id}/withdraw`, { data: { reason: 'Fictional earlier withdrawal' } })).status()).toBe(200);
-    const withdrawn = await (await page.request.get(`/api/orders/${order.id}`)).json();
-    await page.reload();
-    await page.getByRole('button', { name: 'Refund Policy Fictional', exact: true }).click();
     await button.click();
-    await expect(region.getByRole('status')).toContainText('inactive entries');
-    await expect(region.getByRole('status')).toContainText('Review required; no cash amount suggested.');
+    await expect(region).toContainText('Policy cash amount:');
+    const callsBeforeHold = previewGets;
+    holdNext = true;
+    await button.focus(); await page.keyboard.press('Enter');
+    await captured;
+    const checking = region.getByRole('button', { name: 'Checking policy…' });
+    await expect(checking).toHaveAttribute('aria-disabled', 'true');
+    await expect(checking).toBeFocused();
+    await page.keyboard.press('Enter'); // a second activation must not start another GET
+    await page.getByRole('button', { name: /^Withdraw RR-M35-34 / }).click();
+    await page.getByLabel('Reason for the withdrawal', { exact: true }).fill('Fictional earlier withdrawal');
+    await page.getByRole('button', { name: 'Withdraw entry', exact: true }).click();
+    await expect(region.getByRole('status')).toBeEmpty();
+    const withdrawn = await (await page.request.get(`/api/orders/${order.id}`)).json();
+    await button.click();
+    await expect(region).toContainText('inactive entries');
+    await expect(region).toContainText('Review required; no cash amount suggested.');
+    releaseOld(); await fulfilled;
+    await page.waitForLoadState('networkidle');
+    await expect(region).toContainText('inactive entries');
+    await expect(region).not.toContainText('Policy cash amount:');
+    expect(previewGets).toBe(callsBeforeHold + 2);
     expect(refundPosts).toBe(0);
     expect(await (await page.request.get(`/api/orders/${order.id}`)).json()).toEqual(withdrawn);
   }
