@@ -133,7 +133,7 @@ For the historical Burlingame Criterium case study and published local demo, see
 
 For deterministic road, criterium, omnium, empty, and large-event cases, run `npm run seed:cases -- --owner you@example.com`. Use `-- --list`, `-- --scenario <key>`, or `-- --reset` to inspect, load one case, or remove only the generated collection. See the [case-study fixture guide](docs/fixtures/README.md#generated-race-case-studies).
 
-Open `http://127.0.0.1:5273/`, sign in with your email, and select **Load Berkeley Omnium** (the 2026 fields and times, dated for 2027, with organizer-set $80 road race and $60 criterium fees and a $130 two-race package including a podium nomination subject to organizer review), or create your own organization. Select **Browse rider events** to view already-published events; it does not load fixtures. For additional fictional testing data, use the [generated case-study collection](SETUP.md#generated-case-study-collection). Any event you publish also appears in the rider event list. For routine changes, run typechecking and the affected tests. Reserve `npm run check` and the full `npm run test:e2e` for pre-deployment validation.
+Open `http://127.0.0.1:5273/`, sign in with your email, and select **Load Berkeley Omnium** (the 2026 fields and times, dated for 2027, with organizer-set $80 road race and $60 criterium fees and a $130 two-race package including a podium nomination subject to organizer review), or create your own organization. Select **Browse rider events** to view already-published events; it does not load fixtures. For additional fictional testing data, use the [generated case-study collection](SETUP.md#generated-case-study-collection). Any event you publish also appears in the rider event list. For routine changes, run typechecking and the affected tests. Reserve `npm run check` and the full `npm run test:e2e` for phase completion, predeployment, or an explicit owner request ([test plan](docs/testing/test-plan.md)).
 
 ## How it is meant to work
 
@@ -281,7 +281,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose, make, and review a change |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1: expected behavior and how to report a problem privately |
 | [AUDIT.md](AUDIT.md) | Public-safe audit findings register: scope, coverage, findings, and closure evidence |
-| [docs/testing/test-plan.md](docs/testing/test-plan.md) | Test scope, independent verification, predeployment gate, release blockers, and evidence |
+| [docs/testing/test-plan.md](docs/testing/test-plan.md) | Test scope, independent verification, phase-completion/full-run timing, predeployment gate, release blockers, and evidence |
 | [SECURITY.md](SECURITY.md) | How to report a security problem privately, and a summary of security requirements |
 | [ACCESSIBILITY.md](ACCESSIBILITY.md) | Accessibility target, how it will be checked, and how to report a barrier |
 | [LICENSE.md](LICENSE.md) | MIT License |

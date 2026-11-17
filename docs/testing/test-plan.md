@@ -29,9 +29,13 @@ A pull request tests what it changes, not the whole application.
 - **Affected integrations.** When the change touches shared code (`src/shared/`), sign-in or roles, the database schema, dependencies, or a flow in the [risk table](#2-risk-based-coverage), also run the test files listed there for every flow that uses what changed. `npx vitest related` finds the unit and API files that import a changed source file.
 - **Relevant regressions.** Add the test files for behavior the change could plausibly break, such as the flow that calls a changed function.
 - **Explain the scope.** The pull request says which test files ran and why that set covers the change, and names anything left out.
-- **Not for a pull request:** `npm run check` and the full `npm run test:e2e` run locally only at the [predeployment gate](#4-predeployment-testing).
-- **CI.** [CI](../../.github/workflows/ci.yml) runs the typecheck, the full unit and API suite, the build, and the full browser suite on every pull request that changes more than documentation. For a documentation-only change those jobs report as skipped. The `main` ruleset requires both test jobs and the Documentation links job to pass before a merge. Do not repeat CI's full run locally.
+- **Full local suite timing:** run `npm run check` and the full `npm run test:e2e` at phase completion, before deployment, or when the owner explicitly requests them. Do not run the full local unit/API or browser suite for each ordinary change; use the targeted checks above.
+- **CI.** [CI](../../.github/workflows/ci.yml) runs the typecheck, the full unit and API suite, the build, and the full browser suite on every pull request that changes more than documentation. For a documentation-only change those jobs report as skipped. The `main` ruleset requires both test jobs and the Documentation links job to pass before a merge. Do not repeat CI's full run locally for an ordinary pull request; use the full local suite timing above.
 - **Documentation-only changes** run no application tests. Run `npm run check:docs`; CI's Documentation links job also runs it on every change, documentation-only or not, and it is a required check. Fix every broken link or anchor in the same pull request before merging, including one the change exposes in a file it did not edit. Say so in the summary.
+
+### Phase completion and requested full runs
+
+Owner decision, November 17, 2026: reserve full local suite runs for phase completion, predeployment, or an explicit owner request. Before marking a phase complete, run `npm run check` and `npm run test:e2e` on its completion commit and record the commit, commands, results and gaps in the existing pull request or linked test report. Passing automation does not replace that phase's provider, manual or other acceptance gates. An explicitly requested full run records the same evidence. Ordinary changes still require targeted checks, independent verification and required CI; CI's full-suite policy is unchanged.
 
 ## 2. Risk-based coverage
 

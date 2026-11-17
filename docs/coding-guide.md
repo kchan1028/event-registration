@@ -264,7 +264,7 @@ Current coverage (all passing November 14, 2026): category fixtures, eligibility
 
 ### How much to test, and who verifies
 
-The [test plan](testing/test-plan.md) says what a pull request tests, the risk areas that widen it, independent verification by the other agent, the predeployment gate, manual checks, release blockers, and the evidence template.
+The [test plan](testing/test-plan.md) says what a pull request tests, the risk areas that widen it, independent verification by the other agent, phase-completion/full-run timing, the predeployment gate, manual checks, release blockers, and the evidence template.
 
 ### Review
 
