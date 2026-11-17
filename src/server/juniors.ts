@@ -86,8 +86,12 @@ export function createJuniors(db: Db, clock: () => Date) {
     /** New checkout only: do not invalidate accepted orders or infer identity across households. */
     async requireRegistrationAllowed(accountId: string, rider: { firstName: string; lastName: string }) {
       await db.lock(FAMILY_LOCK);
-      const claimed = await db.all<{ first_name: string; last_name: string }>(`SELECT c.registration_name_json->>'firstName' AS first_name,c.registration_name_json->>'lastName' AS last_name
-        FROM junior_profile_claims c WHERE EXISTS (SELECT 1 FROM junior_guardians g WHERE g.junior_profile_id = c.junior_profile_id AND g.account_id = $1)`, [accountId]);
+      const claimed = await db.all<{ first_name: string; last_name: string }>(`WITH RECURSIVE history(id) AS (
+        SELECT junior_profile_id FROM junior_guardians WHERE account_id = $1
+        UNION
+        SELECT j.merged_into_id FROM junior_profiles j JOIN history h ON h.id = j.id WHERE j.merged_into_id IS NOT NULL
+      ) SELECT c.registration_name_json->>'firstName' AS first_name,c.registration_name_json->>'lastName' AS last_name
+        FROM junior_profile_claims c JOIN history h ON h.id = c.junior_profile_id`, [accountId]);
       const key = nameKey(rider.firstName, rider.lastName);
       if (claimed.some((p) => nameKey(p.first_name, p.last_name) === key)) throw new HttpError(409, 'Support review is required before creating another junior registration with this name. Nothing was held. Existing registrations are unchanged.');
     },

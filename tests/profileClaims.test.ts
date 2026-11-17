@@ -227,6 +227,25 @@ describe('post-claim junior checkout', () => {
     expect((await s.call(SECOND, 'POST', `/api/rider/events/${s.eventId}/orders`, newBody(s, SECOND, 'post-claim-old-guardian'))).statusCode).toBe(409);
   });
 
+  it('follows a removed guardian through a later chain of same-family profile merges', async () => {
+    const s = await setup();
+    const [invite] = (await s.call(PARENT, 'POST', `/api/rider/juniors/${s.profile.id}/guardian-invitations`, { email: SECOND })).json();
+    await s.call(SECOND, 'POST', `/api/rider/guardian-invitations/${invite.id}/accept`, { acknowledge: true });
+    const second = (await s.call(SECOND, 'GET', '/api/me')).json().account;
+    const grant = (await s.call(PARENT, 'GET', `/api/rider/juniors/${s.profile.id}/guardians`)).json().find((g: { accountId: string }) => g.accountId === second.id);
+    await s.call(PARENT, 'POST', `/api/rider/juniors/${s.profile.id}/guardians/${grant.id}/remove`, { reason: 'Fictional prior removal', acknowledge: true });
+    for (const name of ['MergedOne', 'MergedTwo']) {
+      expect((await s.call(PARENT, 'POST', `/api/rider/events/${s.eventId}/orders`, newBody(s, PARENT, `post-claim-merge-${name}`, name))).statusCode).toBe(201);
+      expect((await s.call(ORGANIZER, 'POST', `/api/orders/${s.order.id}/rider-corrections`, { changes: { firstName: name }, reason: 'Fictional canonical name correction' })).statusCode).toBe(200);
+    }
+    const [canonical] = (await s.call(PARENT, 'GET', '/api/rider/juniors')).json();
+    expect(canonical.id).not.toBe(s.profile.id);
+    s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
+    expect((await s.call(SUPPORT, 'POST', `/api/support/juniors/${canonical.id}/claim`, s.input)).statusCode).toBe(200);
+    const blocked = await s.call(SECOND, 'POST', `/api/rider/events/${s.eventId}/orders`, newBody(s, SECOND, 'post-claim-merged-guardian', 'MergedTwo'));
+    expect(blocked.statusCode, blocked.body).toBe(409);
+  });
+
   it('serializes a new junior checkout against claim approval without leaving a replacement profile', async () => {
     const s = await setup(); s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
     const [claim, checkout] = await Promise.all([s.approve(), s.call(PARENT, 'POST', `/api/rider/events/${s.eventId}/orders`, newBody(s, PARENT, 'post-claim-racing-order'))]);
@@ -240,5 +259,15 @@ describe('post-claim junior checkout', () => {
       expect((await db.query(`SELECT count(*)::int AS n FROM junior_profiles`)).rows[0].n).toBe(1);
       expect((await db.query(`SELECT count(*)::int AS n FROM junior_guardians WHERE revoked_at IS NULL`)).rows[0].n).toBe(0);
     } finally { await db.end(); }
+  });
+
+  it('keeps a checkout committed before the later claim under the transferred profile authority', async () => {
+    const s = await setup(); s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
+    const created = await s.call(PARENT, 'POST', `/api/rider/events/${s.eventId}/orders`, newBody(s, PARENT, 'post-claim-checkout-first'));
+    expect(created.statusCode).toBe(201);
+    const before = created.json();
+    expect((await s.approve()).statusCode).toBe(200);
+    expect((await s.call(PARENT, 'GET', `/api/orders/${before.id}`)).statusCode).toBe(404);
+    expect((await s.call(RIDER, 'GET', `/api/orders/${before.id}`)).json()).toEqual(before);
   });
 });
