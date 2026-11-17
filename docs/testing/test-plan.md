@@ -109,7 +109,7 @@ Run `tests/migrations.test.ts`, `tests/juniors.test.ts`, `tests/orders.test.ts` 
 
 ### Guardian write rollback
 
-`tests/guardian-rollback.test.ts` installs rejecting triggers only in per-test disposable databases. Fail the initial grant insert after profile creation; fail acceptance-evidence update after the second grant insert; fail replacement insertion after cancelling the old invitation. Require no partial profile/order/grant, unchanged open invitation and purchase/waiver evidence, no recipient access after failed acceptance, and safe successful retry once the injected failure is removed. Database cleanup follows the existing test harness. These checks establish local transaction rollback, not approved privacy/retention, identity evidence or deletion/support policy; issue [#170](https://github.com/kchan1028/event-registration/issues/170) remains open for those gates.
+`tests/guardian-rollback.test.ts` installs rejecting triggers only in per-test disposable databases. Fail the combined initial profile/grant insert and require the enclosing order transaction to roll back; fail acceptance-evidence update after the second grant insert; fail replacement insertion after cancelling the old invitation. Require no partial profile/order/grant, unchanged open invitation and purchase/waiver evidence, no recipient access after failed acceptance, and safe successful retry once the injected failure is removed. Database cleanup follows the existing test harness. These checks establish local transaction rollback, not approved privacy/retention, identity evidence or deletion/support policy; issue [#170](https://github.com/kchan1028/event-registration/issues/170) remains open for those gates.
 
 ### Waiver acceptance evidence
 

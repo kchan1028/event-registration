@@ -54,6 +54,10 @@ it('rolls back a new guardian grant when acceptance evidence fails, preserving t
       CREATE TRIGGER reject_acceptance BEFORE UPDATE ON junior_guardian_invitations FOR EACH ROW WHEN (NEW.accepted_at IS NOT NULL) EXECUTE FUNCTION reject_acceptance()`);
     const accept = () => call(second, 'POST', `/api/rider/guardian-invitations/${invitation.id}/accept`, { acknowledge: true });
     expect((await accept()).statusCode).toBe(500);
+    const unchanged = (await call(parent, 'GET', `/api/orders/${original.id}`)).json();
+    expect(unchanged.waiverEvidence).toEqual(original.waiverEvidence);
+    expect(unchanged.waiver).toEqual(original.waiver);
+    expect(unchanged.quote).toEqual(original.quote);
     expect((await client.query('SELECT count(*)::int AS n FROM junior_guardians WHERE revoked_at IS NULL')).rows[0].n).toBe(1);
     expect((await call(parent, 'GET', url)).json()).toEqual([invitation]);
     expect((await call(second, 'GET', `/api/orders/${original.id}`)).statusCode).toBe(404);
@@ -71,13 +75,18 @@ it('rolls back a new guardian grant when acceptance evidence fails, preserving t
 it('rolls back cancellation when an invitation replacement cannot be inserted', async () => {
   const { call, register, client } = await setup();
   try {
-    expect((await register()).statusCode).toBe(201);
+    const created = await register(); expect(created.statusCode).toBe(201);
+    const original = created.json();
     const [junior] = (await call(parent, 'GET', '/api/rider/juniors')).json();
     const url = `/api/rider/juniors/${junior.id}/guardian-invitations`;
     const [invitation] = (await call(parent, 'POST', url, { email: second })).json();
     await client.query(`CREATE FUNCTION reject_replacement() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Fictional injected replacement failure'; END $$;
       CREATE TRIGGER reject_replacement BEFORE INSERT ON junior_guardian_invitations FOR EACH ROW EXECUTE FUNCTION reject_replacement()`);
     expect((await call(parent, 'POST', url, { email: 'replacement@rollback.test' })).statusCode).toBe(500);
+    const unchanged = (await call(parent, 'GET', `/api/orders/${original.id}`)).json();
+    expect(unchanged.waiverEvidence).toEqual(original.waiverEvidence);
+    expect(unchanged.waiver).toEqual(original.waiver);
+    expect(unchanged.quote).toEqual(original.quote);
     expect((await call(parent, 'GET', url)).json()).toEqual([invitation]);
     expect((await client.query('SELECT count(*)::int AS n FROM junior_guardians')).rows[0].n).toBe(1);
     await client.query('DROP TRIGGER reject_replacement ON junior_guardian_invitations');
