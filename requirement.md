@@ -14,6 +14,7 @@ Read [product.md](product.md) for the authoritative requirements and [roadmap.md
 | How do registration categories, start groups, classifications, and capacity differ? | [Category concepts](product.md#keep-the-concepts-separate) |
 | What are the acceptance criteria and launch conditions? | [Product requirements](product.md) and [launch criteria](product.md#launch-criteria) |
 | What is implemented, pending, or blocked? | [Delivery roadmap](roadmap.md) |
+| How do users get help and recover from problems? | [Self-service help](product.md#7-self-service-help-and-guidance) |
 | What should happen next? | [Next actions](roadmap.md#next-actions) |
 | How are changes reviewed? | [Contribution guide](CONTRIBUTING.md) |
 | How are requirements and status maintained? | [Documentation guide](docs/documentation-guide.md) |

@@ -25,6 +25,7 @@ Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Ver
 | Phase 1: Test the experience without live money | In progress | Organizer event builder, rider checkout (one day, both days, junior, uncertain license), and the registration exception queue are implemented. The race-day check-in and sample timer exports are implemented too. Usability tests with people have not been run (the [test kit](docs/usability/README.md) is ready). A [pilot run of the kit](docs/usability/pilot-run-2026-11-14.md) on November 14, 2026 completed every task, fixed five problems (including check-in ignoring Enter from a scanner), and corrected the kit; it is not gate evidence. The export format is not yet agreed with a timer. |
 | Phase 2: Build the registration core | In progress | Decisions: ADR 0003 and 0004 accepted, 0005 Proposed. First build step done: the local build stores data in PostgreSQL with per-event transaction locks (November 15, 2026). Stripe hosted Checkout and refunds are implemented locally in test mode. Nothing is hosted. Depends on Phase 1 and a settled payment model. |
 | Phase 3: Make race day operable | In progress (partial local implementation ahead of gates) | Check-in, bib allocation, snapshots and printable roster exist. Phase 3 entry dependencies and operational exit evidence remain open; USAC acceptance gates live sanctioned use. |
+| Self-service help and guidance | Proposed (November 16, 2026) | Not committed. Three help stages are mapped onto the phases below in [Self-service help](#self-service-help). Requirements: [product.md](product.md#7-self-service-help-and-guidance). Owner and first topics are an [open decision](product.md#self-service-help-ownership-and-scope-decision). |
 | Phase 4: Run a controlled live pilot | Planned | Depends on Phase 3. |
 | Phase 5: Prove a two-day weekend and handoff | Planned | Depends on a successful Phase 4. |
 | Phase 6: Expand only from observed demand | Planned | P2. |
@@ -195,6 +196,20 @@ Built November 14, 2026, building on the check-in. It covers the Phase 1 deliver
 **Start-list lock (added November 14, 2026):** **Lock start list** on a race saves a snapshot and marks it as the list sent to the timer, with a link to download that locked version. Policy (decided by the project owner, November 14, 2026): the organizer locks each race's list; changes after the lock (new entries, transfers, withdrawals, check-in bibs) are still allowed and appear as "Revisions since the lock" for the timer, never blocked. **Lock again at current list** moves the lock to a new snapshot. Covered by an API test in `tests/startlists.test.ts` (run in CI) and checked by hand in the browser (a check-in after the lock showed as a bib revision).
 
 **Not built yet:** a format agreed with the actual timer and a round trip through timing software (the open research questions in [product.md](product.md#results-site-updates-research)); downloads need sign-in and the timer/export, registration manager, or owner role (November 15, 2026).
+
+## Self-service help
+
+Status: Proposed, not committed (November 16, 2026). No dates: capacity and the help content owner are not known. Requirements and acceptance criteria are in [product.md](product.md#7-self-service-help-and-guidance). These stages sit inside the existing phases and do not change their exit gates.
+
+Why this order: the only evidence is a pilot run by an AI assistant and one interview, so the first stage fixes screens and covers a few known problems before building anything that needs content volume or usage data. Each later stage starts only when the previous stage's evidence supports it.
+
+| Help stage | Placement | Work | Depends on | Done when |
+|---|---|---|---|---|
+| 1. Fix the most important confusion | Phase 1 usability sessions, continuing into Phase 2 | Pick priority tasks from the sessions and the [evidence table](product.md#who-needs-help-and-where). Improve labels, field explanations, empty states, and error messages first. Write a small set of task guides and FAQs (rider registration, junior registration, full race and declined payment, license review, check-in exceptions) and link them from their screens. Show the event's support contact on unrecoverable errors. | Phase 1 session findings; a help content owner (provisionally the project owner); the event support owner required by [product.md](product.md#quality-requirements) | The first-increment acceptance in product.md passes, and the re-run usability tasks show fewer assists at those steps |
+| 2. Improve discovery and maintenance | Phases 3 to 4, before and during the controlled pilot | Organize help by user task. Add search only if the content outgrows a short index. Add a "Was this helpful?" control without free-text personal data. Make help review part of every feature pull request. Compare completion, abandonment, and support requests by topic with the stage 1 baseline. | Stage 1; abandonment and support-topic counts from rehearsals and the pilot | Each topic has an owner and review trigger, and results are compared with recorded baselines |
+| 3. Evaluate assisted help | Phase 6, only if evidence supports it | Consider guided walkthroughs or an assistant only if stage 2 data shows people still fail at steps that guides cannot fix. For an assistant, first define approved sources (published help and event settings only), permission boundaries (never another person's or organization's data), how it says "I don't know", and handoff to the support owner. | Stage 2 data; an accepted ADR for any new service | A written evaluation recommends build or no build |
+
+Proposed versus committed: none of these stages is committed. Screen copy fixes found in usability sessions follow normal pull request review and need no separate approval.
 
 ## Delivery approach
 
@@ -417,6 +432,7 @@ Planned expansion and candidate improvements; sequence within this phase depends
 6. Additional cycling disciplines and other federation integrations.
 7. Offline check-in synchronization, only with a defined conflict-resolution model.
 8. Public event discovery once organizer operations are reliable.
+9. Guided walkthroughs or a help assistant, only if [help stage 3](#self-service-help) evidence supports it.
 
 Omnium scoring, timing hardware, weather, training tools, and general event ticketing remain outside this roadmap unless discovery establishes a compelling need.
 
@@ -441,6 +457,7 @@ These are roles to assign, not assumed staffing commitments.
 | Federation liaison | USAC permissions and accepted licensing/waiver workflows |
 | Timer / officials liaison | Start lists, export acceptance, and race-day change handling |
 | Support owner | Opening-day and race-day response, incidents, and communications |
+| Help content owner | Task guides and FAQs, their review triggers, and accuracy when workflows change |
 
 ## Critical risks and decision points
 
