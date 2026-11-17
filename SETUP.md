@@ -73,7 +73,7 @@ Use the same `DATABASE_URL` when seeding and running the app. The event appears 
 
 This setup publishes one event, Berkeley Omnium 2027, containing Berkeley Hills Road Race (April 17, $80) and Berkeley Streets Criterium (April 18, $60). These are the standard rates; junior, collegiate and women’s rates use the [lowest eligible price](docs/case-studies/organizer-templates/berkeley-omnium.md#organizer-approved-demo-pricing). Its standard $130 two-race package includes a podium nomination subject to organizer review. The category definitions and eligibility remain draft reference data. Payments and rider details must be simulated.
 
-Use Node.js 20 or later and npm. See [local setup](docs/runbooks/local-setup.md) for installation requirements and troubleshooting.
+Use Node.js 22 or later and npm. See [local setup](docs/runbooks/local-setup.md) for installation requirements and troubleshooting.
 
 A database is required for event data, registrations, waivers, bibs, check-ins, and start lists. Locally it is PostgreSQL in a Docker container, set up once in [local setup](docs/runbooks/local-setup.md#what-you-need); the app creates its tables automatically. The general setup uses the `cyclereg` database. The steps below deliberately use a separate demo database, `cyclereg_berkeley`.
 

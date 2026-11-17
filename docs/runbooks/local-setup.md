@@ -1,6 +1,6 @@
 # Local setup
 
-Last verified: November 15, 2026 on macOS 26 (Apple silicon) with Node.js 20.19, npm 10.8, Docker 27.4, and PostgreSQL 17, by the technical lead.
+Last verified: November 15, 2026 on macOS 26 (Apple silicon) with Node.js 20.19, npm 10.8, Docker 27.4, and PostgreSQL 17, by the technical lead. The project moved to Node.js 22 on November 16, 2026; `npm run check` and `npm run test:e2e` passed on Node.js 22.23.4 that day. The rest of this guide was not re-verified on Node.js 22.
 
 This runs the organizer workspace on your own computer, listening on `127.0.0.1`. Without Clerk keys, sign-in is a local test form that takes any fictional address ending in `.test` and sends no email. With a Clerk development instance, sign-in is a passwordless emailed code or link ([ADR 0003](../decisions/0003-sign-in-and-mfa.md), Phase 2). MFA is not built yet, so use fictional data only.
 
@@ -18,7 +18,7 @@ For the combined Berkeley Omnium demo, follow [Set up the Berkeley demo](../../S
 
 ## What you need
 
-- Node.js 20 or later, from [nodejs.org](https://nodejs.org/). Check with `node -v`.
+- Node.js 22 or later, from [nodejs.org](https://nodejs.org/) (or `brew install node@22`, or `nvm install 22`). Check with `node -v`. Node.js 20 is past end of support, and `@fastify/static` 10 depends on a package that requires Node.js 22.
 - npm (comes with Node.js).
 - Git.
 - PostgreSQL 17 on your computer. The simplest way is [Docker Desktop](https://www.docker.com/products/docker-desktop/) and this container (local-only test credentials, listening on `127.0.0.1` only):
