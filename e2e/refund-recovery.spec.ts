@@ -14,7 +14,8 @@ for (const committed of [true, false]) test(`recovers an interrupted refund afte
   await page.goto(`/#/events/${eventId}/registrations`);
   await page.getByRole('button', { name: 'Refund Recovery Fictional', exact: true }).click();
   await page.getByLabel('Amount (USD)').fill('1.00');
-  await page.getByLabel('Reason for the refund (required)').fill('Fictional interrupted partial refund');
+  const reason = `Fictional interrupted partial refund${committed ? '' : ' ' + 'A'.repeat(240)}`;
+  await page.getByLabel('Reason for the refund (required)').fill(reason);
   let body: Record<string, unknown> | null = null;
   let interrupt = true;
   let releaseSubmission!: () => void;
@@ -37,7 +38,7 @@ for (const committed of [true, false]) test(`recovers an interrupted refund afte
   await expect(recovery.getByRole('button', { name: 'Retry original refund' })).toBeDisabled();
   releaseSubmission();
   await expect(recovery.getByRole('button', { name: 'Retry original refund' })).toBeEnabled();
-  await expect(recovery).toContainText('Fictional interrupted partial refund');
+  await expect(recovery).toContainText(reason);
   const stored = await page.evaluate(() => Object.entries(sessionStorage).filter(([key]) => key.startsWith('cyclereg.refund.')));
   expect(stored).toHaveLength(1);
   expect(JSON.parse(stored[0][1]).clientRequestId).toBe(body!.clientRequestId);
@@ -46,7 +47,7 @@ for (const committed of [true, false]) test(`recovers an interrupted refund afte
   for (const theme of ['light','dark']) {
     const toggle = page.getByRole('button', { name: new RegExp(`Switch to ${theme} theme`) });
     if (await toggle.count()) await toggle.click();
-    for (const width of [390,1440]) {
+    for (const width of [360,390,1440]) {
       await page.setViewportSize({ width,height: 1000 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       await recovery.screenshot({ path: `test-results/refund-recovery-${committed}-${theme}-${width}.png` });
@@ -58,12 +59,18 @@ for (const committed of [true, false]) test(`recovers an interrupted refund afte
     await recovery.getByRole('button', { name: 'Check refund status' }).focus();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('alert')).toContainText('No saved refund found yet');
+    await expect(recovery).toBeFocused();
   }
   await recovery.getByRole('button', { name: 'Retry original refund' }).click();
   await expect(recovery).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Refund Recovery Fictional', exact: true })).toBeFocused();
+  await expect(page.getByRole('status').filter({ hasText: 'Last refund request:' })).toContainText('Refunded');
+  await page.setViewportSize({ width: 360,height: 1000 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  await page.getByRole('list', { name: 'Refunds for Recovery Fictional', exact: true }).screenshot({ path: `test-results/refund-history-${committed}-dark-360.png` });
   const refunds = await (await page.request.get(`/api/orders/${order.id}/refunds`)).json();
   expect(refunds.refunds).toHaveLength(1);
-  expect(refunds.refunds[0]).toMatchObject({ clientRequestId: body!.clientRequestId, amountCents: 100, reason: 'Fictional interrupted partial refund', status: 'succeeded' });
+  expect(refunds.refunds[0]).toMatchObject({ clientRequestId: body!.clientRequestId, amountCents: 100, reason, status: 'succeeded' });
   expect(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith('cyclereg.refund.')))).toEqual([]);
   const finalOrder = await (await page.request.get(`/api/orders/${order.id}`)).json();
   expect(finalOrder.entries[0].status).toBe('confirmed');

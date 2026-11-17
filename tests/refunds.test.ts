@@ -188,3 +188,16 @@ it('allows a different finance actor to replay without changing the original req
   expect(saved.refunds).toHaveLength(1);
   expect(saved.refunds[0]).toMatchObject({ amountCents: 100,requestedBy: DEFAULT_TEST_ORGANIZER });
 });
+
+
+it('identifies the saved failed refund on a replay without calling the provider again', async () => {
+  const s = await setup({ stripe: true }); const o = await s.order(['RR-M35-34']); await s.payStripe(o);
+  const body = { clientRequestId: 'refund-refused-response-lost',amountCents: 100,reason: 'Fictional provider refusal' };
+  s.refundCall.mockRejectedValueOnce(Object.assign(new Error('Fictional refusal'),{ statusCode: 400 }));
+  expect((await s.refund(o.id,body)).statusCode).toBe(409);
+  const replay = await s.refund(o.id,body);
+  expect(replay.statusCode).toBe(200);
+  const result = replay.json();
+  expect(result.refunds).toMatchObject([{ id: result.refundId,status: 'failed',amountCents: 100 }]);
+  expect(s.refundCall).toHaveBeenCalledTimes(1);
+});

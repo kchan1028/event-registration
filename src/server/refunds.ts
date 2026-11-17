@@ -1,7 +1,7 @@
 import { newId } from '../shared/factory';
 import { formatCents } from '../shared/format';
 import type { Quote } from '../shared/pricing';
-import { refundableCents, refundCanMove, refundRequestSchema, type RefundStatus, type RefundRequest } from '../shared/refunds';
+import { refundableCents, refundCanMove, refundRequestSchema, type RefundStatus, type RefundRequest, type RefundRequestResult } from '../shared/refunds';
 import type { Db } from './db';
 import { paidLine } from './orders';
 import type { PaymentProvider, ProviderEvent, ProviderRefund } from './payments';
@@ -155,7 +155,7 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
     },
 
     /** Saves a refund within its caps, then sends it to Stripe (or completes it, for a simulated payment). */
-    async request(orderId: string, body: unknown, accountId: string): Promise<void> {
+    async request(orderId: string, body: unknown, accountId: string): Promise<RefundRequestResult> {
       const input = refundRequestSchema.parse(body);
       const id = await db.transaction(async () => {
         await db.lock(`refunds:${orderId}`);
@@ -195,6 +195,7 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
         return refundId;
       });
       await send(id);
+      return { refundId: id };
     },
 
     /** Sends a requested refund to Stripe again, with the same idempotency key. */

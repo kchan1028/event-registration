@@ -23,9 +23,17 @@ export function RefundPanel({ order, canRefund, onChange }: { order: OrderView; 
   });
   const pendingRef = useRef(pending);
   const initialPending = useRef(pending);
+  const wasRecovering = useRef(pending !== null);
+  const workflowRef = useRef<HTMLDivElement>(null);
+  const [outcomeId, setOutcomeId] = useState<string | null>(null);
+  const outcome = order.refunds.find((r) => r.id === outcomeId);
   const [requestInFlight, setRequestInFlight] = useState(false);
   const recoveryRef = useRef<HTMLElement>(null);
-  useEffect(() => { if (pending && pending !== initialPending.current) recoveryRef.current?.focus(); }, [pending]);
+  useEffect(() => {
+    if (pending && pending !== initialPending.current) recoveryRef.current?.focus();
+    if (!pending && wasRecovering.current) workflowRef.current?.querySelector<HTMLElement>('input,select,button')?.focus();
+    wasRecovering.current = pending !== null;
+  }, [pending]);
   const [detail, setDetail] = useState<{ payments: RefundablePaymentView[]; refunds: OrganizerRefundView[] } | null>(null);
   const [open, setOpen] = useState(false);
   const [paymentRef, setPaymentRef] = useState<string>('');
@@ -56,6 +64,7 @@ export function RefundPanel({ order, canRefund, onChange }: { order: OrderView; 
   };
 
   const close = () => {
+    setOutcomeId(null);
     setOpen(false);
     setErr(null);
     setAmount('');
@@ -80,20 +89,26 @@ export function RefundPanel({ order, canRefund, onChange }: { order: OrderView; 
   const recover = async (body: RefundRequest) => {
     const current = await api.refunds(order.id);
     setDetail(current);
-    if (!current.refunds.some((r) => r.clientRequestId === body.clientRequestId)) return false;
+    const saved = current.refunds.find((r) => r.clientRequestId === body.clientRequestId);
+    if (!saved) return false;
     onChange(await api.order(order.id));
     remember(null);
     close();
+    setOutcomeId(saved.id);
     return true;
   };
   const send = async (body: RefundRequest) => {
+    recoveryRef.current?.focus();
+    setOutcomeId(null);
     setRequestInFlight(true);
     setBusy(true);
     setErr(null);
     try {
-      onChange(await api.requestRefund(order.id, body));
+      const next = await api.requestRefund(order.id, body);
+      onChange(next);
       remember(null);
       close();
+      setOutcomeId(next.refundId);
     } catch (e) {
       const error = e as ApiError;
       try {
@@ -119,6 +134,7 @@ export function RefundPanel({ order, canRefund, onChange }: { order: OrderView; 
   };
   const checkStatus = async () => {
     if (!pending) return;
+    recoveryRef.current?.focus();
     setBusy(true);
     setErr(null);
     try {
@@ -150,7 +166,7 @@ export function RefundPanel({ order, canRefund, onChange }: { order: OrderView; 
           <button className="btn btn--primary btn--small" disabled={busy} onClick={() => void send(pending)}>Retry original refund</button>
         </div> : <p className="small">Your account cannot refund this order. Ask an owner or finance teammate to review the saved refund history before any further reimbursement.</p>}
       </section>}
-      <div hidden={pending !== null}>
+      <div ref={workflowRef} hidden={pending !== null}>
       {open && detail ? (
         <ReasonForm
           variant="block"
@@ -201,13 +217,14 @@ export function RefundPanel({ order, canRefund, onChange }: { order: OrderView; 
       ) : (
         canRefund && (
           <p className="row-actions">
-            <button className="btn btn--ghost btn--small" aria-label={`Refund ${name}`} onClick={() => setOpen(true)}>
+            <button className="btn btn--ghost btn--small" aria-label={`Refund ${name}`} onClick={() => { setOutcomeId(null); setOpen(true); }}>
               Refund
             </button>
           </p>
         )
       )}
       </div>
+      {outcome && <p className="small" role="status">Last refund request: <strong>{REFUND_STATUS_LABEL[outcome.status]}</strong> · {formatCents(outcome.amountCents)}</p>}
       {err && (
         <p className="text-error small" role="alert">
           {err}

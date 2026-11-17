@@ -29,6 +29,8 @@ export const refundRequestSchema = z.object({
   reason: z.string().trim().min(3, 'Write why the money is being refunded.').max(300),
 });
 
+export interface RefundRequestResult { refundId: string }
+
 export type RefundRequest = z.infer<typeof refundRequestSchema>;
 
 /**
