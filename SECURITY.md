@@ -4,9 +4,9 @@ CycleReg will handle rider contact details, emergency contacts, license numbers,
 
 > **Status: local build with email sign-in, fictional data only.** Every API route except the health check, the public event list, rider event pages, and the Stripe webhook (trusted only by its verified signature) requires passwordless email sign-in (Clerk, [ADR 0003](docs/decisions/0003-sign-in-and-mfa.md) Phase 2), and organizer routes check the caller's role in the event's organization on the server (`src/server/auth.ts`, `src/shared/roles.ts`). Data is stored in a local PostgreSQL database ([setup](docs/runbooks/local-setup.md)). There is no deployed website, no payments with real money, and no real rider data. Payments are simulated or use Stripe test mode; live keys are refused. Email sign-in is one factor: anyone who controls an account's inbox can sign in as it. So the app must not hold real rider data or take live payments until MFA and sensitive-action re-verification are enforced for every organizer role at the final pre-launch security gate; riders and guardians stay on email sign-in by owner decision; until then hosted use is limited to staging and rehearsals with fictional data, and the [Render deploy](docs/runbooks/deploy-render.md) still waits on its other gates. Unless a section says otherwise, the security requirements below are Planned, not Implemented.
 
-## Expired invitation guidance (local)
+## Expired invitation guidance (Implemented locally)
 
-The signed-in recipient reads only their own latest expiry notices through `/api/rider/expired-invitations`. Authenticated account email scopes organization/role history, without revealing the team or granting access. Later role action supersedes a notice. Real identity-provider acceptance remains open.
+The signed-in recipient reads only their own latest expiry notices through `/api/rider/expired-invitations`. Authenticated account email scopes organization/role history, without revealing the team or granting access. A later grant of the same role supersedes its notice. Real identity-provider acceptance remains open.
 
 ## Reservation recovery (Implemented locally)
 
