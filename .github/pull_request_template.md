@@ -1,7 +1,8 @@
 <!--
 Keep the pull request focused on one problem. The format below comes from CONTRIBUTING.md (change summary)
 and docs/testing/test-plan.md (section 3, verification). Write "None" plus a reason for any document the
-change does not affect. No real rider data, secrets, or security details in this description.
+change does not affect. No real rider data, secrets, or security details in this description, and no AI tool
+or agent names in the title, description, or commit messages.
 -->
 
 ## Change summary
@@ -23,8 +24,8 @@ Open questions:
 ## Verification
 
 ```text
-Author: Claude Code | Codex | <name>
-Verifier: Codex | Claude Code | <name> | Pending (reason)
+Author: <author>
+Verifier: <independent verifier> | Pending (reason)
 Tested commit: <full SHA>
 Author checks: <commands run> -> <results>
 Verifier checks: <commands and scenarios> -> <results>
