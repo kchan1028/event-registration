@@ -184,7 +184,7 @@ A name correction may merge only profiles sharing an active guardian and having 
 
 ### junior_guardians
 
-Migration 28 backfilled one initial grant per existing profile using profile creation time and an unknown `granted_by`. Migration 30 makes active grants on unmerged profiles the authority for junior orders and family APIs. New profile creation writes its initial grant atomically. Explicit invitation acceptance adds the second grant under the shared family lock, with inviter and acceptance time; signing in alone adds nothing. There is no removal API yet.
+Migration 28 backfilled one initial grant per existing profile using profile creation time and an unknown `granted_by`. Migration 30 makes active grants on unmerged profiles the authority for junior orders and family APIs. New profile creation writes its initial grant atomically. Explicit invitation acceptance adds the second grant under the shared family lock, with inviter and acceptance time; signing in alone adds nothing. Migration 31 adds the explicit removal API evidence described below.
 
 | Column | Notes |
 |---|---|
@@ -200,7 +200,7 @@ Migration 31 adds nullable `removal_reason` and `removal_acknowledged_at` to `ju
 
 ### junior_guardian_invitations
 
-Migrations 29–30. Existing guardians privately create/list/replace/cancel invitations; the recipient lists pending invitations by their authenticated email and explicitly accepts with acknowledgement. No historical invitation acceptance is inferred. Existing accounts receive no automatic access. Email delivery and management/acceptance screens remain Planned.
+Migrations 29–30. Existing guardians privately create/list/replace/cancel invitations; the recipient lists pending invitations by their authenticated email and explicitly accepts with acknowledgement. No historical invitation acceptance is inferred. Existing accounts receive no automatic access. My registrations now renders recipient invitation lookup and acknowledged acceptance, using these same APIs and evidence. Email delivery and invitation creation/cancellation screens remain Planned.
 
 | Column | Notes |
 |---|---|
