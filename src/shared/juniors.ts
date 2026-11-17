@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /** A junior managed by up to two explicitly authorized guardians (src/server/juniors.ts). */
 export interface JuniorProfile {
   id: string;
@@ -48,3 +50,9 @@ export interface GuardianRelationship {
   removalReason: string | null;
   removalAcknowledgedAt: string | null;
 }
+
+/** Shared validation for the guardian removal screen and server. */
+export const guardianRemovalSchema = z.object({
+  reason: z.string().trim().refine((value) => { const length = Array.from(value).length; return length >= 3 && length <= 300; }, 'Write a reason of 3 to 300 characters for removing guardian access.'),
+  acknowledge: z.literal(true),
+});

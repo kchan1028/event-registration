@@ -34,6 +34,7 @@ import { createWaitlist } from './waitlist';
 import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
 import { createMailer, emailFromEnv, type EmailSender } from './email';
 import { createJuniors } from './juniors';
+import { guardianRemovalSchema } from '../shared/juniors';
 import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
 import { bibBatchSchema, bibChangeSchema, bibReassignmentSchema, bibFingerprintSchema } from '../shared/checkin';
 import { can, ROLES, type Permission, type Role } from '../shared/roles';
@@ -460,7 +461,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.get('/api/rider/juniors/:id/guardians', async (req) => juniors.relationships(me(req), idParam.parse(req.params).id));
   app.post('/api/rider/juniors/:id/guardians/:relationshipId/remove', async (req) => {
     const { id, relationshipId } = idParam.extend({ relationshipId: idStr }).parse(req.params);
-    const { reason } = z.object({ reason: z.string().trim().refine((value) => { const length = Array.from(value).length; return length >= 3 && length <= 300; }, 'Write a reason of 3 to 300 characters for removing guardian access.'), acknowledge: z.literal(true) }).parse(req.body);
+    const { reason } = guardianRemovalSchema.parse(req.body);
     return juniors.removeGuardian(me(req), id, relationshipId, reason);
   });
   app.get('/api/rider/juniors/:id/guardian-invitations', async (req) => juniors.invitations(me(req), idParam.parse(req.params).id));
