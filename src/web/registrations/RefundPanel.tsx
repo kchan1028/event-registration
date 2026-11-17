@@ -44,7 +44,7 @@ export function RefundPanel({ order, canRefund, onChange }: { order: OrderView; 
   const [err, setErr] = useState<string | null>(null);
   const name = `${order.rider.firstName} ${order.rider.lastName}`;
   const refundKey = order.refunds.map((r) => `${r.id}:${r.status}`).join(',');
-  const previewStateKey = JSON.stringify([order.status, refundKey, order.entries.map((e) => [e.id, e.status, e.categoryId, e.amountPaidCents])]);
+  const previewStateKey = JSON.stringify([order.status, refundKey, order.entries.map((e) => [e.id, e.status, e.categoryId, e.amountPaidCents]), detail?.payments.map((p) => [p.ref, p.provider, p.kind, p.amountCents, p.remainingCents])]);
 
   useEffect(() => {
     if (!open && !pending && order.refunds.length === 0) return;
