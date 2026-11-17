@@ -91,7 +91,7 @@ Run `tests/refunds.test.ts`, `tests/payments.test.ts` and `tests/migrations.test
 
 ### Whole-order refund-policy preview
 
-Run `tests/refundPolicy.test.ts` and `tests/refunds.test.ts` with payment/order/pricing/coupon regressions. Cover inclusive deadlines in the accepted event time zone, rounded integer-cent percentages, paid bundle allocations and excluded fees, frozen rules after republishing, distinct organizer cancellation/withdrawal outcomes, missing structured policy, credit/rider-choice review, unpaid/unreconciled orders, existing refunds, owner/finance permission and outsider/other-role denial. Preview must preserve entries, quote, waiver evidence and refund history and never call the provider. It is a whole-order read-only preview, not a partial race/day cancellation, credit ledger, policy enforcement or screen.
+Run `tests/refundPolicy.test.ts` and `tests/refunds.test.ts` with payment/order/pricing/coupon regressions. Cover inclusive deadlines in the accepted event time zone, rounded integer-cent percentages, paid bundle allocations and excluded fees, frozen rules after republishing, distinct organizer cancellation/withdrawal outcomes, missing structured policy, credit/rider-choice review, unpaid/unreconciled orders, a still-confirmed order with withdrawn/inactive entries, existing refunds, owner/finance permission and outsider/other-role denial. Preview must preserve entries, quote, waiver evidence and refund history and never call the provider. It is a whole-order read-only preview, not a partial race/day cancellation, credit ledger, policy enforcement or screen.
 
 ### Failed refund result recovery
 

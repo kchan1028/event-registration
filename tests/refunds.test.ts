@@ -96,6 +96,22 @@ describe('whole-order policy preview', () => {
     expect(await preview()).toMatchObject({ suggestedCashCents: null, reviewReasons: expect.arrayContaining([expect.stringContaining('Existing refunds')]) });
   });
 
+  it('requires review after one entry is withdrawn even though the paid order stays confirmed', async () => {
+    const s = await setup(); const o = await s.order(['RR-M35-34', 'CR-M35-34']); await s.paySimulated(o.id);
+    const withdrawn = await s.app.inject({ method: 'POST', url: `/api/order-entries/${o.entries[0].id}/withdraw`, payload: { reason: 'Fictional earlier withdrawal' } });
+    expect(withdrawn.statusCode).toBe(200);
+    const before = (await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}` })).json();
+    expect(before.status).toBe('confirmed');
+    expect(before.entries.map((e: { status: string }) => e.status).sort()).toEqual(['confirmed', 'withdrawn']);
+    for (const reason of ['withdrawal', 'organizer_cancellation']) {
+      const res = await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}/refund-policy-preview?reason=${reason}` });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ suggestedCashCents: null, reviewReasons: expect.arrayContaining([expect.stringContaining('inactive entries')]) });
+    }
+    expect((await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}` })).json()).toEqual(before);
+    expect((await s.list(o.id)).refunds).toEqual([]);
+  });
+
   it.each(['credit', 'rider_choice', null] as const)('does not suggest cash for cancellation policy %s', async (mode) => {
     const s = await setup();
     const eventId = s.eventId;

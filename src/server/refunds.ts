@@ -154,6 +154,7 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
         if (!entitlement) reviewReasons.push('No structured refund policy was accepted with this order.');
         if (entitlement && entitlement.returnAs !== 'cash') reviewReasons.push('Credit issuance and rider choice require an external process; no cash amount is suggested.');
         if (order.status !== 'confirmed') reviewReasons.push('The order is not confirmed; reconcile its entry and payment state first.');
+        if (await db.get(`SELECT 1 FROM order_entries WHERE order_id = $1 AND status <> 'confirmed' LIMIT 1`, [orderId])) reviewReasons.push('This order has inactive entries; review their dates and allocations before applying a whole-order policy amount.');
         if (payments.length !== 1 || payments[0]?.kind !== 'order') reviewReasons.push('Reconcile missing or multiple payments before applying the policy.');
         if (refunds.some((r) => r.status !== 'failed')) reviewReasons.push('Existing refunds require allocation and reconciliation before another policy amount can be suggested.');
         const cashCents = entitlement?.returnAs === 'cash' ? entitlement.amountCents : null;
