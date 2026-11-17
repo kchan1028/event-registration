@@ -353,7 +353,7 @@ Minor replacement-draft behavior remains an owner decision ([#98](https://github
 ### Rehearsals and exit evidence still required
 
 - Run an entire mock weekend with sample data and staff other than the developer.
-- Include field changes, missing licenses/signatures, refunds, duplicate names, and a lost-connection scenario.
+- Include field changes, missing licenses/signatures, refunds, duplicate names, and a lost-connection scenario. A local [check-in connection-recovery rehearsal](docs/testing/test-plan.md#check-in-connection-recovery) covers unreceived requests and committed responses lost at desktop/phone widths, including repeat-safe bib recording. Physical network loss, staff/physical inventory handling and accepted offline contingency remain unverified; the stale-warning observation [#153](https://github.com/kchan1028/event-registration/issues/153) awaits owner review.
 - Measure check-in speed and validate every export with the timer.
 - Exercise simultaneous automatic/manual/bulk bib allocation, exhausted ranges, stale previews, repeated confirmation, and protected manual/checked-in assignments. Failed batches must leave no partial assignments.
 - Exercise a walk-up rider, a full field with a waitlist, a minor needing a guardian, failed payment, and repeated staff actions without duplicate charges or entries.

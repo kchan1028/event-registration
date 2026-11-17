@@ -25,7 +25,7 @@ Paths verified against `main` at commit `740d0b9` (November 16, 2026). When a ch
 | Rider identity across orders | `src/server/identity.ts`, `src/web/registrations/SameRider.tsx` | `riderIdentity.ts` | `identity.test.ts` |
 | Sign-in, roles, team, guardians | `src/server/auth.ts`, `juniors.ts`, `src/web/auth.tsx`, `Team.tsx`, `MyRegistrations.tsx` | `roles.ts` (`can`, permissions), `juniors.ts` | `auth.test.ts`, `juniors.test.ts`; `e2e/sign-in.spec.ts`, `e2e/handoff.spec.ts` |
 | Email (test-only SES) | `src/server/email.ts` | | `auth.test.ts` (invitation emails) |
-| Check-in, bibs, roster | `src/server/checkin.ts`, `automaticBibs.ts`, `src/web/CheckIn.tsx`, `BibBatchPanel.tsx`, `Roster.tsx` | `checkin.ts`, `roster.ts` | `checkin.test.ts`, `automatic-bibs.test.ts`, `bib-reassignment.test.ts`, `roster.test.ts`; `e2e/checkin.spec.ts` |
+| Check-in, bibs, roster | `src/server/checkin.ts`, `automaticBibs.ts`, `src/web/CheckIn.tsx`, `BibBatchPanel.tsx`, `Roster.tsx` | `checkin.ts`, `roster.ts` | `checkin.test.ts`, `automatic-bibs.test.ts`, `bib-reassignment.test.ts`, `roster.test.ts`; `e2e/checkin.spec.ts`, `checkin-recovery.spec.ts` |
 | Start lists and timer export | `src/server/startlists.ts`, `src/web/StartLists.tsx` | `startlist.ts` | `startlists.test.ts` |
 | Demo and case-study data | `src/server/seed-cli.ts`, `case-study-cli.ts`, `caseStudies.ts` | `demo.ts`, `fixtures.ts`, `caseStudies.ts`, and the named event files (`berkeleyOmnium.ts`, `burlingame.ts`, and others) | `case-studies.test.ts` and the per-event test files |
 
