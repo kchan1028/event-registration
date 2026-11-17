@@ -43,7 +43,7 @@ async function setup(now?: () => Date) {
     expect(res.statusCode, res.body).toBe(201);
     return (res.json() as { id: string }).id;
   };
-  return { call, registerJunior, databaseUrl };
+  return { call, registerJunior, databaseUrl, eventId };
 }
 
 describe('guardian and junior access', () => {
@@ -301,7 +301,192 @@ describe('guardian invitation records without access grants', () => {
     expect((await call(PARENT, 'GET', url(source.id))).statusCode).toBe(404);
     const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();
     try {
-      expect((await client.query(`SELECT junior_profile_id FROM junior_guardians`)).rows).toEqual([{ junior_profile_id: target.id }]);
+      expect((await client.query(`SELECT junior_profile_id FROM junior_guardians WHERE revoked_at IS NULL`)).rows).toEqual([{ junior_profile_id: target.id }]);
     } finally { await client.end(); }
   });
+});
+
+
+describe('explicit guardian acceptance and shared authority', () => {
+  it('requires the invited account and acknowledgement, then shares only that junior while preserving purchase evidence', async () => {
+    const { call, registerJunior, databaseUrl } = await setup();
+    const orderId = await registerJunior(PARENT, 'Sam');
+    const unrelated = await registerJunior(PARENT, 'Alex');
+    const sam = (await call(PARENT, 'GET', '/api/rider/juniors')).json().find((p: { firstName: string }) => p.firstName === 'Sam');
+    const original = (await call(PARENT, 'GET', `/api/orders/${orderId}`)).json();
+    const invitationUrl = `/api/rider/juniors/${sam.id}/guardian-invitations`;
+    const [invite] = (await call(PARENT, 'POST', invitationUrl, { email: OTHER_PARENT })).json();
+    const acceptUrl = `/api/rider/guardian-invitations/${invite.id}/accept`;
+    const received = (await call(OTHER_PARENT, 'GET', '/api/rider/guardian-invitations')).json();
+    expect(received).toEqual([{ id: invite.id, firstName: 'Sam', lastName: 'Example', invitedByEmail: PARENT, expiresAt: invite.expiresAt }]);
+    expect((await call(ORGANIZER, 'GET', '/api/rider/guardian-invitations')).json()).toEqual([]);
+    expect((await call(OTHER_PARENT, 'GET', `/api/orders/${orderId}`)).statusCode).toBe(404);
+    expect((await call(OTHER_PARENT, 'POST', acceptUrl, { acknowledge: false })).statusCode).toBe(400);
+    expect((await call(ORGANIZER, 'POST', acceptUrl, { acknowledge: true })).statusCode).toBe(404);
+    const accepted = await Promise.all([call(OTHER_PARENT, 'POST', acceptUrl, { acknowledge: true }), call(OTHER_PARENT, 'POST', acceptUrl, { acknowledge: true })]);
+    for (const response of accepted) { expect(response.statusCode, response.body).toBe(200); expect(response.json()).toEqual([sam]); }
+    const secondary = (await call(OTHER_PARENT, 'GET', '/api/me')).json().account;
+    const [history] = (await call(PARENT, 'GET', invitationUrl)).json();
+    expect(history).toMatchObject({ status: 'accepted', acceptedBy: secondary.id, acceptedAt: expect.any(String), cancelledAt: null });
+    expect((await call(OTHER_PARENT, 'GET', '/api/rider/guardian-invitations')).json()).toEqual([]);
+    expect((await call(OTHER_PARENT, 'GET', `/api/orders/${unrelated}`)).statusCode).toBe(404);
+    expect((await call(OTHER_PARENT, 'GET', '/api/rider/registrations')).json()).toEqual([expect.objectContaining({ id: orderId, placedByYou: false, canManage: true })]);
+    expect((await call(OTHER_PARENT, 'GET', `/api/orders/${orderId}`)).json()).toEqual(original);
+    expect((await call(OTHER_PARENT, 'POST', `/api/orders/${orderId}/payment`, { attemptId: 'shared-guardian-payment', outcome: 'success' })).statusCode).toBe(200);
+    const paid = (await call(PARENT, 'GET', `/api/orders/${orderId}`)).json();
+    expect(paid.status).toBe('confirmed');
+    expect(paid.waiverEvidence).toEqual(original.waiverEvidence);
+    expect(paid.waiver).toEqual(original.waiver);
+    expect(paid.quote).toEqual(original.quote);
+    expect((await call(PARENT, 'POST', `${invitationUrl}/${invite.id}/cancel`)).statusCode).toBe(409);
+    expect((await call(OTHER_PARENT, 'POST', invitationUrl, { email: 'third@guardian.test' })).statusCode).toBe(409);
+    const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();
+    try { expect((await client.query(`SELECT account_id FROM orders WHERE id=$1`, [orderId])).rows[0].account_id).toBe(original.waiverEvidence.signerAccountId); expect((await client.query(`SELECT id FROM junior_guardians WHERE junior_profile_id=$1 AND revoked_at IS NULL`, [sam.id])).rowCount).toBe(2); }
+    finally { await client.end(); }
+  });
+
+  it('reuses the shared profile for either guardian’s new orders and leaves the junior viewer read-only', async () => {
+    const { call, registerJunior } = await setup();
+    const first = await registerJunior(PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    const [invite] = (await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/guardian-invitations`, { email: OTHER_PARENT })).json();
+    expect((await call(OTHER_PARENT, 'POST', `/api/rider/guardian-invitations/${invite.id}/accept`, { acknowledge: true })).statusCode).toBe(200);
+    const second = await registerJunior(OTHER_PARENT, 'Sam');
+    expect((await call(OTHER_PARENT, 'GET', '/api/rider/juniors')).json()).toEqual([sam]);
+    expect((await call(PARENT, 'GET', `/api/orders/${second}`)).statusCode).toBe(200);
+    expect((await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/viewer`, { email: OTHER_PARENT })).statusCode).toBe(422);
+    expect((await call(OTHER_PARENT, 'POST', `/api/rider/juniors/${sam.id}/viewer`, { email: PARENT })).statusCode).toBe(422);
+    expect((await call(OTHER_PARENT, 'POST', `/api/rider/juniors/${sam.id}/viewer`, { email: JUNIOR })).statusCode).toBe(200);
+    const viewed = (await call(JUNIOR, 'GET', '/api/rider/registrations')).json();
+    expect(viewed.map((o: { id: string }) => o.id).sort()).toEqual([first, second].sort());
+    expect(viewed.every((o: { canManage: boolean }) => o.canManage === false)).toBe(true);
+    expect((await call(JUNIOR, 'POST', `/api/orders/${second}/payment`, { attemptId: 'viewer-must-not-pay', outcome: 'success' })).statusCode).toBe(404);
+    expect((await call(JUNIOR, 'POST', `/api/orders/${second}/cancel`)).statusCode).toBe(404);
+    expect((await call(PARENT, 'POST', `/api/orders/${second}/cancel`)).statusCode).toBe(200);
+  });
+
+  it('refuses cancelled, expired and junior-viewer invitations at acceptance time', async () => {
+    let time = new Date('2027-01-01T12:00:00Z');
+    const { call, registerJunior } = await setup(() => time);
+    await registerJunior(PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    const url = `/api/rider/juniors/${sam.id}/guardian-invitations`;
+    const accept = (id: string) => call(OTHER_PARENT, 'POST', `/api/rider/guardian-invitations/${id}/accept`, { acknowledge: true });
+    const [old] = (await call(PARENT, 'POST', url, { email: OTHER_PARENT })).json();
+    await call(PARENT, 'POST', `${url}/${old.id}/cancel`);
+    expect((await accept(old.id)).statusCode).toBe(409);
+    let history = (await call(PARENT, 'POST', url, { email: OTHER_PARENT })).json() as GuardianInvitation[];
+    const expired = history.find((i) => i.status === 'pending')!;
+    time = new Date(expired.expiresAt);
+    expect((await accept(expired.id)).statusCode).toBe(409);
+    history = (await call(PARENT, 'POST', url, { email: OTHER_PARENT })).json();
+    const pending = history.find((i) => i.status === 'pending')!;
+    await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/viewer`, { email: OTHER_PARENT });
+    expect((await call(OTHER_PARENT, 'GET', '/api/rider/guardian-invitations')).json()).toEqual([]);
+    expect((await accept(pending.id)).statusCode).toBe(422);
+    expect((await call(OTHER_PARENT, 'GET', '/api/rider/juniors')).json()).toEqual([]);
+  });
+
+  it('adopts legacy orders before sharing but blocks a same-name acceptor household collision atomically', async () => {
+    const { call, registerJunior, databaseUrl } = await setup();
+    const shared = await registerJunior(PARENT, 'Sam');
+    const legacy = await registerJunior(OTHER_PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();
+    try {
+      const profile = (await client.query(`SELECT junior_profile_id FROM orders WHERE id=$1`, [legacy])).rows[0].junior_profile_id;
+      await client.query(`UPDATE orders SET junior_profile_id=NULL WHERE id=$1`, [legacy]);
+      await client.query(`DELETE FROM junior_profiles WHERE id=$1`, [profile]);
+      const [invite] = (await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/guardian-invitations`, { email: OTHER_PARENT })).json();
+      const refused = await call(OTHER_PARENT, 'POST', `/api/rider/guardian-invitations/${invite.id}/accept`, { acknowledge: true });
+      expect(refused.statusCode, refused.body).toBe(409);
+      expect((await client.query(`SELECT junior_profile_id FROM orders WHERE id=$1`, [legacy])).rows[0].junior_profile_id).toBeNull();
+      expect((await client.query(`SELECT id FROM junior_guardians`)).rowCount).toBe(1);
+      expect((await call(PARENT, 'GET', `/api/orders/${legacy}`)).statusCode).toBe(404);
+      expect((await call(OTHER_PARENT, 'GET', `/api/orders/${shared}`)).statusCode).toBe(404);
+    } finally { await client.end(); }
+  });
+
+  it('links the inviter’s older unlinked orders before allowing acceptance', async () => {
+    const { call, registerJunior, databaseUrl } = await setup();
+    await registerJunior(PARENT, 'Sam');
+    const older = await registerJunior(PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();
+    try { await client.query(`UPDATE orders SET junior_profile_id=NULL WHERE id=$1`, [older]); } finally { await client.end(); }
+    const [invite] = (await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/guardian-invitations`, { email: OTHER_PARENT })).json();
+    expect((await call(OTHER_PARENT, 'POST', `/api/rider/guardian-invitations/${invite.id}/accept`, { acknowledge: true })).statusCode).toBe(200);
+    expect((await call(OTHER_PARENT, 'GET', `/api/orders/${older}`)).statusCode).toBe(200);
+  });
+
+  it('blocks merges with differing guardian sets or conflicting viewer identities without changing orders', async () => {
+    const { call, registerJunior } = await setup();
+    const sourceOrder = await registerJunior(PARENT, 'Sma');
+    await registerJunior(PARENT, 'Sam');
+    const profiles = (await call(PARENT, 'GET', '/api/rider/juniors')).json() as { id: string; firstName: string }[];
+    const source = profiles.find((p) => p.firstName === 'Sma')!;
+    const target = profiles.find((p) => p.firstName === 'Sam')!;
+    const share = async (id: string) => { const history = (await call(PARENT, 'POST', `/api/rider/juniors/${id}/guardian-invitations`, { email: OTHER_PARENT })).json() as GuardianInvitation[]; expect((await call(OTHER_PARENT, 'POST', `/api/rider/guardian-invitations/${history.find((i) => i.status === 'pending')!.id}/accept`, { acknowledge: true })).statusCode).toBe(200); };
+    await share(source.id);
+    const original = (await call(PARENT, 'GET', `/api/orders/${sourceOrder}`)).json();
+    const correct = () => call(ORGANIZER, 'POST', `/api/orders/${sourceOrder}/rider-corrections`, { changes: { firstName: 'Sam' }, reason: 'Correct fictional name' });
+    expect((await correct()).statusCode).toBe(409);
+    expect((await call(PARENT, 'GET', `/api/orders/${sourceOrder}`)).json()).toEqual(original);
+    await share(target.id);
+    await call(PARENT, 'POST', `/api/rider/juniors/${source.id}/viewer`, { email: JUNIOR });
+    await call(PARENT, 'POST', `/api/rider/juniors/${target.id}/viewer`, { email: 'other.junior@fictional.test' });
+    expect((await correct()).statusCode).toBe(409);
+    await call(PARENT, 'POST', `/api/rider/juniors/${target.id}/viewer`, { email: null });
+    expect((await correct()).statusCode).toBe(200);
+    const [canonical] = (await call(OTHER_PARENT, 'GET', '/api/rider/juniors')).json();
+    expect(canonical).toMatchObject({ id: target.id, firstName: 'Sam', viewerEmail: JUNIOR });
+    expect((await call(PARENT, 'GET', `/api/orders/${sourceOrder}`)).json().waiverEvidence).toEqual(original.waiverEvidence);
+  });
+
+  it('uses current grants for linked orders and nonce replay, and accepted replay never restores a revoked grant', async () => {
+    const { call, registerJunior, databaseUrl, eventId } = await setup();
+    const orderId = await registerJunior(PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    const parent = (await call(PARENT, 'GET', '/api/me')).json().account;
+    const [invite] = (await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/guardian-invitations`, { email: OTHER_PARENT })).json();
+    await call(OTHER_PARENT, 'POST', `/api/rider/guardian-invitations/${invite.id}/accept`, { acknowledge: true });
+    const secondary = (await call(OTHER_PARENT, 'GET', '/api/me')).json().account;
+    const original = (await call(PARENT, 'GET', `/api/orders/${orderId}`)).json();
+    const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();
+    try {
+      // Direct database invalidation tests the authorization boundary; no removal API is implemented here.
+      await client.query(`UPDATE junior_guardians SET revoked_by=$1,revoked_at=now() WHERE junior_profile_id=$2 AND account_id=$3`, [parent.id, sam.id, secondary.id]);
+      expect((await call(OTHER_PARENT, 'POST', `/api/rider/guardian-invitations/${invite.id}/accept`, { acknowledge: true })).statusCode).toBe(200);
+      expect((await call(OTHER_PARENT, 'GET', `/api/orders/${orderId}`)).statusCode).toBe(404);
+      expect((await client.query(`SELECT id FROM junior_guardians WHERE junior_profile_id=$1 AND account_id=$2 AND revoked_at IS NULL`, [sam.id, secondary.id])).rowCount).toBe(0);
+      await client.query(`UPDATE junior_guardians SET revoked_by=$1,revoked_at=now() WHERE junior_profile_id=$2 AND revoked_at IS NULL`, [parent.id, sam.id]);
+      expect((await call(PARENT, 'GET', `/api/orders/${orderId}`)).statusCode).toBe(404);
+      expect((await call(PARENT, 'GET', '/api/rider/registrations')).json()).toEqual([]);
+      expect((await call(PARENT, 'POST', `/api/orders/${orderId}/cancel`)).statusCode).toBe(404);
+      const { client_request_id: requestId } = (await client.query(`SELECT client_request_id FROM orders WHERE id=$1`, [orderId])).rows[0];
+      const replay = await call(PARENT, 'POST', `/api/rider/events/${eventId}/orders`, { clientRequestId: requestId, categoryIds: [original.entries[0].categoryId], rider: {}, waiver: {} });
+      expect(replay.statusCode, replay.body).toBe(404);
+    } finally { await client.end(); }
+  });
+});
+
+
+it('serializes guardian acceptance against cancellation without a partial grant', async () => {
+  const { call, registerJunior, databaseUrl } = await setup();
+  await registerJunior(PARENT, 'Sam');
+  const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+  const url = `/api/rider/juniors/${sam.id}/guardian-invitations`;
+  const [invite] = (await call(PARENT, 'POST', url, { email: OTHER_PARENT })).json();
+  const [accept, cancel] = await Promise.all([
+    call(OTHER_PARENT, 'POST', `/api/rider/guardian-invitations/${invite.id}/accept`, { acknowledge: true }),
+    call(PARENT, 'POST', `${url}/${invite.id}/cancel`),
+  ]);
+  const [history] = (await call(PARENT, 'GET', url)).json();
+  expect([accept.statusCode, cancel.statusCode].sort()).toEqual([200, 409]);
+  const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();
+  try {
+    const count = (await client.query(`SELECT id FROM junior_guardians WHERE junior_profile_id=$1 AND revoked_at IS NULL`, [sam.id])).rowCount;
+    if (history.status === 'accepted') { expect(accept.statusCode).toBe(200); expect(history.cancelledAt).toBeNull(); expect(count).toBe(2); }
+    else { expect(history.status).toBe('cancelled'); expect(accept.statusCode).toBe(409); expect(history.acceptedAt).toBeNull(); expect(count).toBe(1); }
+  } finally { await client.end(); }
 });

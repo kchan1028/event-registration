@@ -59,7 +59,7 @@ export function MyRegistrations() {
                   </span>
                 </a>
                 <span className="tag">{STATUS_LABEL[o.status] ?? o.status}</span>
-                {!o.placedByYou && <span className="muted small">Registered by your guardian</span>}
+                {!o.placedByYou && <span className="muted small">{o.canManage ? 'Registered by another guardian' : 'Registered by your guardian'}</span>}
               </li>
             ))}
           </ul>
@@ -68,7 +68,7 @@ export function MyRegistrations() {
           <section className="settings__section" aria-labelledby="juniors-title">
             <h2 id="juniors-title">Juniors you manage</h2>
             <p className="muted small">
-              A junior appears here after you register them. You are their guardian on CycleReg. To let a junior check their own registrations, add the email they sign in with; they can look but not pay, cancel, or change anything.
+              Juniors you are authorized to manage appear here. To let a junior check their own registrations, add the email they sign in with; they can look but not pay, cancel, or change anything.
             </p>
             <ul className="orders">
               {juniors.map((j) => (

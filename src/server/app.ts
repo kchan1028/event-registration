@@ -450,8 +450,13 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   // The signed-in person's own registrations, plus those of juniors who named them as their login.
   app.get('/api/rider/registrations', async (req) => orders.listForAccount(me(req)));
 
-  // Juniors this guardian manages (one guardian per junior), and the junior's own login.
+  // Explicitly managed juniors, private guardian acceptance, and the junior's read-only login.
   app.get('/api/rider/juniors', async (req) => juniors.list(me(req).id));
+  app.get('/api/rider/guardian-invitations', async (req) => juniors.receivedInvitations(me(req)));
+  app.post('/api/rider/guardian-invitations/:id/accept', async (req) => {
+    z.object({ acknowledge: z.literal(true) }).parse(req.body);
+    return juniors.accept(me(req), idParam.parse(req.params).id);
+  });
   app.get('/api/rider/juniors/:id/guardian-invitations', async (req) => juniors.invitations(me(req), idParam.parse(req.params).id));
   app.post('/api/rider/juniors/:id/guardian-invitations', async (req) => {
     const { email } = z.object({ email: z.string().trim().email('Enter a guardian email address.').max(254) }).parse(req.body);
@@ -467,7 +472,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return juniors.setViewer(me(req), id, email);
   });
 
-  // Only the rider who placed an order pays for or cancels it.
+  // The adult placing account or a current authorized junior guardian may pay or cancel.
   app.post('/api/orders/:id/payment', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { orderId: id }, { rider: true });

@@ -1,4 +1,4 @@
-/** A junior a guardian manages (src/server/juniors.ts). One guardian per junior. */
+/** A junior managed by up to two explicitly authorized guardians (src/server/juniors.ts). */
 export interface JuniorProfile {
   id: string;
   firstName: string;
@@ -7,7 +7,7 @@ export interface JuniorProfile {
   viewerEmail: string | null;
 }
 
-/** Private invitation record; pending never grants access. Acceptance is a separate workflow. */
+/** Private invitation history; only explicit recipient acceptance grants access. */
 export interface GuardianInvitation {
   id: string;
   email: string;
@@ -17,5 +17,21 @@ export interface GuardianInvitation {
   cancelledBy: string | null;
   cancelledAt: string | null;
   cancellationReason: 'replaced' | 'cancelled' | 'profile_merged' | null;
-  status: 'pending' | 'expired' | 'cancelled';
+  acceptedBy: string | null;
+  acceptedAt: string | null;
+  status: 'pending' | 'expired' | 'cancelled' | 'accepted';
+}
+
+export interface ReceivedGuardianInvitation {
+  id: string;
+  firstName: string;
+  lastName: string;
+  invitedByEmail: string;
+  expiresAt: string;
+}
+
+/** Placing an order and having current authority to manage it are separate facts. */
+export interface RegistrationAccess {
+  placedByYou: boolean;
+  canManage: boolean;
 }

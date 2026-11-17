@@ -158,3 +158,35 @@ describe('migration 28: explicit guardian grant foundation', () => {
     } finally { await db.close(); }
   });
 });
+
+
+describe('migration 30: explicit guardian acceptance', () => {
+  it('preserves the existing guardian, pending invitation and purchase evidence without inventing acceptance', async () => {
+    const url = await testDatabaseUrl({ empty: true });
+    const client = new pg.Client({ connectionString: url }); await client.connect();
+    const evidence = { signerAccountId: 'parent', riderRacingAge: 16, acceptedAt: '2026-01-01T00:00:00.000Z' };
+    try {
+      await client.query(`CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
+      for (let v = 0; v < 29; v++) { await client.query(MIGRATIONS[v]); await client.query(`INSERT INTO schema_migrations(version) VALUES ($1)`, [v + 1]); }
+      await client.query(`INSERT INTO accounts(id,provider_user_id,email,created_at) VALUES ('parent','fictional-parent','parent@migration.test','2026-01-01Z'),('recipient','fictional-recipient','recipient@migration.test','2026-01-01Z')`);
+      await client.query(`INSERT INTO junior_profiles(id,guardian_account_id,name_key,first_name,last_name,viewer_email,created_at) VALUES ('junior','parent',E'sam\\texample','Sam','Example','viewer@migration.test','2026-01-01Z')`);
+      await client.query(`INSERT INTO junior_guardians(id,junior_profile_id,account_id,granted_by,granted_at) VALUES ('original_grant','junior','parent','parent','2026-01-01Z')`);
+      await client.query(`INSERT INTO junior_guardian_invitations(id,junior_profile_id,email,invited_by,created_at,expires_at) VALUES ('old_invite','junior','recipient@migration.test','parent','2026-01-01Z','2026-01-15Z')`);
+      await client.query(`INSERT INTO organizations(id,name,created_at) VALUES ('org','Fictional club','2026-01-01Z')`);
+      await client.query(`INSERT INTO events(id,organization_id,draft_json,revision,created_at,updated_at) VALUES ('event','org','{}',1,'2026-01-01Z','2026-01-01Z')`);
+      await client.query(`INSERT INTO orders(id,event_id,published_version,client_request_id,status,rider_json,waiver_json,waiver_evidence_json,quote_json,total_cents,account_id,junior_profile_id,hold_expires_at,created_at,updated_at) VALUES ('order','event',1,'fictional-request','confirmed','{}','{}',$1,'{}',3000,'parent','junior','2026-01-01Z','2026-01-01Z','2026-01-01Z')`, [JSON.stringify(evidence)]);
+    } finally { await client.end(); }
+    const db = openDb(url);
+    try {
+      await db.migrate(); await db.migrate();
+      expect(await db.get(`SELECT created_by_account_id,viewer_email,merged_into_id,merged_at,merged_by FROM junior_profiles WHERE id='junior'`)).toEqual({ created_by_account_id: 'parent', viewer_email: 'viewer@migration.test', merged_into_id: null, merged_at: null, merged_by: null });
+      expect(await db.get(`SELECT accepted_at,accepted_by,cancelled_at,invited_by,expires_at FROM junior_guardian_invitations WHERE id='old_invite'`)).toEqual({ accepted_at: null, accepted_by: null, cancelled_at: null, invited_by: 'parent', expires_at: '2026-01-15T00:00:00.000Z' });
+      expect(await db.all(`SELECT id,account_id FROM junior_guardians`)).toEqual([{ id: 'original_grant', account_id: 'parent' }]);
+      expect(await db.get(`SELECT account_id,junior_profile_id,status,total_cents,waiver_evidence_json FROM orders WHERE id='order'`)).toEqual({ account_id: 'parent', junior_profile_id: 'junior', status: 'confirmed', total_cents: 3000, waiver_evidence_json: evidence });
+      await expect(db.run(`INSERT INTO junior_guardian_invitations(id,junior_profile_id,email,invited_by,created_at,expires_at) VALUES ('duplicate','junior','new@migration.test','parent',now(),now())`)).rejects.toMatchObject({ code: '23505' });
+      await expect(db.run(`UPDATE junior_guardian_invitations SET accepted_by='recipient' WHERE id='old_invite'`)).rejects.toMatchObject({ code: '23514' });
+      await expect(db.run(`UPDATE junior_guardian_invitations SET cancelled_at=now() WHERE id='old_invite'`)).rejects.toMatchObject({ code: '23514' });
+      await expect(db.run(`DELETE FROM junior_profiles WHERE id='junior'`)).rejects.toMatchObject({ code: '23503' });
+    } finally { await db.close(); }
+  });
+});
