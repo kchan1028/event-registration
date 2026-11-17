@@ -6,7 +6,7 @@ Related brief: [product.md](product.md)
 
 ## Delivery status
 
-Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Verified only after its acceptance criteria or exit gate have been checked. See [docs/documentation-guide.md](docs/documentation-guide.md#status-vocabulary).
+Status values: Planned, In progress, Implemented, Verified, Blocked. Work is Verified only after its acceptance criteria or exit gate have been checked. See [docs/documentation-guide.md](docs/documentation-guide.md#status-vocabulary). Phase completion also requires the [full local suite evidence](docs/testing/test-plan.md#phase-completion-and-requested-full-runs) in the test plan.
 
 | Item | Status | Notes |
 |---|---|---|
