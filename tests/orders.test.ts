@@ -59,7 +59,8 @@ describe('rider checkout: holds and simulated payment', () => {
     const b = (await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: body })).json() as Order;
     expect(b.id).toBe(a.id);
     expect(a.waiverEvidence).toMatchObject({ signerAccountId: expect.any(String), riderRacingAge: RIDER.racingAge, acceptedAt: expect.any(String) });
-    expect(a.waiverEvidence?.signerAccountId).not.toBe('forged-account');
+    const signer = (await app.inject({ method: 'GET', url: '/api/me' })).json().account;
+    expect(a.waiverEvidence?.signerAccountId).toBe(signer.id);
     expect(a.waiverEvidence?.acceptedAt).not.toBe(body.waiverEvidence.acceptedAt);
     expect(b.waiverEvidence).toEqual(a.waiverEvidence);
     expect(await entriesCount()).toBe(before + 1);

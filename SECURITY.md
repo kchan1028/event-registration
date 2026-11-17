@@ -10,7 +10,7 @@ The signed-in recipient reads only their own latest expiry notices through `/api
 
 ## Waiver acceptance evidence (Implemented locally)
 
-New orders record the authenticated accepting account ID, validated declared racing age and server acceptance timestamp beside the original waiver. Client-supplied evidence is ignored; checkout replay and rider corrections preserve the original snapshot. Historical records remain null rather than being reconstructed. Existing private order-access rules govern this evidence, including read-only junior viewing; no public field, access override or federation approval is added. Script-created fictional orders have no inferred account. Retention, real identity and legal/minor acceptance remain launch gates.
+New orders record the authenticated accepting account ID, validated declared racing age and server acceptance timestamp beside the original waiver. Client-supplied evidence is ignored; checkout replay and rider corrections preserve the original snapshot. Historical records remain null rather than being reconstructed. Existing private order-access rules govern this evidence, including read-only junior viewing; no public field, access override or federation approval is added. Demo/case-study fixture orders, including organizer demo actions, have no inferred accepting account. Preservation is enforced by application writes, not a database immutability trigger. Retention, real identity and legal/minor acceptance remain launch gates.
 
 ## Reservation recovery (Implemented locally)
 
