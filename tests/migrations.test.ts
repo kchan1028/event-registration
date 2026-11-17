@@ -77,3 +77,27 @@ describe('local database auto-create', () => {
     await expect(ensureLocalDatabase(urlFor('Bad-Name'))).rejects.toThrow(/lowercase letters/);
   });
 });
+
+
+describe('migration 26: server-recorded waiver evidence', () => {
+  it('preserves an earlier acceptance without inventing signer, age or time evidence', async () => {
+    const url = await testDatabaseUrl({ empty: true });
+    const client = new pg.Client({ connectionString: url }); await client.connect();
+    const waiver = { version: 'fictional-old-waiver', read: true, agreed: true, signatureName: 'Fictional Guardian', signerRole: 'guardian' };
+    try {
+      await client.query(`CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
+      for (let v = 0; v < 25; v++) {
+        await client.query(MIGRATIONS[v]);
+        await client.query(`INSERT INTO schema_migrations(version) VALUES ($1)`, [v + 1]);
+      }
+      await client.query(`INSERT INTO organizations(id,name,created_at) VALUES ('old_org','Fictional migration club','2026-01-01Z')`);
+      await client.query(`INSERT INTO events(id,organization_id,draft_json,revision,created_at,updated_at) VALUES ('old_event','old_org','{}',1,'2026-01-01Z','2026-01-01Z')`);
+      await client.query(`INSERT INTO orders(id,event_id,published_version,client_request_id,status,rider_json,waiver_json,quote_json,total_cents,hold_expires_at,created_at,updated_at) VALUES ('old_order','old_event',1,'old_request','confirmed','{}',$1,'{}',1000,'2026-01-01Z','2026-01-01Z','2026-01-01Z')`, [JSON.stringify(waiver)]);
+    } finally { await client.end(); }
+    const db = openDb(url);
+    try {
+      await db.migrate(); await db.migrate();
+      expect(await db.get(`SELECT waiver_json,waiver_evidence_json,status,total_cents FROM orders WHERE id = 'old_order'`)).toEqual({ waiver_json: waiver,waiver_evidence_json: null,status: 'confirmed',total_cents: 1000 });
+    } finally { await db.close(); }
+  });
+});

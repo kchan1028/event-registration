@@ -83,6 +83,10 @@ When changing the fallback roster, run `tests/roster.test.ts` and the fallback-r
 
 `e2e/roster.spec.ts` checks the approved [phone roster decision](../../product.md#phone-roster-review-decision) in both themes at 320/390/640 CSS pixels, with long valid names/teams, checked-in/ready/blocked riders and empty days. Require full snapshot readiness, bib/races and next-step guidance without horizontal clipping, row/order parity with desktop data, coherent heading levels, visible missing-rider guidance, one visible/accessible presentation and no private fields. At 641px and desktop, preserve table columns; print from a phone must hide stacked entries and show the existing tables, exception checklist and write-in rows. Run `tests/roster.test.ts` and existing fallback browser regressions when changing shared display helpers. Automated axe/Chromium checks do not replace real phone, screen-reader, printer/pagination or volunteer rehearsal evidence.
 
+### Waiver acceptance evidence
+
+Run `tests/orders.test.ts`, `tests/juniors.test.ts` and `tests/migrations.test.ts` for server-derived signer account/declared racing age/time, ignored forged client evidence, identical checkout replay, correction preservation and schema upgrade leaving old evidence unknown. The evidence stays behind existing order authorization. These checks do not establish actual legal age, a valid official waiver, real identity or an approved retention policy. This increment changes data/API behavior, not screens.
+
 ### Expired invitation recovery
 
 Run `tests/auth.test.ts` for real expiry at sign-in, no expired-role grant, recipient-only notice access, denial of team access and disappearance after a later grant. `e2e/invitation-recovery.spec.ts` explicitly stubs notice responses for presentation: both themes, 390/1440 widths, panel-scoped axe, load failure and refresh recovery. The browser fixture does not prove real expiry or identity-provider behavior; those remain separate API and external acceptance checks.

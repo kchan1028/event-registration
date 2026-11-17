@@ -2,7 +2,7 @@ import type { LimitUsage } from '../shared/capacity';
 import type { RefundStatus } from '../shared/refunds';
 import type { CreateEventInput, EventConfig, CapacityEntry, PublicEventSummary } from '../shared/schema';
 import type { Issue } from '../shared/validation';
-import type { ReadinessItem, RiderDetails, WaiverAcceptance } from '../shared/checkout';
+import type { ReadinessItem, RiderDetails, WaiverAcceptance, WaiverEvidence } from '../shared/checkout';
 import type { Quote } from '../shared/pricing';
 import type { z } from 'zod';
 import type { couponInputSchema, CouponTerms } from '../shared/coupons';
@@ -137,6 +137,7 @@ export interface OrderView {
   status: OrderStatus;
   rider: RiderDetails;
   waiver: WaiverAcceptance;
+  waiverEvidence: WaiverEvidence | null;
   guardianRequired: boolean;
   quote: Quote;
   couponCode: string | null;

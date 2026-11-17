@@ -46,6 +46,24 @@ async function setup() {
 }
 
 describe('guardian and junior access', () => {
+  it('records the authenticated waiver signer and declared age without rewriting them after a correction', async () => {
+    const { call, registerJunior, databaseUrl } = await setup();
+    const orderId = await registerJunior(PARENT, 'Sam');
+    const account = (await call(PARENT, 'GET', '/api/me')).json().account;
+    const original = (await call(PARENT, 'GET', `/api/orders/${orderId}`)).json();
+    expect(original.waiverEvidence).toEqual({ signerAccountId: account.id, riderRacingAge: 16, acceptedAt: original.createdAt });
+    expect((await call(ORGANIZER, 'POST', `/api/orders/${orderId}/rider-corrections`, { changes: { firstName: 'Sammie' }, reason: 'Correct the fictional rider name' })).statusCode).toBe(200);
+    const corrected = (await call(PARENT, 'GET', `/api/orders/${orderId}`)).json();
+    expect(corrected.rider.firstName).toBe('Sammie');
+    expect(corrected.waiver).toEqual(original.waiver);
+    expect(corrected.waiverEvidence).toEqual(original.waiverEvidence);
+    const legacy = new pg.Client({ connectionString: databaseUrl });
+    await legacy.connect();
+    try { await legacy.query('UPDATE orders SET waiver_evidence_json = NULL WHERE id = $1', [orderId]); }
+    finally { await legacy.end(); }
+    expect((await call(PARENT, 'GET', `/api/orders/${orderId}`)).json().waiverEvidence).toBeNull();
+  });
+
   it('keeps one profile per junior for the guardian who registers them, and hides it from other households', async () => {
     const { call, registerJunior } = await setup();
     const first = await registerJunior(PARENT, 'Sam');
