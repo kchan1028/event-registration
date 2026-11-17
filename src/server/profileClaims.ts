@@ -29,7 +29,8 @@ export function createProfileClaims(db: Db, clock: () => Date, settings: Profile
       if (!operators.has(actor.id)) throw new HttpError(403, 'Only an explicitly configured support operator may approve a profile claim.');
       if (minimumAge !== 18) throw new HttpError(503, 'Profile claims are disabled until the minimum calendar age is explicitly configured.');
       const input = profileClaimApprovalSchema.parse(body);
-      const zone = new Intl.DateTimeFormat('en', { timeZone: input.timeZone }).resolvedOptions().timeZone;
+      // Preserve the reviewed name so an ICU canonical-name change cannot break identical replay.
+      const zone = input.timeZone;
       return db.transaction(async () => {
         await db.lock(FAMILY_LOCK);
         const previous = await db.get<Claim>(`SELECT *,birth_date::text AS birth_date FROM junior_profile_claims WHERE client_request_id = $1`, [input.clientRequestId]);

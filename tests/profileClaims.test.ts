@@ -61,6 +61,16 @@ describe('claim calendar age and explicit configuration', () => {
 });
 
 describe('support-approved profile claims', () => {
+  it('preserves the rider-confirmed zone name rather than a runtime canonical alias for durable replay', async () => {
+    const s = await setup(); s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
+    const first = await s.approve(SUPPORT, { timeZone: 'US/Pacific' });
+    expect(first.statusCode).toBe(200);
+    expect((await s.approve(SUPPORT, { timeZone: 'US/Pacific' })).json()).toEqual(first.json());
+    expect((await s.approve()).statusCode).toBe(409);
+    const db = new pg.Client({ connectionString: s.databaseUrl }); await db.connect();
+    try { expect((await db.query(`SELECT time_zone FROM junior_profile_claims`)).rows[0].time_zone).toBe('US/Pacific'); }
+    finally { await db.end(); }
+  });
   it('refuses a missing signed-in rider, active guardian or self-approved claim without changing access', async () => {
     const s = await setup(); s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
     const parent = (await s.call(PARENT, 'GET', '/api/me')).json().account;

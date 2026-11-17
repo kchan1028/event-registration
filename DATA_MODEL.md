@@ -228,7 +228,7 @@ Migration 32. One application-written support approval per canonical junior prof
 | `rider_account_id` | Existing signed-in claimant account; account deletion restricted |
 | `approved_by`, `approved_at` | Authenticated allowlisted support account and UTC approval time; approver must differ from claimant |
 | `client_request_id` | Unique normalized creation identity; identical retries retain the original approval |
-| `birth_date`, `time_zone` | Support-reviewed calendar DOB (`date`) and canonical rider-confirmed named zone; sensitive personal data, not legal identity proof |
+| `birth_date`, `time_zone` | Support-reviewed calendar DOB (`date`) and rider-confirmed named zone as supplied (trimmed, without runtime alias rewriting); sensitive personal data, not legal identity proof |
 | `review_reference` | Trimmed 3–300 character review reference; no identity-document copies |
 | `minimum_age` | Explicit configured threshold; database check requires 18 |
 
