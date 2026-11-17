@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import type { EventConfig } from '../src/shared/schema';
 
-// Acceptance is exercised through the actual local API; no acceptance-management screen is claimed.
+// Separate fictional sessions exercise recipient acceptance through the screen and actual local API.
 test('an explicitly accepted guardian sees shared orders with accurate provenance on desktop and phone', async ({ page, browser }, testInfo) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
   expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
@@ -22,13 +22,53 @@ test('an explicitly accepted guardian sees shared orders with accurate provenanc
   const [sam] = await (await page.request.get('/api/rider/juniors', { headers: headers(parent) })).json();
   const [invitation] = await (await page.request.post(`/api/rider/juniors/${sam.id}/guardian-invitations`, { headers: headers(parent), data: { email: second } })).json();
   expect((await page.request.get(`/api/orders/${original.id}`, { headers: headers(second) })).status()).toBe(404);
-  expect((await page.request.post(`/api/rider/guardian-invitations/${invitation.id}/accept`, { headers: headers(second), data: { acknowledge: true } })).status()).toBe(200);
-  expect((await page.request.post(`/api/orders/${original.id}/payment`, { headers: headers(second), data: { attemptId: 'guardian-browser-payment', outcome: 'success' } })).ok()).toBe(true);
-  expect((await page.request.post(`/api/rider/juniors/${sam.id}/viewer`, { headers: headers(second), data: { email: junior } })).ok()).toBe(true);
   const context = await browser.newContext({ baseURL: testInfo.project.use.baseURL, extraHTTPHeaders: headers(second) });
   try {
     const guardian = await context.newPage();
     await guardian.addInitScript((email) => sessionStorage.setItem('cyclereg.test-session', email), second);
+    await guardian.route('**/api/rider/guardian-invitations', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Fictional connection interruption' }) }));
+    await guardian.goto('/#/my-registrations');
+    await expect(guardian.getByRole('alert')).toContainText('Could not load guardian invitations');
+    await guardian.unroute('**/api/rider/guardian-invitations');
+    await guardian.getByRole('button', { name: 'Refresh guardian invitations' }).click();
+    const invitationForm = guardian.getByRole('form', { name: 'Accept guardian access for Sam Example' });
+    await expect(invitationForm).toBeVisible();
+    await expect(guardian.getByRole('alert')).toHaveCount(0);
+    await expect(guardian.getByRole('list', { name: 'Your registrations' })).toHaveCount(0);
+    await expect(invitationForm.getByRole('button')).toBeDisabled();
+    for (const theme of ['light', 'dark']) {
+      await guardian.evaluate((value) => localStorage.setItem('cyclereg-theme', value), theme);
+      await guardian.reload();
+      for (const width of [390, 1440]) {
+        await guardian.setViewportSize({ width, height: 900 });
+        expect(await guardian.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        await guardian.getByRole('region', { name: 'Guardian invitations', exact: true }).screenshot({ path: `test-results/guardian-invitations-${theme}-${width}.png` });
+        await guardian.locator('main').screenshot({ path: `test-results/guardian-invitation-${theme}-${width}.png` });
+      }
+      expect((await new AxeBuilder({ page: guardian }).include('main').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+    }
+    await invitationForm.getByRole('checkbox').focus();
+    await guardian.keyboard.press('Space');
+    await expect(invitationForm.getByRole('button')).toBeEnabled();
+    // Lose the response after acceptance commits; the exact same invitation is safe to retry.
+    let requests = 0;
+    await guardian.route(`**/api/rider/guardian-invitations/${invitation.id}/accept`, async (route) => {
+      requests++;
+      if (requests === 1) { const saved = await route.fetch(); expect(saved.ok()).toBe(true); await route.abort('failed'); }
+      else await route.continue();
+    });
+    await invitationForm.getByRole('button').click();
+    await expect(guardian.getByRole('alert')).toContainText('Refresh invitations to check the current status');
+    await invitationForm.getByRole('button').focus();
+    await guardian.keyboard.press('Enter');
+    const accepted = guardian.getByRole('status').filter({ hasText: 'Guardian access accepted for Sam Example' });
+    await expect(accepted).toBeVisible();
+    await expect(accepted).toBeFocused();
+    await expect(invitationForm).toHaveCount(0);
+    expect(requests).toBe(2);
+    expect((await page.request.post(`/api/orders/${original.id}/payment`, { headers: headers(second), data: { attemptId: 'guardian-browser-payment', outcome: 'success' } })).ok()).toBe(true);
+    expect((await page.request.post(`/api/rider/juniors/${sam.id}/viewer`, { headers: headers(second), data: { email: junior } })).ok()).toBe(true);
+    await guardian.reload();
     for (const theme of ['light', 'dark']) {
       await guardian.goto('/#/my-registrations');
       await guardian.evaluate((value) => localStorage.setItem('cyclereg-theme', value), theme);

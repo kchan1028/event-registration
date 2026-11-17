@@ -14,7 +14,7 @@ import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
 import type { EventSummary } from '../shared/reports';
 import type { Invitation, MembershipChange, Role, ExpiredInvitationNotice } from '../shared/roles';
-import type { JuniorProfile, RegistrationAccess } from '../shared/juniors';
+import type { JuniorProfile, ReceivedGuardianInvitation, RegistrationAccess } from '../shared/juniors';
 
 /** simulated: the labeled demo button. stripe_test: Stripe hosted Checkout in test mode. */
 export type { CheckInRider, CheckInList } from '../shared/checkin';
@@ -363,6 +363,8 @@ export const api = {
   setCouponActive: (eventId: string, couponId: string, active: boolean) => request<CouponView>('POST', `/api/events/${eventId}/coupons/${couponId}/active`, { active }),
   order: (id: string) => request<OrderView>('GET', `/api/orders/${id}`),
   myRegistrations: () => request<(OrderView & RegistrationAccess)[]>('GET', '/api/rider/registrations'),
+  guardianInvitations: () => request<ReceivedGuardianInvitation[]>('GET', '/api/rider/guardian-invitations'),
+  acceptGuardianInvitation: (id: string) => request<JuniorProfile[]>('POST', `/api/rider/guardian-invitations/${id}/accept`, { acknowledge: true }),
   juniors: () => request<JuniorProfile[]>('GET', '/api/rider/juniors'),
   setJuniorViewer: (id: string, email: string | null) => request<JuniorProfile[]>('POST', `/api/rider/juniors/${id}/viewer`, { email }),
   pay: (id: string, attemptId: string, outcome: 'success' | 'failure') => request<OrderView>('POST', `/api/orders/${id}/payment`, { attemptId, outcome }),

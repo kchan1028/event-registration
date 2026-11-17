@@ -4361,3 +4361,6 @@ fieldset:disabled .field label {
   gap: var(--s-2);
 }
 
+
+.guardian-invitation { display: grid; justify-items: start; gap: var(--s-3); }
+.guardian-invitation__ack { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; cursor: pointer; }

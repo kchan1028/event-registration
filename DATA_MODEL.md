@@ -198,7 +198,7 @@ The partial unique index permits one active grant per profile/account; the two-g
 
 ### junior_guardian_invitations
 
-Migrations 29–30. Existing guardians privately create/list/replace/cancel invitations; the recipient lists pending invitations by their authenticated email and explicitly accepts with acknowledgement. No historical invitation acceptance is inferred. Existing accounts receive no automatic access. Email delivery and management/acceptance screens remain Planned.
+Migrations 29–30. Existing guardians privately create/list/replace/cancel invitations; the recipient lists pending invitations by their authenticated email and explicitly accepts with acknowledgement. No historical invitation acceptance is inferred. Existing accounts receive no automatic access. My registrations now renders recipient invitation lookup and acknowledged acceptance, using these same APIs and evidence. Email delivery and invitation creation/cancellation screens remain Planned.
 
 | Column | Notes |
 |---|---|
