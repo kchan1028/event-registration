@@ -4,6 +4,8 @@ Thanks for helping. This guide explains how to propose a change, make it, and ge
 
 The project has its source documents and a local build covering the category builder, rider checkout with simulated payment, registration tools, check-in, and start lists. Useful contributions now are discovery notes, requirement clarifications, decision records, and code that closes gaps listed in [roadmap.md](roadmap.md#delivery-status). To run the code, follow [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
 
+Everyone who takes part follows the [code of conduct](CODE_OF_CONDUCT.md).
+
 ## The one rule that applies to every change
 
 Every change must review [product.md](product.md) and [roadmap.md](roadmap.md) for impact, and also [feature.md](feature.md), [SECURITY.md](SECURITY.md), [DATA_MODEL.md](DATA_MODEL.md), the [test plan](docs/testing/test-plan.md), and the [audit findings](AUDIT.md). AI agents follow the same rules; their local instruction file is not tracked.
@@ -49,7 +51,7 @@ Reviewers will send back any change whose summary does not state its product and
 
 ## Change summary
 
-Put this in the pull request description, or in the commit message body for a direct commit:
+Put this in the pull request description, or in the commit message body for a direct commit. The [pull request template](.github/pull_request_template.md) fills it in for you, with the verification block from the [test plan](docs/testing/test-plan.md#3-independent-verification); keep the two in step when this format changes:
 
 ```text
 What changed:
@@ -89,7 +91,7 @@ Write an ADR when a choice is expensive to reverse or affects several parts of t
 
 ## Reporting a problem
 
-Describe what you expected, what happened, and how to reproduce it. Leave out real rider names, emails, license numbers, and payment details. If the problem exposes private data or a security weakness, report it privately as described in [SECURITY.md](SECURITY.md) instead of filing it in public. For accessibility barriers, see [ACCESSIBILITY.md](ACCESSIBILITY.md#report-a-barrier).
+Open an issue with one of the [issue forms](.github/ISSUE_TEMPLATE/): bug, usability observation, feature or change request, or documentation problem. Describe what you expected, what happened, and how to reproduce it. Leave out real rider names, emails, license numbers, and payment details. If the problem exposes private data or a security weakness, report it privately as described in [SECURITY.md](SECURITY.md) instead of filing it in public. For accessibility barriers, see [ACCESSIBILITY.md](ACCESSIBILITY.md#report-a-barrier).
 
 ## License
 

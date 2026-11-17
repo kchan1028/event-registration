@@ -1,0 +1,52 @@
+name: Usability observation
+description: Someone could not do something easily, or asked for different behavior. An observation, not a bug.
+labels: [usability]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Record what happened, not a fix: the owner decides what to change before anyone codes it, and a changed flow goes into product.md first. Never name the tester or include real rider data. If the person could not complete a flow that product.md promises, file a bug instead.
+  - type: input
+    id: flow
+    attributes:
+      label: Flow or screen
+      placeholder: Rider checkout, review step
+    validations:
+      required: true
+  - type: input
+    id: who
+    attributes:
+      label: Who (role only, no names)
+      placeholder: Parent registering a junior, on a phone
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What they tried
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What they expected
+    validations:
+      required: true
+  - type: textarea
+    id: saw
+    attributes:
+      label: What they saw
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: Usability session, acceptance test, review, or support request, with the date.
+  - type: checkboxes
+    id: safe
+    attributes:
+      label: Before you submit
+      options:
+        - label: No tester names and no real rider data.
+          required: true

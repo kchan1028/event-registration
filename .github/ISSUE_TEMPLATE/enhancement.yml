@@ -1,0 +1,35 @@
+name: Feature or change request
+description: Propose new behavior. Requirements live in product.md and priorities in roadmap.md; the owner decides.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who is affected (riders, guardians, organizers, volunteers, timers) and what they cannot do today.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome you want
+      description: What should be possible afterward. Describe the result, not an implementation.
+    validations:
+      required: true
+  - type: input
+    id: product
+    attributes:
+      label: Related product.md section
+      description: Link it if one exists. A new requirement is added to product.md before it is built.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Evidence and constraints
+      description: Where the need came from (dated), and anything about money, capacity, eligibility, waivers, permissions, personal data, or federation rules that applies.
+  - type: checkboxes
+    id: safe
+    attributes:
+      label: Before you submit
+      options:
+        - label: This contains no real rider data and is not a security weakness.
+          required: true

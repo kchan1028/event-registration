@@ -1,0 +1,29 @@
+name: Documentation problem
+description: A document is wrong, out of date, unclear, or missing something.
+labels: [documentation]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: Document and section
+      placeholder: DATA_MODEL.md, "Not in the database yet"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or missing
+      description: Quote the text, and say what the code or another document shows instead.
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: Suggested correction
+  - type: checkboxes
+    id: safe
+    attributes:
+      label: Before you submit
+      options:
+        - label: This contains no real rider data and is not a security weakness.
+          required: true
