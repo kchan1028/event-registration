@@ -73,8 +73,10 @@ for (const storageAvailable of [true, false]) test(`recovers the exact failed re
     await expect(recovery).toBeVisible();
     await expect(recovery).toContainText('when browser storage is available');
     for (const theme of ['light', 'dark']) {
-      const toggle = page.getByRole('button', { name: `Switch to ${theme} theme` });
-      if (await toggle.count()) await toggle.click();
+      const toggle = page.getByRole('button', { name: /^Theme: / });
+      await expect(toggle).toBeVisible();
+      if (await toggle.getAttribute('data-current') !== theme) await toggle.click();
+      await expect(toggle).toHaveAttribute('data-current', theme);
       for (const width of [360, 1440]) {
         await page.setViewportSize({ width, height: 1000 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
