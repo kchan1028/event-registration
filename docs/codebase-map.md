@@ -45,4 +45,4 @@ Paths verified against `main` at commit `740d0b9` (November 16, 2026). When a ch
 - Unit and API tests: Vitest, `tests/*.test.ts`. `tests/support/db.ts` `testApp()` builds an app on a throwaway database; `tests/support/auth.ts` `fakeAuth()` and `as(email)` fake sign-in. They need the local PostgreSQL server from [local setup](runbooks/local-setup.md).
 - Browser tests: Playwright, `e2e/*.spec.ts`, with the local-only test sign-in (`AUTH_MODE=test`, configured in `playwright.config.ts`).
 - Which tests to run for a change, and when to run everything: the [test plan](testing/test-plan.md). Commands are listed there and in `package.json`.
-- CI (`.github/workflows/ci.yml`) skips the test jobs for documentation-only changes.
+- CI (`.github/workflows/ci.yml`) skips the test jobs for documentation-only changes; its Documentation links job (`npm run check:docs`, `scripts/check-doc-links.mjs`) runs on every change.
