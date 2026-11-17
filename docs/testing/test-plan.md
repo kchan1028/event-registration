@@ -111,6 +111,10 @@ Run `e2e/guardian-management.spec.ts` with the guardian invitation/acceptance br
 
 Run `tests/migrations.test.ts`, `tests/juniors.test.ts`, `tests/orders.test.ts` and `tests/auth.test.ts` for a schema-27 upgrade preserving order/payment/waiver evidence and junior viewing, one historical relationship per profile with unknown actor, one atomic initial relationship on profile creation, no duplicate on profile reuse, and existing household isolation/name-correction behavior. Verify unique active pairs and account references. Migration 30 changes authority to active explicit grants; acceptance coverage follows below. Explicit removal API coverage is described above; claim workflows and real identity-provider verification remain separate.
 
+### Guardian write rollback
+
+`tests/guardian-rollback.test.ts` installs rejecting triggers only in per-test disposable databases. Fail the combined initial profile/grant insert and require the enclosing order transaction to roll back; fail acceptance-evidence update after the second grant insert; fail replacement insertion after cancelling the old invitation. Require no partial profile/order/grant, unchanged open invitation and purchase/waiver evidence, no recipient access after failed acceptance, and safe successful retry once the injected failure is removed. Database cleanup follows the existing test harness. These checks establish local transaction rollback, not approved privacy/retention, identity evidence or deletion/support policy; issue [#170](https://github.com/kchan1028/event-registration/issues/170) remains open for those gates.
+
 ### Waiver acceptance evidence
 
 Run `tests/orders.test.ts`, `tests/juniors.test.ts` and `tests/migrations.test.ts` for server-derived signer account/declared racing age/time, ignored forged client evidence, identical checkout replay, correction preservation and schema upgrade leaving old evidence unknown. The evidence stays behind existing order authorization. These checks do not establish actual legal age, a valid official waiver, real identity or an approved retention policy. This increment changes data/API behavior, not screens.
