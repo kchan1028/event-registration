@@ -209,7 +209,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
 
   /**
    * The one check for routes that act on an order or on one of its entries.
-   * `rider`: the placing account for an adult order, or an active guardian for a linked junior order. `juniorViewer`: so may the junior's own
+   * `rider`: the placing account for an adult order, or an active guardian/approved claimed rider for a linked profile order. `juniorViewer`: so may the junior's own
    * login, when the order is a junior's and the guardian named that email. `permission`: so may a member of the
    * event's organization whose role grants it. Someone who is neither the rider nor a member gets
    * 404, so order and entry IDs cannot be probed. A member who lacks the permission, or who tries

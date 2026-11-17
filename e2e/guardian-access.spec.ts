@@ -82,7 +82,7 @@ for (const recoveryAction of ['retry', 'refresh'] as const) test(`guardian accep
       await guardian.goto('/#/my-registrations');
       await guardian.evaluate((value) => localStorage.setItem('cyclereg-theme', value), theme);
       await guardian.reload();
-      await expect(guardian.getByText('Registered by another guardian', { exact: true })).toBeVisible();
+      await expect(guardian.getByText('Registered by another account', { exact: true })).toBeVisible();
       await expect(guardian.getByText('Registered by your guardian', { exact: true })).toHaveCount(0);
       await expect(guardian.getByRole('heading', { name: 'Juniors you manage' })).toBeVisible();
       for (const width of [390, 1440]) {

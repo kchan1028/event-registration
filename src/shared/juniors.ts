@@ -18,7 +18,7 @@ export interface GuardianInvitation {
   expiresAt: string;
   cancelledBy: string | null;
   cancelledAt: string | null;
-  cancellationReason: 'replaced' | 'cancelled' | 'profile_merged' | null;
+  cancellationReason: 'replaced' | 'cancelled' | 'profile_merged' | 'profile_claimed' | null;
   acceptedBy: string | null;
   acceptedAt: string | null;
   status: 'pending' | 'expired' | 'cancelled' | 'accepted';

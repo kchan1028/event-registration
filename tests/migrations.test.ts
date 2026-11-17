@@ -7,6 +7,34 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const TEXT_TIMESTAMPS = `SELECT table_name, column_name FROM information_schema.columns
   WHERE table_schema = 'public' AND data_type = 'text' AND (column_name LIKE '%\\_at' OR column_name LIKE '%expires%')`;
 
+describe('migration 32: support-approved profile claims', () => {
+  it('keeps existing guardian/viewer history without inferring DOB or claims and constrains new evidence', async () => {
+    const url = await testDatabaseUrl({ empty: true });
+    const client = new pg.Client({ connectionString: url }); await client.connect();
+    try {
+      await client.query(`CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
+      for (let v = 0; v < 31; v++) { await client.query(MIGRATIONS[v]); await client.query(`INSERT INTO schema_migrations(version) VALUES ($1)`, [v + 1]); }
+      await client.query(`INSERT INTO accounts(id,provider_user_id,email,created_at) VALUES ('acc_old_parent','test|old@claim.test','old@claim.test','2026-02-28T12:00Z'),('acc_old_rider','test|rider@claim.test','rider@claim.test','2026-02-28T12:00Z')`);
+      await client.query(`INSERT INTO junior_profiles(id,created_by_account_id,name_key,first_name,last_name,viewer_email,created_at) VALUES ('jun_old','acc_old_parent','claim fictional','Claim','Fictional','viewer@claim.test','2026-02-28T12:00Z')`);
+      await client.query(`INSERT INTO junior_guardians(id,junior_profile_id,account_id,granted_at) VALUES ('jgd_old','jun_old','acc_old_parent','2026-02-28T12:00Z')`);
+    } finally { await client.end(); }
+    const db = openDb(url);
+    try {
+      await db.migrate();
+      expect(await db.all(`SELECT * FROM junior_profile_claims`)).toEqual([]);
+      expect(await db.get(`SELECT viewer_email FROM junior_profiles WHERE id='jun_old'`)).toEqual({ viewer_email: 'viewer@claim.test' });
+      expect(await db.get(`SELECT revoked_at FROM junior_guardians WHERE id='jgd_old'`)).toEqual({ revoked_at: null });
+      const insert = `INSERT INTO junior_profile_claims(id,junior_profile_id,rider_account_id,approved_by,client_request_id,birth_date,time_zone,review_reference,minimum_age,approved_at) VALUES ($1,'jun_old','acc_old_rider',$2,$1,'2008-02-29','UTC','FICTIONAL-REFERENCE',$3,'2026-03-01T00:00Z')`;
+      await expect(db.run(insert, ['clm_self','acc_old_rider',18])).rejects.toThrow();
+      await expect(db.run(insert, ['clm_wrong_age','acc_old_parent',17])).rejects.toThrow();
+      await db.run(insert, ['clm_valid','acc_old_parent',18]);
+      await expect(db.run(insert, ['clm_duplicate','acc_old_parent',18])).rejects.toThrow();
+      await expect(db.run(`DELETE FROM accounts WHERE id='acc_old_rider'`)).rejects.toThrow();
+      await expect(db.run(`DELETE FROM junior_profiles WHERE id='jun_old'`)).rejects.toThrow();
+    } finally { await db.close(); }
+  });
+});
+
 describe('migration 13: timestamps become timestamptz', () => {
   it('converts text timestamps written before the change without altering them', async () => {
     const url = await testDatabaseUrl({ empty: true });

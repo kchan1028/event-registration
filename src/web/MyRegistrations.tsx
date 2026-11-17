@@ -19,7 +19,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /**
- * The signed-in person's registrations, and the juniors they manage as guardian. A junior's own
+ * The signed-in person's registrations, including approved claimed profiles, and the juniors they manage as guardian. A junior's own
  * login (named by the guardian) sees that junior's registrations here, read-only.
  */
 export function MyRegistrations() {
@@ -61,7 +61,7 @@ export function MyRegistrations() {
                   </span>
                 </a>
                 <span className="tag">{STATUS_LABEL[o.status] ?? o.status}</span>
-                {!o.placedByYou && <span className="muted small">{o.canManage ? 'Registered by another guardian' : 'Registered by your guardian'}</span>}
+                {!o.placedByYou && <span className="muted small">{o.canManage ? 'Registered by another account' : 'Registered by your guardian'}</span>}
               </li>
             ))}
           </ul>
