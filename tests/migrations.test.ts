@@ -190,3 +190,28 @@ describe('migration 30: explicit guardian acceptance', () => {
     } finally { await db.close(); }
   });
 });
+
+
+describe('migration 31: guardian removal evidence', () => {
+  it('keeps historical revocations unknown and requires complete explicit removal evidence', async () => {
+    const url = await testDatabaseUrl({ empty: true });
+    const client = new pg.Client({ connectionString: url }); await client.connect();
+    try {
+      await client.query(`CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
+      for (let v = 0; v < 30; v++) { await client.query(MIGRATIONS[v]); await client.query(`INSERT INTO schema_migrations(version) VALUES ($1)`, [v + 1]); }
+      await client.query(`INSERT INTO accounts(id,provider_user_id,email,created_at) VALUES ('parent','parent','parent@migration.test',now()),('other','other','other@migration.test',now())`);
+      await client.query(`INSERT INTO junior_profiles(id,created_by_account_id,name_key,first_name,last_name,created_at) VALUES ('junior','parent','sam','Sam','Example',now())`);
+      await client.query(`INSERT INTO junior_guardians(id,junior_profile_id,account_id,granted_at,revoked_by,revoked_at) VALUES ('old','junior','parent','2026-01-01Z','other','2026-01-02Z')`);
+    } finally { await client.end(); }
+    const db = openDb(url);
+    try {
+      await db.migrate(); await db.migrate();
+      expect(await db.get(`SELECT revoked_by,revoked_at,removal_reason,removal_acknowledged_at FROM junior_guardians WHERE id='old'`)).toEqual({ revoked_by: 'other', revoked_at: '2026-01-02T00:00:00.000Z', removal_reason: null, removal_acknowledged_at: null });
+      await expect(db.run(`UPDATE junior_guardians SET removal_reason='Fictional reason' WHERE id='old'`)).rejects.toMatchObject({ code: '23514' });
+      await expect(db.run(`UPDATE junior_guardians SET removal_reason='  ',removal_acknowledged_at=revoked_at WHERE id='old'`)).rejects.toMatchObject({ code: '23514' });
+      await expect(db.run(`UPDATE junior_guardians SET removal_reason='Fictional reason',removal_acknowledged_at=now() WHERE id='old'`)).rejects.toMatchObject({ code: '23514' });
+      await db.run(`UPDATE junior_guardians SET removal_reason='Fictional reason',removal_acknowledged_at=revoked_at WHERE id='old'`);
+      await expect(db.run(`UPDATE junior_guardians SET revoked_by=account_id WHERE id='old'`)).rejects.toMatchObject({ code: '23514' });
+    } finally { await db.close(); }
+  });
+});

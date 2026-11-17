@@ -99,9 +99,13 @@ Run the guardian/auth/order/migration files and `tests/payments.test.ts` for sch
 
 `e2e/guardian-access.spec.ts` uses actual local API acceptance with separate fictional guardian/viewer sessions, then renders My registrations in both themes at 390/1440, checks provenance wording, width, keyboard order navigation and main-region axe, and opens the shared confirmation. Browser acceptance controls and physical-phone/manual-screen-reader/real identity-provider acceptance are not claimed.
 
+### Guardian removal API
+
+Run `tests/juniors.test.ts`, `tests/auth.test.ts`, `tests/orders.test.ts` and `tests/migrations.test.ts` for either guardian removing the other, actor/reason/acknowledgement evidence, identical and changed replay, self-removal refusal, outsider/viewer/organizer isolation, opposing concurrent removals leaving one guardian, and preserved purchase/waiver/viewer state. Removed original purchasers cannot read/pay/cancel/replay linked orders; accepted invitation replay must not restore authority. Verify schema-30 upgrades leave historical revocation evidence unknown and incomplete/invalid explicit removal evidence fails constraints. This API increment does not prove screens, mail, disputed restoration, claims, real identity or legal guardianship.
+
 ### Guardian relationship foundation
 
-Run `tests/migrations.test.ts`, `tests/juniors.test.ts`, `tests/orders.test.ts` and `tests/auth.test.ts` for a schema-27 upgrade preserving order/payment/waiver evidence and junior viewing, one historical relationship per profile with unknown actor, one atomic initial relationship on profile creation, no duplicate on profile reuse, and existing household isolation/name-correction behavior. Verify unique active pairs and account references. Migration 30 changes authority to active explicit grants; acceptance coverage follows below. General removal/claim workflows and real identity-provider verification remain separate.
+Run `tests/migrations.test.ts`, `tests/juniors.test.ts`, `tests/orders.test.ts` and `tests/auth.test.ts` for a schema-27 upgrade preserving order/payment/waiver evidence and junior viewing, one historical relationship per profile with unknown actor, one atomic initial relationship on profile creation, no duplicate on profile reuse, and existing household isolation/name-correction behavior. Verify unique active pairs and account references. Migration 30 changes authority to active explicit grants; acceptance coverage follows below. Explicit removal API coverage is described below; claim workflows and real identity-provider verification remain separate.
 
 ### Waiver acceptance evidence
 
