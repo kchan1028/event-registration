@@ -197,6 +197,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return { account: { id: account.id, email: account.email }, memberships: await access.memberships(account.id) };
   });
 
+  app.get('/api/rider/expired-invitations', async (req) => access.expiredInvitations(me(req)));
+
   // Only the organizations the caller belongs to, with the caller's roles in each.
   app.get('/api/organizations', async (req) => {
     const mine = new Map((await access.memberships(me(req).id)).map((m) => [m.organizationId, m.roles]));

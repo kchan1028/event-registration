@@ -78,3 +78,11 @@ export interface MembershipChange {
   by: string | null;
   at: string;
 }
+
+/** Only the signed-in recipient's expired invitation, without the organization's team list. */
+export interface ExpiredInvitationNotice {
+  id: string;
+  organizationName: string;
+  role: Role;
+  at: string;
+}

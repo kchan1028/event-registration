@@ -1,7 +1,7 @@
 import { createClerkClient, verifyToken } from '@clerk/backend';
 import type { FastifyRequest } from 'fastify';
 import { newId } from '../shared/factory';
-import { can, INVITATION_DAYS, ROLE_LABELS, type Invitation, type MembershipAction, type MembershipChange, type Permission, type Role } from '../shared/roles';
+import { can, INVITATION_DAYS, ROLE_LABELS, type Invitation, type MembershipAction, type MembershipChange, type Permission, type Role, type ExpiredInvitationNotice } from '../shared/roles';
 import type { Db } from './db';
 import type { Mailer } from './email';
 import { listenHost } from './listen';
@@ -386,7 +386,18 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     });
   }
 
-  return { accountFor, requireOrg, requireEvent, requireOrderAccess, memberships, grant, listMembers, addMember, removeMember, transferOwnership };
+  async function expiredInvitations(account: Account): Promise<ExpiredInvitationNotice[]> {
+    return db.all<ExpiredInvitationNotice>(
+      `SELECT c.id, o.name AS "organizationName", c.role, c.created_at AS at
+       FROM (SELECT DISTINCT ON (organization_id, role) id, organization_id, role, action, created_at
+         FROM membership_changes WHERE email = $1 ORDER BY organization_id, role, created_at DESC, seq DESC) c
+       JOIN organizations o ON o.id = c.organization_id
+       WHERE c.action = 'invitation_expired' ORDER BY c.created_at DESC, c.id`,
+      [account.email.toLowerCase()],
+    );
+  }
+
+  return { accountFor, requireOrg, requireEvent, requireOrderAccess, memberships, grant, listMembers, addMember, removeMember, transferOwnership, expiredInvitations };
 }
 
 export type Access = ReturnType<typeof createAccess>;

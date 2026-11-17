@@ -155,6 +155,8 @@ Migration 19. Append-only history of role and invitation changes in an organizat
 | `actor_id` | Account that made the change: null for seed scripts; for `invitation_accepted` and `invitation_expired`, the person who signed in. Set to null if that account is deleted |
 | `created_at` | |
 
+The recipient-facing expiry view reads the latest history action per organization/role for the authenticated email. It shows only invitation_expired actions, so a later grant of the same role supersedes its notice. Re-adding a signed-in recipient is a direct grant, not renewal of the deleted invitation. This derived read adds no table or migration.
+
 Granting a role someone already holds writes no row. Inviting an email again writes `invitation_renewed`. An invitation that expires unused writes `invitation_expired` only when that person signs in; until then the team panel shows it as expired, with Resend and Cancel.
 
 ### junior_profiles
