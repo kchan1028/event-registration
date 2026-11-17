@@ -113,7 +113,7 @@ Run `tests/migrations.test.ts`, `tests/juniors.test.ts`, `tests/orders.test.ts` 
 
 ### Support-approved profile claims (Planned)
 
-When implementing the approved claim policy, cover actual DOB calendar age immediately before and on the 18th birthday, independently of racing age; missing/invalid DOB and missing explicit age configuration; no unilateral claim by a viewer or guardian; required product-owner/support approval; no organizer-role override; and audit evidence for approval and the end of guardian access. Original orders, prices, payments and waiver evidence must remain unchanged. Do not mark these scenarios passed until the workflow exists and runs. Real identity, DOB provenance, minor-consent and retention approval remain separate gates.
+When implementing the approved claim policy, cover actual DOB calendar age immediately before and on the 18th birthday, independently of racing age, using the rider’s recorded time zone rather than support/server time. Cover opposite sides of midnight across zones, missing/invalid recorded time zones preventing approval, and February 29 birthdays remaining ineligible on February 28 and becoming eligible on March 1 in non-leap years; missing/invalid DOB and missing explicit age configuration; no unilateral claim by a viewer or guardian; required product-owner/support approval; no organizer-role override; and audit evidence for approval and the end of guardian access. Original orders, prices, payments and waiver evidence must remain unchanged. Do not mark these scenarios passed until the workflow exists and runs. Real identity, DOB provenance, minor-consent and retention approval remain separate gates.
 
 ### Waiver acceptance evidence
 
