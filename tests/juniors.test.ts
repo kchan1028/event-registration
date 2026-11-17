@@ -46,6 +46,26 @@ async function setup() {
 }
 
 describe('guardian and junior access', () => {
+  it('records one initial guardian grant per profile without sharing access or duplicating it on reuse', async () => {
+    const { call, registerJunior, databaseUrl } = await setup();
+    await registerJunior(PARENT, 'Sam');
+    await registerJunior(PARENT, 'Sam');
+    await registerJunior(OTHER_PARENT, 'Sam');
+    const parent = (await call(PARENT, 'GET', '/api/me')).json().account;
+    const other = (await call(OTHER_PARENT, 'GET', '/api/me')).json().account;
+    const [profile] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    const [otherProfile] = (await call(OTHER_PARENT, 'GET', '/api/rider/juniors')).json();
+    expect(profile.id).not.toBe(otherProfile.id);
+    const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();
+    try {
+      const grants = (await client.query(`SELECT junior_profile_id,account_id,granted_by,granted_at=p.created_at AS original_time,revoked_at FROM junior_guardians g JOIN junior_profiles p ON p.id=g.junior_profile_id ORDER BY account_id`)).rows;
+      expect(grants).toEqual([
+        { junior_profile_id: profile.id, account_id: parent.id, granted_by: parent.id, original_time: true, revoked_at: null },
+        { junior_profile_id: otherProfile.id, account_id: other.id, granted_by: other.id, original_time: true, revoked_at: null },
+      ].sort((a, b) => a.account_id.localeCompare(b.account_id)));
+    } finally { await client.end(); }
+  });
+
   it('records the authenticated waiver signer and declared age without rewriting them after a correction', async () => {
     const { call, registerJunior, databaseUrl } = await setup();
     const orderId = await registerJunior(PARENT, 'Sam');

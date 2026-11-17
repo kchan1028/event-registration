@@ -551,6 +551,21 @@ export const MIGRATIONS: string[] = [
   // 27: stable creation request evidence, with no inferred historical identity.
   `ALTER TABLE refunds ADD COLUMN request_json jsonb;
    CREATE UNIQUE INDEX refunds_request ON refunds(order_id, (request_json->>'clientRequestId')) WHERE request_json IS NOT NULL;`,
+  // 28: mirror existing single-guardian ownership before the separate access-lifecycle increment.
+  `CREATE TABLE junior_guardians (
+    id text PRIMARY KEY,
+    junior_profile_id text NOT NULL REFERENCES junior_profiles(id) ON DELETE CASCADE,
+    account_id text NOT NULL REFERENCES accounts(id),
+    granted_by text REFERENCES accounts(id),
+    granted_at timestamptz NOT NULL,
+    revoked_by text REFERENCES accounts(id),
+    revoked_at timestamptz,
+    CHECK (revoked_by IS NULL OR revoked_at IS NOT NULL)
+  );
+  CREATE UNIQUE INDEX junior_guardians_active ON junior_guardians(junior_profile_id, account_id) WHERE revoked_at IS NULL;
+  CREATE INDEX junior_guardians_by_account ON junior_guardians(account_id) WHERE revoked_at IS NULL;
+  INSERT INTO junior_guardians(id,junior_profile_id,account_id,granted_at)
+    SELECT 'jgd_migrated_' || id,id,guardian_account_id,created_at FROM junior_profiles;`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

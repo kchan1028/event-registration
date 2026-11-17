@@ -89,6 +89,10 @@ Run `tests/refunds.test.ts`, `tests/payments.test.ts` and `tests/migrations.test
 
 `e2e/refund-recovery.spec.ts` interrupts both POST and lookup before/after a commit, retains the exact payload across refresh, retries one request and verifies one refund with unchanged confirmed entries. Check ordinary submission progress versus unknown response, the exact returned refund status (including a failed replay), initial action focus and focus return after recovery, keyboard status lookup, both themes at 360/390/1440 and region-scoped axe. Verify phone header actions and allowed long unbroken reasons wrap, both during recovery and in the saved history, so the finance screen does not expand sideways. Storage-blocked recovery, manual screen-reader/real-device and provider/operator acceptance remain separate gates. No policy-price calculation is introduced.
 
+### Guardian relationship foundation
+
+Run `tests/migrations.test.ts`, `tests/juniors.test.ts`, `tests/orders.test.ts` and `tests/auth.test.ts` for a schema-27 upgrade preserving order/payment/waiver evidence and junior viewing, one historical relationship per profile with unknown actor, one atomic initial relationship on profile creation, no duplicate on profile reuse, and existing household isolation/name-correction behavior. Verify unique active pairs and account references. Existing single-guardian access remains authoritative; sharing, acceptance, revocation and claim tests belong to their separate lifecycle increment. No screen changes or real identity-provider verification are claimed.
+
 ### Waiver acceptance evidence
 
 Run `tests/orders.test.ts`, `tests/juniors.test.ts` and `tests/migrations.test.ts` for server-derived signer account/declared racing age/time, ignored forged client evidence, identical checkout replay, correction preservation and schema upgrade leaving old evidence unknown. The evidence stays behind existing order authorization. These checks do not establish actual legal age, a valid official waiver, real identity or an approved retention policy. This increment changes data/API behavior, not screens.

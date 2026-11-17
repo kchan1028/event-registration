@@ -44,8 +44,12 @@ export function createJuniors(db: Db, clock: () => Date) {
   async function profileFor(guardianAccountId: string, rider: { firstName: string; lastName: string }): Promise<string> {
     const key = nameKey(rider.firstName, rider.lastName);
     await db.run(
-      `INSERT INTO junior_profiles (id, guardian_account_id, name_key, first_name, last_name, created_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (guardian_account_id, name_key) DO NOTHING`,
-      [newId('jun'), guardianAccountId, key, rider.firstName, rider.lastName, clock().toISOString()],
+      `WITH created AS (
+        INSERT INTO junior_profiles (id, guardian_account_id, name_key, first_name, last_name, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (guardian_account_id, name_key) DO NOTHING RETURNING id, created_at
+      ) INSERT INTO junior_guardians(id,junior_profile_id,account_id,granted_by,granted_at)
+        SELECT $7,id,$2,$2,created_at FROM created`,
+      [newId('jun'), guardianAccountId, key, rider.firstName, rider.lastName, clock().toISOString(), newId('jgd')],
     );
     const row = await db.get<{ id: string }>(`SELECT id FROM junior_profiles WHERE guardian_account_id = $1 AND name_key = $2`, [guardianAccountId, key]);
     return row!.id;

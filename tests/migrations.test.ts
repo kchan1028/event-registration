@@ -125,3 +125,35 @@ describe('migration 27: recoverable refund creation', () => {
     } finally { await db.close(); }
   });
 });
+
+
+describe('migration 28: explicit guardian grant foundation', () => {
+  it('mirrors existing ownership once without inventing an accepting actor or changing order evidence', async () => {
+    const url = await testDatabaseUrl({ empty: true });
+    const client = new pg.Client({ connectionString: url }); await client.connect();
+    const evidence = { signerAccountId: 'old_parent', riderRacingAge: 16, acceptedAt: '2026-01-02T00:00:00.000Z' };
+    try {
+      await client.query(`CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
+      for (let v = 0; v < 27; v++) {
+        await client.query(MIGRATIONS[v]);
+        await client.query(`INSERT INTO schema_migrations(version) VALUES ($1)`, [v + 1]);
+      }
+      await client.query(`INSERT INTO accounts(id,provider_user_id,email,created_at) VALUES ('old_parent','fictional-parent','parent@migration.test','2026-01-01Z')`);
+      await client.query(`INSERT INTO junior_profiles(id,guardian_account_id,name_key,first_name,last_name,viewer_email,created_at) VALUES ('old_junior','old_parent',E'sam\\texample','Sam','Example','junior@migration.test','2026-01-02Z')`);
+      await client.query(`INSERT INTO organizations(id,name,created_at) VALUES ('old_org','Fictional migration club','2026-01-01Z')`);
+      await client.query(`INSERT INTO events(id,organization_id,draft_json,revision,created_at,updated_at) VALUES ('old_event','old_org','{}',1,'2026-01-01Z','2026-01-01Z')`);
+      await client.query(`INSERT INTO orders(id,event_id,published_version,client_request_id,status,rider_json,waiver_json,waiver_evidence_json,quote_json,total_cents,account_id,junior_profile_id,hold_expires_at,created_at,updated_at) VALUES ('old_order','old_event',1,'old_request','confirmed','{}','{}',$1,'{}',3000,'old_parent','old_junior','2026-01-01Z','2026-01-01Z','2026-01-01Z')`, [JSON.stringify(evidence)]);
+    } finally { await client.end(); }
+    const db = openDb(url);
+    try {
+      await db.migrate(); await db.migrate();
+      const grant = await db.get(`SELECT junior_profile_id,account_id,granted_by,granted_at,revoked_by,revoked_at FROM junior_guardians`);
+      expect(grant).toEqual({ junior_profile_id: 'old_junior', account_id: 'old_parent', granted_by: null, granted_at: '2026-01-02T00:00:00.000Z', revoked_by: null, revoked_at: null });
+      expect(await db.all(`SELECT id FROM junior_guardians`)).toHaveLength(1);
+      expect(await db.get(`SELECT account_id,junior_profile_id,status,total_cents,waiver_evidence_json FROM orders WHERE id='old_order'`)).toEqual({ account_id: 'old_parent', junior_profile_id: 'old_junior', status: 'confirmed', total_cents: 3000, waiver_evidence_json: evidence });
+      expect(await db.get(`SELECT viewer_email FROM junior_profiles WHERE id='old_junior'`)).toEqual({ viewer_email: 'junior@migration.test' });
+      await expect(db.run(`INSERT INTO junior_guardians(id,junior_profile_id,account_id,granted_at) VALUES ('duplicate','old_junior','old_parent',now())`)).rejects.toMatchObject({ code: '23505' });
+      await expect(db.run(`INSERT INTO junior_guardians(id,junior_profile_id,account_id,granted_at) VALUES ('missing','old_junior','missing_parent',now())`)).rejects.toMatchObject({ code: '23503' });
+    } finally { await db.close(); }
+  });
+});
