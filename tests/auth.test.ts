@@ -236,6 +236,11 @@ describe('organizer roles', () => {
     now = new Date(now.getTime() + 2 * DAY);
     // Signing in after the invitation expired gives no role; the renewed one still works.
     expect(((await call(late, 'GET', '/api/me')).json() as { memberships: unknown[] }).memberships).toEqual([]);
+    expect((await call(late, 'GET', '/api/rider/expired-invitations')).json()).toEqual([
+      { id: expect.any(String), organizationName: 'Valley Velo', role: 'finance', at: now.toISOString() },
+    ]);
+    expect((await call(OWNER, 'GET', '/api/rider/expired-invitations')).json()).toEqual([]);
+    expect((await call(late, 'GET', `/api/organizations/${org.id}/members`)).statusCode).toBe(404);
     expect(((await call(renewed, 'GET', '/api/me')).json() as { memberships: { roles: string[] }[] }).memberships).toEqual([expect.objectContaining({ organizationId: org.id, roles: ['finance'] })]);
     const after = (await call(OWNER, 'GET', `/api/organizations/${org.id}/members`)).json() as { invitations: unknown[]; history: { action: string; email: string; by: string | null }[] };
     expect(after.invitations).toEqual([]);
@@ -249,6 +254,7 @@ describe('organizer roles', () => {
     // The late person now has an account, so adding them again gives the role straight away.
     await invite(late);
     expect(((await call(late, 'GET', '/api/me')).json() as { memberships: { roles: string[] }[] }).memberships).toEqual([expect.objectContaining({ roles: ['finance'] })]);
+    expect((await call(late, 'GET', '/api/rider/expired-invitations')).json()).toEqual([]);
   });
 
   it('emails an invitation through the configured sender, records failures, and never emails for a seed script', async () => {

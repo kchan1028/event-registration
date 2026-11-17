@@ -13,7 +13,7 @@ import type { WaitlistJoin, WaitlistStatus } from '../shared/waitlist';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
 import type { EventSummary } from '../shared/reports';
-import type { Invitation, MembershipChange, Role } from '../shared/roles';
+import type { Invitation, MembershipChange, Role, ExpiredInvitationNotice } from '../shared/roles';
 import type { JuniorProfile } from '../shared/juniors';
 
 /** simulated: the labeled demo button. stripe_test: Stripe hosted Checkout in test mode. */
@@ -321,6 +321,7 @@ export interface StartListOverview {
 }
 
 export const api = {
+  expiredInvitations: () => request<ExpiredInvitationNotice[]>('GET', '/api/rider/expired-invitations'),
   members: (orgId: string) => request<MemberList>('GET', `/api/organizations/${orgId}/members`),
   addMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role }),
   removeMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members/remove`, { email, role }),

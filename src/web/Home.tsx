@@ -18,6 +18,7 @@ const TEMPLATE_LABELS: Record<Template, { title: string; detail: string }> = {
 
 export function Home() {
   const { data: orgs, error, setError, reload: load } = useLoad(() => api.organizations(), []);
+  const { data: expiredInvitations, error: invitationError } = useLoad(() => api.expiredInvitations(), []);
   const [busy, setBusy] = useState(false);
 
   async function loadDemo(which: 'omnium' | 'example') {
@@ -65,6 +66,16 @@ export function Home() {
           </p>
         )}
 
+        {invitationError && <p className="alert alert--error" role="alert">Invitation status could not load. Refresh this page to try again.</p>}
+        {expiredInvitations && expiredInvitations.length > 0 && (
+          <section className="settings__section" aria-labelledby="expired-invitations-title">
+            <h2 id="expired-invitations-title">Invitation expired</h2>
+            <p>Ask the organization's owner to add your role again. Signing in does not renew an expired invitation.</p>
+            <ul>
+              {expiredInvitations.map((i) => <li key={i.id}>{i.organizationName} · {ROLE_LABELS[i.role]}</li>)}
+            </ul>
+          </section>
+        )}
         <section className="home__grid">
           <div className="home__col">
             <h2>Your organizations</h2>
