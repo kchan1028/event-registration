@@ -28,6 +28,20 @@ export function refundPolicyEntitlement(rules: RefundRules | null, firstDay: str
   return { returnAs: rules.returnAs, percent, amountCents: Math.round(entryCents * percent / 100) };
 }
 
+export interface RefundPolicyPreview {
+  orderId: string;
+  publishedVersion: number;
+  reason: 'withdrawal' | 'organizer_cancellation';
+  onDate: string;
+  timeZone: string;
+  entryCents: number;
+  excludedFeesCents: number;
+  entitlement: ReturnType<typeof refundPolicyEntitlement>;
+  reviewReasons: string[];
+  suggestedCashCents: number | null;
+  scope: 'whole_order';
+}
+
 /** Starting points; the organizer edits every number after picking one. */
 export const REFUND_TEMPLATES: Record<RefundTemplate, { label: string; rules: RefundRules }> = {
   full_until_deadline: {
