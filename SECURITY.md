@@ -8,6 +8,12 @@ CycleReg will handle rider contact details, emergency contacts, license numbers,
 
 The signed-in recipient reads only their own latest expiry notices through `/api/rider/expired-invitations`. Authenticated account email scopes organization/role history, without revealing the team or granting access. A later grant of the same role supersedes its notice. Real identity-provider acceptance remains open.
 
+## Paid cancellation allocation preview (Implemented locally)
+
+`POST /api/events/:id/cancellation-allocation-preview` requires the event organization’s `payments.refund` permission (owner/finance); rider ownership and registration-manager role alone grant no access. The selection schema rejects mixed/unknown scopes and validates race/day IDs against the current published event. Queries constrain both orders and entries to that event, and return entry/order identifiers and financial policy information without rider contacts, DOB or support references.
+
+The preview holds the event advisory lock while reading current published placements and active paid entries; accepted versions/prices remain frozen. Versions and nonfailed refund history are read in batches. An unknown current placement blocks every scope because exclusion cannot be established safely; an absent accepted price line blocks only a selected entry. It reserves no money and sends no provider/message request. Refund history may change outside that event lock; results are nominal allocation information with financial reconciliation always required, never a cap or authorization for a later refund/cancellation. Only confirmed entries on confirmed orders are covered; held/unsettled/historical entries and the operational cancellation workflow remain separate work.
+
 ## Refund request recovery (Implemented locally)
 
 The read-only whole-order refund-policy preview requires the same owner/finance `payments.refund` permission as refund creation. It reads the accepted event version and payment/refund state under the per-order refund lock. It reserves nothing, calls no provider and grants no authority to refund; creation still rechecks its existing caps. Rider/guardian status alone does not authorize this preview. The organizer form shows it only to current owner/finance roles for the whole original order payment; it never fills or submits the refund amount. Results are kept only in component memory and discarded when order state, entry status/category/paid allocation, refund history, known payment-list amounts or selected entry scope changes.
