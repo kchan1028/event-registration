@@ -14,7 +14,7 @@ export function GuardianInvitations({ onAccepted, onRefresh }: { onAccepted: (li
     <h2 id="guardian-invitations-title">Guardian invitations</h2>
     <p className="small muted">Accept only if you are authorized to manage this junior’s registrations. Signing in alone does not give access.</p>
     <p role="status" tabIndex={-1} ref={status}>{message}</p>
-    {error && <p className="alert alert--error" role="alert">Could not load guardian invitations. {error}</p>}
+    {error && <p className="alert alert--error" role="alert">Could not refresh guardian invitations and registration access. {error}</p>}
     <button className="btn btn--secondary" type="button" onClick={() => { setError(null); reload(); }}>Refresh guardian invitations</button>
     {!data && !error && <p role="status">Loading guardian invitations…</p>}
     {data?.length === 0 && <p className="small">No open invitations for this signed-in email. Existing access appears under Juniors you manage. If you expected a new invitation, ask a current guardian to check the invited address.</p>}
@@ -38,14 +38,14 @@ function Invitation({ invitation, onAccepted }: { invitation: ReceivedGuardianIn
     if (!acknowledge || busy) return;
     setBusy(true); setError(null);
     try { await onAccepted(await api.acceptGuardianInvitation(invitation.id)); }
-    catch (e) { setError(`${(e as ApiError).message} Refresh invitations to check the current status. If needed, ask a current guardian for a new invitation.`); }
+    catch (e) { setError(`The result or refreshed registrations could not be confirmed. ${(e as ApiError).message} Refresh invitations to check the current status. If needed, ask a current guardian for a new invitation.`); }
     finally { setBusy(false); }
   };
   return <li className="my-junior">
     <h3>{name}</h3>
     <p className="small">Invited by {invitation.invitedByEmail}. Expires <time dateTime={invitation.expiresAt}>{formatDateTime(invitation.expiresAt)}</time>.</p>
     <form className="guardian-invitation" onSubmit={accept} aria-label={`Accept guardian access for ${name}`}>
-      <label className="check"><input type="checkbox" checked={acknowledge} onChange={(e) => setAcknowledge(e.target.checked)} disabled={busy} required />
+      <label className="guardian-invitation__ack"><input type="checkbox" checked={acknowledge} onChange={(e) => setAcknowledge(e.target.checked)} disabled={busy} required />
         <span>I am authorized to manage {name}’s registrations and accept guardian access.</span>
       </label>
       <button className="btn btn--primary" type="submit" disabled={busy || !acknowledge}>{busy ? 'Accepting guardian access…' : `Accept guardian access for ${name}`}</button>

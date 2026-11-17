@@ -27,9 +27,11 @@ for (const recoveryAction of ['retry', 'refresh'] as const) test(`guardian accep
     const guardian = await context.newPage();
     await guardian.addInitScript((email) => sessionStorage.setItem('cyclereg.test-session', email), second);
     await guardian.route('**/api/rider/guardian-invitations', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Fictional connection interruption' }) }));
+    await guardian.route('**/api/rider/registrations', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Fictional registration load interruption' }) }));
     await guardian.goto('/#/my-registrations');
-    await expect(guardian.getByRole('alert')).toContainText('Could not load guardian invitations');
+    await expect(guardian.getByRole('alert').filter({ hasText: 'Could not refresh guardian invitations' })).toContainText('Could not refresh guardian invitations and registration access');
     await guardian.unroute('**/api/rider/guardian-invitations');
+    await guardian.unroute('**/api/rider/registrations');
     await guardian.getByRole('button', { name: 'Refresh guardian invitations' }).click();
     const invitationForm = guardian.getByRole('form', { name: 'Accept guardian access for Sam Example' });
     await expect(invitationForm).toBeVisible();
