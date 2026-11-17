@@ -469,6 +469,132 @@ Use the selected Stripe hosted payment flow for online collection. Cash/check re
 
 Acceptance: a walk-up rider can register, satisfy or be routed for required checks, complete confirmed payment, and appear once in the correct start list without overselling the last place. A failed payment does not clear check-in, and repeated staff actions cannot create duplicate entries or charges.
 
+### 7. Self-service help and guidance
+
+Status: Proposed (November 16, 2026). Nothing in this section is built or committed beyond the screen copy fixes already in the local build. Delivery order is in [roadmap.md](roadmap.md#self-service-help).
+
+The goal is that a rider, parent, or volunteer can tell what to do next, finish a key task, and recover from a problem without contacting the organizer. Help is a fallback: before writing help for a confusing step, first try a clearer label, a simpler step, or a better message on the screen itself. Add help only when the screen cannot carry the explanation.
+
+#### Who needs help, and where
+
+Evidence is thin. There are no live events, so there are no support records or baseline metrics. The sources below are a pilot run by an AI assistant (not participant evidence), one discovery interview, and decisions already recorded in this document. Rows marked "assumed" are provisional until the [Phase 1 usability sessions](docs/usability/README.md) confirm or reject them.
+
+| User | Task where help is likely needed | Evidence |
+|---|---|---|
+| Rider | Understanding that "You qualify" is not the same as cleared to race; what a license review means | [Pilot run](docs/usability/pilot-run-2026-11-14.md#watch-for-in-real-sessions); the missing next step for "License needs review" was fixed there |
+| Rider | Finding and choosing two of three races in a weekend | [D01](docs/discovery/interviews/D01.md) |
+| Rider | Reading a split bundle discount and the total | Pilot run watch point; R2 follow-up tests it |
+| Rider | What to do when a race is full (no waitlist contact shown) | Pilot run watch point |
+| Rider | What to do when a sign-in code is late or missing | [Open decision 7](#open-decisions) |
+| Rider | Recovering from a declined payment or a reservation that does not finish | R5 task; [uncertain reservation decision](#uncertain-reservation-support-decision) |
+| Parent | Whose details go where, and who signs for a junior | R3 task; guardian rule in [Sign-in and account security](#sign-in-and-account-security) |
+| Organizer | Reading ineligibility reasons in the rider preview | Pilot run watch point (O3) |
+| Organizer | Inviting a teammate, and what an expired invitation means | Expired-invitation message is Planned in [Sign-in and account security](#sign-in-and-account-security) |
+| Check-in volunteer | A rider who is not ready, a repeat visit, a lost connection | V3 to V5 tasks; [check-in recovery decision](#check-in-recovery-warning-decision) |
+| All | Trusting an unfamiliar platform enough to register | D01 (assumed to be partly a help problem) |
+
+#### How the kinds of help work together
+
+| Need | Approach | Where it lives |
+|---|---|---|
+| Know the next step | Clear actions, status text, and empty-state guidance | On the screen |
+| Understand a field | One short explanation beside the field | On the screen, always visible |
+| Fix an error | A specific message that says what is wrong and how to fix it | Beside the field or action |
+| Complete a workflow | A short task guide | Linked from the screen where the task starts |
+| Understand a recurring question or rule | An FAQ or help article | Help pages, linked from guides and screens |
+| Get unresolved help | The event's support contact | Shown on help pages, error screens, and confirmations |
+
+Each layer links to the next one: a screen message links to its task guide, a guide links to related FAQs, and every help page ends with the event's support contact. One topic has one copy; other places link to it.
+
+#### User stories
+
+Each story is a user outcome. Design, frontend, backend, and content work are listed separately below so they are not mistaken for outcomes.
+
+**H1. Help from the current screen.**
+Who: a rider, parent, organizer, or volunteer. What: opens help about the task in front of them. When: while on a screen where they are unsure what to do. Where: registration, checkout, confirmation, Registrations, team panel, and check-in. Why: to keep going without leaving the task or contacting the organizer.
+- Screens with a published guide show a visible "Help" link (not hover-only) that opens the guide for that screen's task.
+- Opening help keeps the user's progress: a held place, entered details, or a check-in search is not lost.
+- A screen without a guide shows no help link, rather than a link to a general page.
+
+**H2. Find and follow a task guide.**
+Who: any user. What: follows step-by-step instructions for one task. When: before or during the task. Where: linked from the screen and listed by task in the help index. Why: to finish the task correctly the first time.
+- Every guide uses the [task guide template](#task-guide-template) below.
+- Steps use the exact interface labels in bold, and a test or review confirms each label exists on the screen.
+- A guide for a role-restricted task says which role it needs and is not linked for users without that role.
+
+**H3. Find an answer to a common question.**
+Who: a rider, parent, or organizer. What: finds an answer to a rule or recurring question (fees, refunds, bundles, license review, guardians). When: before registering or after a surprise. Where: the FAQ, grouped by task. Why: to understand a rule without asking someone.
+- Each answer leads with the answer in one or two sentences, then the detail.
+- Event-specific rules (refund policy, fees, support contact) come from the event's own settings, never from generic copy.
+- Each answer links to the guide or screen where the reader acts on it.
+
+**H4. Understand an error and recover.**
+Who: any user. What: understands why an action failed and what to do. When: a validation, payment, capacity, sign-in, or connection error. Where: beside the field or action that failed. Why: to fix the problem without starting over.
+- Every error message says what happened and the next action, in plain language, without blaming the user or exposing internal codes.
+- Field errors appear beside the field, are announced to screen readers, and move focus to the first error.
+- Errors that the user cannot fix (a full race, a declined payment held for retry, an uncertain reservation) say what is kept, what to try, and who to contact.
+- Recovery never asks the user to repeat a step that could create a second hold, order, or charge.
+
+**H5. Contact support when help is not enough.**
+Who: a rider, parent, or volunteer. What: reaches the person responsible for the event. When: after help does not resolve the issue. Where: help pages, unrecoverable errors, confirmations, and check-in. Why: so a problem reaches a person before race morning.
+- The contact is the event's named support owner and route, already required by [Quality requirements](#quality-requirements). The app does not invent a central support desk.
+- The contact path works by keyboard and on a phone, and does not depend on the user being signed in.
+- The page tells the user what to include (event, race, order reference) and warns them not to send card numbers or license documents.
+
+**H6. Keep help accurate as the product changes.**
+Who: the help content owner and the author of a change. What: updates help when a workflow changes. When: in the same pull request as the change. Where: the help source and the [documentation maintenance rules](docs/documentation-guide.md). Why: wrong help is worse than no help.
+- Each help topic records an owner, the screens and rules it describes, and its last review date.
+- A change to a covered screen, label, permission, or rule triggers a review of that topic in the same pull request.
+- Help describes only Implemented behavior. Planned behavior is never presented as available.
+
+#### Task guide template
+
+Every task guide has these parts, in this order:
+
+1. **Who can do this:** the role or account needed, and any prerequisites (for example, signed in, a guardian for a junior, registration open).
+2. **Where to start:** the screen and the link or button that begins the task.
+3. **Steps:** numbered, one action each, with the exact interface labels in bold.
+4. **What you should see:** the expected result and what happens next (for example, the confirmation, the email, what to bring to check-in).
+5. **If something goes wrong:** the common problems, what each message means, and how to recover, ending with the support contact.
+
+#### Help constraints
+
+- Help matches actual behavior, permissions, and roles. A rider never sees organizer instructions, and a guide never promises an action the user's role cannot take.
+- Plain language, readable on a phone at 360 pixels wide and at 200% zoom, keyboard usable, and consistent with the [coding guide's accessibility rules](docs/coding-guide.md#accessibility-and-mobile-usability).
+- Important guidance is visible without hover. Tooltips may repeat visible text but never hold the only copy.
+- Public help pages follow the [content guide](docs/content-guide.md) and exclude sensitive information: no rider data, internal procedures that would help someone bypass checks, account existence hints, or secrets.
+- Each help topic has one owner and a review trigger tied to the workflow it describes.
+- Shared content is written once and linked, so two copies cannot disagree.
+- Help never replaces a required check: guidance about license review, waivers, or guardians does not clear a rider.
+
+#### Supporting work (not user outcomes)
+
+- Content: draft the first guides and FAQs from the template; record owner and review trigger for each.
+- Design: decide the help link's placement and the help index layout across rider, organizer, and check-in screens.
+- Frontend: render help links and guides; keep progress when help opens; error message and focus behavior for H4.
+- Backend: only if event-specific values (support contact, refund policy) need to reach help pages; no new rider data.
+- Test: check guide labels against screens and help links against roles.
+
+#### Help ownership and review
+
+| Responsibility | Owner |
+|---|---|
+| Screen copy, error messages, and empty states | Author of the change, reviewed by the other agent under the [cross-agent review](CONTRIBUTING.md) rules |
+| Task guides and FAQs | Help content owner (unassigned; see the [open question](#self-service-help-ownership-and-scope-decision)) |
+| Event-specific rules and support contact | The event's organizer and support owner |
+| Accuracy review when a workflow changes | Author of that change, in the same pull request |
+
+#### Help success measures
+
+These are measures to collect, not targets. No baseline exists; set targets after the Phase 1 usability sessions and the first pilot.
+
+- Task completion rate for the core usability tasks, and the share completed without facilitator help.
+- Abandonment at the steps identified above (counted by step, never recording form contents or payment details).
+- Support requests by topic, recorded by the event's support owner, compared before and after help for that topic ships.
+- Once feedback exists: the share of guide views marked useful.
+
+Acceptance for the first help increment: each priority task in the table above either has a clearer screen with no help needed, or a guide in the template linked from that screen; every linked guide's labels match the screen; and a rider can find the event's support contact from an unrecoverable error on a phone, by keyboard, without signing in.
+
 ## Core flows and acceptance criteria
 
 | Flow | Acceptance criteria |
@@ -685,7 +811,7 @@ Targets below are hypotheses, not measured results. Establish the baseline with 
 | Category setup completeness | Approved road race and criterium schedules can be configured without custom code or spreadsheet-only rules |
 | Handoff | Two organizers and two volunteers complete their assigned tasks without developer intervention |
 
-Capture abandonment and support requests without recording payment details or sensitive form content.
+Capture abandonment and support requests without recording payment details or sensitive form content. Help-specific measures are in [Self-service help](#help-success-measures).
 
 ## Out of scope initially
 
@@ -734,6 +860,10 @@ Open, raised November 16, 2026; owner: project owner (technical and registration
 Resolved November 16, 2026 by the project owner: use a stacked phone roster with snapshot readiness always visible for each rider; keep tables on desktop and in print. This answers [expert observation #144](https://github.com/kchan1028/event-registration/issues/144), based on a 390px rendered review, not volunteer feedback or a real-device result. The previous provisional scrollable-phone-table assumption is superseded.
 
 At phone widths (640 CSS pixels and below), show each rider’s name, snapshot status and blockers, recorded bib, racing age, team, races and next-step guidance in a stacked read-only list without sideways scrolling. Desktop and printed tables keep the existing data and recording limits; printing from a phone also uses tables. The phone view exposes one visible/accessible roster presentation, preserves reference-only warnings and does not add registration, payment, waiver clearance or offline check-in. Its entries already include blocker guidance, so the separate paper exception checklist and blank write-in rows remain desktop/print aids. Verify both themes, long content, empty states and print behavior before closing the observation; real-device, screen-reader and staff acceptance remain separate gates.
+
+### Self-service help ownership and scope decision
+
+Open, raised November 16, 2026; owner: project owner (help content owner unassigned). Who owns task guides and FAQs, which tasks get guides first, and where help lives (inside the app, public pages, or both)? Why it matters: [Self-service help](#7-self-service-help-and-guidance) requires one owner per topic, and the first guides should follow evidence rather than guesses. Provisional assumption: the project owner owns help content until someone else is named; the first candidates are the rider tasks in that section's evidence table; help ships inside the app first, because no public pages exist ([content guide](docs/content-guide.md)). Can proceed: clearer labels, error messages, and empty states on existing screens, under normal review. Blocked: publishing task guides or an FAQ, and choosing search or an assistant. Revisit after the Phase 1 usability sessions, or before the controlled pilot, whichever comes first.
 
 ## Research baseline
 

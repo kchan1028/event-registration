@@ -132,5 +132,6 @@ These are not available in the app. Phase order and dependencies remain in [road
 | Walk-up/mobile/kiosk race-day registration | Phone-first handoff Implemented locally; staff-entered orders and shared kiosks Planned; full race-day acceptance remains unverified | [Race-day registration](product.md#race-day-registration) |
 | Dedicated omnium/stage-race setup, TT, pricing, and overall participation | Planned beyond existing package pricing | [Competition setup](product.md#omnium-and-stage-race-setup) |
 | Multi-event, multi-organization bundles / season passes | Planned | [Season passes](product.md#cross-organization-bundles-and-season-passes) |
+| Task guides, FAQs, help links from screens, and a support contact path | Proposed; screen copy fixes from the pilot run are Implemented | [Self-service help](product.md#7-self-service-help-and-guidance) |
 
 Timing hardware, omnium points/results scoring, and full offline synchronization are outside the initial scope. See [scope boundaries](product.md#out-of-scope-initially).

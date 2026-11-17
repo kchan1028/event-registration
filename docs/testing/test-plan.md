@@ -123,6 +123,10 @@ When changing these workflows, cover the approved [Berkeley pricing](../../produ
 
 Focused coverage lives in `tests/pricing.test.ts`, `tests/berkeley-events.test.ts`, `tests/orders.test.ts`, `tests/transfers.test.ts`, `tests/impact.test.ts` and the Berkeley scenarios in `e2e/checkout.spec.ts`. Existing validator regression checks remain in `tests/validation.test.ts`; the missing-race rider-rate case is in `tests/pricing.test.ts`. Apply the risk table above for affected integrations; these scenario lists do not replace it. Browser automation is not a real-phone or assistive-technology rehearsal.
 
+### Self-service help (Proposed)
+
+Applies once help from [product.md](../../product.md#7-self-service-help-and-guidance) is built; nothing exists to test yet. For a change that adds or edits a guide, help link, or error message: check that each bold label in the guide exists on its screen, that a role-restricted guide is not linked for other roles, that opening help keeps a held place and entered details, and that the support contact is reachable from an unrecoverable error on a phone-width screen, by keyboard, without signing in. Guidance must be visible without hover. Run the browser spec for the changed screen and `e2e/accessibility.spec.ts`.
+
 ## 3. Independent verification
 
 The agent that writes a change never verifies it alone.
