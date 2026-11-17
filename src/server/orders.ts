@@ -2,7 +2,7 @@ import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/rese
 import { randomInt } from 'node:crypto';
 import { canAdmit, remainingForCategory, type LimitUsage } from '../shared/capacity';
 import { evaluateCategory } from '../shared/eligibility';
-import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNow, needsGuardian, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
+import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNow, needsGuardian, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance, type WaiverEvidence } from '../shared/checkout';
 import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { termsOf } from '../shared/coupons';
@@ -44,6 +44,7 @@ interface OrderRow {
   status: OrderStatus;
   rider_json: RiderDetails;
   waiver_json: WaiverAcceptance;
+  waiver_evidence_json: WaiverEvidence | null;
   quote_json: Quote;
   total_cents: number;
   hold_expires_at: string;
@@ -275,6 +276,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       status,
       rider,
       waiver,
+      waiverEvidence: row.waiver_evidence_json,
       guardianRequired,
       quote: q,
       /** Coupon code accepted with the order, or null. */
@@ -447,9 +449,9 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const t = nowIso();
         const expires = new Date(clock().getTime() + holdMinutes * 60_000).toISOString();
         await db.run(
-          `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json, coupon_id, account_id)
-           VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-          [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null, accountId],
+          `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json, coupon_id, account_id, waiver_evidence_json)
+           VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+          [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null, accountId, JSON.stringify({ signerAccountId: accountId, riderRacingAge: rider.racingAge, acceptedAt: t } satisfies WaiverEvidence)],
         );
         // A guardian registering a junior: the order belongs to that guardian's profile for the junior.
         if (accountId && rider.guardian) await juniors.adopt(accountId);

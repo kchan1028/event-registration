@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { testApp, testDatabaseUrl } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
+import type { WaiverEvidence } from '../src/shared/checkout';
 
 type Order = {
   id: string;
   status: string;
   totalCents: number;
+  waiverEvidence: WaiverEvidence | null;
   checkInCode: string | null;
   entries: { id: string; categoryId: string; status: string; readiness: { key: string; state: string }[] }[];
 };
@@ -52,10 +54,14 @@ describe('rider checkout: holds and simulated payment', () => {
   it('a repeated request with the same client request ID returns the same order', async () => {
     const { app, eventId, code, waiver, entriesCount } = await setup();
     const before = await entriesCount();
-    const body = { clientRequestId: 'same-request-123', categoryIds: [code('RR-M35-34')], rider: RIDER, waiver };
+    const body = { clientRequestId: 'same-request-123', categoryIds: [code('RR-M35-34')], rider: RIDER, waiver, waiverEvidence: { signerAccountId: 'forged-account', riderRacingAge: 99, acceptedAt: '1900-01-01T00:00:00Z' } };
     const a = (await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: body })).json() as Order;
     const b = (await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: body })).json() as Order;
     expect(b.id).toBe(a.id);
+    expect(a.waiverEvidence).toMatchObject({ signerAccountId: expect.any(String), riderRacingAge: RIDER.racingAge, acceptedAt: expect.any(String) });
+    expect(a.waiverEvidence?.signerAccountId).not.toBe('forged-account');
+    expect(a.waiverEvidence?.acceptedAt).not.toBe(body.waiverEvidence.acceptedAt);
+    expect(b.waiverEvidence).toEqual(a.waiverEvidence);
     expect(await entriesCount()).toBe(before + 1);
   });
 

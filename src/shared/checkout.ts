@@ -267,6 +267,13 @@ export function awaitsLicenseReview(orderStatus: string, entry: { status: string
   return orderStatus === 'confirmed' && entry.status === 'confirmed' && !entry.licenseReviewed;
 }
 
+/** Accepted account and declared racing age, not proof of legal age or federation approval. */
+export interface WaiverEvidence {
+  signerAccountId: string | null;
+  riderRacingAge: number;
+  acceptedAt: string;
+}
+
 export type ReadinessItem = { key: 'license' | 'waiver' | 'guardian'; label: string; state: 'done' | 'needs_review' | 'missing' };
 
 /** What a rider still needs before they are cleared to race. Paying never clears a rider by itself. */

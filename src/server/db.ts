@@ -544,6 +544,10 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE orders ADD COLUMN junior_profile_id text REFERENCES junior_profiles(id) ON DELETE SET NULL;
   CREATE INDEX orders_by_junior ON orders(junior_profile_id) WHERE junior_profile_id IS NOT NULL;
   `,
+  `
+  -- Server-recorded acceptance evidence; historical rows stay unknown rather than reconstructed.
+  ALTER TABLE orders ADD COLUMN waiver_evidence_json jsonb;
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
