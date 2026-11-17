@@ -14,7 +14,8 @@ import type { EventConfig } from '../shared/schema';
 import { blocksPublicSale, effectiveWaitlistStatus, type StoredWaitlistStatus } from '../shared/waitlist';
 import { refundPolicyLines } from '../shared/refundPolicy';
 import type { Coupons } from './coupons';
-import type { Juniors } from './juniors';
+import { juniorViewerSql, orderManagerSql, type Juniors } from './juniors';
+import type { RegistrationAccess } from '../shared/juniors';
 import type { Db } from './db';
 import { eventLock, HttpError, type Repo } from './repo';
 
@@ -383,13 +384,19 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     ) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
-        const existing = await db.get<{ id: string; account_id: string | null }>(`SELECT id, account_id FROM orders WHERE event_id = $1 AND client_request_id = $2`, [
+        const existing = await db.get<{ id: string; account_id: string | null; junior_profile_id: string | null }>(`SELECT id, account_id,junior_profile_id FROM orders WHERE event_id = $1 AND client_request_id = $2`, [
           eventId,
           input.clientRequestId,
         ]);
         // A retried request returns its first order, but never another account's order.
         if (existing && existing.account_id !== accountId) throw new HttpError(409, 'This checkout request was already used. Start checkout again.');
-        if (existing) return view(existing.id);
+        if (existing) {
+          if (existing.junior_profile_id) {
+            await juniors.lockProfiles();
+            if (!(await db.get(`SELECT 1 FROM orders o LEFT JOIN junior_profiles j ON j.id = o.junior_profile_id WHERE o.id = $1 AND ${orderManagerSql('$2')}`, [existing.id, accountId]))) throw new HttpError(404, 'Order not found.');
+          }
+          return view(existing.id);
+        }
 
         const { config, version } = await repo.getPublished(eventId);
         if (isResearchExample(config)) throw new HttpError(409, RESEARCH_REGISTRATION_MESSAGE);
@@ -453,7 +460,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
            VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
           [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null, accountId, JSON.stringify({ signerAccountId: accountId, riderRacingAge: rider.racingAge, acceptedAt: t } satisfies WaiverEvidence)],
         );
-        // A guardian registering a junior: the order belongs to that guardian's profile for the junior.
+        // A guardian's junior order links to the explicitly managed profile; placing account and waiver remain provenance.
         if (accountId && rider.guardian) await juniors.adopt(accountId);
         // Demo riders on demo events carry a simulated license result from the fixtures; everyone else needs review.
         const fixture = config.event.isDemo ? demoRider(rider.demoRiderId) : undefined;
@@ -566,14 +573,14 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       });
     },
 
-    /** Orders the account placed, plus orders of juniors whose viewer email is the account's, newest first. */
+    /** Adult orders placed by this account, explicitly managed juniors, and read-only junior viewing. */
     async listForAccount(account: { id: string; email: string }) {
-      const rows = await db.all<OrderRow>(
-        `SELECT o.* FROM orders o LEFT JOIN junior_profiles j ON j.id = o.junior_profile_id WHERE o.account_id = $1 OR j.viewer_email = $2 ORDER BY o.created_at DESC, o.seq DESC`,
+      const rows = await db.all<OrderRow & { can_manage: boolean | null }>(
+        `SELECT o.*,${orderManagerSql('$1')} AS can_manage FROM orders o LEFT JOIN junior_profiles j ON j.id = o.junior_profile_id WHERE ${orderManagerSql('$1')} OR ${juniorViewerSql('$2')} ORDER BY o.created_at DESC, o.seq DESC`,
         [account.id, account.email.toLowerCase()],
       );
       const views = await viewsOf(rows);
-      return views.map((v, i) => ({ ...v, placedByYou: rows[i].account_id === account.id }));
+      return views.map((v, i) => ({ ...v, placedByYou: rows[i].account_id === account.id, canManage: rows[i].can_manage === true } satisfies RegistrationAccess));
     },
 
     /** Every order of the event, newest first. With `query`, only registrations it finds (see `matchesRegistration`). */
@@ -599,10 +606,10 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const parsed = riderDetailsSchema.safeParse(rider);
         if (!parsed.success) throw new HttpError(422, parsed.error.issues[0].message, parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));
         const t = nowIso();
-        // A junior's name change may merge profiles across events: take the guardian lock before touching any order row.
-        const juniorRename = !!row.junior_profile_id && !!row.account_id && changes.some((c) => c.field === 'firstName' || c.field === 'lastName');
+        // A shared junior's name change may merge profiles across events: take the family lock before touching any order row.
+        const juniorRename = !!row.junior_profile_id && changes.some((c) => c.field === 'firstName' || c.field === 'lastName');
         // Read the profile link again under the lock: a concurrent correction may have merged it into another profile.
-        const profileId = juniorRename ? (await juniors.lockGuardian(row.account_id!), (await orderRow(orderId))!.junior_profile_id) : null;
+        const profileId = juniorRename ? (await juniors.lockProfiles(), (await orderRow(orderId))!.junior_profile_id) : null;
         let cleared: { categoryId: string; note: string | null; reviewedAt: string | null }[] = [];
         if (changes.some((c) => c.field === 'licenseNumber')) {
           cleared = (await entryRows(orderId)).filter((e) => e.license_reviewed).map((e) => ({ categoryId: e.category_id, note: e.license_review_note, reviewedAt: e.license_reviewed_at }));
@@ -610,7 +617,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         }
         await db.run(`UPDATE orders SET rider_json = $1, updated_at = $2 WHERE id = $3`, [JSON.stringify(parsed.data), t, orderId]);
         // A corrected junior name follows to the guardian's profile, so the next registration finds it.
-        if (profileId) await juniors.renamed(profileId, row.account_id!, parsed.data, by);
+        if (profileId) await juniors.renamed(profileId, parsed.data, by);
         await db.run(
           `INSERT INTO rider_corrections (id, event_id, order_id, changes_json, cleared_reviews_json, reason, corrected_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [newId('cor'), row.event_id, orderId, JSON.stringify(changes), cleared.length > 0 ? JSON.stringify(cleared) : null, reason, by, t],

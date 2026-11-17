@@ -581,6 +581,26 @@ export const MIGRATIONS: string[] = [
       OR (cancelled_at IS NOT NULL AND cancelled_by IS NOT NULL AND cancellation_reason IS NOT NULL))
   );
   CREATE UNIQUE INDEX junior_guardian_invitation_pending ON junior_guardian_invitations(junior_profile_id) WHERE cancelled_at IS NULL;`,
+  // 30: accepted invitations and explicit guardian authority, preserving merged profile evidence.
+  `ALTER TABLE junior_guardian_invitations ADD COLUMN accepted_by text REFERENCES accounts(id);
+  ALTER TABLE junior_guardian_invitations ADD COLUMN accepted_at timestamptz;
+  ALTER TABLE junior_guardian_invitations ADD CONSTRAINT guardian_acceptance_complete CHECK
+    ((accepted_by IS NULL AND accepted_at IS NULL) OR (accepted_by IS NOT NULL AND accepted_at IS NOT NULL AND cancelled_at IS NULL));
+  DROP INDEX junior_guardian_invitation_pending;
+  CREATE UNIQUE INDEX junior_guardian_invitation_pending ON junior_guardian_invitations(junior_profile_id) WHERE cancelled_at IS NULL AND accepted_at IS NULL;
+  CREATE INDEX junior_guardian_invitations_by_email ON junior_guardian_invitations(email) WHERE cancelled_at IS NULL AND accepted_at IS NULL;
+  ALTER TABLE junior_profiles DROP CONSTRAINT junior_profiles_guardian_account_id_name_key_key;
+  ALTER TABLE junior_profiles DROP CONSTRAINT junior_profiles_guardian_account_id_fkey;
+  ALTER TABLE junior_profiles RENAME COLUMN guardian_account_id TO created_by_account_id;
+  ALTER TABLE junior_profiles ALTER COLUMN created_by_account_id DROP NOT NULL;
+  ALTER TABLE junior_profiles ADD FOREIGN KEY (created_by_account_id) REFERENCES accounts(id) ON DELETE SET NULL;
+  ALTER TABLE junior_profiles ADD COLUMN merged_into_id text REFERENCES junior_profiles(id);
+  ALTER TABLE junior_profiles ADD COLUMN merged_by text REFERENCES accounts(id);
+  ALTER TABLE junior_profiles ADD COLUMN merged_at timestamptz;
+  ALTER TABLE junior_profiles ADD CONSTRAINT junior_merge_complete CHECK
+    ((merged_into_id IS NULL AND merged_by IS NULL AND merged_at IS NULL) OR (merged_into_id IS NOT NULL AND merged_by IS NOT NULL AND merged_at IS NOT NULL AND merged_into_id <> id));
+  ALTER TABLE orders DROP CONSTRAINT orders_junior_profile_id_fkey;
+  ALTER TABLE orders ADD FOREIGN KEY (junior_profile_id) REFERENCES junior_profiles(id) ON DELETE RESTRICT;`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
