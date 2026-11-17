@@ -8,6 +8,12 @@ CycleReg will handle rider contact details, emergency contacts, license numbers,
 
 The signed-in recipient reads only their own latest expiry notices through `/api/rider/expired-invitations`. Authenticated account email scopes organization/role history, without revealing the team or granting access. A later grant of the same role supersedes its notice. Real identity-provider acceptance remains open.
 
+## Refund request recovery (Implemented locally)
+
+New refund POSTs require a client request ID. The existing per-order refund lock and a database uniqueness index preserve one accepted normalized request; identical replay reuses the saved row before cap checks, while changed details are refused. Existing owner/finance authorization applies before replay, and the original requester is preserved. Different deliberate request IDs remain subject to payment/entry caps; this is not cross-device duplicate-intent detection.
+
+Unresolved requests are retained in session storage scoped to signed-in email/order; no card data is stored. Storage includes the organizer reason and financial references, so real-data retention remains a gate. Blocked storage gives in-memory recovery only. New refunds are unavailable while this tab's result is unresolved; loss of refund permission keeps read-only guidance. Provider-unknown refunds stop being sent 23 hours after creation, leaving a margin before Stripe API v1 may prune its key; the amount stays reserved and late signed updates can still resolve it. Finance must reconcile before another reimbursement. No automatic replacement refund, support override or real payment is added.
+
 ## Waiver acceptance evidence (Implemented locally)
 
 New orders record the authenticated accepting account ID, validated declared racing age and server acceptance timestamp beside the original waiver. Client-supplied evidence is ignored; checkout replay and rider corrections preserve the original snapshot. Historical records remain null rather than being reconstructed. Existing private order-access rules govern this evidence, including read-only junior viewing; no public field, access override or federation approval is added. Demo/case-study fixture orders, including organizer demo actions, have no inferred accepting account. Preservation is enforced by application writes, not a database immutability trigger. Retention, real identity and legal/minor acceptance remain launch gates.

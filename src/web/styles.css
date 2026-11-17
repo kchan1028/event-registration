@@ -964,6 +964,7 @@ fieldset {
 }
 .topbar__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
 }
 .save {
@@ -2722,6 +2723,7 @@ button.issue {
   gap: var(--s-3);
 }
 .order {
+  overflow-wrap: anywhere;
   display: grid;
   gap: 6px;
   padding: var(--s-3) var(--s-4);

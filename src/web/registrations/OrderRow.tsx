@@ -6,6 +6,7 @@ import { refundableCents } from '../../shared/refunds';
 import type { Category } from '../../shared/schema';
 import { api, type OrderStatus, type OrderView } from '../api';
 import { href } from '../App';
+import { useSession } from '../auth';
 import { formatDateTime, refundedCents } from '../format';
 import { Field, Icon, ReasonForm } from '../ui';
 import { RefundPanel } from './RefundPanel';
@@ -34,6 +35,7 @@ const STATUS_TONE: Record<OrderStatus, string> = {
  */
 export function OrderRow({ order, categories, canManage, canRefund, onChange }: { order: OrderView; categories: Category[]; canManage: boolean; canRefund: boolean; onChange: (o: OrderView) => void }) {
   // Display only: money returned or on its way back. Readiness and entry status do not change with a refund.
+  const session = useSession();
   const refunded = refundedCents(order.totalCents, order.refunds);
   return (
     <li className="order">
@@ -77,7 +79,7 @@ export function OrderRow({ order, categories, canManage, canRefund, onChange }: 
       {order.status === 'needs_attention' && (
         <p className="note note--error">Payment arrived but no place was confirmed (the hold had ended and a place filled, the rider had cancelled, or the amount did not match). Refund the rider or offer another race.</p>
       )}
-      {(order.status === 'confirmed' || order.status === 'needs_attention') && <RefundPanel order={order} canRefund={canRefund} onChange={onChange} />}
+      {(order.status === 'confirmed' || order.status === 'needs_attention') && <RefundPanel key={`${session.email?.toLowerCase()}:${order.id}`} order={order} canRefund={canRefund} onChange={onChange} />}
       <ul className="order__entries">
         {order.entries.map((e) => (
           <EntryLine key={e.id} entry={e} confirmed={order.status === 'confirmed'} canManage={canManage} onChange={onChange}>

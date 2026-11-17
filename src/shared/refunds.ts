@@ -21,12 +21,17 @@ export const REFUND_STATUS_LABEL: Record<RefundStatus, string> = {
 };
 
 export const refundRequestSchema = z.object({
+  clientRequestId: z.string().min(8).max(128),
   /** The payment to refund. Null means the payment that confirmed (or tried to confirm) the order. */
   paymentRef: z.string().min(1).max(128).nullable().default(null),
   entryId: z.string().min(1).max(64).nullable().default(null),
   amountCents: z.number().int().positive('Enter an amount above zero.').max(10_000_000),
   reason: z.string().trim().min(3, 'Write why the money is being refunded.').max(300),
 });
+
+export interface RefundRequestResult { refundId: string }
+
+export type RefundRequest = z.infer<typeof refundRequestSchema>;
 
 /**
  * Whether a refund may move from one status to another. Stripe can report events out of order,

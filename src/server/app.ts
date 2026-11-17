@@ -484,8 +484,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/orders/:id/refunds', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { orderId: id }, { permission: 'payments.refund' });
-    await refunds.request(id, req.body, me(req).id);
-    return orders.getOrder(id);
+    const result = await refunds.request(id, req.body, me(req).id);
+    return { ...await orders.getOrder(id), ...result };
   });
   app.post('/api/refunds/:id/retry', async (req) => {
     const { id } = idParam.parse(req.params);
