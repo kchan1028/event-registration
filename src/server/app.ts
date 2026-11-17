@@ -91,7 +91,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   // The sign-in link in invitation emails. Only SES sends (never in production), so local email needs no URL setting.
   const access = createAccess(db, provider, clock, createMailer(db, emailSender, clock), appUrl || (emailSender.mode === 'ses' ? publicAppUrl() : ''));
   const automaticBibs = createAutomaticBibs(db, repo, checkIn, access, clock);
-  const refunds = createRefunds(db, paymentProvider, clock);
+  const refunds = createRefunds(db, paymentProvider, clock, repo);
   const payments = createPayments(db, orders, paymentProvider, clock, appUrl, refunds.onRefundEvent);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
@@ -497,6 +497,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   // Refunds: money back to the rider from one payment, optionally for one entry. Owner or finance role.
+  app.get('/api/orders/:id/refund-policy-preview', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrderAccess(me(req), { orderId: id }, { permission: 'payments.refund' });
+    const { reason } = z.object({ reason: z.enum(['withdrawal', 'organizer_cancellation']) }).strict().parse(req.query);
+    return refunds.policyPreview(id, reason);
+  });
   app.get('/api/orders/:id/refunds', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { orderId: id }, { permission: 'orders.view' });

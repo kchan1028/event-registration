@@ -15,6 +15,19 @@ import type { RefundRules } from './schema';
 
 export type RefundTemplate = 'full_until_deadline' | 'tiered' | 'credit_only';
 
+/** Nominal whole-order entitlement, before payment/refund reconciliation. Fees are excluded by the caller. */
+export function refundPolicyEntitlement(rules: RefundRules | null, firstDay: string, onDate: string, entryCents: number, reason: 'withdrawal' | 'organizer_cancellation') {
+  if (!rules) return null;
+  if (reason === 'organizer_cancellation') return {
+    returnAs: rules.organizerCancellation === 'full_refund' ? 'cash' as const : rules.organizerCancellation === 'credit' ? 'credit' as const : 'rider_choice' as const,
+    percent: 100,
+    amountCents: entryCents,
+  };
+  const tier = [...rules.tiers].sort((a, b) => b.daysBefore - a.daysBefore).find((t) => onDate <= addDays(firstDay, -t.daysBefore));
+  const percent = tier?.percent ?? 0;
+  return { returnAs: rules.returnAs, percent, amountCents: Math.round(entryCents * percent / 100) };
+}
+
 /** Starting points; the organizer edits every number after picking one. */
 export const REFUND_TEMPLATES: Record<RefundTemplate, { label: string; rules: RefundRules }> = {
   full_until_deadline: {
