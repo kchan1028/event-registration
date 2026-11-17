@@ -130,9 +130,19 @@ SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts
 | `STRIPE_SECRET_KEY` | Stripe test-mode secret key (`sk_test_...` or `rk_test_...`). Set it to use Stripe hosted Checkout instead of the simulated payment. Live keys are refused | unset (simulated payment) | **Yes.** Only in `.env` or the platform's secret store |
 | `STRIPE_WEBHOOK_SECRET` | Webhook signing secret (`whsec_...`). Required when `STRIPE_SECRET_KEY` is set | none | **Yes** |
 | `PUBLIC_APP_URL` | Origin Stripe sends riders back to after paying, and the sign-in link in invitation emails. Required in production when Stripe is on | `http://127.0.0.1:5273` outside production | No |
+| `PROFILE_CLAIM_MINIMUM_AGE` | Explicit `18` enables the age gate for support-approved claims; unset keeps claims disabled, any other value refuses startup | unset | No |
+| `PROFILE_CLAIM_SUPPORT_ACCOUNT_IDS` | Comma-separated application account IDs authorized to approve claims; no organizer role or email inference. Remove an ID and restart to revoke future approval/replay authority | unset (no support operators) | Account identifiers are personal data; use fictional accounts in local rehearsals |
 | `EMAIL_MODE` | `ses` sends email through Amazon SES (test-only beta). Unset: emails are recorded in the database and never sent | unset (local) | No |
 | `SES_REGION`, `EMAIL_FROM`, `SES_AWS_PROFILE` | Required with `EMAIL_MODE=ses`: the SES region, a verified sender address, and the named AWS profile for the project's own AWS account. The app never uses the shell's default `AWS_PROFILE` | none | The profile name is not a secret; the credentials it points to are, and stay in `~/.aws`, never in the repository |
 | `SES_CONFIGURATION_SET` | Optional SES configuration set for sending events | unset | No |
+
+## Support claim rehearsal (fictional data only)
+
+Claims default off. For a local rehearsal, first sign in the fictional support operator and rider; obtain their application account IDs from each account’s authenticated `/api/me` response. Configure the support ID in `PROFILE_CLAIM_SUPPORT_ACCOUNT_IDS` and explicitly set `PROFILE_CLAIM_MINIMUM_AGE=18`, then restart. These settings do not grant organizer roles or general order access. There is no claim screen.
+
+The authenticated support-only `POST /api/support/juniors/:id/claim` accepts `clientRequestId`, existing `riderAccountId`, reviewed `birthDate` (YYYY-MM-DD), rider-confirmed named `timeZone`, `reviewReference` and `acknowledge: true`. A different support account must approve the rider; an active guardian cannot be the claimant. The date is evaluated in the recorded zone, with March 1 for February 29 birthdays in non-leap years. Use an opaque support case reference, not an identity/document number. Do not attach identity documents: extra input fields are refused. Keep the original request ID and details after an interrupted response; identical retry returns the same approval, changed details conflict. No support restoration or correction of an approved claim is implemented.
+
+Run the targeted claim scenarios in the [test plan](../testing/test-plan.md#support-approved-profile-claims) instead of using real DOBs or documents. A successful claim ends family guardian/viewer access and makes the claimed account the linked orders’ rider authority while retaining original payment/waiver/placer evidence. Existing organizer permissions remain separate. Configuration and local fixtures do not approve real identity, minor consent, retention/deletion or hosted operation; those gates remain in [product.md](../../product.md#sign-in-and-account-security).
 
 ## Sign-in keys
 

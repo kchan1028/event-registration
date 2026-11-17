@@ -610,6 +610,23 @@ export const MIGRATIONS: string[] = [
       AND removal_acknowledged_at IS NOT NULL AND revoked_by IS NOT NULL AND revoked_at IS NOT NULL
       AND revoked_by <> account_id AND removal_acknowledged_at = revoked_at)
   );`,
+  // 32: audited support-approved claims; no historical DOB, zone or claim is inferred.
+  `CREATE TABLE junior_profile_claims (
+    id text PRIMARY KEY,
+    junior_profile_id text NOT NULL UNIQUE REFERENCES junior_profiles(id) ON DELETE RESTRICT,
+    rider_account_id text NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+    approved_by text NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+    client_request_id text NOT NULL UNIQUE,
+    birth_date date NOT NULL,
+    time_zone text NOT NULL CHECK (char_length(time_zone) BETWEEN 1 AND 64),
+    review_reference text NOT NULL CHECK (char_length(btrim(review_reference)) BETWEEN 3 AND 300),
+    minimum_age integer NOT NULL CHECK (minimum_age = 18),
+    approved_at timestamptz NOT NULL,
+    CHECK (rider_account_id <> approved_by)
+  );
+  ALTER TABLE junior_guardian_invitations DROP CONSTRAINT junior_guardian_invitations_cancellation_reason_check;
+  ALTER TABLE junior_guardian_invitations ADD CONSTRAINT junior_guardian_invitations_cancellation_reason_check
+    CHECK (cancellation_reason IN ('replaced','cancelled','profile_merged','profile_claimed'));`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

@@ -8,13 +8,13 @@ import { HttpError } from './repo';
 
 // SQL fragments take trusted parameter placeholders, never request text. Callers alias profiles as j and orders as o.
 export const juniorManagerSql = (account: string) => `(j.merged_into_id IS NULL AND EXISTS (SELECT 1 FROM junior_guardians g WHERE g.junior_profile_id = j.id AND g.account_id = ${account} AND g.revoked_at IS NULL))`;
-export const orderManagerSql = (account: string) => `(CASE WHEN o.junior_profile_id IS NULL THEN o.account_id = ${account} ELSE ${juniorManagerSql(account)} END)`;
-export const juniorViewerSql = (email: string) => `(j.merged_into_id IS NULL AND j.viewer_email = ${email})`;
+export const orderManagerSql = (account: string) => `(CASE WHEN o.junior_profile_id IS NULL THEN o.account_id = ${account} ELSE (${juniorManagerSql(account)} OR (j.merged_into_id IS NULL AND EXISTS (SELECT 1 FROM junior_profile_claims c WHERE c.junior_profile_id = j.id AND c.rider_account_id = ${account}))) END)`;
+export const juniorViewerSql = (email: string) => `(j.merged_into_id IS NULL AND j.viewer_email = ${email} AND NOT EXISTS (SELECT 1 FROM junior_profile_claims c WHERE c.junior_profile_id = j.id))`;
 
 /** The tab preserves the first/last name boundary after normalization. */
 const nameKey = (firstName: string, lastName: string) => `${normalizeText(firstName)}\t${normalizeText(lastName)}`;
 // Shared profiles can be changed by either guardian across events. Order writers take the event lock first.
-const FAMILY_LOCK = 'junior-access';
+export const FAMILY_LOCK = 'junior-access';
 type Profile = { id: string; name_key: string; first_name: string; last_name: string; viewer_email: string | null };
 
 export function createJuniors(db: Db, clock: () => Date) {

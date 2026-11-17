@@ -34,6 +34,7 @@ import { createWaitlist } from './waitlist';
 import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
 import { createMailer, emailFromEnv, type EmailSender } from './email';
 import { createJuniors } from './juniors';
+import { createProfileClaims, profileClaimSettingsFromEnv, validateProfileClaimSettings, type ProfileClaimSettings } from './profileClaims';
 import { guardianRemovalSchema } from '../shared/juniors';
 import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
 import { bibBatchSchema, bibChangeSchema, bibReassignmentSchema, bibFingerprintSchema } from '../shared/checkin';
@@ -67,6 +68,8 @@ export interface AppOptions {
   appUrl?: string;
   /** Outgoing email (ADR 0006). Defaults to local (recorded, never sent) unless EMAIL_MODE=ses. */
   email?: EmailSender;
+  /** Disabled unless age18 and explicit support account IDs are configured. */
+  profileClaims?: ProfileClaimSettings;
 }
 
 export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; orders: Orders; access: Access; automaticBibs: AutomaticBibs } {
@@ -75,11 +78,14 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const provider = opts.auth ?? authProviderFromEnv();
   const paymentProvider = opts.payments ?? paymentsFromEnv();
   const appUrl = opts.appUrl ?? (paymentProvider.mode === 'simulated' ? '' : publicAppUrl());
+  const claimSettings = opts.profileClaims ?? profileClaimSettingsFromEnv();
+  validateProfileClaimSettings(claimSettings);
   const db = openDb(opts.databaseUrl, (err) => app.log.error(err));
   const clock = opts.now ?? (() => new Date());
   const repo = createRepo(db, clock);
   const coupons = createCoupons(db, repo, clock);
   const juniors = createJuniors(db, clock);
+  const profileClaims = createProfileClaims(db, clock, claimSettings);
   const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10), coupons, juniors);
   const identity = createIdentity(db, orders, clock);
   const resolutions = createResolutions(db, orders, clock);
@@ -452,6 +458,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.get('/api/rider/registrations', async (req) => orders.listForAccount(me(req)));
 
   // Explicitly managed juniors, private guardian acceptance, and the junior's read-only login.
+  app.post('/api/support/juniors/:id/claim', async (req) => profileClaims.approve(me(req), idParam.parse(req.params).id, req.body));
   app.get('/api/rider/juniors', async (req) => juniors.list(me(req).id));
   app.get('/api/rider/guardian-invitations', async (req) => juniors.receivedInvitations(me(req)));
   app.post('/api/rider/guardian-invitations/:id/accept', async (req) => {
