@@ -93,8 +93,17 @@ test('on a phone, the category editor opens as a drawer that takes and returns f
   const name = page.locator('.cat-row__name', { hasText: 'Masters 60+' });
   await name.click();
   await expect(page.locator('.inspector.is-open')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Close category editor' })).toBeFocused();
-  await page.locator('.scrim').click({ position: { x: 10, y: 400 } });
+  const close = page.getByRole('button', { name: 'Close category editor' });
+  await expect(close).toBeFocused();
+  await close.click();
+  await expect(page.locator('.inspector.is-open')).toHaveCount(0);
+  await expect(name).toBeFocused();
+
+  // At 390px the drawer fills the viewport. At 600px its 460px width leaves a backdrop.
+  await page.setViewportSize({ width: 600, height: 844 });
+  await name.click();
+  await expect(close).toBeFocused();
+  await page.locator('.scrim').click({ position: { x: 70, y: 400 } });
   await expect(page.locator('.inspector.is-open')).toHaveCount(0);
   await expect(name).toBeFocused();
 });
