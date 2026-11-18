@@ -9,7 +9,7 @@ for (const scope of ['event', 'day', 'race'] as const) {
     const { config } = await (await page.request.get(`/api/events/${eventId}`)).json();
     const race = config.races[0]; const day = config.days.find((d: { id: string }) => d.id === race.dayId);
     const selection = scope === 'event' ? { scope } : scope === 'day' ? { scope, dayId: day.id } : { scope, raceId: race.id };
-    const otherCategory = config.categories.find((c: { raceId: string }) => c.raceId === config.races[1].id && c.timingCode === 'CR-M35-34');
+    const otherCategory = config.categories.find((c: { raceId: string; timingCode: string }) => c.raceId === config.races[1].id && c.timingCode === 'CR-M35-34');
     const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: {
       clientRequestId: `roster-unaffected-${eventId}`, categoryIds: [otherCategory.id],
       rider: { firstName: 'Unaffected', lastName: 'Fictional', email: 'unaffected@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Fictional Contact', phone: '555-555-0199' } },
