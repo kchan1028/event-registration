@@ -24,6 +24,17 @@ for (const scope of ['event', 'day', 'race'] as const) {
     await s.cancel(scope === 'event' ? { scope } : scope === 'day' ? { scope, dayId: s.config.races.find((r: { id: string }) => r.id === s.rr.raceId).dayId } : { scope, raceId: s.rr.raceId });
     await page.goto(`/#/register/${s.eventId}`);
     await expect(page.getByRole('heading', { name: scope === 'event' ? 'Event cancelled' : 'Part of this event was cancelled', exact: true })).toBeVisible();
+    for (const day of s.config.days) {
+      const heading = page.locator(`#day-${day.id}`);
+      await expect(heading).toBeVisible();
+      const dayCancelled = scope === 'event' || (scope === 'day' && s.config.races.some((race: { id: string; dayId: string }) => race.id === s.rr.raceId && race.dayId === day.id));
+      await expect(heading.getByText('Cancelled', { exact: true })).toHaveCount(dayCancelled ? 1 : 0);
+      for (const race of s.config.races.filter((race: { dayId: string }) => race.dayId === day.id)) {
+        const raceHeading = page.getByRole('heading', { level: 3, name: race.name });
+        await expect(raceHeading).toBeVisible();
+        await expect(raceHeading.getByText('Cancelled', { exact: true })).toHaveCount(dayCancelled || (scope === 'race' && race.id === s.rr.raceId) ? 1 : 0);
+      }
+    }
     const closed = page.locator(`#opt-${s.rr.id}`);
     await expect(closed).toHaveAttribute('aria-disabled', 'true');
     await closed.click({ force: true }); await expect(closed).toHaveAttribute('aria-checked', 'false');
@@ -50,6 +61,9 @@ for (const scope of ['event', 'day', 'race'] as const) {
 
 test('refresh preserves selected entries for explicit removal and blocks a saved later-step draft', async ({ page }) => {
   const s = await fixture(page); await page.goto(`/#/register/${s.eventId}`);
+  await page.getByLabel('Racing age').fill('40');
+  await page.getByLabel('License category').selectOption('3');
+  await page.getByLabel('Competition class').selectOption({ label: 'Men' });
   await page.locator(`#opt-${s.rr.id}`).click();
   await page.getByRole('checkbox', { name: /I want the/ }).check();
   await s.cancel({ scope: 'race', raceId: s.rr.raceId });
@@ -60,15 +74,66 @@ test('refresh preserves selected entries for explicit removal and blocks a saved
   await expect(page.getByText(`${s.rr.name} was cancelled. Remove this entry to continue.`, { exact: true })).toBeVisible();
   await expect(page.getByText('Your selected package includes a cancelled race. Uncheck the package to continue with unaffected races.', { exact: true })).toBeVisible();
   await expect(page.getByText(`Choose one eligible race in ${s.rr.name}.`, { exact: true })).toHaveCount(0);
-  await page.evaluate((id) => { const key = `cyclereg.register.${id}`; const d = JSON.parse(sessionStorage.getItem(key)!); d.step = 'waiver'; d.reached = 2; sessionStorage.setItem(key, JSON.stringify(d)); }, s.eventId);
-  await page.reload();
-  await expect(page.getByRole('region', { name: 'Cancelled race selection' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Sign and review the order' })).toHaveCount(0);
+  for (const step of ['details', 'waiver']) {
+    await page.evaluate(({ id, step }) => {
+      const key = `cyclereg.register.${id}`;
+      const draft = JSON.parse(sessionStorage.getItem(key)!);
+      draft.step = step;
+      draft.reached = step === 'details' ? 1 : 2;
+      draft.details.firstName = 'Saved Fictional';
+      sessionStorage.setItem(key, JSON.stringify(draft));
+    }, { id: s.eventId, step });
+    await page.reload();
+    await expect(page.getByRole('region', { name: 'Cancelled race selection' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Racer details', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Sign and review the order' })).toHaveCount(0);
+  }
   await page.getByRole('button', { name: 'Review race selection' }).click();
   await page.locator(`#opt-${s.rr.id}`).click();
   await expect(page.locator(`#opt-${s.rr.id}`)).toHaveAttribute('aria-checked', 'false');
   await page.locator(`#opt-${s.cr.id}`).click();
   await expect(page.locator(`#opt-${s.cr.id}`)).toHaveAttribute('aria-checked', 'true');
+  const bundle = page.getByRole('checkbox', { name: /I want the/ });
+  await expect(bundle).toBeChecked();
+  await bundle.uncheck();
+  await expect(bundle).toBeDisabled();
+  await page.getByRole('button', { name: 'Continue to racer details', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Racer details', exact: true })).toBeVisible();
+  await expect(page.getByLabel('First name (required)', { exact: true })).toHaveValue('Saved Fictional');
+});
+
+test('refresh keeps an existing cancelled review order visible after race cancellation', async ({ page }) => {
+  const s = await fixture(page);
+  const rider = { firstName: 'Review', lastName: 'Fictional', email: 'review@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Fictional Contact', phone: '555-555-0199' } };
+  const response = await page.request.post(`/api/rider/events/${s.eventId}/orders`, { data: {
+    clientRequestId: 'public-label-review-order', categoryIds: [s.rr.id], rider,
+    waiver: { version: s.config.registration.waiverVersion, signatureName: 'Review Fictional', read: true, agreed: true, signerRole: 'rider' },
+  } });
+  expect(response.status(), await response.text()).toBe(201);
+  const order = await response.json();
+  await page.goto(`/#/register/${s.eventId}`);
+  await page.locator(`#opt-${s.rr.id}`).click();
+  await page.evaluate(({ eventId, orderId }) => {
+    const key = `cyclereg.register.${eventId}`;
+    const draft = JSON.parse(sessionStorage.getItem(key)!);
+    Object.assign(draft, { step: 'review', reached: 3, orderId });
+    sessionStorage.setItem(key, JSON.stringify(draft));
+  }, { eventId: s.eventId, orderId: order.id });
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
+  const payment = page.getByRole('button', { name: /^Complete simulated payment/ });
+  await expect(payment).toBeEnabled();
+  // Organizer execution refuses an unsettled order. Release the rider's hold first.
+  expect((await page.request.post(`/api/orders/${order.id}/cancel`)).status()).toBe(200);
+  await s.cancel({ scope: 'race', raceId: s.rr.raceId });
+  await page.getByRole('button', { name: 'Refresh registration status', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Part of this event was cancelled' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
+  await expect(page.getByText('Your reservation was cancelled. Change your entries to start again.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Change my entries', exact: true })).toBeVisible();
+  await expect(payment).toBeDisabled();
+  expect(await page.evaluate((id) => JSON.parse(sessionStorage.getItem(`cyclereg.register.${id}`)!).orderId, s.eventId)).toBe(order.id);
 });
 
 test('retains loaded status after refresh failure and retries without changing reservation intent', async ({ page }) => {
