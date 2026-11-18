@@ -400,6 +400,8 @@ The event transaction and sorted order refund-request locks cover preflight, acc
 
 The public event-detail response projects committed selection identifiers and currently published closed category IDs from execution records, under the event lock. This is a read-only projection using the admission closure rule; no schema change or private execution evidence is exposed. Plans and refusals are excluded.
 
+CSV export downloads read execution closure and exported rows under the same event lock. Filename/header labels describe current closure; they do not update execution evidence or saved snapshot rows, add schema, or infer settlement/history.
+
 ### cancellation_request_refusals
 
 Migration 36 stores terminal rejected commands; no historical refusals are inferred. Primary key `(event_id, command_kind, client_request_id)` separates `plan` and `execution` namespaces. The event and rejecting account references restrict deletion. `request_json` preserves normalized acknowledged intent and must contain the matching string request identity (8–128 Unicode characters). `rejected_by`, `rejected_at`, `status_code`, bounded `message` and object `details_json` retain the original refusal. Recognized statuses are 400/404/409/422. A missing-plan refusal intentionally retains an unbound plan reference inside intent; it is not a foreign-key relationship to a nonexistent plan.

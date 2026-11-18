@@ -1,3 +1,4 @@
+import { cancellationExportState, cancellationExportFilename, type CancellationExportState } from './cancellationClosure';
 import { bibScopeKey } from '../shared/checkin';
 import { newId } from '../shared/factory';
 import { formatLength } from '../shared/format';
@@ -168,21 +169,27 @@ export function createStartLists(db: Db, repo: Repo, orders: Orders, clock: () =
     },
 
     /** CSV for one race, current or a saved snapshot. All races in one file when raceId is "all". */
-    async csv(eventId: string, raceId: string, snapshotVersion: number | null): Promise<{ filename: string; body: string }> {
-      if (snapshotVersion !== null) {
-        if (raceId === 'all') throw new HttpError(400, 'Snapshots are saved per race. Download a race to get a snapshot.');
-        const race = requireRace((await repo.getPublished(eventId, NOT_PUBLISHED)).config, raceId);
-        const snap = (await snapRows(eventId, raceId)).find((s) => s.version === snapshotVersion);
-        if (!snap) throw new HttpError(404, 'That snapshot does not exist.');
-        return { filename: `${slug(race.name, 'race')}-v${snapshotVersion}-SAMPLE.csv`, body: toCsv(snap.rows_json) };
-      }
-      const loaded = await load(eventId);
-      if (raceId === 'all') {
-        const rows = loaded.config.races.flatMap((r) => currentRows(loaded, r.id));
-        return { filename: `${slug(loaded.config.event.name, 'race')}-all-races-SAMPLE.csv`, body: toCsv(rows) };
-      }
-      const race = requireRace(loaded.config, raceId);
-      return { filename: `${slug(race.name, 'race')}-current-SAMPLE.csv`, body: toCsv(currentRows(loaded, raceId)) };
+    async csv(eventId: string, raceId: string, snapshotVersion: number | null): Promise<{ filename: string; body: string; cancellation: CancellationExportState; historical: boolean }> {
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        if (snapshotVersion !== null && raceId === 'all') throw new HttpError(400, 'Snapshots are saved per race. Download a race to get a snapshot.');
+        const published = await repo.getPublished(eventId, NOT_PUBLISHED);
+        const cancellation = await cancellationExportState(db, eventId, published.config, raceId === 'all' ? undefined : raceId);
+        const file = (filename: string, body: string) => ({ filename: cancellationExportFilename(filename, cancellation, snapshotVersion !== null), body, cancellation, historical: snapshotVersion !== null });
+        if (snapshotVersion !== null) {
+          const race = requireRace(published.config, raceId);
+          const snap = (await snapRows(eventId, raceId)).find((s) => s.version === snapshotVersion);
+          if (!snap) throw new HttpError(404, 'That snapshot does not exist.');
+          return file(`${slug(race.name, 'race')}-v${snapshotVersion}-SAMPLE.csv`, toCsv(snap.rows_json));
+        }
+        const loaded = await load(eventId);
+        if (raceId === 'all') {
+          const rows = loaded.config.races.flatMap((r) => currentRows(loaded, r.id));
+          return file(`${slug(loaded.config.event.name, 'race')}-all-races-SAMPLE.csv`, toCsv(rows));
+        }
+        const race = requireRace(loaded.config, raceId);
+        return file(`${slug(race.name, 'race')}-current-SAMPLE.csv`, toCsv(currentRows(loaded, raceId)));
+      });
     },
   };
 }
