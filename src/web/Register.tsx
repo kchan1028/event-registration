@@ -242,6 +242,14 @@ export function Register({ eventId }: { eventId: string }) {
   const offerToken = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('offer');
 
   const currentOfferFailure = offerFailure?.token === offerToken ? offerFailure : null;
+  const statusRead = useRef(0);
+  const retryButton = useRef<HTMLButtonElement>(null);
+  const refreshButton = useRef<HTMLButtonElement>(null);
+  const readCurrentStatus = async () => {
+    const read = ++statusRead.current;
+    const latest = await api.publicEvent(eventId);
+    return read === statusRead.current ? latest : null;
+  };
 
   useEffect(() => {
     let active = true;
@@ -274,14 +282,13 @@ export function Register({ eventId }: { eventId: string }) {
         setOfferFailure({ token, message: 'This waitlist offer is for a different event. Open the link from the organizer.', retryable: false });
         return;
       }
-      let latest: PublicEvent;
-      try {
-        latest = await api.publicEvent(eventId);
-      } catch {
-        if (active) setOfferFailure({ token, message: 'Could not check registration status for this waitlist offer. Try again to check whether you can use it.', retryable: true });
+      const latest = await readCurrentStatus().catch(() => null);
+      if (!active) return;
+      if (!latest) {
+        setOfferFailure({ token, message: 'Could not check registration status for this waitlist offer. Try again to check whether you can use it.', retryable: true });
         return;
       }
-      if (!active) return;
+      if (document.activeElement === retryButton.current) refreshButton.current?.focus();
       setEv(latest);
       setOffer(opened);
       setOfferFailure(null);
@@ -339,7 +346,10 @@ export function Register({ eventId }: { eventId: string }) {
   const refreshStatus = async () => {
     if (refreshing) return;
     setRefreshing(true); setRefreshError(null);
-    try { setEv(await api.publicEvent(eventId)); }
+    try {
+      const latest = await readCurrentStatus();
+      if (latest) setEv(latest);
+    }
     catch { setRefreshError('Could not refresh registration status. Showing the last loaded status. Try again before continuing.'); }
     finally { setRefreshing(false); }
   };
@@ -354,7 +364,7 @@ export function Register({ eventId }: { eventId: string }) {
       } catch {
         /* the hold expires on its own */
       }
-      const latest = await api.publicEvent(eventId).catch(() => null);
+      const latest = await readCurrentStatus().catch(() => null);
       const changedWaiver = !latest || latest.config.registration.waiverVersion !== ev.config.registration.waiverVersion || latest.config.registration.waiverText !== ev.config.registration.waiverText;
       if (latest) setEv(latest);
       update((d) => ({ ...d, step, orderId: null, clientRequestId: crypto.randomUUID(), waiver: changedWaiver ? { ...d.waiver, read: false, agreed: false } : d.waiver }));
@@ -381,8 +391,8 @@ export function Register({ eventId }: { eventId: string }) {
           )}
           {signedIn && offerToken && currentOfferFailure && (
             <div className="note note--warn offer-retry">
-              <p role="alert">{currentOfferFailure.message}</p>
-              {currentOfferFailure.retryable && <button type="button" className="btn btn--secondary" aria-disabled={checkingOffer || undefined}
+              {!checkingOffer && <p role="alert">{currentOfferFailure.message}</p>}
+              {currentOfferFailure.retryable && <button ref={retryButton} type="button" className="btn btn--secondary" aria-disabled={checkingOffer || undefined}
                 onClick={() => { if (!checkingOffer) setOfferAttempt((attempt) => attempt + 1); }}>
                 {checkingOffer ? 'Checking waitlist offer…' : 'Retry waitlist offer'}
               </button>}
@@ -390,7 +400,7 @@ export function Register({ eventId }: { eventId: string }) {
           )}
           {signedIn && offerToken && offer && !ev.cancellation.categoryIds.includes(offer.categoryId) && <OfferBanner offer={offer} />}
           <CancellationNotice ev={ev} />
-          <button type="button" className="btn btn--secondary btn--small" disabled={refreshing} onClick={refreshStatus}>{refreshing ? 'Refreshing status…' : 'Refresh registration status'}</button>
+          <button type="button" className="btn btn--secondary btn--small" ref={refreshButton} disabled={refreshing} onClick={refreshStatus}>{refreshing ? 'Refreshing status…' : 'Refresh registration status'}</button>
           {refreshError && <p className="note note--warn" role="alert">{refreshError}</p>}
           <div className="pending-stack">
             <Pending>

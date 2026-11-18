@@ -245,7 +245,9 @@ for (const cancelled of [false, true]) {
     await expect(checking).toBeFocused();
     await page.keyboard.press('Enter');
     releaseRetry();
+    await expect(retry).toHaveCount(0);
     await expect(alert).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Refresh registration status' })).toBeFocused();
     expect(offerReads).toBe(2);
     expect(eventReads).toBe(3);
     if (cancelled) {
@@ -280,4 +282,39 @@ test('signed-out and invalid offer links leave the public schedule available', a
   await expect(page.getByRole('alert').filter({ hasText: 'This waitlist offer was not found.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry waitlist offer' })).toHaveCount(0);
   await expect(page.locator(`#opt-${s.rr.id}`)).toHaveAttribute('aria-checked', 'false');
+});
+
+test('a slow offer status read cannot override a newer registration status refresh', async ({ page }) => {
+  const s = await fixture(page);
+  const token = 'fictional-slow-offer';
+  await page.route(`**/api/rider/offers/${token}`, (route) => route.fulfill({ json: {
+    eventId: s.eventId, categoryId: s.rr.id, categoryName: s.rr.name, status: 'offered',
+    rider: { firstName: 'Offer', lastName: 'Fictional', email: 'offer@example.test', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null },
+  } }));
+  let eventReads = 0;
+  let snapshotReady!: () => void;
+  let releaseSnapshot!: () => void;
+  const snapshot = new Promise<void>((resolve) => { snapshotReady = resolve; });
+  const release = new Promise<void>((resolve) => { releaseSnapshot = resolve; });
+  await page.route(`**/api/public/events/${s.eventId}`, async (route) => {
+    if (++eventReads !== 2) return route.continue();
+    const response = await route.fetch();
+    snapshotReady();
+    await release;
+    await route.fulfill({ response });
+  });
+  await page.goto(`/#/register/${s.eventId}?offer=${token}`);
+  await snapshot;
+  try {
+    await s.cancel({ scope: 'race', raceId: s.rr.raceId });
+    await page.getByRole('button', { name: 'Refresh registration status' }).click();
+    await expect(page.getByRole('heading', { name: 'Part of this event was cancelled' })).toBeVisible();
+  } finally {
+    releaseSnapshot();
+  }
+  await expect(page.getByRole('button', { name: 'Retry waitlist offer' })).toBeVisible();
+  const option = page.locator(`#opt-${s.rr.id}`);
+  await expect(option).toHaveAttribute('aria-disabled', 'true');
+  await expect(option).toHaveAttribute('aria-checked', 'false');
+  await expect(option).not.toContainText('Your place is held');
 });
