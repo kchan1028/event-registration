@@ -28,6 +28,17 @@ export function cancellationScopesOverlap(a: { selection: CancellationSelection;
     || config.races.some((r) => (a.selection.scope === 'day' && r.dayId === a.selection.dayId && b.raceIds.includes(r.id)) || (b.selection.scope === 'day' && r.dayId === b.selection.dayId && a.raceIds.includes(r.id)));
 }
 
+export function cancellationPlacementChanges(selection: CancellationSelection, raceIds: string[], frozenCategoryIds: string[], before: EventConfig, after: EventConfig): boolean {
+  return before.categories.some((old) => {
+    const next = after.categories.find((c) => c.id === old.id);
+    if (!next) return false;
+    const oldDay = before.races.find((r) => r.id === old.raceId)?.dayId;
+    const newDay = after.races.find((r) => r.id === next.raceId)?.dayId;
+    return (old.raceId !== next.raceId || oldDay !== newDay)
+      && (cancellationClosesCategory(selection, raceIds, frozenCategoryIds, before, old.id) || cancellationClosesCategory(selection, raceIds, frozenCategoryIds, after, next.id));
+  });
+}
+
 export const cancellationExecutionSchema = z.object({
   clientRequestId: z.string().trim().refine((value) => { const n = Array.from(value).length; return n >= 8 && n <= 128; }, 'Use a request identity of 8 to 128 characters.'),
   confirmationId: id,

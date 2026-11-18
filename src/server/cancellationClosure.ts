@@ -1,12 +1,23 @@
-import { cancellationClosesCategory, type CancellationSelection } from '../shared/cancellations';
-import type { EventConfig } from '../shared/schema';
+import { cancellationClosesCategory, cancellationPlacementChanges, type CancellationSelection } from '../shared/cancellations';
+import { eventConfigSchema, type EventConfig } from '../shared/schema';
 import type { Db } from './db';
 import { HttpError } from './repo';
 
+const records = (db: Db, eventId: string) => db.all<{ selection_json: CancellationSelection; race_ids: string[]; category_ids: string[] }>('SELECT selection_json,race_ids,category_ids FROM cancellation_executions WHERE event_id=$1', [eventId]);
+
 /** Called under the event lock. Frozen identities and current placement both keep a cancelled scope closed. */
 export async function cancellationClosed(db: Db, eventId: string, config: EventConfig, categoryIds: string[]): Promise<boolean> {
-  const records = await db.all<{ selection_json: CancellationSelection; race_ids: string[]; category_ids: string[] }>('SELECT selection_json,race_ids,category_ids FROM cancellation_executions WHERE event_id=$1', [eventId]);
-  return records.some((r) => categoryIds.some((id) => cancellationClosesCategory(r.selection_json, r.race_ids, r.category_ids, config, id)));
+  return (await records(db, eventId)).some((r) => categoryIds.some((id) => cancellationClosesCategory(r.selection_json, r.race_ids, r.category_ids, config, id)));
+}
+
+/** Saving or publishing cannot strand active entries inside a closed scope or move cancelled identities out. */
+export async function requireCancellationPlacementUnchanged(db: Db, eventId: string, proposed: EventConfig) {
+  const closed = await records(db, eventId);
+  if (!closed.length) return;
+  const row = await db.get<{ config_json: unknown }>('SELECT v.config_json FROM events e JOIN event_versions v ON v.event_id=e.id AND v.version=e.published_version WHERE e.id=$1', [eventId]);
+  if (!row) throw new HttpError(409, 'Reconcile the published cancellation scope before changing placement.');
+  const before = eventConfigSchema.parse(row.config_json);
+  if (closed.some((r) => cancellationPlacementChanges(r.selection_json, r.race_ids, r.category_ids, before, proposed))) throw new HttpError(409, 'A category or race cannot move into or out of a cancelled scope. Keep its published placement.');
 }
 
 export async function requireCancellationOpen(db: Db, eventId: string, config: EventConfig, categoryIds: string[]) {

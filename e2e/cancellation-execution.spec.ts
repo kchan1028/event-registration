@@ -10,6 +10,7 @@ test('shows cancelled entries separately from payment and active race readiness'
   const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: { clientRequestId: `cancel-screen-${eventId}`, categoryIds: [event.config.categories.find((c: { timingCode: string }) => c.timingCode === 'RR-M35-34').id], rider, waiver: { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Cancel Fictional', signerRole: 'rider' } } });
   expect(created.status()).toBe(201); const order = await created.json();
   expect((await page.request.post(`/api/orders/${order.id}/payment`, { data: { attemptId: `cancel-screen-payment-${eventId}`, outcome: 'success' } })).status()).toBe(200);
+  for (const entry of order.entries) expect((await page.request.post(`/api/order-entries/${entry.id}/license-review`, { data: { note: 'Fictional reviewed license' } })).status()).toBe(200);
   const preview = await (await page.request.post(`/api/events/${eventId}/cancellation-confirmation-preview`, { data: { scope: 'event' } })).json();
   const plan = await page.request.post(`/api/events/${eventId}/cancellation-confirmations`, { data: { clientRequestId: `cancel-plan-${eventId}`, selection: preview.preview.selection, previewFingerprint: preview.fingerprint, reason: 'Fictional weather cancellation', acknowledgePlanOnly: true } });
   expect(plan.status()).toBe(200);
@@ -38,4 +39,10 @@ test('shows cancelled entries separately from payment and active race readiness'
       }
     }
   }
+  await page.goto(`/#/events/${eventId}/check-in`);
+  const search = page.getByRole('searchbox', { name: 'Find a rider' });
+  await search.fill('Cancel Fictional'); await search.press('Enter');
+  await expect(page.getByText('Ready to race', { exact: true })).toHaveCount(0);
+  expect((await page.request.post(`/api/events/${eventId}/check-in/${order.id}`, { data: { dayId: event.config.days[0].id, bib: null } })).status()).toBe(409);
+
 });

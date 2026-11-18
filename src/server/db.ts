@@ -660,6 +660,7 @@ export const MIGRATIONS: string[] = [
     UNIQUE(event_id,client_request_id)
   );`,
   `ALTER TABLE order_entries ADD COLUMN cancelled_at timestamptz;
+  ALTER TABLE order_entries ADD CONSTRAINT entry_cancellation_time CHECK((status='cancelled')=(cancelled_at IS NOT NULL));
   ALTER TABLE cancellation_confirmations ADD CONSTRAINT cancellation_confirmation_event_id UNIQUE(event_id,id);
   CREATE TABLE cancellation_executions (
     id text PRIMARY KEY,
