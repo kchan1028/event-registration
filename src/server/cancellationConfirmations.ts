@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { newId } from '../shared/factory';
-import { cancellationSelectionSchema, type CancellationConfirmation, type CancellationConfirmationInput, type CancellationConfirmationPreview, type CancellationImpactPreview, type CancellationSelection } from '../shared/cancellations';
+import { CANCELLATION_IMPACT_CHANGED, CANCELLATION_PLAN_NOT_RECORDED, cancellationSelectionSchema, type CancellationConfirmation, type CancellationConfirmationInput, type CancellationConfirmationPreview, type CancellationImpactPreview, type CancellationSelection } from '../shared/cancellations';
 import type { Db } from './db';
 import type { createCancellationImpact } from './cancellationImpact';
 import { eventLock, HttpError } from './repo';
@@ -50,8 +50,14 @@ export function createCancellationConfirmations(db: Db, impact: ReturnType<typeo
           if (existing.preview_fingerprint !== input.previewFingerprint || existing.reason !== input.reason || JSON.stringify(cancellationSelectionSchema.parse(existing.selection_json)) !== JSON.stringify(input.selection)) throw new HttpError(409, 'That confirmation request was already used with different details.');
           return view(existing);
         }
-        const current = await prepare(eventId, input.selection);
-        if (current.fingerprint !== input.previewFingerprint) throw new HttpError(409, 'Cancellation impact changed. Review a fresh confirmation preview before confirming the plan.');
+        let current: CancellationConfirmationPreview;
+        try { current = await prepare(eventId, input.selection); }
+        catch (error) {
+          // Only a failed fresh review after the negative identity lookup proves no record exists.
+          if (error instanceof HttpError && [404, 409, 422].includes(error.status)) throw new HttpError(error.status, error.message, { code: CANCELLATION_PLAN_NOT_RECORDED });
+          throw error;
+        }
+        if (current.fingerprint !== input.previewFingerprint) throw new HttpError(409, CANCELLATION_IMPACT_CHANGED, { code: CANCELLATION_PLAN_NOT_RECORDED });
         const row = await db.get<Row>(`INSERT INTO cancellation_confirmations(id,event_id,client_request_id,confirmed_by,confirmed_at,reason,selection_json,preview_fingerprint,preview_json,acknowledged_plan_only)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,true) RETURNING *`,
         [newId('ccf'), eventId, input.clientRequestId, actorId, clock().toISOString(), input.reason, JSON.stringify(input.selection), current.fingerprint, JSON.stringify(current.preview)]);

@@ -2,7 +2,7 @@
 
 This describes the database the local build uses today. It covers tables, relationships, important fields, constraints, and what happens when data is removed. The intended product data model, including entities that are not built yet, is in [product.md](product.md#data-model) and [product.md](product.md#data-storage).
 
-**Status:** Implemented (local build). Describes schema version 34 on PostgreSQL as of November 17, 2026. The database moved from SQLite to PostgreSQL under [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md); local SQLite data is not carried over (reseed instead).
+**Status:** Implemented (local build). Describes schema version 34 on PostgreSQL as of November 18, 2026. The database moved from SQLite to PostgreSQL under [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md); local SQLite data is not carried over (reseed instead).
 
 **Source of truth:** the migrations in [src/server/db.ts](src/server/db.ts) and the event configuration schema in [src/shared/schema.ts](src/shared/schema.ts). If this file disagrees with them, the code wins; fix this file in the same change.
 
@@ -369,7 +369,7 @@ The read-only paid cancellation allocation preview uses `order_entries.category_
 
 ### cancellation_confirmations
 
-API-only reviewed cancellation plan evidence (migration 34). No executor or queue consumes these records. Normal confirmation routes only insert/read. The owner-only generated case-study reset removes confirmations for its own fixture events under event locks; unrelated plan evidence remains. Direct database administration is not made immutable. No historical plan is inferred on upgrade.
+Reviewed cancellation plan evidence (migration 34), exposed through APIs and the Registrations confirmation screen. No executor or queue consumes these records. Normal confirmation routes only insert/read. The owner-only generated case-study reset removes confirmations for its own fixture events under event locks; unrelated plan evidence remains. Direct database administration is not made immutable. No historical plan is inferred on upgrade.
 
 | Column | Notes |
 |---|---|
@@ -384,6 +384,8 @@ API-only reviewed cancellation plan evidence (migration 34). No executor or queu
 | `acknowledged_plan_only` | Required true acknowledgement, constrained in the database |
 
 `plan_confirmed` and `executionAvailable: false` are response classifications, not stored cancellation/entry/payment state. Exact retry of the same event/request identity and normalized selection/reason/fingerprint returns the original record; changed details conflict. Current owner/finance authority is required for creation, replay and ID-based read. New identities may create separate reviewed plans, with no execution side effect. Confirmation recomputes state under the event lock, but provider updates outside that lock still require later reconciliation. Future execution needs its own fresh checks and repeat/overlap protection. Snapshot/actor retention is a real-data acceptance gate, not decided by this schema.
+
+The confirmation screen retains only unresolved request/review-version data or a resolved record ID in account/event-scoped tab storage. Recorded evidence is loaded from the server; browser storage does not replace or modify the database evidence. Blocked storage limits recovery to the current page. Starting a separate review clears only the local completed-reference pointer, preserving server evidence; unresolved intent cannot be discarded through that action. No schema change accompanies the screen.
 
 ### entry_changes
 
