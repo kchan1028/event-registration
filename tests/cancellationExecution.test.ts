@@ -53,6 +53,26 @@ describe('atomic simulated cancellation', () => {
     expect((await s.sql('SELECT count(*)::int AS n FROM cancellation_executions')).rows[0].n).toBe(1);
     expect((await s.sql('SELECT count(*)::int AS n FROM refunds')).rows[0].n).toBe(executed.json().refunds.length);
   });
+  it('omits refusals and private stored fields while ordering multiple committed scopes', async () => {
+    const s = await prepared();
+    const refused = await s.execute(input('missing-public-plan', 'refused-public-request')); expect(refused.statusCode).toBe(404);
+    const read = () => s.app.inject({ method: 'GET', url: `/api/public/events/${s.eventId}` });
+    expect((await read()).json().cancellation).toEqual({ scopes: [], categoryIds: [] });
+    expect((await s.app.inject({ method: 'POST', url: `/api/order-entries/${s.order.entries[1].id}/withdraw`, payload: { reason: 'Fictional withdrawal before separate scope review' } })).statusCode).toBe(200);
+    const firstPlan = await s.makePlan();
+    const first = await s.execute(input(firstPlan.id)); expect(first.statusCode).toBe(200);
+    const otherRace = s.config.races.find((r) => r.id === s.cat('CR-M35-34').raceId)!;
+    const selection = { scope: 'day' as const, dayId: otherRace.dayId };
+    const plan = await s.makePlan(selection);
+    const second = await s.execute(input(plan.id, 'second-public-execution')); expect(second.statusCode, second.body).toBe(200);
+    await s.sql(`UPDATE cancellation_executions SET selection_json=selection_json || '{"internalNote":"Fictional private note"}'::jsonb WHERE id=$1`, [first.json().id]);
+    const expectedScopes = [first.json(), second.json()].sort((a, b) => a.executedAt.localeCompare(b.executedAt) || a.id.localeCompare(b.id)).map((r) => r.selection);
+    const result = (await read()).json().cancellation;
+    expect(result.scopes).toEqual(expectedScopes);
+    expect(Object.keys(result).sort()).toEqual(['categoryIds', 'scopes']);
+    expect(result.categoryIds).toEqual(s.config.categories.filter((c) => c.raceId === s.cat('RR-M35-34').raceId || s.config.races.find((r) => r.id === c.raceId)?.dayId === otherRace.dayId).map((c) => c.id));
+    expect((await read()).json().cancellation).toEqual(result);
+  });
   it('serializes concurrent replay across separate applications without double refunds', async () => {
     const s = await prepared(); const second = (await testApp({ databaseUrl: s.databaseUrl, now: () => new Date('2027-03-01T18:00:00Z') })).app;
     const responses = await Promise.all([s.execute(), second.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-executions`, payload: input(s.plan.id) })]);

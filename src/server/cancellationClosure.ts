@@ -9,7 +9,7 @@ const records = (db: Db, eventId: string) => db.all<{ selection_json: Cancellati
 export async function publicCancellationStatus(db: Db, eventId: string, config: EventConfig): Promise<PublicCancellationStatus> {
   const closed = await records(db, eventId);
   return {
-    scopes: closed.map((r) => r.selection_json),
+    scopes: closed.map(({ selection_json: s }) => s.scope === 'event' ? { scope: s.scope } : s.scope === 'day' ? { scope: s.scope, dayId: s.dayId } : { scope: s.scope, raceId: s.raceId }),
     categoryIds: config.categories.filter((c) => closed.some((r) => cancellationClosesCategory(r.selection_json, r.race_ids, r.category_ids, config, c.id))).map((c) => c.id),
   };
 }

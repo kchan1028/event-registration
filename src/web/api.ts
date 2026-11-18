@@ -1,4 +1,4 @@
-import type { CancellationExecution, CancellationExecutionInput, CancellationExecutionCheck, CancellationSelection, CancellationConfirmationPreview, CancellationConfirmationInput, CancellationConfirmation } from '../shared/cancellations';
+import type { PublicCancellationStatus, CancellationExecution, CancellationExecutionInput, CancellationExecutionCheck, CancellationSelection, CancellationConfirmationPreview, CancellationConfirmationInput, CancellationConfirmation } from '../shared/cancellations';
 import type { LimitUsage } from '../shared/capacity';
 import type { RefundStatus, RefundRequest, RefundRequestResult } from '../shared/refunds';
 import type { RefundPolicyPreview } from '../shared/refundPolicy';
@@ -27,7 +27,7 @@ export type PaymentMode = 'simulated' | 'stripe_test';
 export type CouponInput = z.input<typeof couponInputSchema>;
 
 export interface PublicEvent {
-  cancellation: import('../shared/cancellations').PublicCancellationStatus;
+  cancellation: PublicCancellationStatus;
   eventId: string;
   publishedVersion: number;
   organizationName: string;

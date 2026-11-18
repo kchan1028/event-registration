@@ -99,7 +99,7 @@ Run `e2e/execution-controls.spec.ts`, adjacent plan/impact/receipt/Registrations
 
 Terminal refusal regressions must cover changed normalized plan input without replacement or a no-action marker, event-scoped identity isolation, authorized replay retaining the original rejecting actor, and migration constraints rejecting mismatched request identities or unsupported statuses.
 
-Public event-detail closure regressions cover empty status before execution, event/day/race selections, exact safe projection, repeated reads without writes, republishing persistence, unpublished-event refusal and existing unauthenticated-route boundaries. Run execution, order and auth API tests; screen labels are a separate increment.
+Public event-detail closure regressions cover empty status before execution, event/day/race selections, exact safe projection including stripping unexpected stored fields, refused-request exclusion, multiple-execution ordering, repeated reads without writes, republishing persistence, unpublished-event refusal and existing unauthenticated-route boundaries. Run execution, order and auth API tests; screen labels are a separate increment.
 
 ### Atomic simulated cancellation
 
