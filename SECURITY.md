@@ -20,7 +20,7 @@ A fresh impact is computed under the lock before a new insert. SHA-256 binds its
 
 Records return `plan_confirmed` and `executionAvailable: false`. No executor/queue consumes them, no entry or ledger is changed and no provider/message request is sent. Distinct request identities can record distinct reviewed plans; they are not repeat-safe execution identities. Future cancellation execution must independently enforce its own fresh state, financial, overlap and retry rules. No real-data or live-money gate is closed.
 
-Execution-readiness reads require current event finance authority and an event-scoped confirmation lookup. They return only identifiers, nominal amounts and blocker codes, without rider contacts or provider references. The assessment locks the event and affected order refund-request locks in sorted order; provider/refund updates outside these locks still require fresh execution-time reconciliation. Any provider evidence, refund history or uncertain payment blocks simulated eligibility. Even an eligible response cannot execute or authorize cancellation.
+Financial-preflight reads require current event finance authority and an event-scoped confirmation lookup. They return only identifiers, nominal amounts and blocker codes, without rider contacts or provider references. The assessment locks the event and affected order refund-request locks in sorted order; provider/refund updates outside these locks still require fresh execution-time reconciliation. Any provider evidence, refund history or uncertain payment blocks simulated eligibility. Even an eligible response cannot execute or authorize cancellation.
 
 ## Cancellation operational impact preview (Implemented locally)
 

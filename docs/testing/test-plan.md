@@ -95,7 +95,7 @@ Run `tests/refunds.test.ts`, `tests/payments.test.ts` and `tests/migrations.test
 
 ### Cancellation execution financial preflight
 
-Run `tests/cancellationExecution.test.ts` with the existing confirmation/allocation and affected auth/refund/payment tests. The new preflight needs proof that a financially eligible partial-package assessment preserves original paid allocations, untouched entries and all write-side evidence. Cover stale/unreviewable plans, held/unsettled orders, absent/credit/rider-choice policies, missing/mismatched settlement, provider references/sessions/events, failed and nonfailed refund history, and current finance authority/revocation/event isolation. Repeated/concurrent reads must change nothing; unknown infrastructure failures must propagate instead of claiming eligibility. Eligibility remains simulation-only, no executor or provider call exists, and no browser change is included.
+Run `tests/cancellationFinancialPreflight.test.ts` with the existing confirmation/allocation and affected auth/refund/payment tests. The new preflight needs proof that a financially eligible partial-package assessment preserves original paid allocations, untouched entries and all write-side evidence. Cover stale/unreviewable plans, held/unsettled orders, absent/credit/rider-choice policies, missing/mismatched settlement, provider references/sessions/events, failed and nonfailed refund history, and current finance authority/revocation/event isolation. Repeated/concurrent reads must change nothing; unknown infrastructure failures must propagate instead of claiming eligibility. Eligibility remains simulation-only, no executor or provider call exists, and no browser change is included.
 
 ### Reviewed cancellation plan confirmation
 

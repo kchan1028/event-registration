@@ -1,17 +1,17 @@
-import type { CancellationExecutionReadiness } from '../shared/cancellations';
+import type { CancellationFinancialPreflight } from '../shared/cancellations';
 import type { createCancellationConfirmations } from './cancellationConfirmations';
 import type { Db } from './db';
 import { eventLock, HttpError } from './repo';
 
 /** No executor: even an eligible result requires a new atomic operational and financial check. */
-export function createCancellationExecution(db: Db, confirmations: ReturnType<typeof createCancellationConfirmations>, clock: () => Date) {
+export function createCancellationFinancialPreflight(db: Db, confirmations: ReturnType<typeof createCancellationConfirmations>, clock: () => Date) {
   return {
-    async readiness(eventId: string, confirmationId: string): Promise<CancellationExecutionReadiness> {
+    async assess(eventId: string, confirmationId: string): Promise<CancellationFinancialPreflight> {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
         const plan = await confirmations.get(eventId, confirmationId);
-        const blockers: CancellationExecutionReadiness['blockers'] = [];
-        const result: CancellationExecutionReadiness = { confirmationId, eventId, assessedAt: clock().toISOString(), status: 'blocked', executionAvailable: false, blockers, entries: [], simulatedCashCents: null };
+        const blockers: CancellationFinancialPreflight['blockers'] = [];
+        const result: CancellationFinancialPreflight = { confirmationId, eventId, assessedAt: clock().toISOString(), status: 'blocked', executionAvailable: false, blockers, entries: [], simulatedCashCents: null };
         let current;
         try { current = await confirmations.preview(eventId, plan.selection); }
         catch (error) {
@@ -44,7 +44,7 @@ export function createCancellationExecution(db: Db, confirmations: ReturnType<ty
           // Failed refunds also need explicit reconciliation; this endpoint does not allocate prior returns.
           if (await db.get('SELECT 1 FROM refunds WHERE order_id=$1 LIMIT 1', [orderId])) blockers.push({ code: 'refund_history', orderId });
           const nominal = result.entries.filter((e) => e.orderId === orderId).reduce((sum, e) => sum + (e.nominalCashCents ?? 0), 0);
-          if (order && nominal > order.total_cents) blockers.push({ code: 'payment_reconciliation', orderId });
+          if (order && nominal > order.total_cents && !blockers.some((b) => b.code === 'payment_reconciliation' && b.orderId === orderId)) blockers.push({ code: 'payment_reconciliation', orderId });
         }
         if (!blockers.length) { result.status = 'financially_eligible_for_simulation'; result.simulatedCashCents = result.entries.reduce((sum, e) => sum + e.nominalCashCents!, 0); }
         return result;

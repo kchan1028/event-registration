@@ -369,9 +369,9 @@ The read-only paid cancellation allocation preview uses `order_entries.category_
 
 ### cancellation_confirmations
 
-The execution financial preflight reads these records and current impact/payment/refund evidence without writing a result or queue. Its eligibility classification is transient, simulation-only and not stored execution state. No schema change accompanies the preflight.
-
 Reviewed cancellation plan evidence (migration 34), exposed through APIs and the Registrations confirmation screen. No executor or queue consumes these records. Normal confirmation routes only insert/read. The owner-only generated case-study reset removes confirmations for its own fixture events under event locks; unrelated plan evidence remains. Direct database administration is not made immutable. No historical plan is inferred on upgrade.
+
+The execution financial preflight reads these records and current impact/payment/refund evidence without writing a result or queue. Its eligibility classification is transient, simulation-only and not stored execution state. No schema change accompanies the preflight.
 
 | Column | Notes |
 |---|---|

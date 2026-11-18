@@ -146,7 +146,7 @@ The authenticated support-only `POST /api/support/juniors/:id/claim` accepts `cl
 
 Run the targeted claim scenarios in the [test plan](../testing/test-plan.md#support-approved-profile-claims) instead of using real DOBs or documents. A successful claim ends family guardian/viewer access and makes the claimed account the linked orders’ rider authority while retaining original payment/waiver/placer evidence. Existing organizer permissions remain separate. Configuration and local fixtures do not approve real identity, minor consent, retention/deletion or hosted operation; those gates remain in [product.md](../../product.md#sign-in-and-account-security).
 
-`GET /api/events/:id/cancellation-confirmations/:confirmationId/execution-readiness` requires current event owner/finance authority. It returns a transient `financially_eligible_for_simulation` or `blocked` status, per-entry nominal cash amounts and blocker codes. `simulatedCashCents` is null when blocked, `executionAvailable` is always false, and no state or provider action changes. Missing/cross-event evidence returns 404. This API has no screen and is not an execution endpoint.
+`GET /api/events/:id/cancellation-confirmations/:confirmationId/financial-preflight` requires current event owner/finance authority. It returns a transient `financially_eligible_for_simulation` or `blocked` status, per-entry nominal cash amounts and blocker codes. `simulatedCashCents` is null when blocked, `executionAvailable` is always false, and no state or provider action changes. Missing/cross-event evidence returns 404. This API has no screen and is not an execution endpoint.
 
 ## Sign-in keys
 

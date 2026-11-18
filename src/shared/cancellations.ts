@@ -46,7 +46,7 @@ export interface CancellationConfirmation {
 }
 
 /** A conservative financial preflight, never authorization or an executable instruction. */
-export interface CancellationExecutionReadiness {
+export interface CancellationFinancialPreflight {
   confirmationId: string;
   eventId: string;
   assessedAt: string;
