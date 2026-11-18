@@ -4399,3 +4399,7 @@ fieldset:disabled .field label {
 .roster__cancellation { border: 1px solid currentColor; padding: 12px; margin: 12px 0; break-inside: avoid; }
 .roster__cancellation h2 { font-size: 1rem; margin: 0 0 6px; }
 .roster__cancellation p { margin: 6px 0 0; }
+
+.reconciliation-download__button {
+  min-height: 44px;
+}

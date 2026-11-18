@@ -37,7 +37,7 @@ This is a feature summary, not a second requirements document or roadmap. [produ
 | Paid cancellation allocation preview | Implemented locally, included in the operational preview screen | Owner/finance select event/current published race/day; transferred entries keep original accepted allocation/policy, fees are excluded and unaffected components are not repriced. Read-only nominal values, with financial reconciliation required. Full cancellation workflow remains Planned |
 | Published-change resolution | Implemented | Resolve affected paid entries through organizer transfer, withdrawal, or unchanged acceptance while preserving accepted prices and an append-only history |
 | Same-rider linking | Implemented | Suggest likely matches across orders; link only when the organizer confirms |
-| Reconciliation evidence CSV | Implemented locally, API only; download control/workspace Planned | Stored linked payment/refund records with provider references, source states and timestamps; no provider calls or settlement totals. [Reporting](product.md#reporting) |
+| Reconciliation evidence CSV | Implemented locally, API and owner/finance download control; broader workspace Planned | Stored linked payment/refund records with provider references, source states and timestamps; no provider calls or settlement totals. [Reporting](product.md#reporting) |
 | Entries and ledger CSV | Implemented | Download one row per entry and a simulated ledger; cancellation filename/header labels preserve CSV schemas; contact, emergency, and license-number details are left out |
 
 Details and limits: [category builder](product.md#1a-road-race-and-criterium-category-builder--p0) and [organizer status](roadmap.md#category-builder-milestone).
