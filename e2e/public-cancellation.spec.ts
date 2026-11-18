@@ -191,3 +191,83 @@ test('cancellation overrides a saved offer and full-category waitlist invitation
   await expect(status.getByRole('button')).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: /I want the/ })).toBeDisabled();
 });
+
+for (const cancelled of [false, true]) {
+  test(`retries a failed offer status check without reload (race cancelled before retry: ${cancelled})`, async ({ page }) => {
+    const s = await fixture(page);
+    const token = 'fictional-retry-offer';
+    let offerReads = 0;
+    let eventReads = 0;
+    await page.route(`**/api/rider/offers/${token}`, async (route) => {
+      offerReads++;
+      await route.fulfill({ json: {
+        eventId: s.eventId, categoryId: s.rr.id, categoryName: s.rr.name, status: 'offered', offerExpiresAt: '2027-04-17T18:00:00Z',
+        rider: { firstName: 'Offer', lastName: 'Fictional', email: 'offer@example.test', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null },
+      } });
+    });
+    await page.route(`**/api/public/events/${s.eventId}`, (route) => {
+      eventReads++;
+      return eventReads === 2 ? route.abort() : route.continue();
+    });
+    await page.goto(`/#/register/${s.eventId}?offer=${token}`);
+    const option = page.locator(`#opt-${s.rr.id}`);
+    await expect(option).toHaveAttribute('aria-checked', 'false');
+    await expect(option).not.toContainText('Your place is held');
+    const alert = page.getByRole('alert').filter({ hasText: 'Could not check registration status for this waitlist offer' });
+    await expect(alert).toBeVisible();
+    expect(offerReads).toBe(1);
+    if (cancelled) await s.cancel({ scope: 'race', raceId: s.rr.raceId });
+    const retry = page.getByRole('button', { name: 'Retry waitlist offer' });
+    if (!cancelled) {
+      for (const theme of ['light', 'dark']) {
+        const toggle = page.getByRole('button', { name: /^Theme: / });
+        if (await toggle.getAttribute('data-current') !== theme) await toggle.click();
+        const width = theme === 'dark' ? 360 : 1440;
+        await page.setViewportSize({ width, height: 1000 });
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await expect(retry).toBeVisible();
+        expect((await retry.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+        await page.evaluate(async () => {
+          await Promise.all(document.getAnimations().filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity).map((animation) => animation.finished.catch(() => {})));
+        });
+        expect(await page.locator('main').evaluate((main) => main.scrollWidth <= innerWidth)).toBe(true);
+        expect((await new AxeBuilder({ page }).include('.reg__event').analyze()).violations).toEqual([]);
+        await page.locator('.reg__event').screenshot({ path: `test-results/offer-retry-${theme}-${width}.png` });
+      }
+    }
+    await retry.click();
+    await expect(alert).toHaveCount(0);
+    expect(offerReads).toBe(2);
+    expect(eventReads).toBe(3);
+    if (cancelled) {
+      await expect(option).toHaveAttribute('aria-disabled', 'true');
+      await expect(option).toHaveAttribute('aria-checked', 'false');
+      await expect(option).not.toContainText('Your place is held');
+      await expect(page.getByText('Waitlist offer:', { exact: true })).toHaveCount(0);
+    } else {
+      await expect(option).toHaveAttribute('aria-checked', 'true');
+      await expect(option).toContainText('Your place is held');
+      await expect(page.getByLabel('Racing age')).toHaveValue('40');
+    }
+  });
+}
+
+test('signed-out and invalid offer links leave the public schedule available', async ({ page, browser }) => {
+  const s = await fixture(page);
+  const path = `/#/register/${s.eventId}?offer=fictional-missing-offer`;
+  const signedOut = await browser.newPage({ extraHTTPHeaders: {} });
+  try {
+    let offerReads = 0;
+    signedOut.on('request', (request) => { if (request.url().includes('/api/rider/offers/')) offerReads++; });
+    await signedOut.goto(path);
+    await expect(signedOut.getByRole('heading', { name: 'Sign in to use your waitlist offer' })).toBeVisible();
+    await expect(signedOut.locator(`#opt-${s.rr.id}`)).toHaveAttribute('aria-checked', 'false');
+    expect(offerReads).toBe(0);
+    expect((await signedOut.request.get('/api/rider/offers/fictional-missing-offer')).status()).toBe(401);
+  } finally {
+    await signedOut.close();
+  }
+  await page.goto(path);
+  await expect(page.getByRole('alert').filter({ hasText: 'This waitlist offer was not found.' })).toBeVisible();
+  await expect(page.locator(`#opt-${s.rr.id}`)).toHaveAttribute('aria-checked', 'false');
+});

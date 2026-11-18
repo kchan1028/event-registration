@@ -234,40 +234,71 @@ export function Register({ eventId }: { eventId: string }) {
   const [draft, update] = useStoredDraft(eventId);
 
   const [offer, setOffer] = useState<WaitlistOffer | null>(null);
-  const [offerError, setOfferError] = useState<string | null>(null);
+  const [offerFailure, setOfferFailure] = useState<{ token: string; message: string } | null>(null);
+  const [checkingOffer, setCheckingOffer] = useState(false);
+  const [offerAttempt, setOfferAttempt] = useState(0);
   const session = useSession();
   const signedIn = session.status === 'signed-in';
   const offerToken = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('offer');
 
+  const offerError = offerFailure && offerFailure.token === offerToken ? offerFailure.message : null;
+
   useEffect(() => {
-    api.publicEvent(eventId).then(setEv).catch(setError);
+    let active = true;
+    api.publicEvent(eventId)
+      .then((initial) => { if (active) setEv((current) => current ?? initial); })
+      .catch((failure: ApiError) => { if (active) setError(failure); });
+    return () => { active = false; };
   }, [eventId]);
 
-  // A waitlist offer link (#/register/<event>?offer=<token>) preselects the offered category and prefills the rider.
+  // Open private offer details after sign-in, then validate against fresh event status.
   useEffect(() => {
     const token = offerToken;
-    if (!token || !signedIn) return; // the offer holds the rider's details, so it opens after sign-in
-    Promise.all([api.waitlistOffer(token), api.publicEvent(eventId)])
-      .then(([o, latest]) => {
-        if (o.eventId !== eventId) return;
-        setEv(latest);
-        setOffer(o);
-        if (latest.cancellation.categoryIds.includes(o.categoryId)) return;
-        if (o.status !== 'offered') return;
-        update((d) => d.pendingReservation ? d : ({
-          ...d,
-          offerToken: token,
-          offerCategoryId: o.categoryId,
-          selected: d.selected.includes(o.categoryId) ? d.selected : [...d.selected, o.categoryId],
-          profile: d.profile.racingAge === null ? profileOf(o.rider) : d.profile,
-          details: d.details.firstName ? d.details : { ...d.details, firstName: o.rider.firstName, lastName: o.rider.lastName, email: o.rider.email },
-        }));
-      })
-      .catch((e: ApiError) => setOfferError(e.message));
+    if (!token || !signedIn) return;
+    let active = true;
+    setCheckingOffer(true);
+    setOffer(null);
+    const checkOffer = async () => {
+      let opened: WaitlistOffer;
+      try {
+        opened = await api.waitlistOffer(token);
+      } catch (failure) {
+        if (active) setOfferFailure({ token, message: (failure as ApiError).message });
+        return;
+      }
+      if (!active) return;
+      if (opened.eventId !== eventId) {
+        setOfferFailure({ token, message: 'This waitlist offer is for a different event. Open the link from the organizer.' });
+        return;
+      }
+      let latest: PublicEvent;
+      try {
+        latest = await api.publicEvent(eventId);
+      } catch {
+        if (active) setOfferFailure({ token, message: 'Could not check registration status for this waitlist offer. Try again to check whether you can use it.' });
+        return;
+      }
+      if (!active) return;
+      setEv(latest);
+      setOffer(opened);
+      setOfferFailure(null);
+      if (opened.status !== 'offered' || latest.cancellation.categoryIds.includes(opened.categoryId)) return;
+      update((d) => d.pendingReservation ? d : ({
+        ...d,
+        offerToken: token,
+        offerCategoryId: opened.categoryId,
+        selected: d.selected.includes(opened.categoryId) ? d.selected : [...d.selected, opened.categoryId],
+        profile: d.profile.racingAge === null ? profileOf(opened.rider) : d.profile,
+        details: d.details.firstName ? d.details : { ...d.details, firstName: opened.rider.firstName, lastName: opened.rider.lastName, email: opened.rider.email },
+      }));
+    };
+    void checkOffer().finally(() => { if (active) setCheckingOffer(false); });
+    return () => { active = false; };
+    // The draft updater applies to current state. Its identity changes on each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, signedIn]);
+  }, [eventId, offerToken, signedIn, offerAttempt]);
 
-  if (error) {
+  if (error && !ev) {
     return (
       <div className="reg">
         <RegHeader />
@@ -345,12 +376,16 @@ export function Register({ eventId }: { eventId: string }) {
               <strong>Demo data.</strong> {config.event.demoNotice}
             </p>
           )}
-          {offerError && (
-            <p className="note note--warn" role="alert">
-              {offerError}
-            </p>
+          {signedIn && offerToken && offerError && (
+            <div className="note note--warn offer-retry">
+              <p role="alert">{offerError}</p>
+              <button type="button" className="btn btn--secondary" aria-disabled={checkingOffer || undefined}
+                onClick={() => { if (!checkingOffer) setOfferAttempt((attempt) => attempt + 1); }}>
+                {checkingOffer ? 'Checking waitlist offer…' : 'Retry waitlist offer'}
+              </button>
+            </div>
           )}
-          {offer && !ev.cancellation.categoryIds.includes(offer.categoryId) && <OfferBanner offer={offer} />}
+          {signedIn && offerToken && offer && !ev.cancellation.categoryIds.includes(offer.categoryId) && <OfferBanner offer={offer} />}
           <CancellationNotice ev={ev} />
           <button type="button" className="btn btn--secondary btn--small" disabled={refreshing} onClick={refreshStatus}>{refreshing ? 'Refreshing status…' : 'Refresh registration status'}</button>
           {refreshError && <p className="note note--warn" role="alert">{refreshError}</p>}
