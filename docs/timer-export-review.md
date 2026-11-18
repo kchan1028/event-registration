@@ -25,7 +25,7 @@ The app exports one CSV per race, per saved snapshot, or for all races of an eve
 - **File format.** UTF-8 text, comma separated, a header row, Windows line endings (CRLF). Fields containing commas or quotes are quoted. A value that starts with `=`, `+`, `-`, or `@` gets a leading apostrophe so a spreadsheet does not run it as a formula.
 - **Not included.** Email, phone, guardian, emergency contact, payment amounts, and order numbers. These stay out unless officials need them and access controls exist.
 
-Cancellation download labels are Implemented locally: filenames and HTTP headers identify current closure and historical snapshots without changing the CSV schema or saved contents. A historical file can still contain entrants in a race cancelled since it was saved. See the [cancellation requirements](../product.md#event-and-race-cancellation) for label meanings. This does not establish timer acceptance, settlement or printable-roster notices.
+Cancellation download labels are Implemented locally: filenames and HTTP headers identify current closure and historical snapshots without changing the CSV schema or saved contents. A historical file can still contain entrants in a race cancelled since it was saved. See the [cancellation requirements](../product.md#event-and-race-cancellation) for label meanings. This does not establish timer acceptance or settlement. Printable-roster cancellation notices use the protected day-list projection described in the requirements.
 
 ## Columns
 

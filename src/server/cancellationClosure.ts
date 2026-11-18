@@ -35,12 +35,16 @@ export async function requireCancellationOpen(db: Db, eventId: string, config: E
 
 export type CancellationExportState = 'none' | 'scoped' | 'cancelled';
 
+function closesRace(r: Awaited<ReturnType<typeof records>>[number], config: EventConfig, raceId: string): boolean {
+  const race = config.races.find((race) => race.id === raceId);
+  return r.selection_json.scope === 'event' || r.race_ids.includes(raceId) || (r.selection_json.scope === 'race' && r.selection_json.raceId === raceId) || (r.selection_json.scope === 'day' && r.selection_json.dayId === race?.dayId);
+}
+
 /** Current committed closure, never plan/refusal or financial settlement status. Caller holds the event lock. */
 export async function cancellationExportState(db: Db, eventId: string, config: EventConfig, raceId?: string): Promise<CancellationExportState> {
   const closed = await records(db, eventId);
   if (!raceId) return closed.some((r) => r.selection_json.scope === 'event') ? 'cancelled' : closed.length ? 'scoped' : 'none';
-  const race = config.races.find((r) => r.id === raceId);
-  return closed.some((r) => r.selection_json.scope === 'event' || r.race_ids.includes(raceId) || (r.selection_json.scope === 'race' && r.selection_json.raceId === raceId) || (r.selection_json.scope === 'day' && r.selection_json.dayId === race?.dayId)) ? 'cancelled' : 'none';
+  return closed.some((r) => closesRace(r, config, raceId)) ? 'cancelled' : 'none';
 }
 
 /** Preserve CSV schemas and stored snapshot rows; the filename marks current download context. */
@@ -48,4 +52,15 @@ export function cancellationExportFilename(filename: string, state: Cancellation
   if (state === 'none') return filename;
   const label = state === 'scoped' ? 'SCOPED-CANCELLATION' : 'CANCELLED';
   return filename.replace(/\.csv$/, `-${historical ? 'HISTORICAL-NOW-' : ''}${label}.csv`);
+}
+
+/** Print-safe day context, excluding actors, reasons and financial evidence. */
+export async function cancellationRosterStatus(db: Db, eventId: string, config: EventConfig, dayId: string) {
+  const closed = await records(db, eventId);
+  const eventCancelled = closed.some((r) => r.selection_json.scope === 'event');
+  return {
+    eventCancelled,
+    dayCancelled: eventCancelled || closed.some((r) => r.selection_json.scope === 'day' && r.selection_json.dayId === dayId),
+    races: config.races.filter((race) => race.dayId === dayId && closed.some((r) => closesRace(r, config, race.id))).map((r) => ({ id: r.id, name: r.name })),
+  };
 }

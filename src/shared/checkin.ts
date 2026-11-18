@@ -122,6 +122,7 @@ export interface CheckInRider {
 }
 
 export interface CheckInList {
+  cancellation: { eventCancelled: boolean; dayCancelled: boolean; races: { id: string; name: string }[] };
   eventId: string;
   eventName: string;
   isDemo: boolean;
