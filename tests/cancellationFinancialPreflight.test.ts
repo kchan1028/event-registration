@@ -56,12 +56,13 @@ describe('cancellation execution financial preflight', () => {
     const s = await setup(); const p = await s.plan(); expect((await s.read(p.id)).json().blockers).toContainEqual({ code: 'unsettled_order', orderId: s.order.id });
     await s.pay(); const r = (await s.read(p.id)).json(); expect(r.blockers).toContainEqual({ code: 'plan_changed' }); expect(r.simulatedCashCents).toBeNull();
   });
-  it.each(['missing_payment', 'mismatch', 'unknown_amount', 'needs_attention', 'over_total', 'provider', 'session', 'provider_event', 'refund', 'succeeded_refund'] as const)('fails closed for %s, including changes not in the historical fingerprint', async (change) => {
+  it.each(['missing_payment', 'mismatch', 'unknown_amount', 'needs_attention', 'over_total', 'over_total_and_mismatch', 'provider', 'session', 'provider_event', 'refund', 'succeeded_refund'] as const)('fails closed for %s, including changes not in the historical fingerprint', async (change) => {
     const s = await setup(); await s.pay(); const p = await s.plan();
     if (change === 'missing_payment') await s.sql('DELETE FROM payment_attempts WHERE order_id=$1', [s.order.id]);
     if (change === 'mismatch') await s.sql("UPDATE payment_attempts SET outcome='mismatch' WHERE order_id=$1", [s.order.id]);
     if (change === 'unknown_amount') await s.sql('UPDATE payment_attempts SET amount_cents=1 WHERE order_id=$1', [s.order.id]);
-    if (change === 'needs_attention') await s.sql("UPDATE payment_attempts SET result_status='needs_attention' WHERE order_id=$1", [s.order.id]);
+    if (change === 'needs_attention') await s.sql("INSERT INTO payment_attempts(id,order_id,outcome,result_status,created_at,provider,provider_ref,amount_cents) SELECT 'attention-fixture',order_id,'success','needs_attention',created_at,provider,provider_ref,amount_cents FROM payment_attempts WHERE order_id=$1 LIMIT 1", [s.order.id]);
+    if (change === 'over_total_and_mismatch') { await s.sql('UPDATE orders SET total_cents=1 WHERE id=$1', [s.order.id]); await s.sql('UPDATE payment_attempts SET amount_cents=2 WHERE order_id=$1', [s.order.id]); }
     if (change === 'over_total') await s.sql('UPDATE orders SET total_cents=1 WHERE id=$1', [s.order.id]);
     if (change === 'provider') await s.sql("UPDATE payment_attempts SET provider='stripe_test',provider_ref='pi_fictional' WHERE order_id=$1", [s.order.id]);
     if (change === 'session') await s.sql("INSERT INTO payment_sessions VALUES('cs_fictional',$1,'stripe_test','https://example.test',1,'expired','2027-02-01','2027-02-01')", [s.order.id]);
@@ -71,6 +72,7 @@ describe('cancellation execution financial preflight', () => {
     const response = await s.read(p.id); expect(response.statusCode, response.body).toBe(200); const r = response.json(); expect(r.status).toBe('blocked'); expect(r.simulatedCashCents).toBeNull();
     const code = ['provider', 'session', 'provider_event'].includes(change) ? 'provider_payment' : ['refund', 'succeeded_refund'].includes(change) ? 'refund_history' : 'payment_reconciliation';
     expect(r.blockers).toContainEqual({ code, orderId: s.order.id });
+    if (code === 'payment_reconciliation') expect(r.blockers.filter((b: { code: string }) => b.code === code)).toHaveLength(1);
     if (change === 'provider' || change === 'provider_event') expect(r.blockers).not.toContainEqual({ code: 'plan_changed' });
     if (change === 'refund') { const fresh = await s.plan(); expect((await s.read(fresh.id)).json().blockers).toContainEqual({ code: 'refund_history', orderId: s.order.id }); }
   });
