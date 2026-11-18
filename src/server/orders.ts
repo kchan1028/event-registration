@@ -17,7 +17,7 @@ import type { Coupons } from './coupons';
 import { juniorViewerSql, orderManagerSql, type Juniors } from './juniors';
 import type { RegistrationAccess } from '../shared/juniors';
 import type { Db } from './db';
-import { cancellationClosed, requireCancellationOpen } from './cancellationClosure';
+import { cancellationClosed, publicCancellationStatus, requireCancellationOpen } from './cancellationClosure';
 import { eventLock, HttpError, type Repo } from './repo';
 
 /**
@@ -352,26 +352,30 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
 
   return {
     async publicEvent(eventId: string) {
-      const { config, version, organizationName } = await repo.getPublished(eventId);
-      const entries = await repo.entries(eventId);
-      const blockers = await waitlistBlockers(config, eventId);
-      const remaining: Record<string, number | null> = {};
-      // A category with riders waiting is not on public sale, so it reads as full.
-      for (const c of config.categories) remaining[c.id] = blockers.has(c.id) ? 0 : remainingForCategory(config, entries, c.id);
-      const waitlist: Record<string, { waiting: number }> = {};
-      for (const c of config.categories) if (c.waitlistEnabled) waitlist[c.id] = { waiting: blockers.get(c.id)?.length ?? 0 };
-      return {
-        eventId,
-        waitlist,
-        publishedVersion: version,
-        organizationName,
-        config,
-        remaining,
-        today: todayIn(config.event.timeZone, clock()),
-        nowLocal: localNow(config.event.timeZone, clock()),
-        enforceWindows: enforcesWindows(config),
-        holdMinutes,
-      };
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        const { config, version, organizationName } = await repo.getPublished(eventId);
+        const entries = await repo.entries(eventId);
+        const blockers = await waitlistBlockers(config, eventId);
+        const remaining: Record<string, number | null> = {};
+        // A category with riders waiting is not on public sale, so it reads as full.
+        for (const c of config.categories) remaining[c.id] = blockers.has(c.id) ? 0 : remainingForCategory(config, entries, c.id);
+        const waitlist: Record<string, { waiting: number }> = {};
+        for (const c of config.categories) if (c.waitlistEnabled) waitlist[c.id] = { waiting: blockers.get(c.id)?.length ?? 0 };
+        return {
+          eventId,
+          cancellation: await publicCancellationStatus(db, eventId, config),
+          waitlist,
+          publishedVersion: version,
+          organizationName,
+          config,
+          remaining,
+          today: todayIn(config.event.timeZone, clock()),
+          nowLocal: localNow(config.event.timeZone, clock()),
+          enforceWindows: enforcesWindows(config),
+          holdMinutes,
+        };
+      });
     },
 
     /**

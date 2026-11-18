@@ -1,9 +1,18 @@
-import { cancellationClosesCategory, cancellationPlacementChanges, type CancellationSelection } from '../shared/cancellations';
+import { cancellationClosesCategory, cancellationPlacementChanges, type CancellationSelection, type PublicCancellationStatus } from '../shared/cancellations';
 import { eventConfigSchema, type EventConfig } from '../shared/schema';
 import type { Db } from './db';
 import { HttpError } from './repo';
 
-const records = (db: Db, eventId: string) => db.all<{ selection_json: CancellationSelection; race_ids: string[]; category_ids: string[] }>('SELECT selection_json,race_ids,category_ids FROM cancellation_executions WHERE event_id=$1', [eventId]);
+const records = (db: Db, eventId: string) => db.all<{ selection_json: CancellationSelection; race_ids: string[]; category_ids: string[] }>('SELECT selection_json,race_ids,category_ids FROM cancellation_executions WHERE event_id=$1 ORDER BY executed_at,id', [eventId]);
+
+/** Public projection of committed closure, using the same placement rule as admission. */
+export async function publicCancellationStatus(db: Db, eventId: string, config: EventConfig): Promise<PublicCancellationStatus> {
+  const closed = await records(db, eventId);
+  return {
+    scopes: closed.map(({ selection_json: s }) => s.scope === 'event' ? { scope: s.scope } : s.scope === 'day' ? { scope: s.scope, dayId: s.dayId } : { scope: s.scope, raceId: s.raceId }),
+    categoryIds: config.categories.filter((c) => closed.some((r) => cancellationClosesCategory(r.selection_json, r.race_ids, r.category_ids, config, c.id))).map((c) => c.id),
+  };
+}
 
 /** Called under the event lock. Frozen identities and current placement both keep a cancelled scope closed. */
 export async function cancellationClosed(db: Db, eventId: string, config: EventConfig, categoryIds: string[]): Promise<boolean> {

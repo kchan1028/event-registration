@@ -12,6 +12,9 @@ export const cancellationSelectionSchema = z.discriminatedUnion('scope', [
 ]);
 export type CancellationSelection = z.infer<typeof cancellationSelectionSchema>;
 
+/** Public closure facts only; no execution, actor, rider or financial evidence. */
+export interface PublicCancellationStatus { scopes: CancellationSelection[]; categoryIds: string[] }
+
 /** A published move or new category cannot reopen a cancelled scope. */
 export function cancellationClosesCategory(selection: CancellationSelection, raceIds: string[], frozenCategoryIds: string[], config: EventConfig, categoryId: string): boolean {
   if (selection.scope === 'event' || frozenCategoryIds.includes(categoryId)) return true;
