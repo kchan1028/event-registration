@@ -7,7 +7,7 @@ import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { termsOf } from '../shared/coupons';
 import type { RefundStatus } from '../shared/refunds';
-import { applyCorrection, matchesRegistration, type FieldChange, type RiderCorrection } from '../shared/lookup';
+import { formatOrderNumber, applyCorrection, matchesRegistration, type FieldChange, type RiderCorrection } from '../shared/lookup';
 import { quote, todayIn, type Quote } from '../shared/pricing';
 import { checkExtras, describeAnswers, EMPTY_EXTRAS, orderExtrasSchema, pruneExtras, type OrderExtras } from '../shared/categoryExtras';
 import type { EventConfig } from '../shared/schema';
@@ -114,11 +114,6 @@ export function isLiveOrder(o: { status: OrderStatus }): boolean {
 /** The quote line an entry was bought on. A transferred entry keeps the line of the category it was bought in. */
 export function paidLine(q: Quote, entry: { category_id: string; original_category_id: string | null }) {
   return q.lines.find((l) => l.categoryId === (entry.original_category_id ?? entry.category_id));
-}
-
-/** Order numbers are marked DEMO- on demonstration events and CR- on every other event (see ORDER_NUMBER_PREFIXES). */
-function orderNumber(orderId: string, config: EventConfig): string {
-  return `${config.event.isDemo ? 'DEMO-' : 'CR-'}${orderId.slice(4, 12).toUpperCase()}`;
 }
 
 function fullMessage(name: string, limit: LimitUsage): string {
@@ -272,7 +267,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     return {
       id: row.id,
       /** Shown to riders. */
-      orderNumber: orderNumber(row.id, config),
+      orderNumber: formatOrderNumber(row.id, config.event.isDemo),
       eventId: row.event_id,
       eventName: config.event.name,
       isDemo: config.event.isDemo,
