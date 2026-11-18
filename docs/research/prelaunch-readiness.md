@@ -144,7 +144,7 @@ November 18, 2026, at application commit `cea5ef4`. The experiment ran in one Fa
 
 Each round ran 32 serial GETs, then 32 concurrent GETs for one event, then 16 concurrent GETs each for two events, then the one-event burst alongside a same-event order hold and, separately, a simulated race cancellation. Every concurrent trial included one additional read of the second event. The hold targeted the unaffected race and was released after its trial. Cancellation used a fresh reviewed plan and was followed by a GET that verified the closed category. There were 820 measured GETs (800 primary reads and 20 probes), five successful holds and five successful cancellations. All measured GETs returned 200.
 
-| Workload | GET p50 / p95 (ms) | p95 range (ms) | Peak busy / queued / advisory-waiting | Other-event probe (ms) | Concurrent write (ms) |
+| Workload | GET p50 / p95 (ms) | p95 range (ms) | Peak busy / queued / advisory-waiting | Second-event probe (ms) | Concurrent write (ms) |
 |---|---:|---:|---:|---:|---:|
 | Serial, one event | 3.79 / 4.97 | 4.35–5.69 | 1 / 0 / 0 | | |
 | Burst, one event | 90.79 / 136.23 | 134.84–153.10 | 10 / 23 / 9 | 104.92–131.57 | |
@@ -152,7 +152,7 @@ Each round ran 32 serial GETs, then 32 concurrent GETs for one event, then 16 co
 | Burst plus order hold | 48.76 / 99.75 | 91.41–125.65 | 10 / 24 / 9 | 72.36–100.22 | 103.84–140.41 |
 | Burst plus simulated cancellation | 57.39 / 113.94 | 102.23–121.16 | 10 / 24 / 9 | 79.34–99.34 | 150.02–163.98 |
 
-GET percentiles are medians of the five per-round percentiles, with nearest-rank percentiles over the 32 primary reads per round. Other columns show ranges or maxima across rounds. The additional GET is a distinct-event probe in the one-event bursts and shares a targeted event in the split burst. The application pool counters and advisory wait count from `pg_stat_activity` were sampled together with a short timer (2ms requested between queries). Peaks can occur at different instants, and sampled peaks can miss short waits. The client measured request completion without browser or network delivery time. No standalone write baseline was collected.
+GET percentiles are medians of the five per-round percentiles, with nearest-rank percentiles over the 32 primary reads per round. Other columns show ranges or maxima across rounds. The additional GET is a distinct-event probe in the one-event bursts and shares a targeted event in the split burst. The application pool counters and advisory wait count from `pg_stat_activity` were sampled together with a short timer (2ms requested between queries). The observer collected 21–56 samples per trial. Peaks can occur at different instants, and sampled peaks can miss short waits. The client measured request completion without browser or network delivery time. No standalone write baseline was collected.
 
 The one-event burst occupied every connection while up to nine sessions waited on the advisory lock. The unrelated-event probe also waited for shared pool capacity. Different events reduced the median p95, with substantial variation across rounds. These short bursts identify contention in the current design. They leave sustained arrival rates, checkout and cancellation effects relative to unloaded writes, realistic database size, network overhead, and multi-instance pool behavior unmeasured.
 
