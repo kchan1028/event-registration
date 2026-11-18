@@ -13,13 +13,13 @@ type PaidOrder = { id: string; published_version: number; quote_json: Quote; ent
 /** Selection and accepted allocation only, not a cancellation or a refundable-balance calculation. */
 export function createCancellationAllocations(db: Db, repo: Repo, clock: () => Date) {
   return {
-    async preview(eventId: string, selection: CancellationSelection) {
+    async preview(eventId: string, selection: CancellationSelection, assessmentAt = clock()) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
         const { config: current, version } = await repo.getPublished(eventId);
         if (selection.scope === 'day' && !current.days.some((d) => d.id === selection.dayId)) throw new HttpError(422, 'Choose a current published race day.');
         if (selection.scope === 'race' && !current.races.some((r) => r.id === selection.raceId)) throw new HttpError(422, 'Choose a current published race.');
-        const now = clock();
+        const now = assessmentAt;
         const groups = await db.all<PaidOrder>(`SELECT o.id,o.published_version,o.quote_json,
           jsonb_agg(jsonb_build_object('id',oe.id,'category_id',oe.category_id,'original_category_id',oe.original_category_id) ORDER BY oe.seq) AS entries
           FROM orders o JOIN order_entries oe ON oe.order_id = o.id

@@ -95,7 +95,7 @@ Run `tests/refunds.test.ts`, `tests/payments.test.ts` and `tests/migrations.test
 
 ### Cancellation operational impact
 
-Run `tests/cancellationAllocations.test.ts` with capacity, waitlist, order, transfer, start-list, auth, refund and payment regressions. Cover paid/held selection, unaffected package components, original paid allocations, shared-pool distinct riders retained in unaffected components, active versus expired/accepted waitlists, immutable snapshot references and no contact/token disclosure or mutation. Validate strict published scope and owner/finance access. Hypothetical capacity includes test reservations and offers and must not be presented as availability for resale. This API does not establish provider reconciliation, message delivery, confirmation/execution or manual acceptance.
+Run `tests/cancellationAllocations.test.ts` with capacity, waitlist, order, transfer, start-list, auth, refund and payment regressions. Cover paid/held selection, unaffected package components, original paid allocations, shared-pool distinct riders retained in unaffected components, active versus expired/accepted waitlists, linked-offer audience de-duplication, event-wide references to removed races, immutable snapshot references and no contact/token disclosure or mutation. Validate strict published scope and owner/finance access. Hypothetical capacity includes test reservations and offers and must not be presented as availability for resale. This API does not establish provider reconciliation, message delivery, confirmation/execution or manual acceptance.
 
 ### Paid cancellation allocations
 
