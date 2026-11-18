@@ -1,3 +1,4 @@
+import { priorCancellationRefusal, recordCancellationRefusal, type CancellationOutcome } from './cancellationRefusals';
 import { createHash } from 'node:crypto';
 import { newId } from '../shared/factory';
 import { CANCELLATION_IMPACT_CHANGED, CANCELLATION_PLAN_NOT_RECORDED, cancellationSelectionSchema, type CancellationConfirmation, type CancellationConfirmationInput, type CancellationConfirmationPreview, type CancellationImpactPreview, type CancellationSelection } from '../shared/cancellations';
@@ -44,26 +45,30 @@ export function createCancellationConfirmations(db: Db, impact: ReturnType<typeo
   return {
     preview: prepare,
     async confirm(eventId: string, actorId: string, input: CancellationConfirmationInput): Promise<CancellationConfirmation> {
-      return db.transaction(async () => {
+      const outcome = await db.transaction(async (): Promise<CancellationOutcome<CancellationConfirmation>> => {
         await db.lock(eventLock(eventId));
         const existing = await db.get<Row>(`SELECT * FROM cancellation_confirmations WHERE event_id=$1 AND client_request_id=$2`, [eventId, input.clientRequestId]);
         if (existing) {
           if (existing.preview_fingerprint !== input.previewFingerprint || existing.reason !== input.reason || JSON.stringify(cancellationSelectionSchema.parse(existing.selection_json)) !== JSON.stringify(input.selection)) throw new HttpError(409, 'That confirmation request was already used with different details.');
-          return view(existing);
+          return { value: view(existing) };
         }
+        const prior = await priorCancellationRefusal(db, eventId, 'plan', input.clientRequestId, input);
+        if (prior) return { refusal: prior };
         let current: CancellationConfirmationPreview;
-        try { current = await prepare(eventId, input.selection); }
-        catch (error) {
-          // Only a failed fresh review after the negative identity lookup proves no record exists.
-          if (error instanceof HttpError && [404, 409, 422].includes(error.status)) throw new HttpError(error.status, error.message, { code: CANCELLATION_PLAN_NOT_RECORDED });
+        try {
+          current = await prepare(eventId, input.selection);
+          if (current.fingerprint !== input.previewFingerprint) throw new HttpError(409, CANCELLATION_IMPACT_CHANGED);
+        } catch (error) {
+          if (error instanceof HttpError && [404, 409, 422].includes(error.status)) return { refusal: await recordCancellationRefusal(db, eventId, 'plan', input.clientRequestId, input, actorId, clock().toISOString(), error, CANCELLATION_PLAN_NOT_RECORDED) };
           throw error;
         }
-        if (current.fingerprint !== input.previewFingerprint) throw new HttpError(409, CANCELLATION_IMPACT_CHANGED, { code: CANCELLATION_PLAN_NOT_RECORDED });
         const row = await db.get<Row>(`INSERT INTO cancellation_confirmations(id,event_id,client_request_id,confirmed_by,confirmed_at,reason,selection_json,preview_fingerprint,preview_json,acknowledged_plan_only)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,true) RETURNING *`,
         [newId('ccf'), eventId, input.clientRequestId, actorId, clock().toISOString(), input.reason, JSON.stringify(input.selection), current.fingerprint, JSON.stringify(current.preview)]);
-        return view(row!);
+        return { value: view(row!) };
       });
+      if ('refusal' in outcome) throw new HttpError(outcome.refusal.status, outcome.refusal.message, outcome.refusal.details);
+      return outcome.value;
     },
     async get(eventId: string, id: string): Promise<CancellationConfirmation> {
       const row = await db.get<Row>(`SELECT * FROM cancellation_confirmations WHERE event_id=$1 AND id=$2`, [eventId, id]);

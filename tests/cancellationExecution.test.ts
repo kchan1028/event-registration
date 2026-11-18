@@ -56,7 +56,7 @@ describe('atomic simulated cancellation', () => {
     const s = await prepared();
     expect((await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/test-entries`, payload: { categoryId: s.cat('RR-M35-34').id, count: 1 } })).statusCode).toBe(200);
     expect((await s.execute()).statusCode).toBe(409);
-    const fresh = await s.makePlan(); const response = await s.execute(input(fresh.id)); expect(response.statusCode).toBe(409); expect(response.body).toContain('test entries');
+    const fresh = await s.makePlan(); const response = await s.execute(input(fresh.id, 'fresh-test-entry-request')); expect(response.statusCode).toBe(409); expect(response.body).toContain('test entries');
   });
   it('requires a separate acknowledgement and rejects reused request identity or plan', async () => {
     const s = await prepared();
@@ -97,9 +97,14 @@ describe('atomic simulated cancellation', () => {
   it('blocks live holds and routes a late payment to review after the hold expires and the race is cancelled', async () => {
     const s = await prepared();
     const held = await s.app.inject({ method: 'POST', url: `/api/rider/events/${s.eventId}/orders`, payload: { clientRequestId: 'late-cancellation-order', categoryIds: [s.cat('RR-M35-34').id], rider: { ...s.order.rider, firstName: 'Late' }, waiver: { version: s.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Late Fictional', signerRole: 'rider' } } });
-    expect(held.statusCode, held.body).toBe(201); expect((await s.execute()).statusCode).toBe(409);
+    expect(held.statusCode, held.body).toBe(201);
+    const duplicate = (await testApp({ databaseUrl: s.databaseUrl, now: () => new Date('2027-03-01T18:00:00Z') })).app;
+    const refusals = await Promise.all([s.execute(), duplicate.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-executions`, payload: input(s.plan.id) })]);
+    expect(refusals.map((r) => r.statusCode)).toEqual([409, 409]); expect(refusals[0].json()).toEqual(refusals[1].json());
     const later = (await testApp({ databaseUrl: s.databaseUrl, now: () => new Date('2027-03-01T19:00:00Z') })).app;
-    const done = await later.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-executions`, payload: input(s.plan.id) });
+    const delayed = await later.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-executions`, payload: input(s.plan.id) }); expect(delayed.json()).toEqual(refusals[0].json());
+    expect((await s.sql("SELECT count(*)::int AS n FROM cancellation_request_refusals WHERE command_kind='execution'")).rows[0].n).toBe(1);
+    const done = await later.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-executions`, payload: input(s.plan.id, 'fresh-after-expired-hold') });
     expect(done.statusCode, done.body).toBe(200);
     const paid = await later.inject({ method: 'POST', url: `/api/orders/${held.json().id}/payment`, payload: { attemptId: 'late-after-cancellation', outcome: 'success' } });
     expect(paid.statusCode).toBe(200); expect(paid.json().status).toBe('needs_attention'); expect(paid.json().entries.every((e: { status: string }) => e.status === 'released')).toBe(true);
@@ -138,6 +143,7 @@ describe('atomic simulated cancellation', () => {
 
   it('resets generated fixture executions without deleting unrelated execution evidence', async () => {
     const s = await prepared(); const ordinary = (await s.execute()).json();
+    expect((await s.execute(input(s.plan.id, 'ordinary-refusal-request'))).statusCode).toBe(409);
     const generated = await s.app.inject({ method: 'POST', url: '/api/demo/case-studies/criterium' }); expect(generated.statusCode).toBe(201); const id = generated.json().eventId;
     const draft = (await s.app.inject({ method: 'GET', url: `/api/events/${id}` })).json();
     draft.config.days.push({ ...draft.config.days[0], id: 'day_execution_reset', date: '2027-05-01' });
@@ -146,7 +152,9 @@ describe('atomic simulated cancellation', () => {
     const preview = (await s.app.inject({ method: 'POST', url: `/api/events/${id}/cancellation-confirmation-preview`, payload: { scope: 'day', dayId: 'day_execution_reset' } })).json();
     const plan = await s.app.inject({ method: 'POST', url: `/api/events/${id}/cancellation-confirmations`, payload: { clientRequestId: 'fixture-execution-plan', selection: preview.preview.selection, previewFingerprint: preview.fingerprint, reason: 'Fictional empty-day closure', acknowledgePlanOnly: true } }); expect(plan.statusCode, plan.body).toBe(200);
     const executed = await s.app.inject({ method: 'POST', url: `/api/events/${id}/cancellation-executions`, payload: input(plan.json().id) }); expect(executed.statusCode, executed.body).toBe(200);
+    expect((await s.app.inject({ method: 'POST', url: `/api/events/${id}/cancellation-executions`, payload: input(plan.json().id, 'fixture-refusal-request') })).statusCode).toBe(409);
     expect((await s.app.inject({ method: 'DELETE', url: '/api/demo/case-studies' })).statusCode).toBe(200);
+    expect((await s.sql('SELECT event_id FROM cancellation_request_refusals')).rows).toEqual([{ event_id: s.eventId }]);
     expect((await s.sql('SELECT count(*)::int AS n FROM cancellation_executions')).rows[0].n).toBe(1);
     expect((await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/cancellation-executions/${ordinary.id}` })).json()).toEqual(ordinary);
   });
@@ -236,7 +244,7 @@ describe('atomic simulated cancellation', () => {
     expect(response.json()).toMatchObject({ eligible: false, execution: null, financial: { status: 'financially_eligible_for_simulation' } }); expect(response.json().reason).toContain('test entries');
   });
   it('marks only known no-execution refusals after a negative identity lookup', async () => {
-    const s = await prepared(); const missing = await s.execute(input('missing-plan')); expect(missing.statusCode).toBe(404); expect(missing.json().details.code).toBe(CANCELLATION_NOT_EXECUTED);
+    const s = await prepared(); const missing = await s.execute(input('missing-plan', 'missing-plan-request')); expect(missing.statusCode).toBe(404); expect(missing.json().details.code).toBe(CANCELLATION_NOT_EXECUTED);
     const invalid = await s.execute({ ...input(s.plan.id), acknowledgeSimulatedCancellation: false }); expect(invalid.statusCode).toBe(400); expect(invalid.json().details?.code).not.toBe(CANCELLATION_NOT_EXECUTED);
     const unauthorized = await s.execute(input(s.plan.id), as('outsider@atomic.test')); expect(unauthorized.statusCode).toBe(404); expect(unauthorized.json().details?.code).not.toBe(CANCELLATION_NOT_EXECUTED);
     expect((await s.execute()).statusCode).toBe(200);
@@ -253,6 +261,18 @@ describe('atomic simulated cancellation', () => {
     expect((await s.app.inject({ method: 'GET', url, headers: as('finance@execution-check.test') })).statusCode).toBe(404);
     const other = await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/events`, payload: { name: 'Other Fictional Race', template: 'weekend', startDate: '2027-04-01', timeZone: 'America/Los_Angeles' } });
     expect((await s.app.inject({ method: 'GET', url: `/api/events/${other.json().id}/cancellation-confirmations/${s.plan.id}/execution-check` })).statusCode).toBe(404);
+  });
+
+  it('durably refuses a known write failure only after rolling back earlier simulated refunds', async () => {
+    const s = await prepared(); const plan = await s.makePlan({ scope: 'event' }); const body = input(plan.id);
+    await s.sql(`CREATE FUNCTION change_total_during_refund() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN UPDATE orders SET total_cents=0 WHERE id=NEW.order_id; RETURN NEW; END $$; CREATE TRIGGER change_total_during_refund BEFORE INSERT ON refunds FOR EACH ROW EXECUTE FUNCTION change_total_during_refund()`);
+    const rejected = await s.execute(body); expect(rejected.statusCode, rejected.body).toBe(409); expect(rejected.json().details.code).toBe(CANCELLATION_NOT_EXECUTED);
+    expect((await s.sql('SELECT count(*)::int AS n FROM refunds')).rows[0].n).toBe(0); expect((await s.sql('SELECT total_cents FROM orders WHERE id=$1', [s.order.id])).rows[0].total_cents).toBe(s.order.totalCents);
+    expect((await s.app.inject({ method: 'GET', url: `/api/orders/${s.order.id}` })).json().entries.every((e: { status: string }) => e.status === 'confirmed')).toBe(true);
+    await s.sql('DROP TRIGGER change_total_during_refund ON refunds');
+    expect((await s.execute(body)).json()).toEqual(rejected.json());
+    const changed = await s.execute({ ...body, confirmationId: 'changed-plan' }); expect(changed.statusCode).toBe(409); expect(changed.json().details?.code).not.toBe(CANCELLATION_NOT_EXECUTED);
+    const restored = await s.execute(input(plan.id, 'fresh-after-known-rollback')); expect(restored.statusCode, restored.body).toBe(200); expect(restored.json().refunds).toHaveLength(2);
   });
 
 });

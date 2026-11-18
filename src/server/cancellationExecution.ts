@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { priorCancellationRefusal, recordCancellationRefusal, type CancellationOutcome } from './cancellationRefusals';
 import { newId } from '../shared/factory';
 import { CANCELLATION_NOT_EXECUTED, cancellationScopesOverlap, type CancellationConfirmation, type CancellationFinancialPreflight, type CancellationExecution, type CancellationExecutionInput, type CancellationExecutionCheck } from '../shared/cancellations';
 import type { createCancellationConfirmations } from './cancellationConfirmations';
@@ -36,40 +38,50 @@ export function createCancellationExecution(db: Db, repo: Repo, confirmations: R
       });
     },
     async execute(eventId: string, actorId: string, input: CancellationExecutionInput): Promise<CancellationExecution> {
-      return db.transaction(async () => {
+      const outcome = await db.transaction(async (): Promise<CancellationOutcome<CancellationExecution>> => {
         await db.lock(eventLock(eventId));
         const prior = await db.get<{ request_json: CancellationExecutionInput; result_json: CancellationExecution }>('SELECT request_json,result_json FROM cancellation_executions WHERE event_id=$1 AND client_request_id=$2', [eventId, input.clientRequestId]);
         if (prior) {
           if (prior.request_json.confirmationId !== input.confirmationId) throw new HttpError(409, 'This cancellation request was used for a different plan. Recover the original request.');
-          return prior.result_json;
+          return { value: prior.result_json };
         }
+        const rejected = await priorCancellationRefusal(db, eventId, 'execution', input.clientRequestId, input);
+        if (rejected) return { refusal: rejected };
         let prepared: Prepared;
         try {
           prepared = await prepare(eventId, input.confirmationId);
           if (prepared.reason || !prepared.financial) throw new HttpError(409, prepared.reason ?? 'Financial reconciliation is required.', { blockers: prepared.financial?.blockers ?? [] });
         } catch (error) {
-          // Only known read-only preconditions after a negative identity lookup prove this request did not execute.
-          if (error instanceof HttpError && [404, 409, 422].includes(error.status)) {
-            const details = error.details && typeof error.details === 'object' && !Array.isArray(error.details) ? error.details : {};
-            throw new HttpError(error.status, error.message, { ...details, code: CANCELLATION_NOT_EXECUTED });
-          }
+          if (error instanceof HttpError && [404, 409, 422].includes(error.status)) return { refusal: await recordCancellationRefusal(db, eventId, 'execution', input.clientRequestId, input, actorId, clock().toISOString(), error, CANCELLATION_NOT_EXECUTED) };
           throw error;
         }
-        const { plan, financial: assessment } = prepared;
-        const preview = plan.preview;
-        const now = clock().toISOString();
-        const result: CancellationExecution = { id: newId('cancel'), eventId, confirmationId: plan.id, executedBy: actorId, executedAt: now, status: 'simulated_cancellation_executed', selection: plan.selection, cancelledEntryIds: preview.entries.map((e) => e.id), removedWaitlistIds: preview.waitlist.map((w) => w.id), refunds: [], communicationAudience: preview.communicationAudience, startListSnapshotIds: preview.startListSnapshots.map((s) => s.id) };
-        // Reuse refund caps and request identity; simulation cannot call the provider or move money.
-        for (const entry of assessment!.entries) {
-          if (!entry.nominalCashCents) continue;
-          const returned = await refunds.request(entry.orderId, { clientRequestId: `${result.id}:${entry.entryId}`, entryId: entry.entryId, paymentRef: null, amountCents: entry.nominalCashCents, reason: `Organizer cancellation ${result.id}` }, actorId);
-          result.refunds.push({ entryId: entry.entryId, refundId: returned.refundId, amountCents: entry.nominalCashCents });
+        try {
+          const value = await db.transaction(async () => {
+            const { plan, financial: assessment } = prepared;
+            const preview = plan.preview;
+            const now = clock().toISOString();
+            const result: CancellationExecution = { id: newId('cancel'), eventId, confirmationId: plan.id, executedBy: actorId, executedAt: now, status: 'simulated_cancellation_executed', selection: plan.selection, cancelledEntryIds: preview.entries.map((e) => e.id), removedWaitlistIds: preview.waitlist.map((w) => w.id), refunds: [], communicationAudience: preview.communicationAudience, startListSnapshotIds: preview.startListSnapshots.map((s) => s.id) };
+            // Reuse refund caps and request identity; simulation cannot call the provider or move money.
+            for (const entry of assessment!.entries) {
+              if (!entry.nominalCashCents) continue;
+              const returned = await refunds.request(entry.orderId, { clientRequestId: `${result.id}:${entry.entryId}`, entryId: entry.entryId, paymentRef: null, amountCents: entry.nominalCashCents, reason: `Organizer cancellation ${result.id}` }, actorId);
+              result.refunds.push({ entryId: entry.entryId, refundId: returned.refundId, amountCents: entry.nominalCashCents });
+            }
+            await db.run("UPDATE order_entries SET status='cancelled',cancelled_at=$1 WHERE event_id=$2 AND id=ANY($3)", [now, eventId, result.cancelledEntryIds]);
+            await db.run("UPDATE waitlist_entries SET status='removed',updated_at=$1 WHERE event_id=$2 AND id=ANY($3)", [now, eventId, result.removedWaitlistIds]);
+            await db.run('INSERT INTO cancellation_executions(id,event_id,confirmation_id,client_request_id,request_json,executed_by,executed_at,selection_json,race_ids,category_ids,result_json) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)', [result.id, eventId, plan.id, input.clientRequestId, JSON.stringify(input), actorId, now, JSON.stringify(plan.selection), JSON.stringify(preview.raceIds), JSON.stringify(preview.categoryIds), JSON.stringify(result)]);
+            return result;
+          });
+          return { value };
+        } catch (error) {
+          // The write savepoint has fully rolled back; record a terminal known refusal before releasing the event lock.
+          const known = error instanceof z.ZodError ? new HttpError(409, 'The simulated refund request exceeds supported limits. Reconcile the allocation.') : error;
+          if (known instanceof HttpError && [400, 404, 409, 422].includes(known.status)) return { refusal: await recordCancellationRefusal(db, eventId, 'execution', input.clientRequestId, input, actorId, clock().toISOString(), known, CANCELLATION_NOT_EXECUTED) };
+          throw error;
         }
-        await db.run("UPDATE order_entries SET status='cancelled',cancelled_at=$1 WHERE event_id=$2 AND id=ANY($3)", [now, eventId, result.cancelledEntryIds]);
-        await db.run("UPDATE waitlist_entries SET status='removed',updated_at=$1 WHERE event_id=$2 AND id=ANY($3)", [now, eventId, result.removedWaitlistIds]);
-        await db.run('INSERT INTO cancellation_executions(id,event_id,confirmation_id,client_request_id,request_json,executed_by,executed_at,selection_json,race_ids,category_ids,result_json) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)', [result.id, eventId, plan.id, input.clientRequestId, JSON.stringify(input), actorId, now, JSON.stringify(plan.selection), JSON.stringify(preview.raceIds), JSON.stringify(preview.categoryIds), JSON.stringify(result)]);
-        return result;
       });
+      if ('refusal' in outcome) throw new HttpError(outcome.refusal.status, outcome.refusal.message, outcome.refusal.details);
+      return outcome.value;
     },
     async get(eventId: string, executionId: string): Promise<CancellationExecution> {
       const row = await db.get<{ result_json: CancellationExecution }>('SELECT result_json FROM cancellation_executions WHERE event_id=$1 AND id=$2', [eventId, executionId]);

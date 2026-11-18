@@ -223,3 +223,18 @@ test('ignores an older eligibility response after starting another plan review',
   await expect(s.execution).toContainText('Fictional newer plan review');
   await expect(s.execution.getByRole('button', { name: 'Execute simulated cancellation' })).toBeVisible();
 });
+
+test('recovers a lost terminal refusal by retrying the exact original request', async ({ page }) => {
+  const s = await setup(page); await s.check(); await s.acknowledge();
+  await page.request.post(`/api/order-entries/${s.order.entries[0].id}/withdraw`, { data: { reason: 'Fictional changed impact' } });
+  let original!: CancellationExecutionInput;
+  await page.route(`**/api/events/${s.eventId}/cancellation-executions`, async (route) => { original = route.request().postDataJSON(); const response = await route.fetch(); expect(response.status()).toBe(409); expect((await response.json()).details.code).toBe('cancellation_not_executed'); await route.abort('failed'); });
+  await s.execute(); await expect(s.execution.getByRole('alert')).toContainText('unresolved'); await page.reload();
+  await s.execution.getByRole('button', { name: 'Check saved execution result' }).click(); await expect(s.execution.getByRole('alert')).toContainText('may still be running');
+  await page.unroute(`**/api/events/${s.eventId}/cancellation-executions`); let retry: CancellationExecutionInput | null = null;
+  page.on('request', (r) => { if (r.method() === 'POST' && r.url().endsWith('/cancellation-executions')) retry = r.postDataJSON(); });
+  await s.execution.getByRole('button', { name: 'Retry original execution request' }).click();
+  await expect(s.execution.getByRole('alert')).toContainText('This execution request did not run.'); expect(retry).toEqual(original);
+  await expect(s.confirmation.getByRole('button', { name: 'Review another plan' })).toHaveAttribute('aria-disabled', 'false');
+  expect((await (await page.request.get(`/api/orders/${s.order.id}`)).json()).refunds).toEqual([]);
+});
