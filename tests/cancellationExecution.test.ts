@@ -73,6 +73,38 @@ describe('atomic simulated cancellation', () => {
     expect(result.categoryIds).toEqual(s.config.categories.filter((c) => c.raceId === s.cat('RR-M35-34').raceId || s.config.races.find((r) => r.id === c.raceId)?.dayId === otherRace.dayId).map((c) => c.id));
     expect((await read()).json().cancellation).toEqual(result);
   });
+  it.each(['event', 'day', 'race'] as const)('labels %s cancellation downloads without rewriting CSV schemas or historical rows', async (scope) => {
+    const s = await prepared(); const raceId = s.cat('RR-M35-34').raceId;
+    const otherRaceId = s.cat('CR-M35-34').raceId;
+    const selection = scope === 'event' ? { scope } : scope === 'day' ? { scope, dayId: s.config.races.find((r) => r.id === raceId)!.dayId } : { scope, raceId };
+    const snapshot = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/start-lists/${raceId}/snapshots` }); expect(snapshot.statusCode).toBe(201);
+    const download = (path: string) => s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/${path}` });
+    const paths = ['exports/entries.csv', 'exports/ledger.csv', `start-lists/${raceId}/csv`, `start-lists/${otherRaceId}/csv`, 'start-lists/all/csv', `start-lists/${raceId}/csv?snapshot=1`];
+    const before = await Promise.all(paths.map(download));
+    for (const r of before) { expect(r.statusCode).toBe(200); expect(r.headers['x-cyclereg-cancellation']).toBe('none'); expect(r.headers['content-disposition']).not.toContain('CANCELLED'); }
+    const plan = await s.makePlan(selection);
+    expect((await download('exports/entries.csv')).headers['x-cyclereg-cancellation']).toBe('none');
+    const savedSnapshots = (await s.sql('SELECT * FROM start_list_snapshots ORDER BY id')).rows;
+    const executed = await s.execute(input(plan.id)); expect(executed.statusCode, executed.body).toBe(200);
+    const after = await Promise.all(paths.map(download));
+    for (let i = 0; i < after.length; i++) {
+      const r = after[i]; expect(r.statusCode).toBe(200); expect(r.headers['cache-control']).toBe('no-store');
+      expect(r.headers['content-type']).toContain('text/csv');
+      expect(r.body.split('\r\n')[0]).toBe(before[i].body.split('\r\n')[0]);
+      const state = i === 2 || i === 5 ? 'cancelled' : i === 3 ? scope === 'event' ? 'cancelled' : 'none' : scope === 'event' ? 'cancelled' : 'partial';
+      expect(r.headers['x-cyclereg-cancellation']).toBe(state);
+      expect(r.headers['x-cyclereg-export-context']).toBe(i === 5 ? 'historical' : 'current');
+      if (state !== 'none') expect(r.headers['content-disposition']).toContain(state === 'partial' ? '-PARTIAL-CANCELLATION.csv' : i === 5 ? '-HISTORICAL-CANCELLED.csv' : '-CANCELLED.csv');
+      else expect(r.headers['content-disposition']).toBe(before[i].headers['content-disposition']);
+    }
+    expect(after[0].body).toContain('cancelled');
+    expect(after[2].body.trim().split('\r\n')).toHaveLength(1);
+    expect(after[5].body).toBe(before[5].body);
+    if (scope !== 'event') expect(after[3].body).toBe(before[3].body);
+    expect((await s.sql('SELECT * FROM start_list_snapshots ORDER BY id')).rows).toEqual(savedSnapshots);
+    const other = (await s.app.inject({ method: 'POST', url: '/api/demo' })).json();
+    expect((await s.app.inject({ method: 'GET', url: `/api/events/${other.eventId}/exports/entries.csv` })).headers['x-cyclereg-cancellation']).toBe('none');
+  });
   it('serializes concurrent replay across separate applications without double refunds', async () => {
     const s = await prepared(); const second = (await testApp({ databaseUrl: s.databaseUrl, now: () => new Date('2027-03-01T18:00:00Z') })).app;
     const responses = await Promise.all([s.execute(), second.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-executions`, payload: input(s.plan.id) })]);
@@ -115,6 +147,8 @@ describe('atomic simulated cancellation', () => {
   });
   it.each(['credit', 'rider_choice', null] as const)('refuses unsupported financial policy %s without writes', async (policy) => {
     const s = await prepared(policy); expect((await s.execute()).statusCode).toBe(409);
+    const exported = await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/exports/entries.csv` });
+    expect(exported.headers['x-cyclereg-cancellation']).toBe('none'); expect(exported.headers['content-disposition']).not.toContain('CANCELLED');
     expect((await s.sql('SELECT count(*)::int AS n FROM cancellation_executions')).rows[0].n).toBe(0);
     expect((await s.sql('SELECT count(*)::int AS n FROM refunds')).rows[0].n).toBe(0);
   });

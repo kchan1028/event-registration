@@ -19,6 +19,7 @@ import { eventSummary } from '../shared/reports';
 import { riderCorrectionSchema } from '../shared/lookup';
 import { changeImpact, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
+import { cancellationExportState, cancellationExportFilename } from './cancellationClosure';
 import { openDb } from './db';
 import { createAutomaticBibs, automaticBibError, type AutomaticBibs } from './automaticBibs';
 import { createCheckIn } from './checkin';
@@ -752,16 +753,23 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     // The permission depends on which file is asked for, so the parameters are parsed before the check.
     const p = z.object({ id: idStr, kind: z.enum(['entries.csv', 'ledger.csv']) }).parse(req.params);
     await access.requireEvent(me(req), p.id, p.kind === 'entries.csv' ? 'export.entries' : 'export.ledger');
-    const record = await repo.getEvent(p.id);
-    const list = (await orders.listOrders(p.id)).filter(isLiveOrder);
-    const slugName = slug(record.config.event.name, 'event');
-    const demo = record.config.event.isDemo ? '-DEMO' : '';
-    const body = p.kind === 'entries.csv' ? entriesCsv(list, await identity.keyOf(p.id)) : ledgerCsv(list);
+    const file = await db.transaction(async () => {
+      await db.lock(eventLock(p.id));
+      const record = await repo.getEvent(p.id);
+      const list = (await orders.listOrders(p.id)).filter(isLiveOrder);
+      const slugName = slug(record.config.event.name, 'event');
+      const demo = record.config.event.isDemo ? '-DEMO' : '';
+      const body = p.kind === 'entries.csv' ? entriesCsv(list, await identity.keyOf(p.id)) : ledgerCsv(list);
+      const cancellation = await cancellationExportState(db, p.id, record.config);
+      return { body, cancellation, filename: cancellationExportFilename(`${slugName}-${p.kind === 'entries.csv' ? 'entries' : 'ledger'}${demo}.csv`, cancellation) };
+    });
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
-      .header('Content-Disposition', `attachment; filename="${slugName}-${p.kind === 'entries.csv' ? 'entries' : 'ledger'}${demo}.csv"`)
+      .header('Content-Disposition', `attachment; filename="${file.filename}"`)
+      .header('X-CycleReg-Cancellation', file.cancellation)
+      .header('X-CycleReg-Export-Context', 'current')
       .header('Cache-Control', 'no-store')
-      .send(body);
+      .send(file.body);
   });
 
   app.get('/api/events/:id/start-lists/:raceId/csv', async (req, reply) => {
@@ -771,6 +779,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
       .header('Content-Disposition', `attachment; filename="${file.filename}"`)
+      .header('X-CycleReg-Cancellation', file.cancellation)
+      .header('X-CycleReg-Export-Context', file.historical ? 'historical' : 'current')
       .header('Cache-Control', 'no-store')
       .send(file.body);
   });

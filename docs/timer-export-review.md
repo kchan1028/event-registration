@@ -17,13 +17,15 @@ A short message to go with it:
 
 The app exports one CSV per race, per saved snapshot, or for all races of an event in one file. Organizers find it under **Start lists and timer export** in the event builder. Implementation details are in [roadmap.md](../roadmap.md#start-lists-and-timer-export).
 
-- **Who is in it.** Confirmed (paid) entries only. Unpaid holds, cancelled orders, withdrawn entries, and the builder's simulated test entries are left out.
+- **Who is in it.** Confirmed (paid) entries only. Unpaid holds, cancelled orders or entries, withdrawn entries, and the builder's simulated test entries are left out.
 - **Order.** Start time, then category code, then bib (riders without a bib last), then last name.
 - **One row per entry.** A rider in two races appears twice, once per race, with the same `rider_id`.
 - **Stable IDs.** `entry_id` and `rider_id` never change, even when a name, team, category, or bib changes, so a re-sent file can be matched to the first one.
 - **Snapshots.** The organizer saves a numbered, timestamped snapshot when sending a list. Later changes (added, removed, or changed riders) are shown against it, so the organizer can tell the timer exactly what changed.
 - **File format.** UTF-8 text, comma separated, a header row, Windows line endings (CRLF). Fields containing commas or quotes are quoted. A value that starts with `=`, `+`, `-`, or `@` gets a leading apostrophe so a spreadsheet does not run it as a formula.
 - **Not included.** Email, phone, guardian, emergency contact, payment amounts, and order numbers. These stay out unless officials need them and access controls exist.
+
+Cancellation download labels are Implemented locally: filenames and HTTP headers identify current closure and historical snapshots without changing the CSV schema or saved contents. A historical file can still contain entrants in a race cancelled since it was saved. See the [cancellation requirements](../product.md#event-and-race-cancellation) for label meanings. This does not establish timer acceptance, settlement or printable-roster notices.
 
 ## Columns
 
