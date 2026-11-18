@@ -2132,6 +2132,20 @@ button.issue {
   font-weight: 500;
   letter-spacing: -0.01em;
 }
+.offer-retry {
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+}
+.offer-retry .btn {
+  min-height: 44px;
+}
+.offer-retry .btn[aria-disabled='true'] {
+  background: var(--pending-bg);
+  color: var(--pending);
+  cursor: wait;
+  transform: none;
+}
 .reg__meta {
   margin-top: 4px;
   color: var(--muted);

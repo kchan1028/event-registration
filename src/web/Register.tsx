@@ -234,40 +234,81 @@ export function Register({ eventId }: { eventId: string }) {
   const [draft, update] = useStoredDraft(eventId);
 
   const [offer, setOffer] = useState<WaitlistOffer | null>(null);
-  const [offerError, setOfferError] = useState<string | null>(null);
+  const [offerFailure, setOfferFailure] = useState<{ token: string; message: string; retryable: boolean } | null>(null);
+  const [checkingOffer, setCheckingOffer] = useState(false);
+  const [offerAttempt, setOfferAttempt] = useState(0);
   const session = useSession();
   const signedIn = session.status === 'signed-in';
   const offerToken = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('offer');
 
+  const currentOfferFailure = offerFailure?.token === offerToken ? offerFailure : null;
+  const statusRead = useRef(0);
+  const retryButton = useRef<HTMLButtonElement>(null);
+  const refreshButton = useRef<HTMLButtonElement>(null);
+  const readCurrentStatus = async () => {
+    const read = ++statusRead.current;
+    const latest = await api.publicEvent(eventId);
+    return read === statusRead.current ? latest : null;
+  };
+
   useEffect(() => {
-    api.publicEvent(eventId).then(setEv).catch(setError);
+    let active = true;
+    api.publicEvent(eventId)
+      .then((initial) => { if (active) setEv((current) => current ?? initial); })
+      .catch((failure: ApiError) => { if (active) setError(failure); });
+    return () => { active = false; };
   }, [eventId]);
 
-  // A waitlist offer link (#/register/<event>?offer=<token>) preselects the offered category and prefills the rider.
+  // Open private offer details after sign-in, then validate against fresh event status.
   useEffect(() => {
     const token = offerToken;
-    if (!token || !signedIn) return; // the offer holds the rider's details, so it opens after sign-in
-    Promise.all([api.waitlistOffer(token), api.publicEvent(eventId)])
-      .then(([o, latest]) => {
-        if (o.eventId !== eventId) return;
-        setEv(latest);
-        setOffer(o);
-        if (latest.cancellation.categoryIds.includes(o.categoryId)) return;
-        if (o.status !== 'offered') return;
-        update((d) => d.pendingReservation ? d : ({
-          ...d,
-          offerToken: token,
-          offerCategoryId: o.categoryId,
-          selected: d.selected.includes(o.categoryId) ? d.selected : [...d.selected, o.categoryId],
-          profile: d.profile.racingAge === null ? profileOf(o.rider) : d.profile,
-          details: d.details.firstName ? d.details : { ...d.details, firstName: o.rider.firstName, lastName: o.rider.lastName, email: o.rider.email },
-        }));
-      })
-      .catch((e: ApiError) => setOfferError(e.message));
+    if (!token || !signedIn) return;
+    let active = true;
+    setCheckingOffer(true);
+    setOffer(null);
+    const checkOffer = async () => {
+      let opened: WaitlistOffer;
+      try {
+        opened = await api.waitlistOffer(token);
+      } catch (failure) {
+        if (active) {
+          const error = failure as ApiError;
+          setOfferFailure({ token, message: error.message, retryable: error.status === 0 || error.status === 429 || error.status >= 500 });
+        }
+        return;
+      }
+      if (!active) return;
+      if (opened.eventId !== eventId) {
+        setOfferFailure({ token, message: 'This waitlist offer is for a different event. Open the link from the organizer.', retryable: false });
+        return;
+      }
+      const latest = await readCurrentStatus().catch(() => null);
+      if (!active) return;
+      if (!latest) {
+        setOfferFailure({ token, message: 'Could not check registration status for this waitlist offer. Try again to check whether you can use it.', retryable: true });
+        return;
+      }
+      if (document.activeElement === retryButton.current) refreshButton.current?.focus();
+      setEv(latest);
+      setOffer(opened);
+      setOfferFailure(null);
+      if (opened.status !== 'offered' || latest.cancellation.categoryIds.includes(opened.categoryId)) return;
+      update((d) => d.pendingReservation ? d : ({
+        ...d,
+        offerToken: token,
+        offerCategoryId: opened.categoryId,
+        selected: d.selected.includes(opened.categoryId) ? d.selected : [...d.selected, opened.categoryId],
+        profile: d.profile.racingAge === null ? profileOf(opened.rider) : d.profile,
+        details: d.details.firstName ? d.details : { ...d.details, firstName: opened.rider.firstName, lastName: opened.rider.lastName, email: opened.rider.email },
+      }));
+    };
+    void checkOffer().finally(() => { if (active) setCheckingOffer(false); });
+    return () => { active = false; };
+    // The draft updater applies to current state. Its identity changes on each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, signedIn]);
+  }, [eventId, offerToken, signedIn, offerAttempt]);
 
-  if (error) {
+  if (error && !ev) {
     return (
       <div className="reg">
         <RegHeader />
@@ -305,7 +346,10 @@ export function Register({ eventId }: { eventId: string }) {
   const refreshStatus = async () => {
     if (refreshing) return;
     setRefreshing(true); setRefreshError(null);
-    try { setEv(await api.publicEvent(eventId)); }
+    try {
+      const latest = await readCurrentStatus();
+      if (latest) setEv(latest);
+    }
     catch { setRefreshError('Could not refresh registration status. Showing the last loaded status. Try again before continuing.'); }
     finally { setRefreshing(false); }
   };
@@ -320,7 +364,7 @@ export function Register({ eventId }: { eventId: string }) {
       } catch {
         /* the hold expires on its own */
       }
-      const latest = await api.publicEvent(eventId).catch(() => null);
+      const latest = await readCurrentStatus().catch(() => null);
       const changedWaiver = !latest || latest.config.registration.waiverVersion !== ev.config.registration.waiverVersion || latest.config.registration.waiverText !== ev.config.registration.waiverText;
       if (latest) setEv(latest);
       update((d) => ({ ...d, step, orderId: null, clientRequestId: crypto.randomUUID(), waiver: changedWaiver ? { ...d.waiver, read: false, agreed: false } : d.waiver }));
@@ -345,14 +389,18 @@ export function Register({ eventId }: { eventId: string }) {
               <strong>Demo data.</strong> {config.event.demoNotice}
             </p>
           )}
-          {offerError && (
-            <p className="note note--warn" role="alert">
-              {offerError}
-            </p>
+          {signedIn && offerToken && currentOfferFailure && (
+            <div className="note note--warn offer-retry">
+              {!checkingOffer && <p role="alert">{currentOfferFailure.message}</p>}
+              {currentOfferFailure.retryable && <button ref={retryButton} type="button" className="btn btn--secondary" aria-disabled={checkingOffer || undefined}
+                onClick={() => { if (!checkingOffer) setOfferAttempt((attempt) => attempt + 1); }}>
+                {checkingOffer ? 'Checking waitlist offer…' : 'Retry waitlist offer'}
+              </button>}
+            </div>
           )}
-          {offer && !ev.cancellation.categoryIds.includes(offer.categoryId) && <OfferBanner offer={offer} />}
+          {signedIn && offerToken && offer && !ev.cancellation.categoryIds.includes(offer.categoryId) && <OfferBanner offer={offer} />}
           <CancellationNotice ev={ev} />
-          <button type="button" className="btn btn--secondary btn--small" disabled={refreshing} onClick={refreshStatus}>{refreshing ? 'Refreshing status…' : 'Refresh registration status'}</button>
+          <button type="button" className="btn btn--secondary btn--small" ref={refreshButton} disabled={refreshing} onClick={refreshStatus}>{refreshing ? 'Refreshing status…' : 'Refresh registration status'}</button>
           {refreshError && <p className="note note--warn" role="alert">{refreshError}</p>}
           <div className="pending-stack">
             <Pending>
