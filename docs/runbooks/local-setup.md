@@ -235,3 +235,12 @@ The finance refund panel distinguishes an ordinary in-flight submission from an 
 Unresolved provider requests stop sending after 23 hours from creation, reserving a one-hour margin before Stripe API v1 may prune its key. Money remains reserved. Finance must inspect the original provider operation/events and reconcile before any alternative reimbursement; do not create a replacement request blindly. Late signed updates still apply. An operator reconciliation/override tool is not implemented; real-provider and support acceptance remain launch gates.
 
 Primary sources checked November 16, 2026: [Stripe idempotent requests](https://docs.stripe.com/api/idempotent_requests) and [low-level error handling](https://docs.stripe.com/error-low-level). API v1 keys are retained at least 24 hours, can then be removed, and reuse after removal can execute a new operation. Tests make no real refunds.
+
+
+## Reviewed cancellation plans (API only)
+
+With fictional data and current event owner/finance authority, POST a strict event/race/day selection to `/api/events/:id/cancellation-confirmation-preview`. Keep the returned fingerprint and review its impact. POST `/api/events/:id/cancellation-confirmations` with `clientRequestId`, the same `selection`, `previewFingerprint`, a 3–300 character `reason` and `acknowledgePlanOnly: true`. Changed impact/financial guard state returns 409 and requires a new preview. GET `/api/events/:id/cancellation-confirmations/:confirmationId` retrieves evidence under current event finance access.
+
+After an interrupted response, resend the identical normalized request with the same identity to recover its original record, actor and time. Changed details under that identity conflict; new identities record separate plans. The result is `plan_confirmed` with `executionAvailable: false`. It changes no entries, places, payments or messages and creates no execution queue. Confirmation UI and actual cancellation remain Planned. Before any future execution, obtain fresh reviewed state and reconcile finances; a saved plan is not financial authorization. Retention and real-provider acceptance remain required before real data/money.
+
+The existing owner-only generated case-study reset also removes reviewed plans for those fixture events under event locks. It preserves unrelated event evidence. This scoped fixture cleanup does not define a real-data retention/deletion policy.

@@ -34,9 +34,10 @@ import { createWaitlist } from './waitlist';
 import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
 import { createMailer, emailFromEnv, type EmailSender } from './email';
 import { createJuniors } from './juniors';
+import { createCancellationConfirmations } from './cancellationConfirmations';
 import { createCancellationImpact } from './cancellationImpact';
 import { createCancellationAllocations } from './cancellationAllocations';
-import { cancellationSelectionSchema } from '../shared/cancellations';
+import { cancellationSelectionSchema, cancellationConfirmationSchema } from '../shared/cancellations';
 import { createProfileClaims, profileClaimSettingsFromEnv, validateProfileClaimSettings, type ProfileClaimSettings } from './profileClaims';
 import { guardianRemovalSchema } from '../shared/juniors';
 import { authProviderFromEnv, createAccess, type Access, type Account, type AuthProvider } from './auth';
@@ -103,6 +104,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const refunds = createRefunds(db, paymentProvider, clock, repo);
   const cancellationAllocations = createCancellationAllocations(db, repo, clock);
   const cancellationImpact = createCancellationImpact(db, repo, cancellationAllocations, clock);
+  const cancellationConfirmations = createCancellationConfirmations(db, cancellationImpact, clock);
   const payments = createPayments(db, orders, paymentProvider, clock, appUrl, refunds.onRefundEvent);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
@@ -506,6 +508,19 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { orderId: id }, { rider: true });
     return payments.startCheckout(id);
+  });
+
+  app.post('/api/events/:id/cancellation-confirmation-preview', async (req) => {
+    const { id } = await onEvent(req, 'payments.refund');
+    return cancellationConfirmations.preview(id, cancellationSelectionSchema.parse(req.body));
+  });
+  app.post('/api/events/:id/cancellation-confirmations', async (req) => {
+    const { id } = await onEvent(req, 'payments.refund');
+    return cancellationConfirmations.confirm(id, me(req).id, cancellationConfirmationSchema.parse(req.body));
+  });
+  app.get('/api/events/:id/cancellation-confirmations/:confirmationId', async (req) => {
+    const { id, confirmationId } = await onEvent(req, 'payments.refund', z.object({ id: z.string().min(1).max(64), confirmationId: z.string().min(1).max(64) }));
+    return cancellationConfirmations.get(id, confirmationId);
   });
 
   app.post('/api/events/:id/cancellation-impact-preview', async (req) => {
