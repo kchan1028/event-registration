@@ -11,6 +11,7 @@ export const cancellationSelectionSchema = z.discriminatedUnion('scope', [
 ]);
 export type CancellationSelection = z.infer<typeof cancellationSelectionSchema>;
 
+export const CANCELLATION_PLAN_NOT_RECORDED = 'cancellation_plan_not_recorded';
 export const CANCELLATION_IMPACT_CHANGED = 'Cancellation impact changed. Review a fresh confirmation preview before confirming the plan.';
 
 /** Confirms a reviewed plan only; it is not a cancellation or payment instruction. */

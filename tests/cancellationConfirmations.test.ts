@@ -4,7 +4,7 @@ import { testApp, testDatabaseUrl } from './support/db';
 import { as } from './support/auth';
 import { localEmail } from '../src/server/email';
 import type { EventConfig } from '../src/shared/schema';
-import type { CancellationConfirmationInput, CancellationConfirmationPreview, CancellationSelection } from '../src/shared/cancellations';
+import { CANCELLATION_PLAN_NOT_RECORDED, type CancellationConfirmationInput, CancellationConfirmationPreview, CancellationSelection } from '../src/shared/cancellations';
 
 async function setup() {
   let instant = new Date('2027-03-01T18:00:00Z');
@@ -67,7 +67,7 @@ describe('reviewed cancellation plan confirmation', () => {
   it('refuses changed reason, scope or fingerprint for an existing request identity', async () => {
     const s = await setup(); const p = await s.preview(); const body = s.input(p);
     expect((await s.confirm(body)).statusCode).toBe(200);
-    for (const change of [{ reason: 'Different approved reason' }, { selection: { scope: 'race', raceId: s.cat('RR-M35-34').raceId } }, { previewFingerprint: '0'.repeat(64) }]) expect((await s.confirm({ ...body, ...change })).statusCode).toBe(409);
+    for (const change of [{ reason: 'Different approved reason' }, { selection: { scope: 'race', raceId: s.cat('RR-M35-34').raceId } }, { previewFingerprint: '0'.repeat(64) }]) { const response = await s.confirm({ ...body, ...change }); expect(response.statusCode).toBe(409); expect(response.json().details?.code).not.toBe(CANCELLATION_PLAN_NOT_RECORDED); }
     expect(await s.count()).toBe(1);
   });
 
@@ -106,6 +106,32 @@ describe('reviewed cancellation plan confirmation', () => {
     expect(first.statusCode, first.body).toBe(200);
     expect((await s.confirm(body)).json()).toEqual(first.json());
     expect((await s.get(first.json().id)).json().selection).toEqual(selection);
+  });
+
+  it('proves a removed published scope did not record the new request', async () => {
+    const s = await setup();
+    const update = async (include: boolean) => {
+      const record = (await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}` })).json();
+      const day = new Date(`${record.config.days[0].date}T00:00Z`); day.setUTCDate(day.getUTCDate() + 7);
+      record.config.days = record.config.days.filter((d: { id: string }) => d.id !== 'temporary_confirmation_day');
+      if (include) record.config.days.push({ id: 'temporary_confirmation_day', label: 'Temporary confirmation day', date: day.toISOString().slice(0, 10) });
+      expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/config`, payload: { revision: record.revision, config: record.config } })).statusCode).toBe(200);
+      expect((await s.publish()).statusCode).toBe(200);
+    };
+    await update(true); const p = await s.preview({ scope: 'day', dayId: 'temporary_confirmation_day' }); await update(false);
+    const response = await s.confirm(s.input(p)); expect(response.statusCode).toBe(422);
+    expect(response.json().details).toEqual({ code: CANCELLATION_PLAN_NOT_RECORDED }); expect(await s.count()).toBe(0);
+  });
+
+  it('classifies an unreviewable fresh plan without losing prior exact-replay evidence', async () => {
+    const s = await setup(); const order = await s.buy(); const p = await s.preview(); const body = s.input(p);
+    const place = (categoryId: string) => s.sql(async (db) => { await db.query('UPDATE order_entries SET category_id=$1 WHERE id=$2', [categoryId, order.entries[0].id]); });
+    await place('unknown_confirmation_category');
+    const refused = await s.confirm(body); expect(refused.statusCode).toBe(409); expect(refused.json().details).toEqual({ code: CANCELLATION_PLAN_NOT_RECORDED }); expect(await s.count()).toBe(0);
+    await place(s.cat('RR-M35-34').id); const original = (await s.confirm(body)).json(); await place('unknown_confirmation_category');
+    expect((await s.confirm(body)).json()).toEqual(original);
+    const separate = await s.confirm({ ...body, clientRequestId: 'separate-unreviewable-request' });
+    expect(separate.statusCode).toBe(409); expect(separate.json().details).toEqual({ code: CANCELLATION_PLAN_NOT_RECORDED }); expect(await s.count()).toBe(1);
   });
 
   it('keeps exact replay historical after the impact changes and preserves the original actor', async () => {

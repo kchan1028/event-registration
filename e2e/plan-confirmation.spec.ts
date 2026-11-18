@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import type { Locator } from '@playwright/test';
 import { expect, test, type Page } from './fixtures';
 import type { CancellationConfirmation, CancellationConfirmationInput } from '../src/shared/cancellations';
 
@@ -25,6 +26,21 @@ async function setup(page: Page, pay = true) {
   };
 }
 
+async function inspectState(page: Page, region: Locator, state: string) {
+  for (const theme of ['light', 'dark']) {
+    const toggle = page.getByRole('button', { name: /^Theme: / });
+    if (await toggle.getAttribute('data-current') !== theme) await toggle.click();
+    await expect(toggle).toHaveAttribute('data-current', theme);
+    for (const width of [360, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await page.setViewportSize({ width, height: 3000 });
+      await region.screenshot({ path: `test-results/plan-confirmation-${state}-${theme}-${width}.png` });
+    }
+    expect((await new AxeBuilder({ page }).include('[aria-label="Reviewed plan confirmation"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+  }
+}
+
 test('records only acknowledged plans and recovers a committed lost response across refresh', async ({ page }) => {
   const s = await setup(page); const posts: CancellationConfirmationInput[] = []; let financialPosts = 0;
   let release!: () => void; let captured!: () => void; let saved!: CancellationConfirmation;
@@ -39,19 +55,14 @@ test('records only acknowledged plans and recovers a committed lost response acr
   await s.confirmation.getByLabel('Reason for the reviewed plan').fill('Fictional weather plan review');
   await s.confirmation.getByRole('button', { name: 'Record plan confirmation' }).click();
   await expect(s.confirmation.getByRole('alert')).toContainText('Acknowledge'); expect(posts).toHaveLength(0);
+  await expect(s.confirmation.getByRole('checkbox')).toHaveAttribute('aria-invalid', 'true');
+  await expect(s.confirmation.getByRole('checkbox')).toHaveAccessibleDescription('Acknowledge that this records a plan only.');
   await s.fill('ab'); await s.confirmation.getByRole('button', { name: 'Record plan confirmation' }).click();
   await expect(s.confirmation.getByRole('alert')).toContainText('3 to 300'); expect(posts).toHaveLength(0);
+  await expect(s.confirmation.getByLabel('Reason for the reviewed plan')).toHaveAttribute('aria-invalid', 'true');
+  await expect(s.confirmation.getByLabel('Reason for the reviewed plan')).toHaveAccessibleDescription('Write a reason of 3 to 300 characters.');
   await s.fill();
-  for (const theme of ['light', 'dark']) {
-    const toggle = page.getByRole('button', { name: /^Theme: / }); if (await toggle.getAttribute('data-current') !== theme) await toggle.click();
-    for (const width of [360, 1440]) {
-      await page.setViewportSize({ width, height: 1000 });
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-      await page.setViewportSize({ width, height: 3000 });
-      await s.confirmation.screenshot({ path: `test-results/plan-confirmation-form-${theme}-${width}.png` });
-    }
-    expect((await new AxeBuilder({ page }).include('[aria-label="Reviewed plan confirmation"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
-  }
+  await inspectState(page, s.confirmation, 'form');
   await s.confirmation.getByRole('button', { name: 'Record plan confirmation' }).click(); await ready;
   const retry = s.confirmation.getByRole('button', { name: 'Retry original plan confirmation' });
   await expect(retry).toHaveAttribute('aria-disabled', 'true'); await retry.focus(); await page.keyboard.press('Enter'); expect(posts).toHaveLength(1);
@@ -63,6 +74,7 @@ test('records only acknowledged plans and recovers a committed lost response acr
   await expect(s.preview.getByRole('status', { name: 'Cancellation impact status' })).toBeEmpty();
   await expect(s.confirmation).toContainText('Original reason: Fictional weather plan review');
   release(); await expect(s.confirmation.getByRole('alert')).toContainText('original result is unresolved');
+  await inspectState(page, s.confirmation, 'pending');
   const afterWithdrawal = await (await page.request.get(`/api/orders/${s.order!.id}`)).json();
   await page.reload();
   await expect(s.confirmation).toContainText('Original reason: Fictional weather plan review'); expect(posts).toHaveLength(1);
@@ -80,17 +92,11 @@ test('records only acknowledged plans and recovers a committed lost response acr
   await lookup.focus(); await page.keyboard.press('Enter'); await expect.poll(() => lookupCalls).toBe(2);
   await expect(lookup).toHaveAttribute('aria-disabled', 'false'); await expect(lookup).toBeFocused();
   await expect(s.confirmation).not.toContainText('Reviewed plan recorded'); expect(posts).toHaveLength(2);
+  await inspectState(page, s.confirmation, 'failed-lookup');
   failLookup = false; await s.confirmation.getByRole('button', { name: 'Retry saved record lookup' }).click();
   await expect(s.confirmation).toContainText(saved.id); expect(posts).toHaveLength(2);
   await expect(s.confirmation.getByLabel('Recorded plan evidence')).toBeFocused();
-  for (const theme of ['light', 'dark']) {
-    const toggle = page.getByRole('button', { name: /^Theme: / }); if (await toggle.getAttribute('data-current') !== theme) await toggle.click();
-    for (const width of [360, 1440]) {
-      await page.setViewportSize({ width, height: 1000 }); expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-      await page.setViewportSize({ width, height: 3000 }); await s.confirmation.screenshot({ path: `test-results/plan-confirmation-recorded-${theme}-${width}.png` });
-    }
-    expect((await new AxeBuilder({ page }).include('[aria-label="Reviewed plan confirmation"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
-  }
+  await inspectState(page, s.confirmation, 'recorded');
 });
 
 test('refuses stale impact and requires a fresh review and acknowledgement', async ({ page }) => {
@@ -100,7 +106,7 @@ test('refuses stale impact and requires a fresh review and acknowledgement', asy
   const before = await (await page.request.get(`/api/orders/${s.order!.id}`)).json();
   expect((await page.request.post(`/api/order-entries/${before.entries[0].id}/withdraw`, { data: { reason: 'Fictional external change before plan save' } })).status()).toBe(200);
   await s.confirmation.getByRole('button', { name: 'Record plan confirmation' }).click();
-  await expect(s.confirmation.getByRole('alert')).toContainText('plan was not recorded because its impact changed');
+  await expect(s.confirmation.getByRole('alert')).toContainText('plan was not recorded.');
   await expect(s.preview.getByRole('button', { name: 'Preview cancellation impact', exact: true })).toBeFocused();
   await expect(s.confirmation.getByLabel('Reason for the reviewed plan')).toHaveCount(0);
   await s.load(); await expect(s.confirmation.getByLabel('Reason for the reviewed plan')).toHaveValue(''); await expect(s.confirmation.getByRole('checkbox')).not.toBeChecked();
@@ -118,6 +124,7 @@ test('keeps the original request in memory when browser recovery storage is bloc
   await page.route(`**/api/events/${s.eventId}/cancellation-confirmations`, async (route) => { posts.push(route.request().postDataJSON()); if (posts.length === 1) { await route.fetch(); return route.abort('failed'); } return route.continue(); });
   await s.load(); await s.fill(); await s.confirmation.getByRole('button', { name: 'Record plan confirmation' }).click();
   await expect(s.confirmation.getByRole('alert')).toContainText('original result is unresolved'); await expect(s.confirmation).toContainText('Keep this page open');
+  await inspectState(page, s.confirmation, 'blocked-storage');
   await s.confirmation.getByRole('button', { name: 'Retry original plan confirmation' }).click();
   await expect(s.confirmation).toContainText('Reviewed plan recorded'); expect(posts).toHaveLength(2); expect(posts[1]).toEqual(posts[0]);
 });
@@ -178,6 +185,7 @@ for (const raw of ['{not-json', JSON.stringify({ state: 'recorded', id: '../../m
   await page.reload(); await expect(s.confirmation).toContainText('Saved recovery data could not be read');
   await s.load(); await expect(s.confirmation.getByRole('button', { name: 'Record plan confirmation' })).toHaveCount(0);
   await expect(s.confirmation).toContainText('Manual review'); expect(posts).toBe(0);
+  if (raw === '{not-json') await inspectState(page, s.confirmation, 'corrupt-storage');
 });
 
 
@@ -197,4 +205,27 @@ test('can start an explicit separate review when a recorded reference is unavail
   await s.load(); await s.fill('Fictional explicit separate review'); await s.confirmation.getByRole('button', { name: 'Record plan confirmation' }).click();
   await expect(s.confirmation).toContainText('Reviewed plan recorded'); expect(posts).toHaveLength(2); expect(posts[0].clientRequestId).not.toBe(posts[1].clientRequestId);
   expect(await (await page.request.get(`/api/events/${s.eventId}/cancellation-confirmations/${original.id}`)).json()).toEqual(original);
+});
+
+
+test('unlocks a refused request only when the server proves the vanished scope was not recorded', async ({ page }) => {
+  const s = await setup(page, false);
+  const changeDay = async (include: boolean) => {
+    const record = await (await page.request.get(`/api/events/${s.eventId}`)).json();
+    const date = new Date(`${record.config.days[0].date}T00:00Z`); date.setUTCDate(date.getUTCDate() + 7);
+    record.config.days = record.config.days.filter((d: { id: string }) => d.id !== 'day_confirmation_temporary');
+    if (include) record.config.days.push({ id: 'day_confirmation_temporary', label: 'Temporary published confirmation day', date: date.toISOString().slice(0, 10) });
+    expect((await page.request.put(`/api/events/${s.eventId}/config`, { data: { revision: record.revision, config: record.config } })).status()).toBe(200);
+    expect((await page.request.post(`/api/events/${s.eventId}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).status()).toBe(200);
+  };
+  await changeDay(true); await page.reload(); await s.load(); await expect(s.confirmation.getByLabel('Reason for the reviewed plan')).toBeVisible();
+  await s.preview.getByLabel('Cancellation scope', { exact: true }).selectOption('day'); await s.preview.getByLabel('Published day').selectOption('day_confirmation_temporary');
+  await s.load(); await s.fill(); await changeDay(false);
+  await s.confirmation.getByRole('button', { name: 'Record plan confirmation' }).click();
+  await expect(s.confirmation.getByRole('alert')).toContainText('plan was not recorded');
+  await expect(s.preview.getByLabel('Cancellation scope', { exact: true })).toBeEnabled();
+  await expect(s.confirmation.getByRole('button', { name: 'Retry original plan confirmation' })).toHaveCount(0);
+  await s.preview.getByLabel('Cancellation scope', { exact: true }).selectOption('event'); await s.load();
+  await expect(s.confirmation.getByRole('checkbox')).not.toBeChecked(); await s.fill('Fictional revised scope review');
+  await s.confirmation.getByRole('button', { name: 'Record plan confirmation' }).click(); await expect(s.confirmation).toContainText('Reviewed plan recorded');
 });

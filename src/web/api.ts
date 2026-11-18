@@ -1,4 +1,4 @@
-import type { CancellationSelection, CancellationImpactPreview, CancellationConfirmationPreview, CancellationConfirmationInput, CancellationConfirmation } from '../shared/cancellations';
+import type { CancellationSelection, CancellationConfirmationPreview, CancellationConfirmationInput, CancellationConfirmation } from '../shared/cancellations';
 import type { LimitUsage } from '../shared/capacity';
 import type { RefundStatus, RefundRequest, RefundRequestResult } from '../shared/refunds';
 import type { RefundPolicyPreview } from '../shared/refundPolicy';
@@ -382,7 +382,6 @@ export const api = {
   cancellationConfirmationPreview: (eventId: string, selection: CancellationSelection) => request<CancellationConfirmationPreview>('POST', `/api/events/${eventId}/cancellation-confirmation-preview`, selection),
   confirmCancellationPlan: (eventId: string, input: CancellationConfirmationInput) => request<CancellationConfirmation>('POST', `/api/events/${eventId}/cancellation-confirmations`, input),
   cancellationConfirmation: (eventId: string, id: string) => request<CancellationConfirmation>('GET', `/api/events/${eventId}/cancellation-confirmations/${encodeURIComponent(id)}`),
-  cancellationImpact: (eventId: string, selection: CancellationSelection) => request<CancellationImpactPreview>('POST', `/api/events/${eventId}/cancellation-impact-preview`, selection),
   refundPolicyPreview: (orderId: string, reason: RefundPolicyPreview['reason']) => request<RefundPolicyPreview>('GET', `/api/orders/${orderId}/refund-policy-preview?reason=${reason}`),
   requestRefund: (orderId: string, body: RefundRequest) => request<OrderView & RefundRequestResult>('POST', `/api/orders/${orderId}/refunds`, body),
   retryRefund: (refundId: string) => request<OrderView>('POST', `/api/refunds/${refundId}/retry`),
