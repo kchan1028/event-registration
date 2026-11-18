@@ -54,7 +54,7 @@ describe('atomic simulated cancellation', () => {
     expect((await s.sql('SELECT count(*)::int AS n FROM cancellation_executions')).rows[0].n).toBe(1);
     expect((await s.sql('SELECT count(*)::int AS n FROM refunds')).rows[0].n).toBe(executed.json().refunds.length);
   });
-  it('omits refusals and private stored fields while ordering multiple committed scopes', async () => {
+  it('omits persisted refusals and orders committed scopes by time then ID', async () => {
     const s = await prepared();
     const refused = await s.execute(input('missing-public-plan', 'refused-public-request')); expect(refused.statusCode).toBe(404);
     expect((await s.sql(
