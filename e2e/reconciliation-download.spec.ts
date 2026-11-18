@@ -25,6 +25,7 @@ test('owner downloads the full event evidence with progress, interpretation and 
   await expect(section).toContainText('do not sum amounts across kinds');
   await expect(section).toContainText('Blank amounts mean unknown.');
   await page.getByRole('searchbox', { name: 'Find a registration' }).fill('No matching fictional rider');
+  await page.getByRole('button', { name: /^Unpaid holds/ }).click();
   const before = await (await page.request.get(`/api/orders/${s.order.id}`)).json();
   let release!: () => void; const gate = new Promise<void>((r) => { release = r; }); let gets = 0;
   await page.route(`**/api/events/${s.eventId}/exports/reconciliation.csv`, async (route) => { gets++; await gate; await route.continue(); });
@@ -33,6 +34,9 @@ test('owner downloads the full event evidence with progress, interpretation and 
   await button.focus(); await page.keyboard.press('Enter');
   await expect(section.getByRole('button', { name: 'Preparing CSV…' })).toBeDisabled();
   await expect(section.getByRole('status')).toContainText('Preparing local records'); await expect.poll(() => gets).toBe(1);
+  await expect(section.getByRole('button', { name: 'Preparing CSV…' })).toBeFocused();
+  await page.keyboard.press('Enter'); expect(gets).toBe(1);
+  await section.screenshot({ path: 'test-results/reconciliation-control-preparing.png' });
   const pending = page.waitForEvent('download'); release(); const download = await pending;
   expect(download.suggestedFilename()).toContain('-reconciliation-LOCAL-RECORDS-DEMO.csv');
   const text = await readFile((await download.path())!, 'utf8'); const [header, ...rows] = parseCsv(text);
@@ -40,6 +44,8 @@ test('owner downloads the full event evidence with progress, interpretation and 
   expect(rows[0][header.indexOf('order_id')]).toBe(s.order.id);
   expect(rows[0][header.indexOf('basis')]).toBe('local_record_not_provider_settlement');
   await expect(section.getByRole('status')).toContainText('Download requested.');
+  await expect(button).toBeFocused();
+  await section.screenshot({ path: 'test-results/reconciliation-control-requested.png' });
   expect(await (await page.request.get(`/api/orders/${s.order.id}`)).json()).toEqual(before);
   await page.unroute(`**/api/events/${s.eventId}/exports/reconciliation.csv`);
   for (const theme of ['light', 'dark']) {
@@ -59,8 +65,11 @@ test('failed read is visible and a retry requests the same event file', async ({
   const section = page.getByRole('region', { name: 'Local reconciliation records' }); let fail = true; let gets = 0;
   await page.route(`**/api/events/${s.eventId}/exports/reconciliation.csv`, (route) => { gets++; return fail ? route.abort() : route.continue(); });
   await section.getByRole('button', { name: 'Download local records (CSV)' }).click();
-  await expect(section.getByRole('alert')).toContainText('Try again, or refresh this page to check your access.');
+  await expect(section.getByRole('alert')).toContainText('Refresh this page to check your access.');
   await expect(section.getByRole('status')).not.toContainText('Download requested');
+  await page.setViewportSize({ width: 360, height: 1000 });
+  expect((await new AxeBuilder({ page }).include('[aria-labelledby="reconciliation-records-title"]').analyze()).violations).toEqual([]);
+  await section.screenshot({ path: 'test-results/reconciliation-control-error-360.png' });
   fail = false; const pending = page.waitForEvent('download');
   await section.getByRole('button', { name: 'Download local records (CSV)' }).click(); await pending;
   await expect(section.getByRole('alert')).toHaveCount(0); expect(gets).toBe(2);
@@ -83,9 +92,21 @@ test('finance can download while registration managers cannot, and revocation is
         const pending = member.waitForEvent('download'); await section.getByRole('button', { name: 'Download local records (CSV)' }).click(); await pending;
         expect((await page.request.post(`/api/organizations/${s.organizationId}/members/remove`, { data: { email, role } })).status()).toBe(200);
         let downloads = 0; member.on('download', () => downloads++);
+        const deniedResponse = member.waitForResponse(`**/api/events/${s.eventId}/exports/reconciliation.csv`);
         await section.getByRole('button', { name: 'Download local records (CSV)' }).click();
-        await expect(section.getByRole('alert')).toBeVisible(); expect(downloads).toBe(0);
+        const denied = await deniedResponse; expect(denied.status()).toBe(404);
+        expect(denied.headers()['content-disposition']).toBeUndefined();
+        await expect(section.getByRole('alert')).toContainText((await denied.json()).error); expect(downloads).toBe(0);
       }
     } finally { await context.close(); }
   }
+});
+
+test('unpublished events hide the control until publication', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  await page.goto(`/#/events/${eventId}/registrations`);
+  await expect(page.getByRole('heading', { name: 'Registrations', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Local reconciliation records' })).toHaveCount(0);
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+  await page.reload(); await expect(page.getByRole('region', { name: 'Local reconciliation records' })).toBeVisible();
 });

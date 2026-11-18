@@ -4403,3 +4403,7 @@ fieldset:disabled .field label {
 .reconciliation-download__button {
   min-height: 44px;
 }
+
+.reconciliation-download__button[aria-disabled='true'] {
+  cursor: wait;
+}
