@@ -78,7 +78,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
   type DayState = Awaited<ReturnType<typeof dayState>>;
 
   function riderCard(o: Rider, dayId: string, state: DayState) {
-    const today = o.entries.filter((e) => e.dayId === dayId && e.status !== 'released' && e.status !== 'withdrawn');
+    const today = o.entries.filter((e) => e.dayId === dayId && (e.status === 'held' || e.status === 'confirmed'));
     const readiness = mergeReadiness(today.map((e) => e.readiness));
     const payment: PaymentState = o.status === 'confirmed' ? 'confirmed' : 'not_complete';
     const result = checkInResult({ payment, entriesToday: today.length, readiness });
@@ -274,7 +274,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       if (exclusion) throw new HttpError(409, exclusion);
       requireRiderScope(cfg, card, input);
       const active = activeEntries(rider).filter((e) => days.some((d) => d.id === e.dayId));
-      const applicable = active.length ? active : rider.entries.filter((e) => e.status === 'withdrawn');
+      const applicable = active.length ? active : rider.entries.filter((e) => e.status === 'withdrawn' || e.status === 'cancelled');
       const range = riderRange(cfg, applicable, s, day.id);
       if (!range) throw new HttpError(409, 'Set a bib range for every applicable entry before changing numbers.');
       requireBibInRange(a.bib, range);

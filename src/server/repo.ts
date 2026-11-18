@@ -1,3 +1,4 @@
+import { requireCancellationOpen, requireCancellationPlacementUnchanged } from './cancellationClosure';
 import { canAdmit, entryCountsByCategory, type LimitUsage } from '../shared/capacity';
 import { bibSettingsSchema, DEFAULT_BIB_SETTINGS, type BibSettings } from '../shared/checkin';
 import { newId } from '../shared/factory';
@@ -222,6 +223,7 @@ export function createRepo(db: Db, clock: () => Date) {
           });
         }
         assertSafeForEntries(parsed, await entries(id));
+        await requireCancellationPlacementUnchanged(db, id, parsed);
         await db.run(`UPDATE events SET draft_json = $1, revision = revision + 1, updated_at = $2 WHERE id = $3`, [JSON.stringify(parsed), now(), id]);
         return requireEvent(id);
       });
@@ -231,6 +233,7 @@ export function createRepo(db: Db, clock: () => Date) {
       return db.transaction(async () => {
         await db.lock(eventLock(id));
         const current = await requireEvent(id);
+        await requireCancellationPlacementUnchanged(db, id, current.config);
         const issues = validateConfig(current.config, await entries(id));
         const { errors, warnings } = countIssues(issues);
         if (errors > 0) throw new HttpError(422, `Fix ${errors} ${errors === 1 ? 'error' : 'errors'} before publishing.`, issues);
@@ -277,6 +280,7 @@ export function createRepo(db: Db, clock: () => Date) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
         const { config } = await requireEvent(eventId);
+        await requireCancellationOpen(db, eventId, config, [categoryId]);
         const current = await entries(eventId);
         let created = 0;
         let blockedBy: LimitUsage | null = null;

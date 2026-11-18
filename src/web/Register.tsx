@@ -1441,6 +1441,7 @@ export function OrderPage({ orderId }: { orderId: string }) {
   if (!order) return <div className="state-page"><div className="skeleton skeleton--page" /></div>;
 
   const confirmed = order.status === 'confirmed';
+  const hasActiveEntry = order.entries.some((e) => e.status === 'confirmed');
   // How this order was paid; before payment, only a return from Stripe tells us the mode.
   const mode: PaymentMode | null = order.paidWith ?? (returned ? 'stripe_test' : null);
   // Display only: money returned or on its way back. Entries and readiness do not change with a refund.
@@ -1451,22 +1452,23 @@ export function OrderPage({ orderId }: { orderId: string }) {
       <main className="reg__main reg__main--narrow">
         {confirmed ? (
           <>
-            <h1 className="done__title">You’re entered</h1>
+            <h1 className="done__title">{hasActiveEntry ? 'You’re entered' : 'Registration history'}</h1>
             <p className="reg__meta">
               {order.eventName} · {order.rider.firstName} {order.rider.lastName} · order <span className="num">{order.orderNumber}</span>
             </p>
             <PaymentNote mode={mode} />
-            <div className="ticket">
+            {hasActiveEntry && <div className="ticket">
               <p className="ticket__label">Check-in code{order.isDemo ? ' (demo)' : ''}</p>
               <p className="ticket__code num">{order.checkInCode}</p>
               {order.checkInCode && <QrCodeImage value={order.checkInCode} alt={`QR code for check-in code ${order.checkInCode}`} />}
               <p className="muted small">Show this at check-in. It identifies your entry and contains no personal details.</p>
-            </div>
-            {order.entries.some((e) => e.status !== 'withdrawn' && e.readiness.some((r) => r.state !== 'done')) ? (
+            </div>}
+            {hasActiveEntry && (order.entries.some((e) => e.status === 'confirmed' && e.readiness.some((r) => r.state !== 'done')) ? (
               <p className="note note--warn">Not cleared to race yet. Paying does not clear you; each entry below shows what is still needed.</p>
             ) : (
               <p className="note">Everything below is done. Bring your check-in code on race morning to collect your bib.</p>
-            )}
+            ))}
+            {!hasActiveEntry && <p className="note">No active entries remain on this order. Payment history is kept below.</p>}
           </>
         ) : waiting && polls < 30 ? (
           <>
@@ -1503,7 +1505,8 @@ export function OrderPage({ orderId }: { orderId: string }) {
                 {e.startTime ? ` · starts ${formatTime(e.startTime)}` : ''}
               </p>
               {confirmed && e.status === 'withdrawn' && <p className="small">Withdrawn by the organizer. This entry no longer races.</p>}
-              {confirmed && e.status !== 'withdrawn' && (
+              {confirmed && e.status === 'cancelled' && <p className="small">Cancelled by the organizer. This entry no longer races.</p>}
+              {confirmed && e.status === 'confirmed' && (
                 <ul className="readiness">
                   {e.readiness.map((r) => (
                     <li key={r.key} className={`readiness__item readiness__item--${r.state}`}>

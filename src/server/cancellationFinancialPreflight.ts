@@ -3,7 +3,7 @@ import type { createCancellationConfirmations } from './cancellationConfirmation
 import type { Db } from './db';
 import { eventLock, HttpError } from './repo';
 
-/** No executor: even an eligible result requires a new atomic operational and financial check. */
+/** A standalone result authorizes nothing; the executor must obtain fresh checks inside its transaction. */
 export function createCancellationFinancialPreflight(db: Db, confirmations: ReturnType<typeof createCancellationConfirmations>, clock: () => Date) {
   return {
     async assess(eventId: string, confirmationId: string): Promise<CancellationFinancialPreflight> {

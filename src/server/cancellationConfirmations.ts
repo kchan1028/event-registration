@@ -20,9 +20,10 @@ function view(row: Row): CancellationConfirmation {
     preview: row.preview_json, acknowledgedPlanOnly: true, executionAvailable: false };
 }
 
-/** Append-only plan evidence through these routes. No executor consumes these records. */
+/** Append-only plan evidence through these routes. These routes do not execute; the separate simulation executor performs fresh checks. */
 export function createCancellationConfirmations(db: Db, impact: ReturnType<typeof createCancellationImpact>, clock: () => Date) {
   async function prepare(eventId: string, selection: CancellationSelection): Promise<CancellationConfirmationPreview> {
+    selection = cancellationSelectionSchema.parse(selection);
     return db.transaction(async () => {
       await db.lock(eventLock(eventId));
       const preview = await impact.preview(eventId, selection);

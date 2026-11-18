@@ -177,7 +177,7 @@ describe('event summary', () => {
 
     expect(s.riders).toBe(1);
     expect(s.orders).toEqual({ confirmed: 3, held: 1, paymentFailed: 0, needsAttention: 1 });
-    expect(s.entries).toEqual({ confirmed: 4, held: 2, withdrawn: 2 });
+    expect(s.entries).toEqual({ confirmed: 4, held: 2, withdrawn: 2, cancelled: 0 });
     // Every paid entry still racing awaits a license review in this fixture; withdrawn and unpaid ones never do.
     expect(s.licenseReviews).toBe(4);
     expect(s.waitlist).toEqual({ waiting: 2, offered: 1, expired: 1, accepted: 1, removed: 0 });

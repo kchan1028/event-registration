@@ -659,6 +659,24 @@ export const MIGRATIONS: string[] = [
     acknowledged_plan_only boolean NOT NULL CHECK (acknowledged_plan_only),
     UNIQUE(event_id,client_request_id)
   );`,
+  `ALTER TABLE order_entries ADD COLUMN cancelled_at timestamptz;
+  ALTER TABLE order_entries ADD CONSTRAINT entry_cancellation_time CHECK((status='cancelled')=(cancelled_at IS NOT NULL));
+  ALTER TABLE cancellation_confirmations ADD CONSTRAINT cancellation_confirmation_event_id UNIQUE(event_id,id);
+  CREATE TABLE cancellation_executions (
+    id text PRIMARY KEY,
+    event_id text NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
+    confirmation_id text NOT NULL UNIQUE,
+    client_request_id text NOT NULL CHECK(char_length(client_request_id) BETWEEN 8 AND 128),
+    request_json jsonb NOT NULL,
+    executed_by text NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+    executed_at timestamptz NOT NULL,
+    selection_json jsonb NOT NULL CHECK(jsonb_typeof(selection_json)='object' AND selection_json ? 'scope' AND jsonb_typeof(selection_json->'scope')='string' AND selection_json->>'scope' IN ('event','day','race')),
+    race_ids jsonb NOT NULL CHECK(jsonb_typeof(race_ids)='array'),
+    category_ids jsonb NOT NULL CHECK(jsonb_typeof(category_ids)='array'),
+    result_json jsonb NOT NULL CHECK(jsonb_typeof(result_json)='object' AND result_json ?& ARRAY['id','eventId','confirmationId','executedBy'] AND jsonb_typeof(result_json->'id')='string' AND jsonb_typeof(result_json->'eventId')='string' AND jsonb_typeof(result_json->'confirmationId')='string' AND jsonb_typeof(result_json->'executedBy')='string' AND result_json->>'id'=id AND result_json->>'eventId'=event_id AND result_json->>'confirmationId'=confirmation_id AND result_json->>'executedBy'=executed_by),
+    FOREIGN KEY(event_id,confirmation_id) REFERENCES cancellation_confirmations(event_id,id) ON DELETE RESTRICT,
+    UNIQUE(event_id,client_request_id)
+  );`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
