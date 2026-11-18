@@ -26,7 +26,7 @@ Evidence labels used below:
 
 The available local API returned healthy and listed three fixture events. The served registration module included `pendingReservation`, establishing that port 5273 served a separate **uncommitted CRO variant**, not baseline main. Consequently no fresh rendered desktop/mobile, keyboard, assistive-technology or payment walkthrough is claimed here. Historical 40 API and 25 browser checks, and a historical independent review, concern that variant only. They neither validate unchanged main nor establish that its fixes merged. No real registration, payment, competitor account change, outreach or deployment occurred.
 
-Five narrowly selected roster/check-in tests passed on main; remaining test definitions were inspected, not rerun. No build, full application suite, load test, physical scanner/print test, provider sandbox exercise, bank reconciliation or restore rehearsal was performed. Security review remains subject to the private reporting process in [SECURITY.md](../../SECURITY.md).
+Five narrowly selected roster/check-in tests passed on main; remaining test definitions were inspected, not rerun. The original assessment ran no build, full application suite, load test, physical scanner/print test, provider sandbox exercise, bank reconciliation or restore rehearsal. The November 18 [contention experiment](#local-public-event-read-contention) adds a narrow local performance result. Security review remains subject to the private reporting process in [SECURITY.md](../../SECURITY.md).
 
 ## Journey walkthroughs and screen hierarchy
 
@@ -137,6 +137,28 @@ Existing timing in [CheckIn](../../src/web/CheckIn.tsx), [server check-in](../..
 Proposed replay identity: one logical attempt/order key per recoverable submission; deduplicate outcome events by authoritative provider event ID and transitions by entity/version. Registration lead owns journey/blocker review, treasurer reconciliation, timer liaison version acknowledgement, technical/support leads failure routing. Actual people, alert thresholds, access and retention require owner decisions before collection. A manual synthetic sheet is sufficient; no analytics service is selected.
 
 Allowlist event/version/reason enum, timestamps, attempt ID and restricted opaque keys only as needed. Those keys remain personal data. Exclude names, emails, DOB, license/emergency details, signatures/waiver text, form contents, free-text errors, full URLs, check-in codes, secrets and card data. Restrict operational joins, aggregate product dashboards, approve retention/deletion and reuse authoritative financial/audit records rather than creating a second ledger. Verify forbidden-field absence and replay counts before any real-data instrumentation.
+
+### Local public event read contention
+
+November 18, 2026, at application commit `cea5ef4`. The experiment ran in one Fastify process on an ARM64 Mac with Node 24.21 and local PostgreSQL 17.12. Fastify injected GETs through the real event-detail route. Each of five rounds used a new disposable database, an application pool of ten connections, and two published fictional demo events with seeded test entries removed. The first event retained one paid two-race order for the simulated cancellation case. One GET warmed each event before the timed trials.
+
+Each round ran 32 serial GETs, then 32 concurrent GETs for one event, then 16 concurrent GETs each for two events, then the one-event burst alongside a same-event order hold and, separately, a simulated race cancellation. Every concurrent trial included one additional read of the second event. The hold targeted the unaffected race and was released after its trial. Cancellation used a fresh reviewed plan and was followed by a GET that verified the closed category. There were 820 measured GETs (800 primary reads and 20 probes), five successful holds and five successful cancellations. All measured GETs returned 200.
+
+| Workload | GET p50 / p95 (ms) | p95 range (ms) | Peak busy / queued / advisory-waiting | Other-event probe (ms) | Concurrent write (ms) |
+|---|---:|---:|---:|---:|---:|
+| Serial, one event | 3.79 / 4.97 | 4.35–5.69 | 1 / 0 / 0 | | |
+| Burst, one event | 90.79 / 136.23 | 134.84–153.10 | 10 / 23 / 9 | 104.92–131.57 | |
+| Burst, split across two events | 29.96 / 53.72 | 51.92–153.84 | 10 / 23 / 8 | 54.55–158.51 | |
+| Burst plus order hold | 48.76 / 99.75 | 91.41–125.65 | 10 / 24 / 9 | 72.36–100.22 | 103.84–140.41 |
+| Burst plus simulated cancellation | 57.39 / 113.94 | 102.23–121.16 | 10 / 24 / 9 | 79.34–99.34 | 150.02–163.98 |
+
+GET percentiles are medians of the five per-round percentiles, with nearest-rank percentiles over the 32 primary reads per round. Other columns show ranges or maxima across rounds. The additional GET is a distinct-event probe in the one-event bursts and shares a targeted event in the split burst. The application pool counters and advisory wait count from `pg_stat_activity` were sampled together with a short timer (2ms requested between queries). Peaks can occur at different instants, and sampled peaks can miss short waits. The client measured request completion without browser or network delivery time. No standalone write baseline was collected.
+
+The one-event burst occupied every connection while up to nine sessions waited on the advisory lock. The unrelated-event probe also waited for shared pool capacity. Different events reduced the median p95, with substantial variation across rounds. These short bursts identify contention in the current design. They leave sustained arrival rates, checkout and cancellation effects relative to unloaded writes, realistic database size, network overhead, and multi-instance pool behavior unmeasured.
+
+Keep the exclusive event lock until an alternative proves the same published version, capacity, waitlist and cancellation facts. A shared transaction advisory lock could let public readers overlap while existing exclusive writers retain coordination. It would still let blocked readers occupy pool capacity, and it requires reviewing lock ordering and writer delay. A single consistent snapshot could avoid advisory waits, but it would need to prove equivalence for publication, checkout and cancellation races. Compare any candidate with current behavior using the existing correctness regressions and a matched load run.
+
+**Hosting decision remains open** (November 18, 2026, project owner). Establish the expected opening peak and acceptable p95/error budgets from organizer evidence before setting hosted thresholds. Retain the current lock provisionally. Revisit at the pre-hosting gate with representative event sizes, sustained arrivals, independent readers/writers and hosted pool telemetry. See [issue #195](https://github.com/kchan1028/event-registration/issues/195).
 
 ## Benchmark patterns, economics and owner decisions
 
