@@ -246,11 +246,12 @@ export function Register({ eventId }: { eventId: string }) {
   useEffect(() => {
     const token = offerToken;
     if (!token || !signedIn) return; // the offer holds the rider's details, so it opens after sign-in
-    api
-      .waitlistOffer(token)
-      .then((o) => {
+    Promise.all([api.waitlistOffer(token), api.publicEvent(eventId)])
+      .then(([o, latest]) => {
         if (o.eventId !== eventId) return;
+        setEv(latest);
         setOffer(o);
+        if (latest.cancellation.categoryIds.includes(o.categoryId)) return;
         if (o.status !== 'offered') return;
         update((d) => d.pendingReservation ? d : ({
           ...d,
@@ -466,6 +467,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
     scheduleRef.current?.focus();
     scheduleRef.current?.scrollIntoView({ block: 'start' });
   };
+  const unavailableBundleIds = config.registration.bundles.filter((b) => b.raceIds.some((r) => ev.cancellation.scopes.some((s) => s.scope === 'event' || (s.scope === 'race' && s.raceId === r) || (s.scope === 'day' && config.races.find((race) => race.id === r)?.dayId === s.dayId)) || config.categories.some((c) => c.raceId === r && ev.cancellation.categoryIds.includes(c.id)))).map((b) => b.id);
   const intent = config.registration.bundles.find((b) => b.id === draft.bundleIntent) ?? null;
   const selectedRaces = new Set(draft.selected.map((id) => config.categories.find((c) => c.id === id)?.raceId));
   const intentMissing = intent ? intent.raceIds.filter((r) => !selectedRaces.has(r)) : [];
@@ -516,7 +518,8 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
       if (ev.cancellation.categoryIds.includes(id)) errs.push({ id: `opt-${id}`, message: `${cat?.name ?? 'A selected race'} was cancelled. Remove this entry to continue.` });
       if (cat && !ev.cancellation.categoryIds.includes(id) && ev.remaining[id] === 0 && !offeredHere) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.full}` });
     }
-    if (intent && intentMissing.length) {
+    if (intent && unavailableBundleIds.includes(intent.id)) errs.push({ id: 'tray-title', message: 'Your selected package includes a cancelled race. Uncheck the package to continue with unaffected races.' });
+    if (intent && !unavailableBundleIds.includes(intent.id) && intentMissing.length) {
       errs.push({ id: 'tray-title', message: `The ${intent.name} needs one eligible race on each day. Add a race in ${intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.` });
     }
     if (q.coupon?.unappliedReason) errs.push({ id: 'f-coupon', message: `${q.coupon.unappliedReason} Remove the code or change your races.` });
@@ -703,13 +706,13 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           {config.registration.bundles.map((b) => (
             <div key={b.id} className={`bundle-pick ${draft.bundleIntent === b.id ? 'is-on' : ''}`}>
               <label className="check">
-                <input type="checkbox" checked={draft.bundleIntent === b.id} disabled={draft.bundleIntent !== b.id && b.raceIds.some((r) => config.categories.some((c) => c.raceId === r && ev.cancellation.categoryIds.includes(c.id)))} onChange={(e) => update((d) => ({ ...d, bundleIntent: e.target.checked ? b.id : null }))} />
+                <input type="checkbox" checked={draft.bundleIntent === b.id} disabled={draft.bundleIntent !== b.id && unavailableBundleIds.includes(b.id)} onChange={(e) => update((d) => ({ ...d, bundleIntent: e.target.checked ? b.id : null }))} />
                 <span>
                   I want the <strong>{b.name}</strong> ({b.priceCents !== null ? packageRates(config, b).length ? 'one entry per race; see the Omnium pricing comparison' : `${formatCents(b.priceCents)} for one race each day` : `save ${formatCents(b.discountCents)}`})
                 </span>
               </label>
-              {b.raceIds.some((r) => config.categories.some((c) => c.raceId === r && ev.cancellation.categoryIds.includes(c.id))) && <p className="small text-warn">This package includes a cancelled race and is unavailable for a new registration.</p>}
-              {draft.bundleIntent === b.id && intentMissing.length > 0 && (
+              {unavailableBundleIds.includes(b.id) && <p className="small text-warn">This package includes a cancelled race and is unavailable for a new registration. Uncheck it if it was previously selected.</p>}
+              {draft.bundleIntent === b.id && !unavailableBundleIds.includes(b.id) && intentMissing.length > 0 && (
                 <p className="small text-warn">Choose one eligible race in {intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.</p>
               )}
             </div>
@@ -719,7 +722,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           ) : (
             <QuoteTable q={q} raceName={(id) => config.races.find((r) => r.id === id)?.name ?? ''} onRemove={(id) => toggle(id)} />
           )}
-          {!ev.cancellation.categoryIds.length && <BundleHint config={config} selected={draft.selected} q={q} />}
+          <BundleHint config={config} selected={draft.selected} q={q} unavailableBundleIds={unavailableBundleIds} />
           {draft.selected.length > 0 && <CouponField eventId={ev.eventId} draft={draft} update={update} q={q} />}
           <button className="btn btn--primary tray__cta" disabled={ev.cancellation.scopes.some((s) => s.scope === 'event')} onClick={next}>
             Continue to racer details
@@ -1000,10 +1003,10 @@ function packageRates(config: EventConfig, bundle: Bundle) {
   return (config.registration.riderRates ?? []).filter((rate) => bundle.raceIds.every((id) => rate.racePrices.some((price) => price.raceId === id)));
 }
 
-function BundleHint({ config, selected, q }: { config: EventConfig; selected: string[]; q: Quote }) {
+function BundleHint({ config, selected, q, unavailableBundleIds }: { config: EventConfig; selected: string[]; q: Quote; unavailableBundleIds: string[] }) {
   if (q.bundle || selected.length === 0) return null;
   const races = new Set(selected.map((id) => config.categories.find((c) => c.id === id)?.raceId));
-  const near = config.registration.bundles.find((b) => b.raceIds.some((r) => races.has(r)) && b.raceIds.some((r) => !races.has(r)));
+  const near = config.registration.bundles.find((b) => !unavailableBundleIds.includes(b.id) && b.raceIds.some((r) => races.has(r)) && b.raceIds.some((r) => !races.has(r)));
   if (!near) return null;
   const missing = near.raceIds.filter((r) => !races.has(r)).map((r) => config.races.find((x) => x.id === r)?.name ?? 'another race');
   return (

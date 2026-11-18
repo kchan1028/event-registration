@@ -51,12 +51,15 @@ for (const scope of ['event', 'day', 'race'] as const) {
 test('refresh preserves selected entries for explicit removal and blocks a saved later-step draft', async ({ page }) => {
   const s = await fixture(page); await page.goto(`/#/register/${s.eventId}`);
   await page.locator(`#opt-${s.rr.id}`).click();
+  await page.getByRole('checkbox', { name: /I want the/ }).check();
   await s.cancel({ scope: 'race', raceId: s.rr.raceId });
   await page.getByRole('button', { name: 'Refresh registration status', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Part of this event was cancelled' })).toBeVisible();
   await expect(page.locator(`#opt-${s.rr.id}`)).toHaveAttribute('aria-checked', 'true');
   await page.getByRole('button', { name: 'Continue to racer details', exact: true }).click();
   await expect(page.getByText(`${s.rr.name} was cancelled. Remove this entry to continue.`, { exact: true })).toBeVisible();
+  await expect(page.getByText('Your selected package includes a cancelled race. Uncheck the package to continue with unaffected races.', { exact: true })).toBeVisible();
+  await expect(page.getByText(`Choose one eligible race in ${s.rr.name}.`, { exact: true })).toHaveCount(0);
   await page.evaluate((id) => { const key = `cyclereg.register.${id}`; const d = JSON.parse(sessionStorage.getItem(key)!); d.step = 'waiver'; d.reached = 2; sessionStorage.setItem(key, JSON.stringify(d)); }, s.eventId);
   await page.reload();
   await expect(page.getByRole('region', { name: 'Cancelled race selection' })).toBeVisible();
@@ -108,9 +111,12 @@ test('cancellation overrides a saved offer and full-category waitlist invitation
     value.remaining[s.rr.id] = 0; value.waitlist[s.rr.id] = { waiting: 0 };
     await route.fulfill({ response, json: value });
   });
+  await page.route('**/api/rider/offers/fictional-expired-offer', (route) => route.fulfill({ json: { eventId: s.eventId, categoryId: s.rr.id, status: 'offered', rider: { firstName: 'Offer', lastName: 'Fictional', email: 'offer@example.test', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null } } }));
+  await page.goto(`/#/register/${s.eventId}?offer=fictional-expired-offer`);
   await page.reload();
   const option = page.locator(`#opt-${s.rr.id}`);
   await expect(option).toHaveAttribute('aria-disabled', 'true');
+  await expect(option).toHaveAttribute('aria-checked', 'false');
   await expect(option).not.toContainText('Your place is held');
   const status = page.locator(`#opt-${s.rr.id}-why`);
   await expect(status).toContainText('Cancelled by organizer');
