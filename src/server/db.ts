@@ -645,6 +645,20 @@ export const MIGRATIONS: string[] = [
     AND jsonb_typeof(registration_name_json->'firstName') = 'string' AND jsonb_typeof(registration_name_json->'lastName') = 'string'
   );
   CREATE INDEX junior_guardians_history_by_account ON junior_guardians(account_id,junior_profile_id);`,
+  // 34: reviewed cancellation plan evidence only; there is no execution queue or state change.
+  `CREATE TABLE cancellation_confirmations (
+    id text PRIMARY KEY,
+    event_id text NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
+    client_request_id text NOT NULL CHECK (char_length(client_request_id) BETWEEN 8 AND 128),
+    confirmed_by text NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+    confirmed_at timestamptz NOT NULL,
+    reason text NOT NULL CHECK (char_length(btrim(reason)) BETWEEN 3 AND 300),
+    selection_json jsonb NOT NULL CHECK (jsonb_typeof(selection_json)='object' AND selection_json ? 'scope' AND jsonb_typeof(selection_json->'scope')='string' AND selection_json->>'scope' IN ('event','race','day')),
+    preview_fingerprint text NOT NULL CHECK (preview_fingerprint ~ '^[a-f0-9]{64}$'),
+    preview_json jsonb NOT NULL CHECK (jsonb_typeof(preview_json)='object' AND preview_json ? 'eventId' AND jsonb_typeof(preview_json->'eventId')='string' AND preview_json->>'eventId'=event_id AND preview_json ? 'selection' AND preview_json->'selection'=selection_json),
+    acknowledged_plan_only boolean NOT NULL CHECK (acknowledged_plan_only),
+    UNIQUE(event_id,client_request_id)
+  );`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

@@ -11,6 +11,37 @@ export const cancellationSelectionSchema = z.discriminatedUnion('scope', [
 ]);
 export type CancellationSelection = z.infer<typeof cancellationSelectionSchema>;
 
+/** Confirms a reviewed plan only; it is not a cancellation or payment instruction. */
+export const cancellationConfirmationSchema = z.object({
+  clientRequestId: z.string().trim().min(8).max(128),
+  selection: cancellationSelectionSchema,
+  previewFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  reason: z.string().trim().refine((value) => { const n = Array.from(value).length; return n >= 3 && n <= 300; }, 'Write a reason of 3 to 300 characters.'),
+  acknowledgePlanOnly: z.literal(true),
+}).strict();
+export type CancellationConfirmationInput = z.infer<typeof cancellationConfirmationSchema>;
+
+export interface CancellationConfirmationPreview {
+  fingerprint: string;
+  preview: CancellationImpactPreview;
+  executionAvailable: false;
+}
+
+export interface CancellationConfirmation {
+  id: string;
+  eventId: string;
+  clientRequestId: string;
+  status: 'plan_confirmed';
+  selection: CancellationSelection;
+  reason: string;
+  confirmedBy: string;
+  confirmedAt: string;
+  previewFingerprint: string;
+  preview: CancellationImpactPreview;
+  acknowledgedPlanOnly: true;
+  executionAvailable: false;
+}
+
 export interface CancellationAllocationPreview {
   eventId: string;
   currentPublishedVersion: number;
