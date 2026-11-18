@@ -19,6 +19,7 @@ import { eventSummary } from '../shared/reports';
 import { riderCorrectionSchema } from '../shared/lookup';
 import { changeImpact, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
+import { reconciliationCsv } from './reconciliation';
 import { cancellationExportState, cancellationExportFilename } from './cancellationClosure';
 import { openDb } from './db';
 import { createAutomaticBibs, automaticBibError, type AutomaticBibs } from './automaticBibs';
@@ -749,21 +750,27 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return eventSummary(list, await identity.keyOf(id), await waitlist.statuses(id), can(roles, 'export.ledger'));
   });
 
-  // Organizer exports from the database: entries and a ledger (simulated or Stripe test-mode payments and refunds). No contact or emergency details.
+  // Protected database exports: entries, ledger and local reconciliation evidence. No contact or emergency details.
   app.get('/api/events/:id/exports/:kind', async (req, reply) => {
     // The permission depends on which file is asked for, so the parameters are parsed before the check.
-    const p = z.object({ id: idStr, kind: z.enum(['entries.csv', 'ledger.csv']) }).parse(req.params);
+    const p = z.object({ id: idStr, kind: z.enum(['entries.csv', 'ledger.csv', 'reconciliation.csv']) }).parse(req.params);
     await access.requireEvent(me(req), p.id, p.kind === 'entries.csv' ? 'export.entries' : 'export.ledger');
     const file = await db.transaction(async () => {
       await db.lock(eventLock(p.id));
       const record = await repo.getEvent(p.id);
-      const list = (await orders.listOrders(p.id)).filter(isLiveOrder);
       const slugName = slug(record.config.event.name, 'event');
       const demo = record.config.event.isDemo ? '-DEMO' : '';
-      const body = p.kind === 'entries.csv' ? entriesCsv(list, await identity.keyOf(p.id)) : ledgerCsv(list);
+      const generatedAt = clock().toISOString();
+      let body: string;
+      if (p.kind === 'reconciliation.csv') body = await reconciliationCsv(db, p.id, generatedAt, record.config.event.isDemo);
+      else {
+        const list = (await orders.listOrders(p.id)).filter(isLiveOrder);
+        body = p.kind === 'entries.csv' ? entriesCsv(list, await identity.keyOf(p.id)) : ledgerCsv(list);
+      }
       const cancellation = await cancellationExportState(db, p.id, record.config);
-      return { body, cancellation, filename: cancellationExportFilename(`${slugName}-${p.kind === 'entries.csv' ? 'entries' : 'ledger'}${demo}.csv`, cancellation) };
+      return { body, cancellation, generatedAt, filename: cancellationExportFilename(`${slugName}-${p.kind.slice(0, -4)}${p.kind === 'reconciliation.csv' ? '-LOCAL-RECORDS' : ''}${demo}.csv`, cancellation) };
     });
+    if (p.kind === 'reconciliation.csv') reply.header('X-CycleReg-Export-Generated-At', file.generatedAt);
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
       .header('Content-Disposition', `attachment; filename="${file.filename}"`)

@@ -124,3 +124,8 @@ export function applyCorrection(rider: RiderDetails, patch: RiderCorrection): { 
   }
   return { rider: next, changes };
 }
+
+/** Same display reference on receipts and finance exports. */
+export function formatOrderNumber(orderId: string, isDemo: boolean): string {
+  return `${isDemo ? 'DEMO-' : 'CR-'}${orderId.slice(4, 12).toUpperCase()}`;
+}

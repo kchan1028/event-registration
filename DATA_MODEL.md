@@ -461,6 +461,8 @@ Each payment result for an order: a simulated button press, or a verified Stripe
 | `provider_ref` | Stripe PaymentIntent ID, when there is one. Kept for reconciliation; a refund names the payment it returns money from by this ID |
 | `amount_cents` | Amount the provider reported. Null for simulated attempts |
 
+The reconciliation evidence export joins all event orders (including inactive statuses) to payment attempts, sessions, provider events and refunds in one read under the event lock. Null amounts/timestamps remain unknown; repeated source evidence is not aggregated into settlement totals. Unlinked provider events are excluded. Display order numbers use the same shared formatter as order views; no number or report field is newly stored. Contract: [Reporting](product.md#reporting).
+
 ### payment_sessions
 
 One row per Stripe Checkout Session the app opened (migration 17). Only a session in this table can confirm an order.

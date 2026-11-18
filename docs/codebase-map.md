@@ -47,6 +47,8 @@ Paths verified against `main` at commit `740d0b9` (November 16, 2026). When a ch
 
 - **Public catalog cancellation.** `repo.listPublished` reads published summaries and scope kinds in one statement; the shared `cancellationScopeState` classifier also drives event-level CSV labels. `RegisterIndex` retains event links and labels explicit event versus race/day closure without availability claims. Coverage: cancellation execution/auth/API tests and `e2e/catalog-cancellation.spec.ts`.
 
+- **Local reconciliation evidence.** `src/server/reconciliation.ts` reads linked financial source rows; the existing export route requires ledger permission. `src/shared/lookup.ts` owns `formatOrderNumber` for order views and this CSV. Coverage: `tests/reconciliation.test.ts` plus exports/payments/refunds/auth/orders/lookup regressions. No provider call or settlement calculation.
+
 ## Tests and commands
 
 - Unit and API tests: Vitest, `tests/*.test.ts`. `tests/support/db.ts` `testApp()` builds an app on a throwaway database; `tests/support/auth.ts` `fakeAuth()` and `as(email)` fake sign-in. They need the local PostgreSQL server from [local setup](runbooks/local-setup.md).
