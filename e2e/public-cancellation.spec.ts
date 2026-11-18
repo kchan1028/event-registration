@@ -113,7 +113,10 @@ test('cancellation overrides a saved offer and full-category waitlist invitation
   });
   await page.route('**/api/rider/offers/fictional-expired-offer', (route) => route.fulfill({ json: { eventId: s.eventId, categoryId: s.rr.id, status: 'offered', rider: { firstName: 'Offer', lastName: 'Fictional', email: 'offer@example.test', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null } } }));
   await page.goto(`/#/register/${s.eventId}?offer=fictional-expired-offer`);
+  const loadedOffer = page.waitForResponse('**/api/rider/offers/fictional-expired-offer');
   await page.reload();
+  await (await loadedOffer).finished();
+  await page.waitForLoadState('networkidle');
   const option = page.locator(`#opt-${s.rr.id}`);
   await expect(option).toHaveAttribute('aria-disabled', 'true');
   await expect(option).toHaveAttribute('aria-checked', 'false');
