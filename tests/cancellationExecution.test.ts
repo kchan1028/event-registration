@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { cancellationSetup as setup } from './support/cancellation';
 import { testApp } from './support/db';
 import { as } from './support/auth';
+import { CANCELLATION_NOT_EXECUTED } from '../src/shared/cancellations';
 import type { PaymentProvider } from '../src/server/payments';
 
 const input = (confirmationId: string, clientRequestId = 'atomic-cancellation-request') => ({ confirmationId, clientRequestId, acknowledgeSimulatedCancellation: true });
@@ -40,7 +41,7 @@ describe('atomic simulated cancellation', () => {
   it('rolls back refunds, entry changes and closure if recording execution fails', async () => {
     const s = await prepared();
     await s.sql("CREATE FUNCTION fail_execution() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Fictional recording failure'; END $$; CREATE TRIGGER fail_execution BEFORE INSERT ON cancellation_executions FOR EACH ROW EXECUTE FUNCTION fail_execution()");
-    expect((await s.execute()).statusCode).toBe(500);
+    const failed = await s.execute(); expect(failed.statusCode).toBe(500); expect(failed.json().details?.code).not.toBe(CANCELLATION_NOT_EXECUTED);
     expect((await s.sql('SELECT count(*)::int AS n FROM refunds')).rows[0].n).toBe(0);
     expect((await s.app.inject({ method: 'GET', url: `/api/orders/${s.order.id}` })).json().entries[0].status).toBe('confirmed');
     await s.sql('DROP TRIGGER fail_execution ON cancellation_executions');
@@ -81,6 +82,7 @@ describe('atomic simulated cancellation', () => {
     const payments = { mode: 'stripe_test', refund, createCheckout, parseWebhook: vi.fn() } satisfies PaymentProvider;
     const second = (await testApp({ databaseUrl: s.databaseUrl, now: () => new Date('2027-03-01T18:00:00Z'), payments, appUrl: 'http://localhost:3105' })).app;
     expect((await second.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-executions`, payload: input(s.plan.id) })).statusCode).toBe(409);
+    const checked = await second.inject({ method: 'GET', url: `/api/events/${s.eventId}/cancellation-confirmations/${s.plan.id}/execution-check` }); expect(checked.json()).toMatchObject({ eligible: false, execution: null, financial: null }); expect(checked.json().reason).toContain('simulated payments');
     expect(refund).not.toHaveBeenCalled(); expect(createCheckout).not.toHaveBeenCalled();
   });
   it('prevents new holds, transfers, test entries and waitlist joins after republishing', async () => {
@@ -219,6 +221,38 @@ describe('atomic simulated cancellation', () => {
     const card = (await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/check-in?day=${dayId}&q=Readiness` })).json().riders.find((r: { orderId: string }) => r.orderId === s.order.id);
     expect(card.result.ready).toBe(false); expect(card.bib).toBe(101); expect(card.bibHistory).toHaveLength(2);
     expect((await s.app.inject({ method: 'GET', url: `/api/orders/${s.order.id}` })).json().entries[0].status).toBe('cancelled');
+  });
+
+  it('checks actual eligibility without writes and returns verified existing execution evidence', async () => {
+    const s = await prepared(); const check = () => s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/cancellation-confirmations/${s.plan.id}/execution-check` });
+    const first = await check(); expect(first.statusCode).toBe(200); expect(first.json()).toMatchObject({ eligible: true, reason: null, execution: null, financial: { status: 'financially_eligible_for_simulation' } });
+    expect((await s.sql('SELECT count(*)::int AS n FROM refunds')).rows[0].n).toBe(0);
+    const saved = (await s.execute()).json(); expect((await check()).json()).toMatchObject({ eligible: false, execution: saved });
+    const fresh = await s.makePlan(); const overlap = await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/cancellation-confirmations/${fresh.id}/execution-check` }); expect(overlap.json().eligible).toBe(false); expect(overlap.json().reason).toContain('overlaps');
+  });
+  it('reports selected test entries as an operational blocker even with eligible finances', async () => {
+    const s = await prepared(); await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/test-entries`, payload: { categoryId: s.cat('RR-M35-34').id, count: 1 } });
+    const p = await s.makePlan(); const response = await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/cancellation-confirmations/${p.id}/execution-check` });
+    expect(response.json()).toMatchObject({ eligible: false, execution: null, financial: { status: 'financially_eligible_for_simulation' } }); expect(response.json().reason).toContain('test entries');
+  });
+  it('marks only known no-execution refusals after a negative identity lookup', async () => {
+    const s = await prepared(); const missing = await s.execute(input('missing-plan')); expect(missing.statusCode).toBe(404); expect(missing.json().details.code).toBe(CANCELLATION_NOT_EXECUTED);
+    const invalid = await s.execute({ ...input(s.plan.id), acknowledgeSimulatedCancellation: false }); expect(invalid.statusCode).toBe(400); expect(invalid.json().details?.code).not.toBe(CANCELLATION_NOT_EXECUTED);
+    const unauthorized = await s.execute(input(s.plan.id), as('outsider@atomic.test')); expect(unauthorized.statusCode).toBe(404); expect(unauthorized.json().details?.code).not.toBe(CANCELLATION_NOT_EXECUTED);
+    expect((await s.execute()).statusCode).toBe(200);
+    const conflict = await s.execute(input('other-plan')); expect(conflict.statusCode).toBe(409); expect(conflict.json().details?.code).not.toBe(CANCELLATION_NOT_EXECUTED);
+    const otherIdentity = await s.execute(input(s.plan.id, 'another-execution-identity')); expect(otherIdentity.statusCode).toBe(409); expect(otherIdentity.json().details.code).toBe(CANCELLATION_NOT_EXECUTED);
+  });
+  it('protects execution checks with current event finance authority', async () => {
+    const s = await prepared(); const url = `/api/events/${s.eventId}/cancellation-confirmations/${s.plan.id}/execution-check`;
+    for (const [role, expected] of [['finance', 200], ['registration_manager', 403]] as const) {
+      const email = `${role}@execution-check.test`; await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members`, payload: { email, role } });
+      expect((await s.app.inject({ method: 'GET', url, headers: as(email) })).statusCode).toBe(expected);
+    }
+    await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members/remove`, payload: { email: 'finance@execution-check.test', role: 'finance' } });
+    expect((await s.app.inject({ method: 'GET', url, headers: as('finance@execution-check.test') })).statusCode).toBe(404);
+    const other = await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/events`, payload: { name: 'Other Fictional Race', template: 'weekend', startDate: '2027-04-01', timeZone: 'America/Los_Angeles' } });
+    expect((await s.app.inject({ method: 'GET', url: `/api/events/${other.json().id}/cancellation-confirmations/${s.plan.id}/execution-check` })).statusCode).toBe(404);
   });
 
 });

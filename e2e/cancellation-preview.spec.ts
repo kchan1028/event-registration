@@ -49,7 +49,7 @@ test('previews published cancellation impact with recovery and discards older re
   await expect(region.getByRole('status', { name: 'Cancellation impact status' })).toContainText('2 live entries');
   await expect(region).toContainText('Financial review required');
   await expect(region).toContainText('not a refundable balance');
-  await expect(region).toContainText('Cancellation execution is not available');
+  await expect(region).toContainText('This preview executes nothing');
   expect(refundPosts).toBe(0);
   expect(await (await page.request.get(`/api/orders/${order.id}`)).json()).toEqual(before);
   holdNext = true; await button.click(); await ready;

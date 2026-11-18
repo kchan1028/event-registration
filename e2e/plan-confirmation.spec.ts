@@ -79,7 +79,7 @@ test('records only acknowledged plans and recovers a committed lost response acr
   await page.reload();
   await expect(s.confirmation).toContainText('Original reason: Fictional weather plan review'); expect(posts).toHaveLength(1);
   await s.confirmation.getByRole('button', { name: 'Retry original plan confirmation' }).click();
-  await expect(s.confirmation).toContainText('Reviewed plan recorded. No cancellation was executed.');
+  await expect(s.confirmation).toContainText('Reviewed plan recorded. Recording a plan does not execute cancellation.');
   expect(posts).toHaveLength(2); expect(posts[1]).toEqual(posts[0]);
   await expect(s.confirmation).toContainText(saved.id);
   expect(await (await page.request.get(`/api/events/${s.eventId}/cancellation-confirmations/${saved.id}`)).json()).toEqual(saved);

@@ -1,4 +1,4 @@
-import type { CancellationSelection, CancellationConfirmationPreview, CancellationConfirmationInput, CancellationConfirmation } from '../shared/cancellations';
+import type { CancellationExecution, CancellationExecutionInput, CancellationExecutionCheck, CancellationSelection, CancellationConfirmationPreview, CancellationConfirmationInput, CancellationConfirmation } from '../shared/cancellations';
 import type { LimitUsage } from '../shared/capacity';
 import type { RefundStatus, RefundRequest, RefundRequestResult } from '../shared/refunds';
 import type { RefundPolicyPreview } from '../shared/refundPolicy';
@@ -383,6 +383,9 @@ export const api = {
   cancellationConfirmationPreview: (eventId: string, selection: CancellationSelection) => request<CancellationConfirmationPreview>('POST', `/api/events/${eventId}/cancellation-confirmation-preview`, selection),
   confirmCancellationPlan: (eventId: string, input: CancellationConfirmationInput) => request<CancellationConfirmation>('POST', `/api/events/${eventId}/cancellation-confirmations`, input),
   cancellationConfirmation: (eventId: string, id: string) => request<CancellationConfirmation>('GET', `/api/events/${eventId}/cancellation-confirmations/${encodeURIComponent(id)}`),
+  checkCancellationExecution: (eventId: string, id: string) => request<CancellationExecutionCheck>('GET', `/api/events/${eventId}/cancellation-confirmations/${encodeURIComponent(id)}/execution-check`),
+  executeCancellation: (eventId: string, input: CancellationExecutionInput) => request<CancellationExecution>('POST', `/api/events/${eventId}/cancellation-executions`, input),
+  cancellationExecution: (eventId: string, id: string) => request<CancellationExecution>('GET', `/api/events/${eventId}/cancellation-executions/${encodeURIComponent(id)}`),
   refundPolicyPreview: (orderId: string, reason: RefundPolicyPreview['reason']) => request<RefundPolicyPreview>('GET', `/api/orders/${orderId}/refund-policy-preview?reason=${reason}`),
   requestRefund: (orderId: string, body: RefundRequest) => request<OrderView & RefundRequestResult>('POST', `/api/orders/${orderId}/refunds`, body),
   retryRefund: (refundId: string) => request<OrderView>('POST', `/api/refunds/${refundId}/retry`),
