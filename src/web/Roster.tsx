@@ -70,6 +70,11 @@ export function Roster({ eventId }: { eventId: string }) {
                 Paper bib issuance requires an approved event contingency. Without one, pause issuance and contact the registration lead.
                 After service returns, the lead must reconcile notes with current records before normal issuance resumes.
               </p>
+              {(d.cancellation.eventCancelled || d.cancellation.dayCancelled || d.cancellation.races.length > 0) && <section className="roster__cancellation" aria-label={`Cancellation notice for ${day?.label ?? d.dayId}`}>
+                <h2>{d.cancellation.eventCancelled ? 'Event cancelled' : d.cancellation.dayCancelled ? 'Race day cancelled' : 'Cancelled races on this day'}</h2>
+                {d.cancellation.races.length > 0 && <ul>{d.cancellation.races.map((r) => <li key={r.id}>{r.name}: cancelled</li>)}</ul>}
+                <p>Do not issue bibs or clear riders for cancelled races. This notice reflects the records loaded for this day; later changes are not shown. It does not confirm refunds or other financial settlement.</p>
+              </section>}
               {d.isDemo && <p className="roster__demo">Example data: fictional riders.</p>}
               <p className="roster__counts">
                 {roster.counts.riders} riders · {roster.counts.checkedIn} checked in · {roster.counts.ready} ready · {roster.counts.blocked} not ready

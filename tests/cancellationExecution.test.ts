@@ -121,6 +121,21 @@ describe('atomic simulated cancellation', () => {
     const other = (await s.app.inject({ method: 'POST', url: '/api/demo' })).json();
     expect((await s.app.inject({ method: 'GET', url: `/api/events/${other.eventId}/exports/entries.csv` })).headers['x-cyclereg-cancellation']).toBe('none');
   });
+  it.each(['event', 'day', 'race'] as const)('provides print-safe %s closure context with each day list', async (scope) => {
+    const s = await prepared(); const race = s.config.races.find((r) => r.id === s.cat('RR-M35-34').raceId)!;
+    const selection = scope === 'event' ? { scope } : scope === 'day' ? { scope, dayId: race.dayId } : { scope, raceId: race.id };
+    const list = (day: string) => s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/check-in?day=${day}` });
+    const plan = await s.makePlan(selection);
+    expect((await list(race.dayId)).json().cancellation).toEqual({ eventCancelled: false, dayCancelled: false, races: [] });
+    expect((await s.execute(input(plan.id))).statusCode).toBe(200);
+    for (const day of s.config.days) {
+      const response = await list(day.id); expect(response.statusCode).toBe(200);
+      const affected = s.config.races.filter((r) => r.dayId === day.id && (scope === 'event' || (scope === 'day' ? r.dayId === race.dayId : r.id === race.id))).map((r) => ({ id: r.id, name: r.name }));
+      expect(response.json().cancellation).toEqual({ eventCancelled: scope === 'event', dayCancelled: scope === 'event' || (scope === 'day' && day.id === race.dayId), races: affected });
+      if (scope !== 'event' && day.id !== race.dayId) expect(response.json().riders.some((r: { orderId: string }) => r.orderId === s.order.id)).toBe(true);
+      else expect(response.json().riders).toEqual([]);
+    }
+  });
   it('serializes concurrent replay across separate applications without double refunds', async () => {
     const s = await prepared(); const second = (await testApp({ databaseUrl: s.databaseUrl, now: () => new Date('2027-03-01T18:00:00Z') })).app;
     const responses = await Promise.all([s.execute(), second.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-executions`, payload: input(s.plan.id) })]);

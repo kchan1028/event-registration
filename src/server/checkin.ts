@@ -1,3 +1,4 @@
+import { cancellationRosterStatus } from './cancellationClosure';
 import { createHash, randomUUID } from 'node:crypto';
 import { bibScopeKey, bibSettingsSchema, bibBatchExclusion, changedBibAssignments, type BibChange, type BibReassignment, type BibReassignmentPlan, type BibReassignmentResult, type BibBatch, type BibPlan, type PaymentState, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, bibRangeForEntries, type BibSettings } from '../shared/checkin';
 import { checkSelection, needsGuardian, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
@@ -359,40 +360,44 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       });
     },
     async list(eventId: string, dayId: string | undefined, q: string) {
-      const { config: cfg, published } = await schedule(eventId);
-      const day = dayId ? requireDay(cfg, dayId) : cfg.days[0];
-      const s = await settings(eventId);
-      const state = await dayState(eventId, day.id, bibScopeKey(s, day.id));
-      const checkedInScope = new Set((await db.all<{ order_id: string }>(`SELECT DISTINCT order_id FROM check_ins WHERE event_id = $1 AND day_id = ANY($2::text[])`, [eventId, cfg.days.filter((d) => bibScopeKey(s, d.id) === bibScopeKey(s, day.id)).map((d) => d.id)])).map((r) => r.order_id));
-      const all = (await riders(eventId)).filter((o) => activeEntries(o).length || state.bibs.get(o.id)?.some((b) => b.released_at === null)).map((o) => riderCard(o, day.id, state)).sort((a, b) => a.name.localeCompare(b.name));
-      const enteredToday = all.filter((c) => c.entries.length > 0);
-      // A search also finds riders with no entry today, so the volunteer sees why; the plain list shows only today's riders.
-      const cards = q.trim() ? all.filter((c) => matches(c, q)) : enteredToday;
-      const scope = bibScopeKey(s, day.id);
-      const summary = {
-        riders: enteredToday.length,
-        checkedIn: enteredToday.filter((c) => c.checkedInAt).length,
-        blocked: enteredToday.filter((c) => !c.result.ready).length,
-        bibsAssigned: (await takenBibs(eventId, scope)).size,
-        /** Measured standard check-ins for this day (product.md target: median under 30 s, 95th percentile under 90 s). */
-        timing: checkInTiming(
-          (await db.all<{ duration_ms: number }>(`SELECT duration_ms FROM check_ins WHERE event_id = $1 AND day_id = $2 AND duration_ms IS NOT NULL`, [eventId, day.id])).map((r) => r.duration_ms),
-        ),
-      };
-      return {
-        eventId,
-        eventName: cfg.event.name,
-        isDemo: cfg.event.isDemo,
-        published,
-        days: cfg.days.map((d) => ({ id: d.id, label: d.label, date: d.date })),
-        dayId: day.id,
-        races: cfg.races.filter((r) => r.dayId === day.id).map((r) => ({ id: r.id, name: r.name })),
-        categories: cfg.categories.filter((c) => cfg.races.some((r) => r.id === c.raceId && r.dayId === day.id)).map((c) => ({ id: c.id, name: c.name, raceId: c.raceId })),
-        settings: s,
-        summary,
-        checkedInScope: [...checkedInScope],
-        riders: q.trim() ? cards.slice(0, 50) : cards,
-      };
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        const { config: cfg, published } = await schedule(eventId);
+        const day = dayId ? requireDay(cfg, dayId) : cfg.days[0];
+        const s = await settings(eventId);
+        const state = await dayState(eventId, day.id, bibScopeKey(s, day.id));
+        const checkedInScope = new Set((await db.all<{ order_id: string }>(`SELECT DISTINCT order_id FROM check_ins WHERE event_id = $1 AND day_id = ANY($2::text[])`, [eventId, cfg.days.filter((d) => bibScopeKey(s, d.id) === bibScopeKey(s, day.id)).map((d) => d.id)])).map((r) => r.order_id));
+        const all = (await riders(eventId)).filter((o) => activeEntries(o).length || state.bibs.get(o.id)?.some((b) => b.released_at === null)).map((o) => riderCard(o, day.id, state)).sort((a, b) => a.name.localeCompare(b.name));
+        const enteredToday = all.filter((c) => c.entries.length > 0);
+        // A search also finds riders with no entry today, so the volunteer sees why; the plain list shows only today's riders.
+        const cards = q.trim() ? all.filter((c) => matches(c, q)) : enteredToday;
+        const scope = bibScopeKey(s, day.id);
+        const summary = {
+          riders: enteredToday.length,
+          checkedIn: enteredToday.filter((c) => c.checkedInAt).length,
+          blocked: enteredToday.filter((c) => !c.result.ready).length,
+          bibsAssigned: (await takenBibs(eventId, scope)).size,
+          /** Measured standard check-ins for this day (product.md target: median under 30 s, 95th percentile under 90 s). */
+          timing: checkInTiming(
+            (await db.all<{ duration_ms: number }>(`SELECT duration_ms FROM check_ins WHERE event_id = $1 AND day_id = $2 AND duration_ms IS NOT NULL`, [eventId, day.id])).map((r) => r.duration_ms),
+          ),
+        };
+        return {
+          eventId,
+          cancellation: await cancellationRosterStatus(db, eventId, cfg, day.id),
+          eventName: cfg.event.name,
+          isDemo: cfg.event.isDemo,
+          published,
+          days: cfg.days.map((d) => ({ id: d.id, label: d.label, date: d.date })),
+          dayId: day.id,
+          races: cfg.races.filter((r) => r.dayId === day.id).map((r) => ({ id: r.id, name: r.name })),
+          categories: cfg.categories.filter((c) => cfg.races.some((r) => r.id === c.raceId && r.dayId === day.id)).map((c) => ({ id: c.id, name: c.name, raceId: c.raceId })),
+          settings: s,
+          summary,
+          checkedInScope: [...checkedInScope],
+          riders: q.trim() ? cards.slice(0, 50) : cards,
+        };
+      });
     },
 
     async saveSettings(eventId: string, input: unknown) {
