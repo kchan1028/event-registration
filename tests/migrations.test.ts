@@ -8,6 +8,20 @@ const TEXT_TIMESTAMPS = `SELECT table_name, column_name FROM information_schema.
   WHERE table_schema = 'public' AND data_type = 'text' AND (column_name LIKE '%\\_at' OR column_name LIKE '%expires%')`;
 
 describe('migration 36: terminal cancellation request refusals', () => {
+  it('enforces matching request identities and supported terminal refusal statuses', async () => {
+    const databaseUrl = await testDatabaseUrl(); const { app } = await testApp({ databaseUrl });
+    const db = openDb(databaseUrl);
+    try {
+      const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json();
+      const actor = (await app.inject({ method: 'GET', url: '/api/me' })).json().account.id;
+      const insert = (requestId: string, status: number) => db.run(`INSERT INTO cancellation_request_refusals(event_id,command_kind,client_request_id,request_json,rejected_by,rejected_at,status_code,message,details_json) VALUES($1,'execution','migration-refusal-id',$2,$3,'2026-11-18T12:00Z',$4,'Fictional refusal','{}')`, [eventId, JSON.stringify({ clientRequestId: requestId }), actor, status]);
+      await expect(insert('different-refusal-id', 409)).rejects.toMatchObject({ code: '23514' });
+      for (const status of [200, 401, 403, 500]) await expect(insert('migration-refusal-id', status)).rejects.toMatchObject({ code: '23514' });
+      expect(await db.get('SELECT count(*)::int AS n FROM cancellation_request_refusals')).toEqual({ n: 0 });
+      await insert('migration-refusal-id', 409);
+      expect(await db.get('SELECT count(*)::int AS n FROM cancellation_request_refusals')).toEqual({ n: 1 });
+    } finally { await db.close(); }
+  });
   it('preserves existing records without inventing historical refusal evidence', async () => {
     const url = await testDatabaseUrl({ empty: true }); const client = new pg.Client({ connectionString: url }); await client.connect();
     try {
