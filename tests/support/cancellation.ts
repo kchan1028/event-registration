@@ -32,4 +32,3 @@ export async function cancellationSetup(policy: 'full_refund' | 'credit' | 'ride
   const read = (id: string, headers = {}) => app.inject({ method: 'GET', url: `/api/events/${eventId}/cancellation-confirmations/${id}/financial-preflight`, headers });
   return { app, databaseUrl, eventId, organizationId, order, cat, config, pay, sql, plan, read };
 }
-
