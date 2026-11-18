@@ -4376,3 +4376,13 @@ fieldset:disabled .field label {
 .guardian-management > .btn { justify-self: start; }
 .guardian-management .row { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .guardian-management .btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
+
+.cancellation-preview { width: 100%; min-width: 0; margin-block: var(--s-5); }
+.cancellation-preview > * { max-width: 100%; }
+.cancellation-preview p { margin: 0; }
+.cancellation-preview details { width: 100%; overflow-wrap: anywhere; }
+.cancellation-preview summary { cursor: pointer; padding-block: var(--s-2); font-weight: 600; }
+.cancellation-preview .table-wrap { width: 100%; }
+.cancellation-preview table { width: 100%; border-collapse: collapse; }
+.cancellation-preview th, .cancellation-preview td { padding: var(--s-2); text-align: left; border-bottom: 1px solid var(--hairline); }
+.cancellation-preview li { margin-block: var(--s-2); }

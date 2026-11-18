@@ -95,6 +95,8 @@ Run `tests/refunds.test.ts`, `tests/payments.test.ts` and `tests/migrations.test
 
 ### Cancellation operational impact
 
+Run `e2e/cancellation-preview.spec.ts` and the adjacent `e2e/refund-policy-preview.spec.ts` for screen changes. Use actual API data for published-versus-draft labels, startup registration loading, scope changes, failed-request retry with preserved focus, duplicate busy activation, ignored old responses, cleared results after withdrawal, empty results and finance/manager visibility. Reject a request crossing publication and verify retry. Check no refund is submitted, paid order remains unchanged by preview, both themes at phone/desktop widths, horizontal containment and scoped automated accessibility. Screen-reader/physical-device and real-provider acceptance stay separate.
+
 Run `tests/cancellationAllocations.test.ts` with capacity, waitlist, order, transfer, start-list, auth, refund and payment regressions. Cover paid/held selection, unaffected package components, original paid allocations, shared-pool distinct riders retained in unaffected components, active versus expired/accepted waitlists, linked-offer audience de-duplication, event-wide references to removed races, immutable snapshot references and no contact/token disclosure or mutation. Validate strict published scope and owner/finance access. Hypothetical capacity includes test reservations and offers and must not be presented as availability for resale. This API does not establish provider reconciliation, message delivery, confirmation/execution or manual acceptance.
 
 ### Paid cancellation allocations
