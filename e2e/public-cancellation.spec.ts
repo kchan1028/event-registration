@@ -198,8 +198,11 @@ for (const cancelled of [false, true]) {
     const token = 'fictional-retry-offer';
     let offerReads = 0;
     let eventReads = 0;
+    let releaseRetry!: () => void;
+    const retryGate = new Promise<void>((resolve) => { releaseRetry = resolve; });
     await page.route(`**/api/rider/offers/${token}`, async (route) => {
       offerReads++;
+      if (offerReads === 2) await retryGate;
       await route.fulfill({ json: {
         eventId: s.eventId, categoryId: s.rr.id, categoryName: s.rr.name, status: 'offered', offerExpiresAt: '2027-04-17T18:00:00Z',
         rider: { firstName: 'Offer', lastName: 'Fictional', email: 'offer@example.test', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null },
@@ -235,7 +238,13 @@ for (const cancelled of [false, true]) {
         await page.locator('.reg__event').screenshot({ path: `test-results/offer-retry-${theme}-${width}.png` });
       }
     }
-    await retry.click();
+    await retry.focus();
+    await page.keyboard.press('Enter');
+    const checking = page.getByRole('button', { name: 'Checking waitlist offer…' });
+    await expect(checking).toBeDisabled();
+    await expect(checking).toBeFocused();
+    await page.keyboard.press('Enter');
+    releaseRetry();
     await expect(alert).toHaveCount(0);
     expect(offerReads).toBe(2);
     expect(eventReads).toBe(3);
@@ -269,5 +278,6 @@ test('signed-out and invalid offer links leave the public schedule available', a
   }
   await page.goto(path);
   await expect(page.getByRole('alert').filter({ hasText: 'This waitlist offer was not found.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retry waitlist offer' })).toHaveCount(0);
   await expect(page.locator(`#opt-${s.rr.id}`)).toHaveAttribute('aria-checked', 'false');
 });

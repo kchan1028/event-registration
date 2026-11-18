@@ -234,14 +234,14 @@ export function Register({ eventId }: { eventId: string }) {
   const [draft, update] = useStoredDraft(eventId);
 
   const [offer, setOffer] = useState<WaitlistOffer | null>(null);
-  const [offerFailure, setOfferFailure] = useState<{ token: string; message: string } | null>(null);
+  const [offerFailure, setOfferFailure] = useState<{ token: string; message: string; retryable: boolean } | null>(null);
   const [checkingOffer, setCheckingOffer] = useState(false);
   const [offerAttempt, setOfferAttempt] = useState(0);
   const session = useSession();
   const signedIn = session.status === 'signed-in';
   const offerToken = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('offer');
 
-  const offerError = offerFailure && offerFailure.token === offerToken ? offerFailure.message : null;
+  const currentOfferFailure = offerFailure?.token === offerToken ? offerFailure : null;
 
   useEffect(() => {
     let active = true;
@@ -263,19 +263,22 @@ export function Register({ eventId }: { eventId: string }) {
       try {
         opened = await api.waitlistOffer(token);
       } catch (failure) {
-        if (active) setOfferFailure({ token, message: (failure as ApiError).message });
+        if (active) {
+          const error = failure as ApiError;
+          setOfferFailure({ token, message: error.message, retryable: error.status === 0 || error.status === 429 || error.status >= 500 });
+        }
         return;
       }
       if (!active) return;
       if (opened.eventId !== eventId) {
-        setOfferFailure({ token, message: 'This waitlist offer is for a different event. Open the link from the organizer.' });
+        setOfferFailure({ token, message: 'This waitlist offer is for a different event. Open the link from the organizer.', retryable: false });
         return;
       }
       let latest: PublicEvent;
       try {
         latest = await api.publicEvent(eventId);
       } catch {
-        if (active) setOfferFailure({ token, message: 'Could not check registration status for this waitlist offer. Try again to check whether you can use it.' });
+        if (active) setOfferFailure({ token, message: 'Could not check registration status for this waitlist offer. Try again to check whether you can use it.', retryable: true });
         return;
       }
       if (!active) return;
@@ -376,13 +379,13 @@ export function Register({ eventId }: { eventId: string }) {
               <strong>Demo data.</strong> {config.event.demoNotice}
             </p>
           )}
-          {signedIn && offerToken && offerError && (
+          {signedIn && offerToken && currentOfferFailure && (
             <div className="note note--warn offer-retry">
-              <p role="alert">{offerError}</p>
-              <button type="button" className="btn btn--secondary" aria-disabled={checkingOffer || undefined}
+              <p role="alert">{currentOfferFailure.message}</p>
+              {currentOfferFailure.retryable && <button type="button" className="btn btn--secondary" aria-disabled={checkingOffer || undefined}
                 onClick={() => { if (!checkingOffer) setOfferAttempt((attempt) => attempt + 1); }}>
                 {checkingOffer ? 'Checking waitlist offer…' : 'Retry waitlist offer'}
-              </button>
+              </button>}
             </div>
           )}
           {signedIn && offerToken && offer && !ev.cancellation.categoryIds.includes(offer.categoryId) && <OfferBanner offer={offer} />}

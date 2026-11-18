@@ -2140,6 +2140,12 @@ button.issue {
 .offer-retry .btn {
   min-height: 44px;
 }
+.offer-retry .btn[aria-disabled='true'] {
+  background: var(--pending-bg);
+  color: var(--pending);
+  cursor: wait;
+  transform: none;
+}
 .reg__meta {
   margin-top: 4px;
   color: var(--muted);
