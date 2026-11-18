@@ -146,6 +146,8 @@ The authenticated support-only `POST /api/support/juniors/:id/claim` accepts `cl
 
 Run the targeted claim scenarios in the [test plan](../testing/test-plan.md#support-approved-profile-claims) instead of using real DOBs or documents. A successful claim ends family guardian/viewer access and makes the claimed account the linked orders’ rider authority while retaining original payment/waiver/placer evidence. Existing organizer permissions remain separate. Configuration and local fixtures do not approve real identity, minor consent, retention/deletion or hosted operation; those gates remain in [product.md](../../product.md#sign-in-and-account-security).
 
+`GET /api/events/:id/cancellation-confirmations/:confirmationId/execution-readiness` requires current event owner/finance authority. It returns a transient `financially_eligible_for_simulation` or `blocked` status, per-entry nominal cash amounts and blocker codes. `simulatedCashCents` is null when blocked, `executionAvailable` is always false, and no state or provider action changes. Missing/cross-event evidence returns 404. This API has no screen and is not an execution endpoint.
+
 ## Sign-in keys
 
 Real emailed sign-in uses a Clerk development instance on the free plan; without it, local development uses the test sign-in. Set both keys or neither: the dev server picks its sign-in from the publishable key and the API from the secret key. The project owner creates the Clerk account and instance; agents and scripts never create accounts.

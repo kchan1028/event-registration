@@ -20,6 +20,8 @@ A fresh impact is computed under the lock before a new insert. SHA-256 binds its
 
 Records return `plan_confirmed` and `executionAvailable: false`. No executor/queue consumes them, no entry or ledger is changed and no provider/message request is sent. Distinct request identities can record distinct reviewed plans; they are not repeat-safe execution identities. Future cancellation execution must independently enforce its own fresh state, financial, overlap and retry rules. No real-data or live-money gate is closed.
 
+Execution-readiness reads require current event finance authority and an event-scoped confirmation lookup. They return only identifiers, nominal amounts and blocker codes, without rider contacts or provider references. The assessment locks the event and affected order refund-request locks in sorted order; provider/refund updates outside these locks still require fresh execution-time reconciliation. Any provider evidence, refund history or uncertain payment blocks simulated eligibility. Even an eligible response cannot execute or authorize cancellation.
+
 ## Cancellation operational impact preview (Implemented locally)
 
 The Registrations screen shows read-only impact and reviewed-plan controls to owner/finance roles only, using the same server permission. It waits for registration data before mounting, clears results on loaded registration/draft changes or selection changes, ignores older responses, and rejects schedule/preview version mismatches. Every load fetches the published configuration for labels and selections. No cancellation or financial action is exposed; displayed amounts still require reconciliation and a fresh preview. Unobserved external changes can make any snapshot stale, so the screen labels it as point-in-time.
