@@ -4390,3 +4390,8 @@ fieldset:disabled .field label {
 .plan-confirmation { display: grid; gap: var(--s-3); width: 100%; min-width: 0; overflow-wrap: anywhere; padding-top: var(--s-4); border-top: 1px solid var(--hairline); }
 .plan-confirmation .correction { width: 100%; min-width: 0; }
 .plan-confirmation textarea { min-height: 6em; resize: vertical; }
+
+/* Cancellation notices contain a heading and prose, rather than an inline icon row. */
+.cancellation-notice { display: block; }
+.cancellation-notice h2 { font-size: 1.0625rem; margin: 0 0 0.5rem; }
+.cancellation-notice p { margin: 0.5rem 0; }

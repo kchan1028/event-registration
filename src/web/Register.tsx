@@ -228,6 +228,8 @@ export function RegisterIndex() {
 export function Register({ eventId }: { eventId: string }) {
   const [ev, setEv] = useState<PublicEvent | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [draft, update] = useStoredDraft(eventId);
 
   const [offer, setOffer] = useState<WaitlistOffer | null>(null);
@@ -296,6 +298,15 @@ export function Register({ eventId }: { eventId: string }) {
       </div>
     );
   }
+  const selectedCancelled = draft.selected.some((id) => ev.cancellation.categoryIds.includes(id));
+  const blockedDraft = selectedCancelled && !draft.pendingReservation && (draft.step === 'details' || draft.step === 'waiver');
+  const refreshStatus = async () => {
+    if (refreshing) return;
+    setRefreshing(true); setRefreshError(null);
+    try { setEv(await api.publicEvent(eventId)); }
+    catch { setRefreshError('Could not refresh registration status. Showing the last loaded status. Try again before continuing.'); }
+    finally { setRefreshing(false); }
+  };
   const stepIndex = STEPS.findIndex((s) => s.key === draft.step);
 
   /** Going back keeps everything entered. Leaving the review step releases the held places first. */
@@ -337,7 +348,10 @@ export function Register({ eventId }: { eventId: string }) {
               {offerError}
             </p>
           )}
-          {offer && <OfferBanner offer={offer} />}
+          {offer && !ev.cancellation.categoryIds.includes(offer.categoryId) && <OfferBanner offer={offer} />}
+          <CancellationNotice ev={ev} />
+          <button type="button" className="btn btn--secondary btn--small" disabled={refreshing} onClick={refreshStatus}>{refreshing ? 'Refreshing status…' : 'Refresh registration status'}</button>
+          {refreshError && <p className="note note--warn" role="alert">{refreshError}</p>}
           <div className="pending-stack">
             <Pending>
               {ev.paymentMode === 'stripe_test'
@@ -393,7 +407,12 @@ export function Register({ eventId }: { eventId: string }) {
           <SignInPrompt title="Sign in to use your waitlist offer">Sign in with the email you joined the waitlist with to see the place being held for you.</SignInPrompt>
         )}
         {draft.step === 'races' && <ChooseRaces ev={ev} draft={draft} update={update} />}
-        {draft.step !== 'races' && !signedIn ? (
+        {blockedDraft ? (
+          <section className="note note--warn cancellation-notice" aria-label="Cancelled race selection">
+            <p>A selected race was cancelled. Return to race selection and remove cancelled entries before continuing. Your entered details are saved.</p>
+            <button className="btn btn--secondary" onClick={() => goTo('races')}>Review race selection</button>
+          </section>
+        ) : draft.step !== 'races' && !signedIn ? (
           <SignInPrompt title="Sign in to continue your registration">
             Your race choices are saved. Sign in with your email to enter your details, sign the waiver, and hold your places. Your registration is kept in your
             account.
@@ -408,6 +427,17 @@ export function Register({ eventId }: { eventId: string }) {
       </main>
     </div>
   );
+}
+
+function CancellationNotice({ ev }: { ev: PublicEvent }) {
+  const { scopes } = ev.cancellation;
+  if (!scopes.length) return null;
+  const wholeEvent = scopes.some((s) => s.scope === 'event');
+  return <section className="note note--warn cancellation-notice" aria-labelledby="cancellation-title">
+    <h2 id="cancellation-title">{wholeEvent ? 'Event cancelled' : 'Part of this event was cancelled'}</h2>
+    {!wholeEvent && <ul>{scopes.map((s, i) => <li key={i}>{s.scope === 'day' ? `${ev.config.days.find((d) => d.id === s.dayId)?.label ?? 'A previously published race day'}: cancelled` : s.scope === 'race' ? `${ev.config.races.find((r) => r.id === s.raceId)?.name ?? 'A previously published race'}: cancelled` : 'Event cancelled'}</li>)}</ul>}
+    <p>Cancelled races are closed to new entries and waitlist offers. {wholeEvent ? 'Registration is unavailable.' : 'Unaffected races remain available subject to their registration rules.'} For an existing paid entry, check My registrations or contact the organizer about its recorded outcome.</p>
+  </section>;
 }
 
 /* Step 1: choose races ---------------------------------------------------- */
@@ -483,7 +513,8 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
       const cat = config.categories.find((c) => c.id === id);
       // A waitlist offer reserves this rider's place, so its category is not full for them.
       const offeredHere = !!draft.offerToken && draft.offerCategoryId === id;
-      if (cat && ev.remaining[id] === 0 && !offeredHere) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.full}` });
+      if (ev.cancellation.categoryIds.includes(id)) errs.push({ id: `opt-${id}`, message: `${cat?.name ?? 'A selected race'} was cancelled. Remove this entry to continue.` });
+      if (cat && !ev.cancellation.categoryIds.includes(id) && ev.remaining[id] === 0 && !offeredHere) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.full}` });
     }
     if (intent && intentMissing.length) {
       errs.push({ id: 'tray-title', message: `The ${intent.name} needs one eligible race on each day. Add a race in ${intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.` });
@@ -594,6 +625,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
             <section key={day.id} className="sched-day" style={{ ['--day' as string]: dayHue(di) }} aria-labelledby={`day-${day.id}`}>
               <h2 className="sched-day__title" id={`day-${day.id}`}>
                 {day.label} <span>{formatDate(day.date)}</span>
+                {ev.cancellation.scopes.some((s) => s.scope === 'event' || (s.scope === 'day' && s.dayId === day.id)) && <span>Cancelled</span>}
               </h2>
               {config.races
                 .filter((r) => r.dayId === day.id)
@@ -603,6 +635,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                     <div key={race.id} className="sched-race">
                       <h3 className="sched-race__title">
                         {race.name}
+                        {ev.cancellation.scopes.some((s) => s.scope === 'event' || (s.scope === 'day' && s.dayId === race.dayId) || (s.scope === 'race' && s.raceId === race.id)) && <span>Cancelled</span>}
                         {race.course && <span>{race.course}</span>}
                       </h3>
                       {matching && !config.categories.some((cat) => cat.raceId === race.id && cat.status !== 'archived' && cat.startGroupId !== null && visible(cat)) && <p className="muted small">No matching categories in this race. Choose All races to review the full schedule.</p>}
@@ -628,6 +661,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                                     key={cat.id}
                                     config={config}
                                     cat={cat}
+                                    cancelled={ev.cancellation.categoryIds.includes(cat.id)}
                                     today={ev.today}
                                     profile={draft.profile}
                                     selected={draft.selected.includes(cat.id)}
@@ -669,11 +703,12 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           {config.registration.bundles.map((b) => (
             <div key={b.id} className={`bundle-pick ${draft.bundleIntent === b.id ? 'is-on' : ''}`}>
               <label className="check">
-                <input type="checkbox" checked={draft.bundleIntent === b.id} onChange={(e) => update((d) => ({ ...d, bundleIntent: e.target.checked ? b.id : null }))} />
+                <input type="checkbox" checked={draft.bundleIntent === b.id} disabled={draft.bundleIntent !== b.id && b.raceIds.some((r) => config.categories.some((c) => c.raceId === r && ev.cancellation.categoryIds.includes(c.id)))} onChange={(e) => update((d) => ({ ...d, bundleIntent: e.target.checked ? b.id : null }))} />
                 <span>
                   I want the <strong>{b.name}</strong> ({b.priceCents !== null ? packageRates(config, b).length ? 'one entry per race; see the Omnium pricing comparison' : `${formatCents(b.priceCents)} for one race each day` : `save ${formatCents(b.discountCents)}`})
                 </span>
               </label>
+              {b.raceIds.some((r) => config.categories.some((c) => c.raceId === r && ev.cancellation.categoryIds.includes(c.id))) && <p className="small text-warn">This package includes a cancelled race and is unavailable for a new registration.</p>}
               {draft.bundleIntent === b.id && intentMissing.length > 0 && (
                 <p className="small text-warn">Choose one eligible race in {intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.</p>
               )}
@@ -684,9 +719,9 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           ) : (
             <QuoteTable q={q} raceName={(id) => config.races.find((r) => r.id === id)?.name ?? ''} onRemove={(id) => toggle(id)} />
           )}
-          <BundleHint config={config} selected={draft.selected} q={q} />
+          {!ev.cancellation.categoryIds.length && <BundleHint config={config} selected={draft.selected} q={q} />}
           {draft.selected.length > 0 && <CouponField eventId={ev.eventId} draft={draft} update={update} q={q} />}
-          <button className="btn btn--primary tray__cta" onClick={next}>
+          <button className="btn btn--primary tray__cta" disabled={ev.cancellation.scopes.some((s) => s.scope === 'event')} onClick={next}>
             Continue to racer details
           </button>
           {refundPolicyLines(config).length > 0 && (
@@ -714,12 +749,14 @@ function RaceOption({
   conflicts,
   onToggle,
   offered,
+  cancelled,
   waitlist,
 }: {
   config: EventConfig;
   profile: RiderProfile;
   cat: Category;
   offered: boolean;
+  cancelled: boolean;
   waitlist: ReactNode;
   today: string;
   selected: boolean;
@@ -735,8 +772,10 @@ function RaceOption({
   const full = remaining === 0 && !offered;
   const outside = enforceWindows && window !== 'open';
   const closed = cat.status !== 'active';
-  const disabled = !selected && (full || closed || outside || result?.status === 'ineligible');
-  const status = closed
+  const disabled = !selected && (cancelled || full || closed || outside || result?.status === 'ineligible');
+  const status = cancelled
+    ? { cls: 'ineligible', text: 'Cancelled by organizer' }
+    : closed
     ? { cls: 'muted', text: 'Closed' }
     : outside && window === 'not_yet'
       ? { cls: 'muted', text: `Opens ${formatLocalDateTime(cat.registration.opensAt!)}` }
@@ -766,7 +805,7 @@ function RaceOption({
           </span>
           <span className="opt__elig">{summarizeEligibility(cat)}</span>
           <span className="opt__facts">
-            {formatLength(cat.length)} · {offered ? 'Your place is held' : remaining === null ? 'Places open' : full ? 'No places left' : `${remaining} places left`}
+            {formatLength(cat.length)} · {cancelled ? 'No new entries or waitlist offers' : offered ? 'Your place is held' : remaining === null ? 'Places open' : full ? 'No places left' : `${remaining} places left`}
           </span>
         </span>
         <span className="opt__price num">
@@ -776,11 +815,12 @@ function RaceOption({
       </button>
       <div className="opt__status" id={`opt-${cat.id}-why`}>
         {status && <span className={`status status--${status.cls}`}>{status.text}</span>}
-        {full && !waitlist && <span className="opt__reason">{MESSAGES.full}</span>}
-        {full && waitlist}
-        {!outside && cat.registration.closesAt && window === 'open' && <span className="opt__reason">Registration closes {formatLocalDateTime(cat.registration.closesAt)}</span>}
-        {result && result.status === 'ineligible' && <span className="opt__reason">{result.reasons.join('; ')}</span>}
-        {result && result.status === 'needs_review' && <span className="opt__reason">{result.reasons.join('; ')}</span>}
+        {!cancelled && full && !waitlist && <span className="opt__reason">{MESSAGES.full}</span>}
+        {!cancelled && full && waitlist}
+        {!cancelled && !outside && cat.registration.closesAt && window === 'open' && <span className="opt__reason">Registration closes {formatLocalDateTime(cat.registration.closesAt)}</span>}
+        {cancelled && selected && <span className="opt__reason">Remove this cancelled entry to continue.</span>}
+        {!cancelled && result && result.status === 'ineligible' && <span className="opt__reason">{result.reasons.join('; ')}</span>}
+        {!cancelled && result && result.status === 'needs_review' && <span className="opt__reason">{result.reasons.join('; ')}</span>}
         {cat.eligibility.guardianRequired && <span className="opt__reason">A parent or guardian signs for this entry.</span>}
         {conflicts.map((c) => (
           <span key={`${c.a}-${c.b}`} className={`opt__reason ${c.level === 'block' ? 'text-error' : 'text-warn'}`}>
@@ -794,7 +834,7 @@ function RaceOption({
 
 /** Explains when windows apply, and says plainly when a demo lets testers register outside them. */
 function WindowBanner({ ev }: { ev: PublicEvent }) {
-  const cats = ev.config.categories.filter((c) => c.status === 'active');
+  const cats = ev.config.categories.filter((c) => c.status === 'active' && !ev.cancellation.categoryIds.includes(c.id));
   const outside = cats.filter((c) => windowState(c, ev.nowLocal) !== 'open');
   if (outside.length === 0) return null;
   const opens = cats.map((c) => c.registration.opensAt).filter((x): x is string => !!x).sort()[0];
