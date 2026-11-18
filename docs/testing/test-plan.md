@@ -105,7 +105,7 @@ Run `e2e/public-cancellation.spec.ts` with checkout and cancelled-receipt regres
 
 Cancellation CSV download regressions run execution, exports, start-list and auth API tests. Verify event/day/race current filename/header labels, unaffected files and unrelated-event isolation, plans/refusals staying unlabelled, current empty cancelled lists, unchanged CSV header schemas and snapshot bytes/rows, historical download context, DEMO/SAMPLE markers and unchanged export permissions. Timer round-trip and printable-roster/in-file notices are separate gates.
 
-Printable cancellation notices run `e2e/roster-cancellation.spec.ts` with check-in and cancelled-receipt browser regressions, plus cancellation execution/check-in/roster/auth/start-list API tests. Cover event/day/race scope, unaffected days, plan-only exclusion, safe projection, empty-day notices, retained reference-only instructions, screen/print visibility, both themes and phone/desktop containment/accessibility. Each day is independently loaded; no cross-day atomic snapshot, financial settlement or manual assistive-technology acceptance is implied.
+Printable cancellation notices run `e2e/roster-cancellation.spec.ts` and `e2e/roster.spec.ts` with check-in and cancelled-receipt browser regressions, plus cancellation execution/check-in/roster/auth/start-list API tests. Cover event/day/race scope, unaffected days, plan-only exclusion, safe projection, empty-day notices, retained reference-only instructions, screen/print visibility, both themes and phone/desktop containment/accessibility. Each day is independently loaded; no cross-day atomic snapshot, financial settlement or manual assistive-technology acceptance is implied.
 
 ### Atomic simulated cancellation
 

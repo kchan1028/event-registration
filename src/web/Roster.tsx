@@ -67,7 +67,7 @@ export function Roster({ eventId }: { eventId: string }) {
               </p>
               <p className="roster__hint">
                 <strong>Reference only.</strong> This snapshot does not authorize offline registration, payment, waiver clearance or check-in.
-                Paper bib issuance requires an approved event contingency. Without one, pause issuance and contact the registration lead.
+                Paper bib issuance requires an approved event contingency and never applies to cancelled races. Without one, pause issuance and contact the registration lead.
                 After service returns, the lead must reconcile notes with current records before normal issuance resumes.
               </p>
               {(d.cancellation.eventCancelled || d.cancellation.dayCancelled || d.cancellation.races.length > 0) && <section className="roster__cancellation" aria-label={`Cancellation notice for ${day?.label ?? d.dayId}`}>
