@@ -72,6 +72,7 @@ describe('atomic simulated cancellation', () => {
     expect(Object.keys(result).sort()).toEqual(['categoryIds', 'scopes']);
     expect(result.categoryIds).toEqual(s.config.categories.filter((c) => c.raceId === s.cat('RR-M35-34').raceId || s.config.races.find((r) => r.id === c.raceId)?.dayId === otherRace.dayId).map((c) => c.id));
     expect((await read()).json().cancellation).toEqual(result);
+    expect((await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/exports/entries.csv` })).headers['x-cyclereg-cancellation']).toBe('scoped');
   });
   it.each(['event', 'day', 'race'] as const)('labels %s cancellation downloads without rewriting CSV schemas or historical rows', async (scope) => {
     const s = await prepared(); const raceId = s.cat('RR-M35-34').raceId;
@@ -86,16 +87,28 @@ describe('atomic simulated cancellation', () => {
     expect((await download('exports/entries.csv')).headers['x-cyclereg-cancellation']).toBe('none');
     const savedSnapshots = (await s.sql('SELECT * FROM start_list_snapshots ORDER BY id')).rows;
     const executed = await s.execute(input(plan.id)); expect(executed.statusCode, executed.body).toBe(200);
+    const draft = (await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}` })).json();
+    draft.config.event.name = 'Fictional draft export name';
+    expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/config`, payload: { revision: draft.revision, config: draft.config } })).statusCode).toBe(200);
     const after = await Promise.all(paths.map(download));
     for (let i = 0; i < after.length; i++) {
       const r = after[i]; expect(r.statusCode).toBe(200); expect(r.headers['cache-control']).toBe('no-store');
       expect(r.headers['content-type']).toContain('text/csv');
+      expect(r.headers['content-disposition']).toContain(i < 2 ? '-DEMO-' : '-SAMPLE');
       expect(r.body.split('\r\n')[0]).toBe(before[i].body.split('\r\n')[0]);
-      const state = i === 2 || i === 5 ? 'cancelled' : i === 3 ? scope === 'event' ? 'cancelled' : 'none' : scope === 'event' ? 'cancelled' : 'partial';
+      const state = i === 2 || i === 5 ? 'cancelled' : i === 3 ? scope === 'event' ? 'cancelled' : 'none' : scope === 'event' ? 'cancelled' : 'scoped';
       expect(r.headers['x-cyclereg-cancellation']).toBe(state);
       expect(r.headers['x-cyclereg-export-context']).toBe(i === 5 ? 'historical' : 'current');
-      if (state !== 'none') expect(r.headers['content-disposition']).toContain(state === 'partial' ? '-PARTIAL-CANCELLATION.csv' : i === 5 ? '-HISTORICAL-CANCELLED.csv' : '-CANCELLED.csv');
+      if (state !== 'none') expect(r.headers['content-disposition']).toContain(state === 'scoped' ? '-SCOPED-CANCELLATION.csv' : i === 5 ? '-HISTORICAL-NOW-CANCELLED.csv' : '-CANCELLED.csv');
       else expect(r.headers['content-disposition']).toBe(before[i].headers['content-disposition']);
+    }
+    expect(after[0].headers['content-disposition']).toContain('fictional-draft-export-name-entries');
+    expect(after[4].headers['content-disposition']).not.toContain('fictional-draft-export-name');
+    for (const path of paths) {
+      for (const [headers, status] of [[{ authorization: 'Bearer invalid' }, 401], [as('outsider-export@example.test'), 404]] as const) {
+        const denied = await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/${path}`, headers });
+        expect(denied.statusCode).toBe(status); expect(denied.headers['x-cyclereg-cancellation']).toBeUndefined(); expect(denied.headers['x-cyclereg-export-context']).toBeUndefined();
+      }
     }
     expect(after[0].body).toContain('cancelled');
     expect(after[2].body.trim().split('\r\n')).toHaveLength(1);

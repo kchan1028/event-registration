@@ -33,12 +33,12 @@ export async function requireCancellationOpen(db: Db, eventId: string, config: E
   if (await cancellationClosed(db, eventId, config, categoryIds)) throw new HttpError(409, 'This event, race or day was cancelled by the organizer. No new entry or offer is allowed.');
 }
 
-export type CancellationExportState = 'none' | 'partial' | 'cancelled';
+export type CancellationExportState = 'none' | 'scoped' | 'cancelled';
 
 /** Current committed closure, never plan/refusal or financial settlement status. Caller holds the event lock. */
 export async function cancellationExportState(db: Db, eventId: string, config: EventConfig, raceId?: string): Promise<CancellationExportState> {
   const closed = await records(db, eventId);
-  if (!raceId) return closed.some((r) => r.selection_json.scope === 'event') ? 'cancelled' : closed.length ? 'partial' : 'none';
+  if (!raceId) return closed.some((r) => r.selection_json.scope === 'event') ? 'cancelled' : closed.length ? 'scoped' : 'none';
   const race = config.races.find((r) => r.id === raceId);
   return closed.some((r) => r.selection_json.scope === 'event' || r.race_ids.includes(raceId) || (r.selection_json.scope === 'race' && r.selection_json.raceId === raceId) || (r.selection_json.scope === 'day' && r.selection_json.dayId === race?.dayId)) ? 'cancelled' : 'none';
 }
@@ -46,6 +46,6 @@ export async function cancellationExportState(db: Db, eventId: string, config: E
 /** Preserve CSV schemas and stored snapshot rows; the filename marks current download context. */
 export function cancellationExportFilename(filename: string, state: CancellationExportState, historical = false): string {
   if (state === 'none') return filename;
-  const label = state === 'partial' ? 'PARTIAL-CANCELLATION' : 'CANCELLED';
-  return filename.replace(/\.csv$/, `-${historical ? 'HISTORICAL-' : ''}${label}.csv`);
+  const label = state === 'scoped' ? 'SCOPED-CANCELLATION' : 'CANCELLED';
+  return filename.replace(/\.csv$/, `-${historical ? 'HISTORICAL-NOW-' : ''}${label}.csv`);
 }
