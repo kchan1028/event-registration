@@ -56,6 +56,10 @@ When a change touches one of these areas, run that row's tests in addition to th
 
 Concurrency and idempotency tests must run requests in parallel or replay events; a single-threaded test does not prove them. Use fictional data only.
 
+### Category editor drawer
+
+In `e2e/organizer.spec.ts`, verify initial focus and focus return after using the close button at a 390px viewport, where the drawer fills the screen. At 600px, verify that clicking the exposed backdrop closes the drawer and returns focus. The click point must stay outside the settled drawer throughout its opening transition.
+
 ### Walk-up phone handoff
 
 `e2e/walkup.spec.ts` verifies separate fictional staff/rider sessions, public event-only URL generation, QR fallback address, unpublished-event suppression, declined payment without bib issuance, participant-owned confirmation and staff check-in with one start-list entry. Run receipt QR/guardian and check-in browser regressions when changing the shared QR renderer. Existing server tests remain authoritative for windows, day-of pricing, capacity, guardian consent and readiness. A localhost emulation is not physical-phone scanning, real provider operation or a completed race-day rehearsal.
