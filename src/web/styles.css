@@ -4405,5 +4405,11 @@ fieldset:disabled .field label {
 }
 
 .reconciliation-download__button[aria-disabled='true'] {
+  background: var(--pending-bg);
+  color: var(--pending);
   cursor: wait;
+}
+
+.reconciliation-download__button[aria-disabled='true']:active {
+  transform: none;
 }

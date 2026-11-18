@@ -35,8 +35,20 @@ test('owner downloads the full event evidence with progress, interpretation and 
   await expect(section.getByRole('button', { name: 'Preparing CSV…' })).toBeDisabled();
   await expect(section.getByRole('status')).toContainText('Preparing local records'); await expect.poll(() => gets).toBe(1);
   await expect(section.getByRole('button', { name: 'Preparing CSV…' })).toBeFocused();
-  await page.keyboard.press('Enter'); expect(gets).toBe(1);
+  await page.keyboard.press('Enter');
+  const preparing = section.getByRole('button', { name: 'Preparing CSV…' });
+  await expect(preparing).toHaveCSS('background-color', 'rgb(241, 241, 250)');
   await section.screenshot({ path: 'test-results/reconciliation-control-preparing.png' });
+  // Switch the root theme without reloading the page or interrupting the held request.
+  await page.locator('html').evaluate((root) => root.setAttribute('data-theme', 'dark'));
+  await page.setViewportSize({ width: 360, height: 1000 });
+  await expect(preparing).toHaveCSS('background-color', 'rgb(36, 37, 61)');
+  await expect(preparing).toBeFocused();
+  expect(await section.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
+  expect((await new AxeBuilder({ page }).include('[aria-labelledby="reconciliation-records-title"]').analyze()).violations).toEqual([]);
+  await section.screenshot({ path: 'test-results/reconciliation-control-preparing-dark-360.png' });
+  await page.locator('html').evaluate((root) => root.setAttribute('data-theme', 'light'));
+  await page.setViewportSize({ width: 1440, height: 900 });
   const pending = page.waitForEvent('download'); release(); const download = await pending;
   expect(download.suggestedFilename()).toContain('-reconciliation-LOCAL-RECORDS-DEMO.csv');
   const text = await readFile((await download.path())!, 'utf8'); const [header, ...rows] = parseCsv(text);
@@ -47,6 +59,7 @@ test('owner downloads the full event evidence with progress, interpretation and 
   await expect(button).toBeFocused();
   await section.screenshot({ path: 'test-results/reconciliation-control-requested.png' });
   expect(await (await page.request.get(`/api/orders/${s.order.id}`)).json()).toEqual(before);
+  expect(gets, 'only the initial activation should request the CSV').toBe(1);
   await page.unroute(`**/api/events/${s.eventId}/exports/reconciliation.csv`);
   for (const theme of ['light', 'dark']) {
     await page.evaluate((theme) => localStorage.setItem('cyclereg-theme', theme), theme); await page.reload();
