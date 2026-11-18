@@ -1,4 +1,4 @@
-import type { CancellationSelection } from '../shared/cancellations';
+import type { CancellationSelection, CancellationAllocationPreview } from '../shared/cancellations';
 import type { Quote } from '../shared/pricing';
 import { todayIn } from '../shared/pricing';
 import { refundPolicyEntitlement } from '../shared/refundPolicy';
@@ -13,7 +13,7 @@ type PaidOrder = { id: string; published_version: number; quote_json: Quote; ent
 /** Selection and accepted allocation only, not a cancellation or a refundable-balance calculation. */
 export function createCancellationAllocations(db: Db, repo: Repo, clock: () => Date) {
   return {
-    async preview(eventId: string, selection: CancellationSelection, assessmentAt?: Date) {
+    async preview(eventId: string, selection: CancellationSelection, assessmentAt?: Date): Promise<CancellationAllocationPreview> {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
         const { config: current, version } = await repo.getPublished(eventId);

@@ -1,5 +1,5 @@
 import { limitsForCategory, usageForLimit } from '../shared/capacity';
-import type { CancellationSelection } from '../shared/cancellations';
+import type { CancellationSelection, CancellationImpactPreview } from '../shared/cancellations';
 import { blocksPublicSale, effectiveWaitlistStatus, type StoredWaitlistStatus } from '../shared/waitlist';
 import type { Db } from './db';
 import type { createCancellationAllocations } from './cancellationAllocations';
@@ -8,7 +8,7 @@ import { eventLock, HttpError, liveEntrySql, type Repo } from './repo';
 /** Read-only planning: the hypothetical removal below does not authorize execution. */
 export function createCancellationImpact(db: Db, repo: Repo, allocations: ReturnType<typeof createCancellationAllocations>, clock: () => Date) {
   return {
-    async preview(eventId: string, selection: CancellationSelection) {
+    async preview(eventId: string, selection: CancellationSelection): Promise<CancellationImpactPreview> {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
         const assessmentAt = clock();
