@@ -7,6 +7,25 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const TEXT_TIMESTAMPS = `SELECT table_name, column_name FROM information_schema.columns
   WHERE table_schema = 'public' AND data_type = 'text' AND (column_name LIKE '%\\_at' OR column_name LIKE '%expires%')`;
 
+describe('migration 35: simulated cancellation execution', () => {
+  it('adds no inferred executions and retains existing event evidence on upgrade', async () => {
+    const url = await testDatabaseUrl({ empty: true }); const client = new pg.Client({ connectionString: url }); await client.connect();
+    try {
+      await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+      for (let v = 0; v < 34; v++) { await client.query(MIGRATIONS[v]); await client.query('INSERT INTO schema_migrations(version) VALUES($1)', [v + 1]); }
+      await client.query(`INSERT INTO organizations(id,name,created_at) VALUES('org_execution_upgrade','Fictional upgrade club','2026-11-18T12:00Z')`);
+    } finally { await client.end(); }
+    const db = openDb(url);
+    try {
+      const before = await db.get(`SELECT to_jsonb(o) AS value FROM organizations o WHERE id='org_execution_upgrade'`);
+      await db.migrate(); await db.migrate();
+      expect(await db.get(`SELECT to_jsonb(o) AS value FROM organizations o WHERE id='org_execution_upgrade'`)).toEqual(before);
+      expect(await db.get('SELECT count(*)::int AS n FROM cancellation_executions')).toEqual({ n: 0 });
+      expect(await db.get("SELECT data_type FROM information_schema.columns WHERE table_name='order_entries' AND column_name='cancelled_at'")).toEqual({ data_type: 'timestamp with time zone' });
+    } finally { await db.close(); }
+  });
+});
+
 describe('migration 34: reviewed cancellation plan evidence', () => {
   it('adds no historical confirmations and preserves existing records on upgrade', async () => {
     const url = await testDatabaseUrl({ empty: true }); const client = new pg.Client({ connectionString: url }); await client.connect();

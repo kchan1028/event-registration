@@ -39,7 +39,7 @@ export interface EventSummary {
   /** Distinct riders with a paid entry still racing. Orders linked as the same rider count once. */
   riders: number;
   orders: { confirmed: number; held: number; paymentFailed: number; needsAttention: number };
-  entries: { confirmed: number; held: number; withdrawn: number };
+  entries: { confirmed: number; held: number; withdrawn: number; cancelled: number };
   byCategory: CategoryCount[];
   /** Paid entries still racing whose license no organizer has reviewed. */
   licenseReviews: number;
@@ -52,7 +52,7 @@ export interface EventSummary {
 export function eventSummary(orders: readonly ExportOrder[], riderKey: (orderId: string) => string, waitlistStatuses: readonly WaitlistStatus[], withMoney: boolean): EventSummary {
   const riders = new Set<string>();
   const counts = { confirmed: 0, held: 0, paymentFailed: 0, needsAttention: 0 };
-  const entries = { confirmed: 0, held: 0, withdrawn: 0 };
+  const entries = { confirmed: 0, held: 0, withdrawn: 0, cancelled: 0 };
   const byCategory = new Map<string, CategoryCount>();
   let licenseReviews = 0;
   const waitlist: Record<WaitlistStatus, number> = { waiting: 0, offered: 0, expired: 0, accepted: 0, removed: 0 };
@@ -68,6 +68,7 @@ export function eventSummary(orders: readonly ExportOrder[], riderKey: (orderId:
     for (const e of o.entries) {
       if (awaitsLicenseReview(o.status, e)) licenseReviews++;
       if (e.status === 'withdrawn') entries.withdrawn++;
+      else if (e.status === 'cancelled') entries.cancelled++;
       else if (o.status === 'confirmed' && e.status === 'confirmed') {
         entries.confirmed++;
         riders.add(riderKey(o.id));

@@ -241,8 +241,9 @@ export function createPayments(
     async startCheckout(orderId: string): Promise<{ kind: 'redirect'; url: string } | { kind: 'confirmed' }> {
       if (provider.mode === 'simulated') throw new HttpError(409, 'Payments are simulated for this build. Use the simulated payment.');
       const next = await db.transaction(async () => {
-        // Per-order lock, not the event lock: other riders' checkouts are not held up.
+        // Session reuse uses this order lock; the closure guard below also takes the event lock.
         await db.lock(`checkout:${orderId}`);
+        await orders.requireCheckoutOpen(orderId);
         const order = await orders.getOrder(orderId);
         if (order.status === 'confirmed') throw new HttpError(409, 'This order is already paid.');
         if (order.status === 'needs_attention') throw new HttpError(409, 'This order is with the organizer. They will contact you.');

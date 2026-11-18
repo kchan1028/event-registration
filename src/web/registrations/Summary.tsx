@@ -49,6 +49,10 @@ export function Summary({ eventId, refreshKey }: { eventId: string; refreshKey: 
           <dt>Withdrawn entries</dt>
           <dd>{s.entries.withdrawn}</dd>
         </div>
+        <div>
+          <dt>Cancelled entries</dt>
+          <dd>{s.entries.cancelled}</dd>
+        </div>
       </dl>
       {(s.waitlist.offered > 0 || s.waitlist.expired > 0 || s.waitlist.accepted > 0) && (
         <p className="small">

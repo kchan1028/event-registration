@@ -103,7 +103,9 @@ function EntryLine({ entry, confirmed, canManage, onChange, children }: { entry:
       <span className="order__entry-name">
         <code className="code">{entry.code}</code> {entry.categoryName}
       </span>
-      {entry.status === 'withdrawn' ? (
+      {entry.status === 'cancelled' ? (
+        <span className="muted small">Cancelled by organizer</span>
+      ) : entry.status === 'withdrawn' ? (
         <span className="muted small">Withdrawn</span>
       ) : confirmed ? (
         entry.licenseReviewed ? (

@@ -1,3 +1,4 @@
+import { requireCancellationOpen } from './cancellationClosure';
 import { canAdmit, entryCountsByCategory, type LimitUsage } from '../shared/capacity';
 import { bibSettingsSchema, DEFAULT_BIB_SETTINGS, type BibSettings } from '../shared/checkin';
 import { newId } from '../shared/factory';
@@ -277,6 +278,7 @@ export function createRepo(db: Db, clock: () => Date) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
         const { config } = await requireEvent(eventId);
+        await requireCancellationOpen(db, eventId, config, [categoryId]);
         const current = await entries(eventId);
         let created = 0;
         let blockedBy: LimitUsage | null = null;

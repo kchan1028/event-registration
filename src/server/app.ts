@@ -36,6 +36,8 @@ import { createMailer, emailFromEnv, type EmailSender } from './email';
 import { createJuniors } from './juniors';
 import { createCancellationConfirmations } from './cancellationConfirmations';
 import { createCancellationFinancialPreflight } from './cancellationFinancialPreflight';
+import { createCancellationExecution } from './cancellationExecution';
+import { cancellationExecutionSchema } from '../shared/cancellations';
 import { createCancellationImpact } from './cancellationImpact';
 import { createCancellationAllocations } from './cancellationAllocations';
 import { cancellationSelectionSchema, cancellationConfirmationSchema } from '../shared/cancellations';
@@ -107,6 +109,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const cancellationImpact = createCancellationImpact(db, repo, cancellationAllocations, clock);
   const cancellationConfirmations = createCancellationConfirmations(db, cancellationImpact, clock);
   const cancellationFinancialPreflight = createCancellationFinancialPreflight(db, cancellationConfirmations, clock);
+  const cancellationExecution = createCancellationExecution(db, repo, cancellationConfirmations, cancellationFinancialPreflight, refunds, paymentProvider.mode === 'simulated', clock);
   const payments = createPayments(db, orders, paymentProvider, clock, appUrl, refunds.onRefundEvent);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
@@ -527,6 +530,14 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.get('/api/events/:id/cancellation-confirmations/:confirmationId/financial-preflight', async (req) => {
     const { id, confirmationId } = await onEvent(req, 'payments.refund', z.object({ id: z.string().min(1).max(64), confirmationId: z.string().min(1).max(64) }));
     return cancellationFinancialPreflight.assess(id, confirmationId);
+  });
+  app.post('/api/events/:id/cancellation-executions', async (req) => {
+    const { id } = await onEvent(req, 'payments.refund');
+    return cancellationExecution.execute(id, me(req).id, cancellationExecutionSchema.parse(req.body));
+  });
+  app.get('/api/events/:id/cancellation-executions/:executionId', async (req) => {
+    const { id, executionId } = await onEvent(req, 'payments.refund', z.object({ id: z.string().min(1).max(64), executionId: z.string().min(1).max(64) }));
+    return cancellationExecution.get(id, executionId);
   });
 
   app.post('/api/events/:id/cancellation-impact-preview', async (req) => {

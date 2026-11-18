@@ -158,11 +158,12 @@ export interface OrderView {
     raceName: string;
     dayId: string;
     startTime: string | null;
-    status: 'held' | 'confirmed' | 'released' | 'withdrawn';
+    status: 'held' | 'confirmed' | 'released' | 'withdrawn' | 'cancelled';
     amountPaidCents: number;
     discountCents: number;
     discountReason: string | null;
     withdrawnAt: string | null;
+    cancelledAt: string | null;
     changes: {
       kind: 'transfer' | 'withdraw';
       fromCategoryName: string;

@@ -17,6 +17,7 @@ import type { Coupons } from './coupons';
 import { juniorViewerSql, orderManagerSql, type Juniors } from './juniors';
 import type { RegistrationAccess } from '../shared/juniors';
 import type { Db } from './db';
+import { cancellationClosed, requireCancellationOpen } from './cancellationClosure';
 import { eventLock, HttpError, type Repo } from './repo';
 
 /**
@@ -85,9 +86,10 @@ interface EntryRow {
   order_id: string;
   category_id: string;
   rider_ref: string;
-  status: 'held' | 'confirmed' | 'released' | 'withdrawn';
+  status: 'held' | 'confirmed' | 'released' | 'withdrawn' | 'cancelled';
   original_category_id: string | null;
   withdrawn_at: string | null;
+  cancelled_at: string | null;
   license_reviewed: boolean;
   license_review_note: string | null;
   license_reviewed_at: string | null;
@@ -245,6 +247,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         discountCents: paid?.discountCents ?? 0,
         discountReason: paid?.discountReason ?? null,
         withdrawnAt: e.withdrawn_at,
+        cancelledAt: e.cancelled_at,
         changes: changes
           .filter((c) => c.entry_id === e.id)
           .map((c) => ({
@@ -399,6 +402,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         }
 
         const { config, version } = await repo.getPublished(eventId);
+        await requireCancellationOpen(db, eventId, config, input.categoryIds);
         if (isResearchExample(config)) throw new HttpError(409, RESEARCH_REGISTRATION_MESSAGE);
         const rider = riderDetailsSchema.parse(input.rider);
         const waiver = waiverAcceptanceSchema.parse(input.waiver);
@@ -491,6 +495,14 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
      * A success after the hold expired confirms only if every place is still
      * free; otherwise the order goes to the organizer's exception queue.
      */
+    async requireCheckoutOpen(orderId: string) {
+      return db.transaction(async () => {
+        await lockEventOf('SELECT event_id FROM orders WHERE id=$1', orderId);
+        const row = await orderRow(orderId);
+        if (!row) throw new HttpError(404, 'Order not found.');
+        await requireCancellationOpen(db, row.event_id, (await repo.getPublished(row.event_id)).config, (await entryRows(orderId)).map((e) => e.category_id));
+      });
+    },
     async pay(orderId: string, attemptId: string, outcome: PaymentOutcome, source: PaymentSource = { provider: 'simulated', ref: null, amountCents: null }) {
       return db.transaction(async () => {
         await lockEventOf(`SELECT event_id FROM orders WHERE id = $1`, orderId);
@@ -505,7 +517,10 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const t = nowIso();
         let next: OrderStatus = status;
 
-        if (status === 'confirmed' || status === 'needs_attention') {
+        const closed = await cancellationClosed(db, row.event_id, (await repo.getPublished(row.event_id)).config, (await entryRows(orderId)).map((e) => e.category_id));
+        if (outcome !== 'failure' && status !== 'confirmed' && closed) {
+          next = 'needs_attention'; // A late payment never reopens an organizer-cancelled scope.
+        } else if (status === 'confirmed' || status === 'needs_attention') {
           next = status; // duplicate or late notification: nothing changes
         } else if (outcome === 'mismatch') {
           // Money arrived but not the amount this order was priced at: a person decides, never a silent confirmation.
@@ -642,6 +657,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         if (effectiveStatus(row) !== 'confirmed' || e.status !== 'confirmed') throw new HttpError(409, 'Only a paid, active entry can be transferred.');
         if (e.category_id === toCategoryId) throw new HttpError(422, 'Choose a different category.');
         const { config } = await repo.getPublished(e.event_id);
+        await requireCancellationOpen(db, e.event_id, config, [toCategoryId]);
         const target = config.categories.find((c) => c.id === toCategoryId);
         if (!target || target.status !== 'active') throw new HttpError(422, 'That category is not open for entries.');
         const others = (await entryRows(e.order_id)).filter((x) => x.id !== e.id && x.status === 'confirmed');
@@ -696,6 +712,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const row = await db.get<{ order_id: string; status: EntryRow['status'] }>(`SELECT order_id, status FROM order_entries WHERE id = $1`, [entryId]);
         if (!row) throw new HttpError(404, 'Entry not found.');
         if (row.status === 'withdrawn') throw new HttpError(409, 'This entry was withdrawn, so its license cannot be reviewed.');
+        if (row.status === 'cancelled') throw new HttpError(409, 'This entry was cancelled, so its license cannot be reviewed.');
         await db.run(`UPDATE order_entries SET license_reviewed = true, license_review_note = $1, license_reviewed_at = $2 WHERE id = $3`, [note, nowIso(), entryId]);
         return view(row.order_id);
       });

@@ -5,6 +5,7 @@ import { newId } from '../shared/factory';
 import type { EventConfig } from '../shared/schema';
 import { blocksPublicSale, effectiveWaitlistStatus, OFFER_HOURS, waitlistJoinSchema, type StoredWaitlistStatus, type WaitlistJoin, type WaitlistStatus } from '../shared/waitlist';
 import type { Db } from './db';
+import { requireCancellationOpen } from './cancellationClosure';
 import { eventLock, HttpError, type Repo } from './repo';
 
 /**
@@ -76,6 +77,7 @@ export function createWaitlist(db: Db, repo: Repo, clock: () => Date) {
           await db.lock(eventLock(eventId));
           const config = await published(eventId);
           const body = waitlistJoinSchema.parse(input);
+          await requireCancellationOpen(db, eventId, config, [body.categoryId]);
           const cat = config.categories.find((c) => c.id === body.categoryId);
           if (!cat || cat.status === 'archived') throw new HttpError(404, 'That category is no longer offered.');
           if (!cat.waitlistEnabled) throw new HttpError(409, `${cat.name} does not have a waitlist.`);
@@ -134,6 +136,7 @@ export function createWaitlist(db: Db, repo: Repo, clock: () => Date) {
           const config = await published(eventId);
           const row = await byId(entryId, eventId);
           if (!row) throw new HttpError(404, 'Waitlist entry not found.');
+          await requireCancellationOpen(db, eventId, config, [row.category_id]);
           if (status(row) !== 'waiting') throw new HttpError(409, 'Only a rider who is still waiting can be offered a place.');
           const name = config.categories.find((c) => c.id === row.category_id)?.name ?? 'This category';
           const room = canAdmit(config, await repo.entries(eventId), row.category_id, `waitlist-${row.id}`);
