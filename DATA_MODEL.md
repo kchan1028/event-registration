@@ -369,13 +369,13 @@ The read-only paid cancellation allocation preview uses `order_entries.category_
 
 ### cancellation_confirmations
 
-API-only reviewed cancellation plan evidence (migration 34). No executor or queue consumes these records. Application routes only insert/read; direct database administration is not made immutable. No historical plan is inferred on upgrade.
+API-only reviewed cancellation plan evidence (migration 34). No executor or queue consumes these records. Normal confirmation routes only insert/read. The owner-only generated case-study reset removes confirmations for its own fixture events under event locks; unrelated plan evidence remains. Direct database administration is not made immutable. No historical plan is inferred on upgrade.
 
 | Column | Notes |
 |---|---|
 | `id` | Application-generated primary key |
 | `event_id` | Required event reference; deletion restricted |
-| `client_request_id` | Trimmed opaque request identity, 8–128 characters; unique with `event_id` |
+| `client_request_id` | Trimmed opaque request identity, 8–128 Unicode characters; unique with `event_id` |
 | `confirmed_by`, `confirmed_at` | Required server-derived account reference and timestamp; account deletion restricted |
 | `reason` | Normalized reason of 3–300 Unicode characters |
 | `selection_json` | Reviewed strict event/race/day scope; database requires an object with a recognized string scope |
@@ -715,7 +715,7 @@ BBC's day identifies March 9, 2008. Pinole's unresolved edition uses November 15
 
 `npm run seed:cases` uses the current tables and schema without a migration. It creates one reserved organization (`org_demo_case_studies_v1`) and fixed event IDs. Scenario configuration and simulated test-entry IDs are stable. A PostgreSQL advisory transaction lock serializes loader and reset requests. Rerunning a scenario returns the existing event instead of overwriting organizer changes or duplicating entries and orders. Seeded payment attempts are simulated records only.
 
-The case-study reset is a narrow development operation. In one transaction it resolves events owned by the reserved organization, then deletes their dependent change-resolution records, rider links, locks, changes, waitlist records, check-ins, bib records, snapshots, payment attempts, order entries, orders, test entries, versions, events, and finally the organization. It never accepts an arbitrary organization ID. Unrelated organizations are preserved. This is not a general rider-data deletion or retention workflow.
+The case-study reset is a narrow development operation. In one transaction it resolves events owned by the reserved organization, acquires their event locks in sorted order, removes their reviewed plan confirmations, then deletes their dependent change-resolution records, rider links, locks, changes, waitlist records, check-ins, bib records, snapshots, payment attempts, order entries, orders, test entries, versions, events, and finally the organization. It never accepts an arbitrary organization ID. Unrelated organizations are preserved. This is not a general rider-data deletion or retention workflow.
 
 ## Capacity and concurrency
 

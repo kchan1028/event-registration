@@ -163,6 +163,36 @@ describe('reviewed cancellation plan confirmation', () => {
     expect((await s.confirm({ ...body, reason: '🚲'.repeat(300) })).statusCode).toBe(200);
   });
 
+  it('validates request identity by Unicode character count before insertion', async () => {
+    const s = await setup(); const body = s.input(await s.preview());
+    expect((await s.confirm({ ...body, clientRequestId: '🚲'.repeat(4) })).statusCode).toBe(400);
+    expect((await s.confirm({ ...body, clientRequestId: '🚲'.repeat(129) })).statusCode).toBe(400);
+    expect((await s.confirm({ ...body, clientRequestId: '🚲'.repeat(8) })).statusCode).toBe(200);
+    expect(await s.count()).toBe(1);
+  });
+
+  it('resets generated case studies after plan review while preserving unrelated plan evidence', async () => {
+    const s = await setup(); const ordinary = (await s.confirm(s.input(await s.preview()))).json();
+    const loaded = await s.app.inject({ method: 'POST', url: '/api/demo/case-studies/criterium' });
+    expect(loaded.statusCode, loaded.body).toBe(201); const caseEventId = loaded.json().eventId;
+    const response = await s.app.inject({ method: 'POST', url: `/api/events/${caseEventId}/cancellation-confirmation-preview`, payload: { scope: 'event' } });
+    expect(response.statusCode, response.body).toBe(200); const p = response.json();
+    const saved = await s.app.inject({ method: 'POST', url: `/api/events/${caseEventId}/cancellation-confirmations`, payload: { ...s.input(p), clientRequestId: 'case-study-confirmation-reset' } });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const { resetPromise } = await s.sql(async (db) => {
+      await db.query('BEGIN'); await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`event:${caseEventId}`]);
+      let finished = false;
+      const resetPromise = s.app.inject({ method: 'DELETE', url: '/api/demo/case-studies' }).then((r) => { finished = true; return r; });
+      try {
+        await expect.poll(async () => (await db.query(`SELECT EXISTS(SELECT 1 FROM pg_locks h JOIN pg_locks w ON h.database=w.database AND h.classid=w.classid AND h.objid=w.objid AND h.objsubid=w.objsubid WHERE h.pid=pg_backend_pid() AND h.locktype='advisory' AND h.granted AND w.locktype='advisory' AND NOT w.granted AND w.pid<>h.pid) AS waiting`)).rows[0].waiting, { timeout: 5000 }).toBe(true);
+        expect(finished).toBe(false); return { resetPromise };
+      } finally { await db.query('ROLLBACK'); }
+    });
+    const reset = await resetPromise;
+    expect(reset.statusCode, reset.body).toBe(200); expect(reset.json().removedEvents).toBe(1);
+    expect(await s.count()).toBe(1); expect((await s.get(ordinary.id)).json()).toEqual(ordinary);
+  });
+
   it('rolls back a rejected evidence insert without changing entry, payment or refund state', async () => {
     const s = await setup(); const order = await s.buy(); const p = await s.preview();
     await s.sql(async (db) => { await db.query(`CREATE FUNCTION reject_confirmation_fixture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Fictional confirmation insert failure'; END $$; CREATE TRIGGER reject_confirmation_fixture BEFORE INSERT ON cancellation_confirmations FOR EACH ROW EXECUTE FUNCTION reject_confirmation_fixture()`); });

@@ -1,7 +1,7 @@
 import { buildCaseStudyScenarios, CASE_STUDY_ORG_ID, CASE_STUDY_ORG_NAME, CASE_STUDY_REFERENCE_NOW, type CaseStudyKey } from '../shared/caseStudies';
 import type { Db } from './db';
 import type { Orders } from './orders';
-import type { Repo } from './repo';
+import { eventLock, type Repo } from './repo';
 
 const scenarioByKey = () => new Map(buildCaseStudyScenarios().map((scenario) => [scenario.key, scenario]));
 
@@ -71,9 +71,11 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
       await db.lock('demo:case-studies');
       const eventIds = (await db.all<{ id: string }>(`SELECT id FROM events WHERE organization_id = $1`, [CASE_STUDY_ORG_ID])).map((row) => row.id);
       if (eventIds.length === 0) return { removedEvents: 0 };
+      for (const id of [...eventIds].sort()) await db.lock(eventLock(id));
       const ids = eventIds.map((_, index) => `$${index + 1}`).join(', ');
       const orderIds = `SELECT id FROM orders WHERE event_id IN (${ids})`;
       // Children before parents: none of these foreign keys cascade.
+      await db.run(`DELETE FROM cancellation_confirmations WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM refunds WHERE order_id IN (${orderIds})`, eventIds);
       await db.run(`DELETE FROM provider_events WHERE order_id IN (${orderIds})`, eventIds);
       await db.run(`DELETE FROM payment_sessions WHERE order_id IN (${orderIds})`, eventIds);

@@ -13,7 +13,7 @@ export type CancellationSelection = z.infer<typeof cancellationSelectionSchema>;
 
 /** Confirms a reviewed plan only; it is not a cancellation or payment instruction. */
 export const cancellationConfirmationSchema = z.object({
-  clientRequestId: z.string().trim().min(8).max(128),
+  clientRequestId: z.string().trim().refine((value) => { const n = Array.from(value).length; return n >= 8 && n <= 128; }, 'Use a request identity of 8 to 128 characters.'),
   selection: cancellationSelectionSchema,
   previewFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   reason: z.string().trim().refine((value) => { const n = Array.from(value).length; return n >= 3 && n <= 300; }, 'Write a reason of 3 to 300 characters.'),
