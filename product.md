@@ -892,7 +892,7 @@ Open, raised November 16, 2026; owner: project owner (technical and registration
 
 ### Waitlist offer status retry
 
-Resolved November 18, 2026. Keep the public schedule read independent so it can render before sign-in and when private offer lookup fails. After opening a signed-in offer, check current event status before prefilling. If validation fails, explain that registration status could not be checked and provide an in-page retry that reopens the offer and reads fresh event status. A closed category cannot be prefilled, and retry preserves any unresolved reservation payload. See [issue #210](https://github.com/kchan1028/event-registration/issues/210).
+Resolved November 18, 2026. Keep the public schedule read independent so it can render before sign-in and when private offer lookup fails. After opening a signed-in offer, check current event status before prefilling. If validation fails, explain that registration status could not be checked and provide an in-page retry that reopens the offer and reads fresh event status. When a newer schedule check supersedes the offer check, explain why the rider needs to retry the offer. If retry ends with a terminal error, move keyboard focus to the registration status control or the event heading while that control is unavailable. A closed category cannot be prefilled, and retry preserves any unresolved reservation payload. See [issue #210](https://github.com/kchan1028/event-registration/issues/210).
 
 ### Phone roster review decision
 

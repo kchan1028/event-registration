@@ -312,9 +312,63 @@ test('a slow offer status read cannot override a newer registration status refre
   } finally {
     releaseSnapshot();
   }
+  await expect(page.getByRole('alert').filter({ hasText: 'A newer schedule check replaced this waitlist offer check.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry waitlist offer' })).toBeVisible();
   const option = page.locator(`#opt-${s.rr.id}`);
   await expect(option).toHaveAttribute('aria-disabled', 'true');
   await expect(option).toHaveAttribute('aria-checked', 'false');
   await expect(option).not.toContainText('Your place is held');
+});
+
+test('repeated offer failure updates the live alert and terminal retry preserves keyboard focus', async ({ page }) => {
+  const s = await fixture(page);
+  const token = 'fictional-repeat-offer';
+  let offerReads = 0;
+  let eventReads = 0;
+  let release!: () => void;
+  const checkingGate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route(`**/api/rider/offers/${token}`, async (route) => {
+    offerReads++;
+    if (offerReads === 3) {
+      await route.fulfill({ status: 404, json: { error: 'This waitlist offer was not found.' } });
+      return;
+    }
+    await route.fulfill({ json: { eventId: s.eventId, categoryId: s.rr.id, status: 'offered' } });
+  });
+  await page.route(`**/api/public/events/${s.eventId}`, async (route) => {
+    eventReads++;
+    if (eventReads === 1) return route.continue();
+    if (eventReads === 3) await checkingGate;
+    await route.abort();
+  });
+
+  await page.setViewportSize({ width: 360, height: 1000 });
+  await page.goto(`/#/register/${s.eventId}?offer=${token}`);
+  const feedback = page.locator('.offer-retry');
+  const alert = feedback.getByRole('alert');
+  const retry = feedback.getByRole('button', { name: 'Retry waitlist offer' });
+  await expect(alert).toContainText('Could not check registration status for this waitlist offer.');
+  const initialAlert = await alert.elementHandle();
+  const initialText = await alert.textContent();
+  await retry.focus();
+  try {
+    await page.keyboard.press('Enter');
+    const checking = feedback.getByRole('button', { name: 'Checking waitlist offer…' });
+    await expect(checking).toBeFocused();
+    await expect(checking).toBeDisabled();
+    await expect(alert).toBeEmpty();
+    expect((await new AxeBuilder({ page }).include('.offer-retry').analyze()).violations).toEqual([]);
+    await feedback.screenshot({ path: 'test-results/offer-retry-checking-360.png' });
+  } finally {
+    release();
+  }
+
+  await expect(alert).toHaveText(initialText!);
+  expect(await initialAlert!.evaluate((node) => node.isConnected)).toBe(true);
+  await expect(retry).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(alert).toHaveText('This waitlist offer was not found.');
+  await expect(feedback.getByRole('button')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Refresh registration status' })).toBeFocused();
+  await expect(page.locator(`#opt-${s.rr.id}`)).toHaveAttribute('aria-checked', 'false');
 });
