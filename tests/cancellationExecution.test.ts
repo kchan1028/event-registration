@@ -38,6 +38,31 @@ describe('atomic simulated cancellation', () => {
     expect(responses.map((r) => r.statusCode)).toEqual([200, 200]); expect(responses[0].json()).toEqual(responses[1].json());
     expect((await s.sql('SELECT count(*)::int AS n FROM refunds')).rows[0].n).toBe(1);
   });
+  it('isolates refused identities by event and retains the original rejecting account on authorized replay', async () => {
+    const s = await prepared('credit'); const body = input(s.plan.id);
+    const first = await s.execute(body); expect(first.statusCode).toBe(409);
+    expect(first.json().details?.code).toBe(CANCELLATION_NOT_EXECUTED);
+    const rows = () => s.sql('SELECT * FROM cancellation_request_refusals ORDER BY event_id');
+    const original = (await rows()).rows; expect(original).toHaveLength(1);
+    const owner = (await s.app.inject({ method: 'GET', url: '/api/me' })).json().account.id;
+    expect(original[0].rejected_by).toBe(owner);
+    const email = 'refusal-finance@example.test';
+    expect((await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members`, payload: { email, role: 'finance' } })).statusCode).toBe(200);
+    const finance = (await s.app.inject({ method: 'GET', url: '/api/me', headers: as(email) })).json().account.id;
+    expect(finance).not.toBe(owner);
+    const replay = await s.execute(body, as(email)); expect(replay.statusCode).toBe(409); expect(replay.json()).toEqual(first.json());
+    expect((await rows()).rows).toEqual(original);
+    const other = (await s.app.inject({ method: 'POST', url: '/api/demo' })).json();
+    expect(other.eventId).not.toBe(s.eventId);
+    const missing = await s.app.inject({ method: 'POST', url: `/api/events/${other.eventId}/cancellation-executions`, payload: body });
+    expect(missing.statusCode).toBe(404); expect(missing.json().details?.code).toBe(CANCELLATION_NOT_EXECUTED);
+    const both = (await rows()).rows; expect(both).toHaveLength(2);
+    expect(both.find((r) => r.event_id === s.eventId)).toEqual(original[0]);
+    expect(both.find((r) => r.event_id === other.eventId)).toMatchObject({ client_request_id: body.clientRequestId, rejected_by: owner, status_code: 404 });
+    expect((await s.execute(body)).json()).toEqual(first.json());
+    expect((await s.sql('SELECT count(*)::int AS n FROM cancellation_executions')).rows[0].n).toBe(0);
+    expect((await s.sql('SELECT count(*)::int AS n FROM refunds')).rows[0].n).toBe(0);
+  });
   it('rolls back refunds, entry changes and closure if recording execution fails', async () => {
     const s = await prepared();
     await s.sql("CREATE FUNCTION fail_execution() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Fictional recording failure'; END $$; CREATE TRIGGER fail_execution BEFORE INSERT ON cancellation_executions FOR EACH ROW EXECUTE FUNCTION fail_execution()");

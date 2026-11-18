@@ -136,6 +136,21 @@ describe('reviewed cancellation plan confirmation', () => {
     expect(separate.statusCode).toBe(409); expect(separate.json().details).toEqual({ code: CANCELLATION_PLAN_NOT_RECORDED }); expect(await s.count()).toBe(1);
   });
 
+  it('rejects changed details for a refused plan identity without replacing its evidence', async () => {
+    const s = await setup(); const body = s.input(await s.preview());
+    await s.publish();
+    const refused = await s.confirm(body); expect(refused.statusCode).toBe(409);
+    expect(refused.json().details?.code).toBe(CANCELLATION_PLAN_NOT_RECORDED);
+    const stored = () => s.sql(async (db) => (await db.query('SELECT * FROM cancellation_request_refusals')).rows);
+    const before = await stored(); expect(before).toHaveLength(1);
+    for (const change of [{ reason: 'Different fictional reason' }, { previewFingerprint: '0'.repeat(64) }, { selection: { scope: 'race', raceId: s.cat('RR-M35-34').raceId } }]) {
+      const changed = await s.confirm({ ...body, ...change });
+      expect(changed.statusCode).toBe(409); expect(changed.json().details).toBeUndefined(); expect(changed.json().error).toMatch(/different details/);
+      expect(await stored()).toEqual(before);
+    }
+    expect((await s.confirm(body)).json()).toEqual(refused.json()); expect(await s.count()).toBe(0);
+  });
+
   it('keeps exact replay historical after the impact changes and preserves the original actor', async () => {
     const s = await setup(); const held = await s.buy(false); const p = await s.preview(); const body = s.input(p);
     const original = (await s.confirm(body)).json();
