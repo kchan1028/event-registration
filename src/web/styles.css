@@ -4386,3 +4386,7 @@ fieldset:disabled .field label {
 .cancellation-preview table { width: 100%; border-collapse: collapse; }
 .cancellation-preview th, .cancellation-preview td { padding: var(--s-2); text-align: left; border-bottom: 1px solid var(--hairline); }
 .cancellation-preview li { margin-block: var(--s-2); }
+
+.plan-confirmation { display: grid; gap: var(--s-3); width: 100%; min-width: 0; overflow-wrap: anywhere; padding-top: var(--s-4); border-top: 1px solid var(--hairline); }
+.plan-confirmation .correction { width: 100%; min-width: 0; }
+.plan-confirmation textarea { min-height: 6em; resize: vertical; }

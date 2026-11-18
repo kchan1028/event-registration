@@ -1,4 +1,4 @@
-import type { CancellationSelection, CancellationImpactPreview } from '../shared/cancellations';
+import type { CancellationSelection, CancellationImpactPreview, CancellationConfirmationPreview, CancellationConfirmationInput, CancellationConfirmation } from '../shared/cancellations';
 import type { LimitUsage } from '../shared/capacity';
 import type { RefundStatus, RefundRequest, RefundRequestResult } from '../shared/refunds';
 import type { RefundPolicyPreview } from '../shared/refundPolicy';
@@ -377,6 +377,11 @@ export const api = {
   pay: (id: string, attemptId: string, outcome: 'success' | 'failure') => request<OrderView>('POST', `/api/orders/${id}/payment`, { attemptId, outcome }),
   startCheckout: (id: string) => request<{ kind: 'redirect'; url: string } | { kind: 'confirmed' }>('POST', `/api/orders/${id}/checkout-session`),
   refunds: (orderId: string) => request<{ payments: RefundablePaymentView[]; refunds: OrganizerRefundView[] }>('GET', `/api/orders/${orderId}/refunds`),
+  currentAccount: () => request<{ account: { id: string; email: string } }>('GET', '/api/me'),
+  eventVersion: (eventId: string, version: number) => request<{ version: number; config: EventConfig }>('GET', `/api/events/${eventId}/versions/${version}`),
+  cancellationConfirmationPreview: (eventId: string, selection: CancellationSelection) => request<CancellationConfirmationPreview>('POST', `/api/events/${eventId}/cancellation-confirmation-preview`, selection),
+  confirmCancellationPlan: (eventId: string, input: CancellationConfirmationInput) => request<CancellationConfirmation>('POST', `/api/events/${eventId}/cancellation-confirmations`, input),
+  cancellationConfirmation: (eventId: string, id: string) => request<CancellationConfirmation>('GET', `/api/events/${eventId}/cancellation-confirmations/${encodeURIComponent(id)}`),
   cancellationImpact: (eventId: string, selection: CancellationSelection) => request<CancellationImpactPreview>('POST', `/api/events/${eventId}/cancellation-impact-preview`, selection),
   refundPolicyPreview: (orderId: string, reason: RefundPolicyPreview['reason']) => request<RefundPolicyPreview>('GET', `/api/orders/${orderId}/refund-policy-preview?reason=${reason}`),
   requestRefund: (orderId: string, body: RefundRequest) => request<OrderView & RefundRequestResult>('POST', `/api/orders/${orderId}/refunds`, body),

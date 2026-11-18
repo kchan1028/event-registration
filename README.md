@@ -59,7 +59,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Event summary on Registrations: riders, entries, unpaid holds, payment exceptions, license reviews to do, waitlist activity, per-category counts, and (for ledger roles) money that adds up to the ledger CSV | Implemented; automated tests in CI |
 | Organizer refunds of an entry or an order, for simulated and Stripe test-mode payments (no real money moves) | Implemented; automated tests in CI. Not yet checked against a real Stripe sandbox account |
 | Refund and credit rules set by the organizer from templates (full refund until a deadline, tiered, credit only), shown to riders before paying and kept with each order | Implemented; whole-order policy preview in the organizer refund form, with refund amounts still entered by the organizer |
-| Reviewed cancellation plan confirmation with fresh preview and actor/reason/acknowledgement evidence | Implemented locally, API only; no cancellation or financial execution |
+| Reviewed cancellation plan confirmation with fresh preview and actor/reason/acknowledgement evidence | Implemented locally, API and Registrations screen; no cancellation or financial execution |
 | Cancellation operational impact preview: entries/holds, shared capacity, waitlists, saved snapshots and audience IDs | Implemented locally, API and owner/finance screen in Registrations; no execution |
 | Paid cancellation allocation preview by event, current published race or day, keeping accepted prices and policies | Implemented locally, also shown in the operational preview; no cancellation or payout execution |
 | Category builder: copy a day's races to another day, bulk edit with before/after preview | Implemented; automated tests in CI |

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { newId } from '../shared/factory';
-import { cancellationSelectionSchema, type CancellationConfirmation, type CancellationConfirmationInput, type CancellationConfirmationPreview, type CancellationImpactPreview, type CancellationSelection } from '../shared/cancellations';
+import { CANCELLATION_IMPACT_CHANGED, cancellationSelectionSchema, type CancellationConfirmation, type CancellationConfirmationInput, type CancellationConfirmationPreview, type CancellationImpactPreview, type CancellationSelection } from '../shared/cancellations';
 import type { Db } from './db';
 import type { createCancellationImpact } from './cancellationImpact';
 import { eventLock, HttpError } from './repo';
@@ -51,7 +51,7 @@ export function createCancellationConfirmations(db: Db, impact: ReturnType<typeo
           return view(existing);
         }
         const current = await prepare(eventId, input.selection);
-        if (current.fingerprint !== input.previewFingerprint) throw new HttpError(409, 'Cancellation impact changed. Review a fresh confirmation preview before confirming the plan.');
+        if (current.fingerprint !== input.previewFingerprint) throw new HttpError(409, CANCELLATION_IMPACT_CHANGED);
         const row = await db.get<Row>(`INSERT INTO cancellation_confirmations(id,event_id,client_request_id,confirmed_by,confirmed_at,reason,selection_json,preview_fingerprint,preview_json,acknowledged_plan_only)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,true) RETURNING *`,
         [newId('ccf'), eventId, input.clientRequestId, actorId, clock().toISOString(), input.reason, JSON.stringify(input.selection), current.fingerprint, JSON.stringify(current.preview)]);

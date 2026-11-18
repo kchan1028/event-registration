@@ -23,7 +23,7 @@ test('previews published cancellation impact with recovery and discards older re
   const ready = new Promise<void>((resolve) => { captured = resolve; });
   const done = new Promise<void>((resolve) => { fulfilled = resolve; });
   page.on('request', (r) => { if (r.method() === 'POST' && /\/(refunds|retry)$/.test(r.url())) refundPosts++; });
-  await page.route(`**/api/events/${eventId}/cancellation-impact-preview`, async (route) => {
+  await page.route(`**/api/events/${eventId}/cancellation-confirmation-preview`, async (route) => {
     calls++;
     if (fail) return route.abort('failed');
     if (holdNext) { holdNext = false; const response = await route.fetch(); captured(); await waiting; await route.fulfill({ response }); fulfilled(); return; }
@@ -46,10 +46,10 @@ test('previews published cancellation impact with recovery and discards older re
   await expect(region.getByRole('alert')).toContainText('Try Preview cancellation impact again');
   await expect(button).toBeFocused();
   fail = false; await button.click();
-  await expect(region.getByRole('status')).toContainText('2 live entries');
+  await expect(region.getByRole('status', { name: 'Cancellation impact status' })).toContainText('2 live entries');
   await expect(region).toContainText('Financial review required');
   await expect(region).toContainText('not a refundable balance');
-  await expect(region).toContainText('Cancellation confirmation and execution are not available');
+  await expect(region).toContainText('Cancellation execution is not available');
   expect(refundPosts).toBe(0);
   expect(await (await page.request.get(`/api/orders/${order.id}`)).json()).toEqual(before);
   holdNext = true; await button.click(); await ready;
@@ -57,13 +57,13 @@ test('previews published cancellation impact with recovery and discards older re
   await expect(loading).toHaveAttribute('aria-disabled', 'true');
   await loading.focus(); await page.keyboard.press('Enter'); expect(calls).toBe(3);
   await region.getByLabel('Cancellation scope', { exact: true }).selectOption('race');
-  await expect(region.getByRole('status')).toBeEmpty();
+  await expect(region.getByRole('status', { name: 'Cancellation impact status' })).toBeEmpty();
   await expect(region.getByLabel('Published race')).not.toContainText('UNPUBLISHED');
   await region.getByLabel('Published race').selectOption(cr.raceId);
-  await button.click(); await expect(region.getByRole('status')).toContainText('1 live entry');
+  await button.click(); await expect(region.getByRole('status', { name: 'Cancellation impact status' })).toContainText('1 live entry');
   await expect(region).toContainText('1 unaffected live entry');
   release(); await done; await page.waitForLoadState('networkidle');
-  await expect(region.getByRole('status')).toContainText('1 live entry');
+  await expect(region.getByRole('status', { name: 'Cancellation impact status' })).toContainText('1 live entry');
   expect(calls).toBe(4);
   for (const theme of ['light', 'dark']) {
     const toggle = page.getByRole('button', { name: /^Theme: / });
@@ -80,13 +80,13 @@ test('previews published cancellation impact with recovery and discards older re
   await page.getByRole('button', { name: /^Withdraw RR-M35-34 / }).click();
   await page.getByLabel('Reason for the withdrawal', { exact: true }).fill('Fictional preview refresh check');
   await page.getByRole('button', { name: 'Withdraw entry', exact: true }).click();
-  await expect(region.getByRole('status')).toBeEmpty();
+  await expect(region.getByRole('status', { name: 'Cancellation impact status' })).toBeEmpty();
   await expect(region.getByLabel('Cancellation scope')).toHaveValue('event');
-  await button.click(); await expect(region.getByRole('status')).toContainText('1 live entry');
+  await button.click(); await expect(region.getByRole('status', { name: 'Cancellation impact status' })).toContainText('1 live entry');
   expect(refundPosts).toBe(0);
   await region.getByLabel('Cancellation scope').selectOption('day');
   await expect(region.getByLabel('Published day')).toBeVisible();
-  await expect(region.getByRole('status')).toBeEmpty();
+  await expect(region.getByRole('status', { name: 'Cancellation impact status' })).toBeEmpty();
 });
 
 test('limits the screen to finance and owner and recovers an empty preview', async ({ page, browser }) => {
@@ -118,7 +118,7 @@ test('rejects a preview that crossed a publication and retries against the new v
   const { eventId } = await (await page.request.post('/api/demo')).json();
   expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
   let publishDuringRequest = true;
-  await page.route(`**/api/events/${eventId}/cancellation-impact-preview`, async (route) => {
+  await page.route(`**/api/events/${eventId}/cancellation-confirmation-preview`, async (route) => {
     if (publishDuringRequest) {
       publishDuringRequest = false;
       const event = await (await page.request.get(`/api/events/${eventId}`)).json();
@@ -133,7 +133,7 @@ test('rejects a preview that crossed a publication and retries against the new v
   const button = region.getByRole('button', { name: 'Preview cancellation impact' });
   await button.click();
   await expect(region.getByRole('alert')).toContainText('published schedule changed while loading');
-  await expect(region.getByRole('status')).toBeEmpty();
+  await expect(region.getByRole('status', { name: 'Cancellation impact status' })).toBeEmpty();
   await button.click();
   await expect(region).toContainText('Published version 2');
   await expect(region.getByRole('alert')).toHaveCount(0);

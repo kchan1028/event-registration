@@ -11,6 +11,8 @@ export const cancellationSelectionSchema = z.discriminatedUnion('scope', [
 ]);
 export type CancellationSelection = z.infer<typeof cancellationSelectionSchema>;
 
+export const CANCELLATION_IMPACT_CHANGED = 'Cancellation impact changed. Review a fresh confirmation preview before confirming the plan.';
+
 /** Confirms a reviewed plan only; it is not a cancellation or payment instruction. */
 export const cancellationConfirmationSchema = z.object({
   clientRequestId: z.string().trim().refine((value) => { const n = Array.from(value).length; return n >= 8 && n <= 128; }, 'Use a request identity of 8 to 128 characters.'),
