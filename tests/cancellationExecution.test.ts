@@ -41,6 +41,7 @@ describe('atomic simulated cancellation', () => {
     expect(before.json().cancellation).toEqual({ scopes: [], categoryIds: [] });
     const executed = await s.execute(input(plan.id)); expect(executed.statusCode, executed.body).toBe(200);
     const expected = s.config.categories.filter((c) => scope === 'event' || (scope === 'race' ? c.raceId === s.cat('RR-M35-34').raceId : s.config.races.find((r) => r.id === c.raceId)?.dayId === s.config.days[0].id)).map((c) => c.id);
+    await s.sql(`UPDATE cancellation_executions SET selection_json=selection_json || '{"internalNote":"Fictional private note"}'::jsonb WHERE id=$1`, [executed.json().id]);
     const status = { scopes: [selection], categoryIds: expected };
     expect((await publicRead()).json().cancellation).toEqual(status);
     expect((await publicRead()).json().cancellation).toEqual(status);
@@ -53,9 +54,13 @@ describe('atomic simulated cancellation', () => {
     expect((await s.sql('SELECT count(*)::int AS n FROM cancellation_executions')).rows[0].n).toBe(1);
     expect((await s.sql('SELECT count(*)::int AS n FROM refunds')).rows[0].n).toBe(executed.json().refunds.length);
   });
-  it('omits refusals and private stored fields while ordering multiple committed scopes', async () => {
+  it('omits persisted refusals and orders committed scopes by time then ID', async () => {
     const s = await prepared();
     const refused = await s.execute(input('missing-public-plan', 'refused-public-request')); expect(refused.statusCode).toBe(404);
+    expect((await s.sql(
+      'SELECT status_code FROM cancellation_request_refusals WHERE event_id=$1 AND command_kind=$2 AND client_request_id=$3',
+      [s.eventId, 'execution', 'refused-public-request'],
+    )).rows).toEqual([{ status_code: 404 }]);
     const read = () => s.app.inject({ method: 'GET', url: `/api/public/events/${s.eventId}` });
     expect((await read()).json().cancellation).toEqual({ scopes: [], categoryIds: [] });
     expect((await s.app.inject({ method: 'POST', url: `/api/order-entries/${s.order.entries[1].id}/withdraw`, payload: { reason: 'Fictional withdrawal before separate scope review' } })).statusCode).toBe(200);
@@ -65,13 +70,20 @@ describe('atomic simulated cancellation', () => {
     const selection = { scope: 'day' as const, dayId: otherRace.dayId };
     const plan = await s.makePlan(selection);
     const second = await s.execute(input(plan.id, 'second-public-execution')); expect(second.statusCode, second.body).toBe(200);
-    await s.sql(`UPDATE cancellation_executions SET selection_json=selection_json || '{"internalNote":"Fictional private note"}'::jsonb WHERE id=$1`, [first.json().id]);
-    const expectedScopes = [first.json(), second.json()].sort((a, b) => a.executedAt.localeCompare(b.executedAt) || a.id.localeCompare(b.id)).map((r) => r.selection);
+    const [lowerId, higherId] = [first.json(), second.json()].sort((a, b) => a.id.localeCompare(b.id));
+    expect(lowerId.executedAt).toBe(higherId.executedAt);
+    const expectedScopes = [lowerId.selection, higherId.selection];
     const result = (await read()).json().cancellation;
     expect(result.scopes).toEqual(expectedScopes);
     expect(Object.keys(result).sort()).toEqual(['categoryIds', 'scopes']);
     expect(result.categoryIds).toEqual(s.config.categories.filter((c) => c.raceId === s.cat('RR-M35-34').raceId || s.config.races.find((r) => r.id === c.raceId)?.dayId === otherRace.dayId).map((c) => c.id));
     expect((await read()).json().cancellation).toEqual(result);
+    // Put the lower ID later to distinguish time order from the ID tie-breaker.
+    await s.sql('UPDATE cancellation_executions SET executed_at=$1 WHERE id=$2', ['2027-03-01T19:00:00Z', lowerId.id]);
+    expect((await read()).json().cancellation).toEqual({
+      ...result,
+      scopes: [higherId.selection, lowerId.selection],
+    });
     expect((await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/exports/entries.csv` })).headers['x-cyclereg-cancellation']).toBe('scoped');
   });
   it.each(['event', 'day', 'race'] as const)('labels %s cancellation downloads without rewriting CSV schemas or historical rows', async (scope) => {
