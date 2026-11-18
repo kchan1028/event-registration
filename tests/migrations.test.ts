@@ -15,8 +15,8 @@ describe('migration 36: terminal cancellation request refusals', () => {
       const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json();
       const actor = (await app.inject({ method: 'GET', url: '/api/me' })).json().account.id;
       const insert = (requestId: string, status: number) => db.run(`INSERT INTO cancellation_request_refusals(event_id,command_kind,client_request_id,request_json,rejected_by,rejected_at,status_code,message,details_json) VALUES($1,'execution','migration-refusal-id',$2,$3,'2026-11-18T12:00Z',$4,'Fictional refusal','{}')`, [eventId, JSON.stringify({ clientRequestId: requestId }), actor, status]);
-      await expect(insert('different-refusal-id', 409)).rejects.toMatchObject({ code: '23514' });
-      for (const status of [200, 401, 403, 500]) await expect(insert('migration-refusal-id', status)).rejects.toMatchObject({ code: '23514' });
+      await expect(insert('different-refusal-id', 409)).rejects.toMatchObject({ code: '23514', constraint: 'cancellation_request_refusals_check' });
+      for (const status of [200, 401, 403, 500]) await expect(insert('migration-refusal-id', status)).rejects.toMatchObject({ code: '23514', constraint: 'cancellation_request_refusals_status_code_check' });
       expect(await db.get('SELECT count(*)::int AS n FROM cancellation_request_refusals')).toEqual({ n: 0 });
       await insert('migration-refusal-id', 409);
       expect(await db.get('SELECT count(*)::int AS n FROM cancellation_request_refusals')).toEqual({ n: 1 });

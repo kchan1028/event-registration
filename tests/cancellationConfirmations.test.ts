@@ -145,7 +145,7 @@ describe('reviewed cancellation plan confirmation', () => {
     const before = await stored(); expect(before).toHaveLength(1);
     for (const change of [{ reason: 'Different fictional reason' }, { previewFingerprint: '0'.repeat(64) }, { selection: { scope: 'race', raceId: s.cat('RR-M35-34').raceId } }]) {
       const changed = await s.confirm({ ...body, ...change });
-      expect(changed.statusCode).toBe(409); expect(changed.json().details?.code).not.toBe(CANCELLATION_PLAN_NOT_RECORDED);
+      expect(changed.statusCode).toBe(409); expect(changed.json().details).toBeUndefined(); expect(changed.json().error).toMatch(/different details/);
       expect(await stored()).toEqual(before);
     }
     expect((await s.confirm(body)).json()).toEqual(refused.json()); expect(await s.count()).toBe(0);
