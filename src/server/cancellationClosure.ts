@@ -1,4 +1,4 @@
-import { cancellationClosesCategory, cancellationPlacementChanges, type CancellationSelection, type PublicCancellationStatus } from '../shared/cancellations';
+import { cancellationScopeState, cancellationClosesCategory, cancellationPlacementChanges, type CancellationScopeState, type CancellationSelection, type PublicCancellationStatus } from '../shared/cancellations';
 import { eventConfigSchema, type EventConfig } from '../shared/schema';
 import type { Db } from './db';
 import { HttpError } from './repo';
@@ -33,7 +33,7 @@ export async function requireCancellationOpen(db: Db, eventId: string, config: E
   if (await cancellationClosed(db, eventId, config, categoryIds)) throw new HttpError(409, 'This event, race or day was cancelled by the organizer. No new entry or offer is allowed.');
 }
 
-export type CancellationExportState = 'none' | 'scoped' | 'cancelled';
+export type CancellationExportState = CancellationScopeState;
 
 function closesRace(r: Awaited<ReturnType<typeof records>>[number], config: EventConfig, raceId: string): boolean {
   const race = config.races.find((race) => race.id === raceId);
@@ -43,7 +43,7 @@ function closesRace(r: Awaited<ReturnType<typeof records>>[number], config: Even
 /** Current committed closure, never plan/refusal or financial settlement status. Caller holds the event lock. */
 export async function cancellationExportState(db: Db, eventId: string, config: EventConfig, raceId?: string): Promise<CancellationExportState> {
   const closed = await records(db, eventId);
-  if (!raceId) return closed.some((r) => r.selection_json.scope === 'event') ? 'cancelled' : closed.length ? 'scoped' : 'none';
+  if (!raceId) return cancellationScopeState(closed.map((r) => r.selection_json));
   return closed.some((r) => closesRace(r, config, raceId)) ? 'cancelled' : 'none';
 }
 

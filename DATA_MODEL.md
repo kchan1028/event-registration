@@ -404,6 +404,8 @@ CSV export downloads read execution closure and exported rows under the same eve
 
 Protected check-in day lists project current event/day cancellation and affected published race names under the event lock used for that day’s rider read. Printable notices consume this projection without changing schema, stored rows, snapshots or financial evidence. Different days remain separate reads.
 
+The public event catalog reads published event versions and aggregated executed scope kinds in one statement, then applies the shared none/scoped/cancelled classifier used by event-level CSV downloads. Only the classified status is exposed; no new stored field, schema change, per-event application query or read lock is introduced.
+
 ### cancellation_request_refusals
 
 Migration 36 stores terminal rejected commands; no historical refusals are inferred. Primary key `(event_id, command_kind, client_request_id)` separates `plan` and `execution` namespaces. The event and rejecting account references restrict deletion. `request_json` preserves normalized acknowledged intent and must contain the matching string request identity (8–128 Unicode characters). `rejected_by`, `rejected_at`, `status_code`, bounded `message` and object `details_json` retain the original refusal. Recognized statuses are 400/404/409/422. A missing-plan refusal intentionally retains an unbound plan reference inside intent; it is not a foreign-key relationship to a nonexistent plan.

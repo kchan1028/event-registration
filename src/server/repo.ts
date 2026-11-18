@@ -1,8 +1,9 @@
+import { cancellationScopeState, type CancellationSelection } from '../shared/cancellations';
 import { requireCancellationOpen, requireCancellationPlacementUnchanged } from './cancellationClosure';
 import { canAdmit, entryCountsByCategory, type LimitUsage } from '../shared/capacity';
 import { bibSettingsSchema, DEFAULT_BIB_SETTINGS, type BibSettings } from '../shared/checkin';
 import { newId } from '../shared/factory';
-import { eventConfigSchema, type EventConfig, type CapacityEntry } from '../shared/schema';
+import { eventConfigSchema, type EventConfig, type CapacityEntry, type PublicEventSummary } from '../shared/schema';
 import { countIssues, validateConfig, type Issue } from '../shared/validation';
 import type { Db } from './db';
 
@@ -138,14 +139,16 @@ export function createRepo(db: Db, clock: () => Date) {
     },
 
     /** Every published event with its latest published configuration, in the order organizations and events were created. */
-    async listPublished(): Promise<{ id: string; organizationName: string; config: EventConfig }[]> {
-      const rows = await db.all<{ id: string; organization_name: string; config_json: unknown }>(
-        `SELECT e.id, o.name AS organization_name, v.config_json FROM events e
+    async listPublished(): Promise<{ id: string; organizationName: string; config: EventConfig; cancellation: PublicEventSummary['cancellation'] }[]> {
+      const rows = await db.all<{ id: string; organization_name: string; config_json: unknown; cancellation_scopes: { scope: CancellationSelection['scope'] }[] }>(
+        `SELECT e.id, o.name AS organization_name, v.config_json,
+         COALESCE((SELECT jsonb_agg(jsonb_build_object('scope',c.selection_json->>'scope')) FROM cancellation_executions c WHERE c.event_id=e.id),'[]'::jsonb) AS cancellation_scopes
+         FROM events e
          JOIN organizations o ON o.id = e.organization_id
          JOIN event_versions v ON v.event_id = e.id AND v.version = e.published_version
          ORDER BY o.created_at, o.seq, e.created_at, e.seq`,
       );
-      return rows.map((r) => ({ id: r.id, organizationName: r.organization_name, config: eventConfigSchema.parse(r.config_json) }));
+      return rows.map((r) => ({ id: r.id, organizationName: r.organization_name, config: eventConfigSchema.parse(r.config_json), cancellation: cancellationScopeState(r.cancellation_scopes) }));
     },
 
     async createOrganization(name: string, requestedId?: string) {
