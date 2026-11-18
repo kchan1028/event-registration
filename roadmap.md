@@ -345,6 +345,8 @@ Verification:
 - Repeated event/race/day cancellation requests produce one auditable financial and capacity outcome; provider or communication failure remains an actionable exception.
 - Retention/deletion approval, actor-attributed protected exports, access revocation, twice-baseline load checks, and a demonstrated hosted backup restore before real rider data.
 
+Local verification baseline (November 18, 2026, commit `074f979`): typecheck, production build, 549 unit/API tests, 131 browser tests, and documentation links passed. The browser run used fictional data and a disposable local database. Two optional documentation screenshot cases were skipped. The suite exercises simulated checkout, signed local payment fixtures, cancellation, recovery, and test-only sign-in. Actor-attributed protected export auditing remains open, along with the real provider, policy, load, and hosted restore requirements in the exit gate.
+
 Exit gate: Sandbox money and entry states reconcile; no overselling or duplicate processing in concurrency/retry tests; core flows pass with realistic categories. Verify the Berkeley package, extra-entry, guardian-in-adult-category, recovery, identity-lifecycle, and cancellation criteria, with no partial package or silently repriced paid entry. Stripe sandbox evidence must cover authoritative notification/retry/refund reconciliation, not simulated app buttons. A real Clerk development-instance rehearsal, approved retention/deletion rules, actor-attributed protected access, and hosted backup restore evidence are required before real rider data. No public paid launch yet.
 
 ## Phase 3 — Make race day operable
