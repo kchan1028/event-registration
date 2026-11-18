@@ -91,8 +91,8 @@ export function createRepo(db: Db, clock: () => Date) {
     return toRecord(row);
   }
 
-  async function entries(eventId: string): Promise<CapacityEntry[]> {
-    const rows = await db.all<{ id: string; category_id: string; rider_ref: string }>(entriesSql, [eventId, now()]);
+  async function entries(eventId: string, asOf = now()): Promise<CapacityEntry[]> {
+    const rows = await db.all<{ id: string; category_id: string; rider_ref: string }>(entriesSql, [eventId, asOf]);
     return rows.map((r) => ({ id: r.id, categoryId: r.category_id, riderRef: r.rider_ref }));
   }
 

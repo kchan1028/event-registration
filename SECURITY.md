@@ -8,6 +8,10 @@ CycleReg will handle rider contact details, emergency contacts, license numbers,
 
 The signed-in recipient reads only their own latest expiry notices through `/api/rider/expired-invitations`. Authenticated account email scopes organization/role history, without revealing the team or granting access. A later grant of the same role supersedes its notice. Real identity-provider acceptance remains open.
 
+## Cancellation operational impact preview (Implemented locally)
+
+`POST /api/events/:id/cancellation-impact-preview` requires event `payments.refund` authority (owner/finance). Strict published scope validation and the paid allocation rules are reused. The outer transaction holds the event lock across financial and operational reads; nested allocation reads use the same database transaction. The endpoint returns entry/order/waitlist/snapshot identifiers and counts, without contact details, invitation tokens or snapshot contents. Capacity uses a single assessment timestamp for holds/offers and existing distinct-rider rules. It is a hypothetical removal including test reservations, never a promise to resell places. Event-wide snapshot references include removed races; linked live-order waitlist offers remain in the waitlist impact but are omitted from duplicate audience records. This does not deduplicate people across unrelated accounts/orders. It performs no writes/provider/message calls, and requires a fresh confirmation preview before any future execution. Provider changes outside the event lock still require reconciliation.
+
 ## Paid cancellation allocation preview (Implemented locally)
 
 `POST /api/events/:id/cancellation-allocation-preview` requires the event organization’s `payments.refund` permission (owner/finance); rider ownership and registration-manager role alone grant no access. The selection schema rejects mixed/unknown scopes and validates race/day IDs against the current published event. Queries constrain both orders and entries to that event, and return entry/order identifiers and financial policy information without rider contacts, DOB or support references.

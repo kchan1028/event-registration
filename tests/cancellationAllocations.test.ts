@@ -174,3 +174,102 @@ describe('paid cancellation allocation preview', () => {
     expect((await s.preview({ scope: 'race', raceId: 'race_not_in_this_event' })).statusCode).toBe(422);
   });
 });
+
+
+describe('operational cancellation impact preview', () => {
+  it('includes holds and paid components without mutation or repricing', async () => {
+    const s = await setup(); const paid = await s.order(['RR-M35-34', 'CR-M35-34']);
+    const held = await s.order(['RR-M35-34'], false);
+    const rr = s.cat('RR-M35-34'); const cr = s.cat('CR-M35-34');
+    const response = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-impact-preview`, payload: { scope: 'race', raceId: rr.raceId } });
+    expect(response.statusCode, response.body).toBe(200);
+    const plan = response.json();
+    expect(plan.entries.map((e: { id: string }) => e.id).sort()).toEqual([paid.entries.find((e) => e.categoryId === rr.id)!.id, held.entries[0].id].sort());
+    expect(plan.unaffectedLiveEntryIds).toEqual([paid.entries.find((e) => e.categoryId === cr.id)!.id]);
+    expect(plan.financial.acceptedEntryAllocationCents).toBe(paid.quote.lines.find((l) => l.categoryId === rr.id)!.totalCents);
+    expect(plan.capacity.length).toBeGreaterThan(0);
+    expect(plan.readOnly).toBe(true);
+    expect(plan.generatedAt).toBe(plan.financial.generatedAt);
+    const dayId = s.config.races.find((r) => r.id === rr.raceId)!.dayId;
+    for (const scope of [{ scope: 'day', dayId }, { scope: 'event' }]) {
+      const scoped = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-impact-preview`, payload: scope });
+      expect(scoped.statusCode).toBe(200);
+      expect(scoped.json().entries).toHaveLength(scope.scope === 'event' ? 3 : 2);
+    }
+
+    expect(plan.communicationAudience.orderIds.sort()).toEqual([paid.id, held.id].sort());
+    expect(JSON.stringify(plan)).not.toContain(RIDER);
+    expect(await s.get(paid.id)).toEqual(paid);
+    expect(await s.get(held.id)).toEqual(held);
+    const db = new pg.Client({ connectionString: s.databaseUrl }); await db.connect();
+    try { await db.query('UPDATE orders SET hold_expires_at=$1 WHERE id=$2', ['2027-03-01T18:00:00Z', held.id]); }
+    finally { await db.end(); }
+    const expired = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-impact-preview`, payload: { scope: 'race', raceId: rr.raceId } });
+    expect(expired.json().entries.map((e: { id: string }) => e.id)).not.toContain(held.entries[0].id);
+
+  });
+
+  it('does not release a shared pool place when the same rider retains an unaffected component', async () => {
+    const s = await setup();
+    await s.edit((c) => { c.startGroups.find((g) => g.id === s.cat('RR-M35-34').startGroupId)!.fieldLimit = 100; c.capacityPools.push({ id: 'pool_impact', name: 'Fictional shared weekend pool', limit: 100, memberCategoryIds: [s.cat('RR-M35-34').id, s.cat('CR-M35-34').id], memberStartGroupIds: [] }); });
+    const db = new pg.Client({ connectionString: s.databaseUrl }); await db.connect();
+    try { await db.query('DELETE FROM test_entries WHERE event_id=$1', [s.eventId]); } finally { await db.end(); }
+    await s.order(['RR-M35-34', 'CR-M35-34']);
+    const response = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-impact-preview`, payload: { scope: 'race', raceId: s.cat('RR-M35-34').raceId } });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json().capacity.find((l: { id: string }) => l.id === 'pool_impact')).toMatchObject({ used: 1, hypotheticalUsedAfter: 1, hypotheticalReleasedPlaces: 0 });
+    expect(response.json().capacity.find((l: { id: string }) => l.id === s.cat('RR-M35-34').startGroupId)).toMatchObject({ kind: 'start_group', used: 1, hypotheticalUsedAfter: 0, hypotheticalReleasedPlaces: 1 });
+
+  });
+
+  it('identifies active waitlists and saved exports without exposing contacts or changing them', async () => {
+    const s = await setup(); const rr = s.cat('RR-M35-34'); const cr = s.cat('CR-M35-34');
+    const held = await s.order(['RR-M35-34'], false);
+    const db = new pg.Client({ connectionString: s.databaseUrl }); await db.connect();
+    try {
+      await db.query('DELETE FROM test_entries WHERE event_id=$1', [s.eventId]);
+      for (const [id, category, status, expiry] of [
+        ['waiting', rr.id, 'waiting', null], ['offered', rr.id, 'offered', '2027-03-02T18:00:00Z'],
+        ['expired', rr.id, 'offered', '2027-03-01T18:00:00Z'], ['accepted', rr.id, 'accepted', null], ['other', cr.id, 'waiting', null],
+      ]) await db.query(`INSERT INTO waitlist_entries(id,event_id,category_id,rider_json,status,offer_expires_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$7)`, [id, s.eventId, category, { email: 'private@impact.test' }, status, expiry, '2027-03-01T17:00:00Z']);
+      await db.query(`INSERT INTO start_list_snapshots(id,event_id,race_id,version,published_version,rows_json,created_at) VALUES('snapshot_impact',$1,$2,1,1,'[]',$3)`, [s.eventId, rr.raceId, '2027-03-01T17:00:00Z']);
+      await db.query("UPDATE waitlist_entries SET order_id=$1 WHERE id='offered'", [held.id]);
+      const before = (await db.query('SELECT * FROM waitlist_entries ORDER BY id')).rows;
+      const response = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-impact-preview`, payload: { scope: 'race', raceId: rr.raceId } });
+      expect(response.statusCode, response.body).toBe(200);
+      const plan = response.json();
+      expect(plan.waitlist.map((w: { id: string }) => w.id).sort()).toEqual(['offered', 'waiting']);
+      expect(plan.startListSnapshots).toEqual([{ id: 'snapshot_impact', raceId: rr.raceId, version: 1 }]);
+      expect(plan.communicationAudience).toEqual({ orderIds: [held.id], waitlistEntryIds: ['waiting'], deliveryPlanned: false });
+      await db.query(`INSERT INTO start_list_snapshots(id,event_id,race_id,version,published_version,rows_json,created_at) VALUES('snapshot_removed',$1,'removed_race',1,1,'[]',$2)`, [s.eventId, '2027-03-01T17:00:00Z']);
+      const eventPreview = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-impact-preview`, payload: { scope: 'event' } });
+      expect(eventPreview.json().startListSnapshots.map((x: { id: string }) => x.id).sort()).toEqual(['snapshot_impact', 'snapshot_removed']);
+
+      expect(JSON.stringify(plan)).not.toContain('private@impact.test');
+      expect((await db.query('SELECT * FROM waitlist_entries ORDER BY id')).rows).toEqual(before);
+      expect(plan.capacity.some((l: { hypotheticalReleasedPlaces: number }) => l.hypotheticalReleasedPlaces === 1)).toBe(true);
+      await db.query("UPDATE waitlist_entries SET category_id='unknown' WHERE id='waiting'");
+      const invalid = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-impact-preview`, payload: { scope: 'race', raceId: cr.raceId } });
+      expect(invalid.statusCode).toBe(409);
+
+    } finally { await db.end(); }
+  });
+
+  it('uses event permissions and strict published selection for operational details', async () => {
+    const s = await setup();
+    const request = (payload: object, headers = {}) => s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-impact-preview`, payload, headers });
+    expect((await request({ scope: 'event' }, as(RIDER))).statusCode).toBe(404);
+    for (const [email, role, status] of [['impact-finance@allocation.test', 'finance', 200], ['impact-manager@allocation.test', 'registration_manager', 403]] as const) {
+      await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members`, payload: { email, role } });
+      await s.app.inject({ method: 'GET', url: '/api/me', headers: as(email) });
+      expect((await request({ scope: 'event' }, as(email))).statusCode).toBe(status);
+    }
+    const outsider = as('impact-other-owner@allocation.test');
+    expect((await s.app.inject({ method: 'POST', url: '/api/organizations', headers: outsider, payload: { name: 'Fictional Impact Outsider' } })).statusCode).toBe(201);
+    expect((await request({ scope: 'event' }, outsider)).statusCode).toBe(404);
+
+    expect((await request({ scope: 'event' }, { authorization: 'Bearer invalid' })).statusCode).toBe(401);
+    expect((await request({ scope: 'race', raceId: 'missing' })).statusCode).toBe(422);
+    expect((await request({ scope: 'event', raceId: 'mixed' })).statusCode).toBe(400);
+  });
+});

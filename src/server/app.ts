@@ -34,6 +34,7 @@ import { createWaitlist } from './waitlist';
 import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
 import { createMailer, emailFromEnv, type EmailSender } from './email';
 import { createJuniors } from './juniors';
+import { createCancellationImpact } from './cancellationImpact';
 import { createCancellationAllocations } from './cancellationAllocations';
 import { cancellationSelectionSchema } from '../shared/cancellations';
 import { createProfileClaims, profileClaimSettingsFromEnv, validateProfileClaimSettings, type ProfileClaimSettings } from './profileClaims';
@@ -101,6 +102,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const automaticBibs = createAutomaticBibs(db, repo, checkIn, access, clock);
   const refunds = createRefunds(db, paymentProvider, clock, repo);
   const cancellationAllocations = createCancellationAllocations(db, repo, clock);
+  const cancellationImpact = createCancellationImpact(db, repo, cancellationAllocations, clock);
   const payments = createPayments(db, orders, paymentProvider, clock, appUrl, refunds.onRefundEvent);
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
 
@@ -504,6 +506,11 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { orderId: id }, { rider: true });
     return payments.startCheckout(id);
+  });
+
+  app.post('/api/events/:id/cancellation-impact-preview', async (req) => {
+    const { id } = await onEvent(req, 'payments.refund');
+    return cancellationImpact.preview(id, cancellationSelectionSchema.parse(req.body));
   });
 
   app.post('/api/events/:id/cancellation-allocation-preview', async (req) => {
