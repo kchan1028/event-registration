@@ -79,7 +79,7 @@ describe('reviewed cancellation plan confirmation', () => {
     if (change === 'transfer') expect((await s.app.inject({ method: 'POST', url: `/api/order-entries/${order.entries[0].id}/transfer`, payload: { toCategoryId: s.cat('CR-M35-34').id, reason: 'Fictional approved transfer' } })).statusCode).toBe(200);
     if (change === 'hold expiry') s.advance(31 * 60_000);
     const result = await s.confirm(s.input(p)); expect(result.statusCode, result.body).toBe(409); expect(await s.count()).toBe(0);
-    expect((await s.confirm(s.input(await s.preview(p.preview.selection)))).statusCode).toBe(200);
+    expect((await s.confirm({ ...s.input(await s.preview(p.preview.selection)), clientRequestId: `fresh-confirmation-${change}` })).statusCode).toBe(200);
   });
 
   it('guards refund changes even when nominal policy and preview totals do not change', async () => {
@@ -128,8 +128,10 @@ describe('reviewed cancellation plan confirmation', () => {
     const place = (categoryId: string) => s.sql(async (db) => { await db.query('UPDATE order_entries SET category_id=$1 WHERE id=$2', [categoryId, order.entries[0].id]); });
     await place('unknown_confirmation_category');
     const refused = await s.confirm(body); expect(refused.statusCode).toBe(409); expect(refused.json().details).toEqual({ code: CANCELLATION_PLAN_NOT_RECORDED }); expect(await s.count()).toBe(0);
-    await place(s.cat('RR-M35-34').id); const original = (await s.confirm(body)).json(); await place('unknown_confirmation_category');
-    expect((await s.confirm(body)).json()).toEqual(original);
+    await place(s.cat('RR-M35-34').id); expect((await s.confirm(body)).json()).toEqual(refused.json());
+    const recovered = { ...body, clientRequestId: 'recovered-unreviewable-plan' };
+    const original = (await s.confirm(recovered)).json(); await place('unknown_confirmation_category');
+    expect((await s.confirm(recovered)).json()).toEqual(original);
     const separate = await s.confirm({ ...body, clientRequestId: 'separate-unreviewable-request' });
     expect(separate.statusCode).toBe(409); expect(separate.json().details).toEqual({ code: CANCELLATION_PLAN_NOT_RECORDED }); expect(await s.count()).toBe(1);
   });

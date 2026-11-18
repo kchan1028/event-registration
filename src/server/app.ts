@@ -531,6 +531,10 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id, confirmationId } = await onEvent(req, 'payments.refund', z.object({ id: z.string().min(1).max(64), confirmationId: z.string().min(1).max(64) }));
     return cancellationFinancialPreflight.assess(id, confirmationId);
   });
+  app.get('/api/events/:id/cancellation-confirmations/:confirmationId/execution-check', async (req) => {
+    const { id, confirmationId } = await onEvent(req, 'payments.refund', z.object({ id: z.string().min(1).max(64), confirmationId: z.string().min(1).max(64) }));
+    return cancellationExecution.check(id, confirmationId);
+  });
   app.post('/api/events/:id/cancellation-executions', async (req) => {
     const { id } = await onEvent(req, 'payments.refund');
     return cancellationExecution.execute(id, me(req).id, cancellationExecutionSchema.parse(req.body));

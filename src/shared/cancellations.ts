@@ -45,6 +45,10 @@ export const cancellationExecutionSchema = z.object({
   acknowledgeSimulatedCancellation: z.literal(true),
 }).strict();
 export type CancellationExecutionInput = z.infer<typeof cancellationExecutionSchema>;
+export interface CancellationExecutionCheck {
+  eventId: string; confirmationId: string; assessedAt: string; execution: CancellationExecution | null;
+  financial: CancellationFinancialPreflight | null; eligible: boolean; reason: string | null;
+}
 export interface CancellationExecution {
   id: string; eventId: string; confirmationId: string; executedBy: string; executedAt: string;
   status: 'simulated_cancellation_executed';
@@ -54,6 +58,7 @@ export interface CancellationExecution {
   startListSnapshotIds: string[];
 }
 
+export const CANCELLATION_NOT_EXECUTED = 'cancellation_not_executed';
 export const CANCELLATION_PLAN_NOT_RECORDED = 'cancellation_plan_not_recorded';
 export const CANCELLATION_IMPACT_CHANGED = 'Cancellation impact changed. Review a fresh confirmation preview before confirming the plan.';
 

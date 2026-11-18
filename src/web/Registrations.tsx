@@ -73,7 +73,7 @@ export function Registrations({ draft }: { draft: Draft }) {
       )}
 
       {published && <Summary eventId={eventId} refreshKey={orders} />}
-      {published && orders !== null && can(roles, 'payments.refund') && <CancellationPreview eventId={eventId} revision={draft.data.revision} publishedVersion={draft.data.publishedVersion} orders={orders} />}
+      {published && orders !== null && can(roles, 'payments.refund') && <CancellationPreview eventId={eventId} revision={draft.data.revision} publishedVersion={draft.data.publishedVersion} orders={orders} onExecutionSaved={reload} />}
 
       <form role="search" className="reg-search" onSubmit={(e) => e.preventDefault()}>
         <label htmlFor="reg-search">Find a registration</label>

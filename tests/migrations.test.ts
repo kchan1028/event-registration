@@ -7,6 +7,25 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const TEXT_TIMESTAMPS = `SELECT table_name, column_name FROM information_schema.columns
   WHERE table_schema = 'public' AND data_type = 'text' AND (column_name LIKE '%\\_at' OR column_name LIKE '%expires%')`;
 
+describe('migration 36: terminal cancellation request refusals', () => {
+  it('preserves existing records without inventing historical refusal evidence', async () => {
+    const url = await testDatabaseUrl({ empty: true }); const client = new pg.Client({ connectionString: url }); await client.connect();
+    try {
+      await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+      for (let v = 0; v < 35; v++) { await client.query(MIGRATIONS[v]); await client.query('INSERT INTO schema_migrations(version) VALUES($1)', [v + 1]); }
+      await client.query(`INSERT INTO organizations(id,name,created_at) VALUES('org_refusal_upgrade','Fictional refusal club','2026-11-18T12:00Z')`);
+    } finally { await client.end(); }
+    const db = openDb(url);
+    try {
+      const before = await db.get(`SELECT to_jsonb(o) AS value FROM organizations o WHERE id='org_refusal_upgrade'`);
+      await db.migrate(); await db.migrate();
+      expect(await db.get(`SELECT to_jsonb(o) AS value FROM organizations o WHERE id='org_refusal_upgrade'`)).toEqual(before);
+      expect(await db.get('SELECT count(*)::int AS n FROM cancellation_request_refusals')).toEqual({ n: 0 });
+      expect(await db.get('SELECT max(version) AS version FROM schema_migrations')).toEqual({ version: 36 });
+    } finally { await db.close(); }
+  });
+});
+
 describe('migration 35: simulated cancellation execution', () => {
   it('adds no inferred executions and retains existing event evidence on upgrade', async () => {
     const url = await testDatabaseUrl({ empty: true }); const client = new pg.Client({ connectionString: url }); await client.connect();

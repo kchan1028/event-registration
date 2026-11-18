@@ -9,7 +9,7 @@ import { Field } from '../ui';
 
 const count = (n: number, singular: string, plural = `${singular}s`) => `${n} ${n === 1 ? singular : plural}`;
 
-export function CancellationPreview({ eventId, revision, publishedVersion, orders }: { eventId: string; revision: number; publishedVersion: number | null; orders: OrderView[] | null }) {
+export function CancellationPreview({ eventId, revision, publishedVersion, orders, onExecutionSaved }: { eventId: string; revision: number; publishedVersion: number | null; orders: OrderView[] | null; onExecutionSaved: () => void }) {
   const [catalog, setCatalog] = useState<PublicEvent | null>(null);
   const [selection, setSelection] = useState<CancellationSelection>({ scope: 'event' });
   const [result, setResult] = useState<{ confirmation: CancellationConfirmationPreview; config: EventConfig } | null>(null);
@@ -52,7 +52,7 @@ export function CancellationPreview({ eventId, revision, publishedVersion, order
   const data = result?.confirmation.preview;
   return <section className="settings__section cancellation-preview" aria-label="Cancellation preview">
     <h3>Cancellation preview</h3>
-    <p>Inspect an event, race or day before planning a cancellation. You can record a reviewed plan after loading its impact. Entries, places, money and messages stay unchanged.</p>
+    <p>Inspect an event, race or day before planning a cancellation. You can record a reviewed plan after loading its impact. Loading a preview or recording a plan changes no entries, places, payments or messages. The separate simulation step can execute an eligible plan.</p>
     <div className="form-row">
       <Field label="Cancellation scope">{(id) => <select id={id} className="input" value={selection.scope} disabled={confirmationPending} onChange={(e) => change(e.target.value === 'race' ? { scope: 'race', raceId: catalog?.config.races[0]?.id ?? '' } : e.target.value === 'day' ? { scope: 'day', dayId: catalog?.config.days[0]?.id ?? '' } : { scope: 'event' })}>
         <option value="event">Entire event</option><option value="race" disabled={!catalog?.config.races.length}>One race</option><option value="day" disabled={!catalog?.config.days.length}>One day</option>
@@ -60,7 +60,7 @@ export function CancellationPreview({ eventId, revision, publishedVersion, order
       {selection.scope === 'race' && <Field label="Published race">{(id) => <select id={id} className="input" value={selection.raceId} disabled={confirmationPending} onChange={(e) => change({ scope: 'race', raceId: e.target.value })}>{catalog?.config.races.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>}</Field>}
       {selection.scope === 'day' && <Field label="Published day">{(id) => <select id={id} className="input" value={selection.dayId} disabled={confirmationPending} onChange={(e) => change({ scope: 'day', dayId: e.target.value })}>{catalog?.config.days.map((d) => <option key={d.id} value={d.id}>{d.label} ({d.date})</option>)}</select>}</Field>}
     </div>
-    {confirmationPending && <p className="note">Resolve the original plan request below before starting another review. Its original scope is shown in the recovery details.</p>}
+    {confirmationPending && <p className="note">Resolve the original plan or execution request below before starting another review. Its original scope is shown in the recovery details.</p>}
     <button ref={previewButton} type="button" className="btn btn--secondary" aria-disabled={busy || confirmationPending} onClick={() => void load()}>{busy ? 'Loading cancellation preview…' : 'Preview cancellation impact'}</button>
     {error && <p className="alert alert--error" role="alert">Could not load the cancellation preview: {error} Try Preview cancellation impact again.</p>}
     <p className="small" role="status" aria-label="Cancellation impact status" aria-atomic="true">{busy ? 'Loading current published cancellation impact…' : data ? `Preview loaded: ${count(data.entries.length, 'live entry', 'live entries')}, ${count(data.waitlist.length, 'active waitlist record')}.${data.financial.requiresFinancialReconciliation ? ' Financial reconciliation required.' : ''}` : ''}</p>
@@ -80,8 +80,8 @@ export function CancellationPreview({ eventId, revision, publishedVersion, order
       <h4>Saved start lists and communications</h4>
       <p>{count(data.startListSnapshots.length, 'saved start-list snapshot')} {data.startListSnapshots.length === 1 ? 'is' : 'are'} affected. Saved files remain unchanged; previous exports cannot be recalled.</p>
       <p>Audience records: {count(data.communicationAudience.orderIds.length, 'order')} and {count(data.communicationAudience.waitlistEntryIds.length, 'additional waitlist record')}. These are not a count of unique recipients. Message wording and delivery are not available.</p>
-      <details><summary>Preview limits and next steps</summary><ul>{data.limitations.map((text) => <li key={text}>{text}</li>)}</ul><p>Cancellation execution is not available. A future action requires a fresh preview and financial reconciliation.</p></details>
+      <details><summary>Preview limits and next steps</summary><ul>{data.limitations.map((text) => <li key={text}>{text}</li>)}</ul><p>This preview executes nothing. A recorded plan and a separate acknowledged simulation step are required. A future action requires a fresh preview and financial reconciliation.</p></details>
     </>}
-    <PlanConfirmation eventId={eventId} prepared={result} onPendingChange={setConfirmationPending} onResetPreview={() => { clear(); previewButton.current?.focus(); }} />
+    <PlanConfirmation refreshKey={orders} onExecutionSaved={onExecutionSaved} eventId={eventId} prepared={result} onPendingChange={setConfirmationPending} onResetPreview={() => { clear(); previewButton.current?.focus(); }} />
   </section>;
 }

@@ -677,6 +677,18 @@ export const MIGRATIONS: string[] = [
     FOREIGN KEY(event_id,confirmation_id) REFERENCES cancellation_confirmations(event_id,id) ON DELETE RESTRICT,
     UNIQUE(event_id,client_request_id)
   );`,
+  `CREATE TABLE cancellation_request_refusals (
+    event_id text NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
+    command_kind text NOT NULL CHECK(command_kind IN ('plan','execution')),
+    client_request_id text NOT NULL CHECK(char_length(client_request_id) BETWEEN 8 AND 128),
+    request_json jsonb NOT NULL CHECK(jsonb_typeof(request_json)='object' AND request_json ? 'clientRequestId' AND jsonb_typeof(request_json->'clientRequestId')='string' AND request_json->>'clientRequestId'=client_request_id),
+    rejected_by text NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+    rejected_at timestamptz NOT NULL,
+    status_code integer NOT NULL CHECK(status_code IN (400,404,409,422)),
+    message text NOT NULL CHECK(char_length(message) BETWEEN 1 AND 1000),
+    details_json jsonb NOT NULL CHECK(jsonb_typeof(details_json)='object'),
+    PRIMARY KEY(event_id,command_kind,client_request_id)
+  );`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
