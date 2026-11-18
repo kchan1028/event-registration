@@ -43,8 +43,8 @@ describe('local finance reconciliation CSV', () => {
     await s.sql(`INSERT INTO payment_sessions(id,order_id,provider,url,amount_cents,status,expires_at,created_at) VALUES('cs_fixture_reconciliation',$1,'stripe_test','https://checkout.example.test/private-token-not-exported',4321,'expired','2027-03-01T19:00Z','2027-03-01T18:01Z')`, [o.id]);
     await s.sql(`INSERT INTO provider_events(id,provider,type,session_id,order_id,outcome,result,received_at,payment_ref,amount_cents) VALUES('evt_fixture_reconciliation','stripe_test','checkout.session.completed','cs_fixture_reconciliation',$1,'success','duplicate_charge','2027-03-01T18:02Z','pi_fixture_reconciliation',4321)`, [o.id]);
     await s.sql(`INSERT INTO payment_attempts(id,order_id,outcome,result_status,created_at,provider,provider_ref,amount_cents)
-      VALUES ('stripe_attempt_z',$1,'fail','reserved','2027-03-01T18:01Z','stripe_test',NULL,NULL),
-             ('stripe_attempt_a',$1,'success','confirmed','2027-03-01T18:01Z','stripe_test','pi_fixture_reconciliation',4321)`, [o.id]);
+      VALUES ('evt_stripe_attempt_z',$1,'failure','confirmed','2027-03-01T18:01Z','stripe_test','pi_fixture_failed',4321),
+             ('evt_stripe_attempt_a',$1,'success','confirmed','2027-03-01T18:01Z','stripe_test','pi_fixture_reconciliation',4321)`, [o.id]);
     await s.sql(`UPDATE refunds SET updated_at='2027-03-01T18:04Z' WHERE order_id=$1`, [o.id]);
     const evidence = () => s.sql(`SELECT * FROM (SELECT 'order' AS kind,to_jsonb(o) AS value FROM orders o UNION ALL SELECT 'attempt',to_jsonb(a) FROM payment_attempts a UNION ALL SELECT 'session',to_jsonb(s) FROM payment_sessions s UNION ALL SELECT 'event',to_jsonb(e) FROM provider_events e UNION ALL SELECT 'refund',to_jsonb(r) FROM refunds r) records ORDER BY kind,value->>'id'`);
     const before = (await evidence()).rows; const response = await s.download(); expect(response.statusCode, response.body).toBe(200);
@@ -58,12 +58,17 @@ describe('local finance reconciliation CSV', () => {
       ['provider_event', '2027-03-01T18:02:00.000Z', ''],
     ]);
     expect(rows.slice(2, 5).map((row) => row.record_id)).toEqual([
-      'stripe_attempt_a', 'stripe_attempt_z', 'cs_fixture_reconciliation',
+      'evt_stripe_attempt_a', 'evt_stripe_attempt_z', 'cs_fixture_reconciliation',
     ]);
     expect(rows[2]).toMatchObject({
       provider: 'stripe_test', provider_reference: 'pi_fixture_reconciliation',
       payment_reference: 'pi_fixture_reconciliation', session_reference: '',
       amount_cents: '4321', outcome: 'success', result_status: 'confirmed',
+    });
+    expect(rows[3]).toMatchObject({
+      provider: 'stripe_test', provider_reference: 'pi_fixture_failed',
+      payment_reference: 'pi_fixture_failed', session_reference: '',
+      amount_cents: '4321', outcome: 'failure', result_status: 'confirmed',
     });
     expect(rows.find((r) => r.record_kind === 'payment_attempt')).toMatchObject({ amount_cents: '', order_total_cents: String(o.totalCents), provider: 'simulated', result_status: 'confirmed', order_number: o.orderNumber });
     expect(rows.find((r) => r.record_kind === 'payment_session')).toMatchObject({ amount_cents: '4321', provider_reference: 'cs_fixture_reconciliation', session_reference: 'cs_fixture_reconciliation', result_status: 'expired', payment_reference: '', updated_at: '' });
