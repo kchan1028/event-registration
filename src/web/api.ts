@@ -27,6 +27,7 @@ export type PaymentMode = 'simulated' | 'stripe_test';
 export type CouponInput = z.input<typeof couponInputSchema>;
 
 export interface PublicEvent {
+  cancellation: import('../shared/cancellations').PublicCancellationStatus;
   eventId: string;
   publishedVersion: number;
   organizationName: string;

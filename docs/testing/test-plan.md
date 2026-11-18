@@ -99,6 +99,8 @@ Run `e2e/execution-controls.spec.ts`, adjacent plan/impact/receipt/Registrations
 
 Terminal refusal regressions must cover changed normalized plan input without replacement or a no-action marker, event-scoped identity isolation, authorized replay retaining the original rejecting actor, and migration constraints rejecting mismatched request identities or unsupported statuses.
 
+Public event-detail closure regressions cover empty status before execution, event/day/race selections, exact safe projection, repeated reads without writes, republishing persistence, unpublished-event refusal and existing unauthenticated-route boundaries. Run execution, order and auth API tests; screen labels are a separate increment.
+
 ### Atomic simulated cancellation
 
 Run `tests/cancellationExecution.test.ts`, migration tests and affected order/payment/refund/waitlist/transfer/summary/export/start-list/auth regressions. Cover separate acknowledgement, original partial-package allocation and fees, atomic rollback after refund work, two-application concurrent replay, request/plan conflicts, current roles and revocation, stale/unreviewable/unsupported financial state, test-entry refusal, and event/day/race closure through republishing/new categories, blocked placement moves into/out of closed scopes and blocked publication of an earlier draft move. Day selection must hash identically after database JSON round trips. Live holds block; late payment after expiry and cancellation must enter review without restoring entries. Active waitlists/offers are removed, snapshots remain historical and current start-list revisions omit cancelled rows.

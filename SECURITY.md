@@ -22,6 +22,10 @@ Records return `plan_confirmed` and `executionAvailable: false`. The confirmatio
 
 Financial-preflight reads require current event finance authority and an event-scoped confirmation lookup. They return only identifiers, nominal amounts and blocker codes, without rider contacts or provider references. The assessment locks the event and affected order refund-request locks in sorted order; provider/refund updates outside these locks still require fresh execution-time reconciliation. Any provider evidence, refund history or uncertain payment blocks simulated eligibility. Even an eligible response cannot execute or authorize cancellation.
 
+## Public cancellation status
+
+The existing unauthenticated event-detail route includes committed scope selections and closed published category IDs. It projects no execution/confirmation IDs, actor, reason, rider, audience or refund evidence. Event locking keeps this projection consistent with the published configuration. Plans/refusals do not appear; no new public route or write authority is added. Public screen labels remain Planned.
+
 ## Atomic simulated cancellation (Implemented locally)
 
 `POST /api/events/:id/cancellation-executions` and ID-based reads require current event owner/finance authority. A strict plan ID, normalized per-event request identity and explicit simulation-execution acknowledgement are required; actor/time come from the server. Exact replay is historical, with current authorization. Each plan executes once; conflicting identities and overlapping closed scopes are refused. Migration 35 stores the result and closure evidence with restricted event/plan/account references.

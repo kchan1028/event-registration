@@ -32,6 +32,27 @@ describe('atomic simulated cancellation', () => {
     expect((await s.sql('SELECT count(*)::int AS n FROM refunds')).rows[0].n).toBe(1);
     expect((await s.sql('SELECT count(*)::int AS n FROM cancellation_executions')).rows[0].n).toBe(1);
   });
+  it.each(['event', 'day', 'race'] as const)('publishes only safe committed %s closure facts, never plan or private evidence', async (scope) => {
+    const s = await prepared();
+    const selection = scope === 'event' ? { scope } : scope === 'day' ? { scope, dayId: s.config.days[0].id } : { scope, raceId: s.cat('RR-M35-34').raceId };
+    const plan = await s.makePlan(selection);
+    const publicRead = () => s.app.inject({ method: 'GET', url: `/api/public/events/${s.eventId}`, headers: { authorization: 'Bearer invalid' } });
+    const before = await publicRead(); expect(before.statusCode).toBe(200);
+    expect(before.json().cancellation).toEqual({ scopes: [], categoryIds: [] });
+    const executed = await s.execute(input(plan.id)); expect(executed.statusCode, executed.body).toBe(200);
+    const expected = s.config.categories.filter((c) => scope === 'event' || (scope === 'race' ? c.raceId === s.cat('RR-M35-34').raceId : s.config.races.find((r) => r.id === c.raceId)?.dayId === s.config.days[0].id)).map((c) => c.id);
+    const status = { scopes: [selection], categoryIds: expected };
+    expect((await publicRead()).json().cancellation).toEqual(status);
+    expect((await publicRead()).json().cancellation).toEqual(status);
+    expect((await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    expect((await publicRead()).json().cancellation).toEqual(status);
+    const other = (await s.app.inject({ method: 'POST', url: '/api/demo' })).json();
+    expect((await s.app.inject({ method: 'GET', url: `/api/public/events/${other.eventId}` })).statusCode).toBe(409);
+    expect((await s.app.inject({ method: 'POST', url: `/api/events/${other.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    expect((await s.app.inject({ method: 'GET', url: `/api/public/events/${other.eventId}` })).json().cancellation).toEqual({ scopes: [], categoryIds: [] });
+    expect((await s.sql('SELECT count(*)::int AS n FROM cancellation_executions')).rows[0].n).toBe(1);
+    expect((await s.sql('SELECT count(*)::int AS n FROM refunds')).rows[0].n).toBe(executed.json().refunds.length);
+  });
   it('serializes concurrent replay across separate applications without double refunds', async () => {
     const s = await prepared(); const second = (await testApp({ databaseUrl: s.databaseUrl, now: () => new Date('2027-03-01T18:00:00Z') })).app;
     const responses = await Promise.all([s.execute(), second.inject({ method: 'POST', url: `/api/events/${s.eventId}/cancellation-executions`, payload: input(s.plan.id) })]);
@@ -162,6 +183,8 @@ describe('atomic simulated cancellation', () => {
     draft.config.categories.push({ ...source, id: 'cat_after_cancellation', raceId: newRaceId, startGroupId: newStartId, displayGroupId: null, timingCode: 'AFTER-CANCEL', classifications: source.classifications.map((c) => ({ ...c, code: 'AFTER-CANCEL' })) });
     expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/config`, payload: { revision: draft.revision, config: draft.config } })).statusCode).toBe(200);
     const published = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } }); expect(published.statusCode, published.body).toBe(200);
+    const publicStatus = (await s.app.inject({ method: 'GET', url: `/api/public/events/${s.eventId}` })).json().cancellation;
+    expect(publicStatus.scopes).toEqual([selection]); expect(publicStatus.categoryIds).toContain('cat_after_cancellation');
     const held = await s.app.inject({ method: 'POST', url: `/api/rider/events/${s.eventId}/orders`, payload: { clientRequestId: 'new-category-after-cancel', categoryIds: ['cat_after_cancellation'], rider: s.order.rider, waiver: { version: s.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Readiness Fictional', signerRole: 'rider' } } });
     expect(held.statusCode, held.body).toBe(409); expect(held.body).toContain('cancelled');
   });
