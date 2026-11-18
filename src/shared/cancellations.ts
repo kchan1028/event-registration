@@ -10,7 +10,14 @@ export const cancellationSelectionSchema = z.discriminatedUnion('scope', [
   z.object({ scope: z.literal('day'), dayId: id }).strict(),
   z.object({ scope: z.literal('race'), raceId: id }).strict(),
 ]);
+/** Explicit event closure versus one or more recorded race/day scopes. */
+export type CancellationScopeState = 'none' | 'scoped' | 'cancelled';
+
 export type CancellationSelection = z.infer<typeof cancellationSelectionSchema>;
+
+export function cancellationScopeState(scopes: readonly { scope: CancellationSelection['scope'] }[]): CancellationScopeState {
+  return scopes.some((s) => s.scope === 'event') ? 'cancelled' : scopes.length ? 'scoped' : 'none';
+}
 
 /** Public closure facts only; no execution, actor, rider or financial evidence. */
 export interface PublicCancellationStatus { scopes: CancellationSelection[]; categoryIds: string[] }

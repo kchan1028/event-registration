@@ -370,9 +370,10 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   // Rider checkout. Uses the latest published version only.
   app.get('/api/public/events', isPublic, async () => {
-    return (await repo.listPublished()).map(({ id, organizationName, config }) => ({
+    return (await repo.listPublished()).map(({ id, organizationName, config, cancellation }) => ({
       id,
       organizationName,
+      cancellation,
       name: config.event.name,
       venue: config.event.venue,
       isDemo: config.event.isDemo,

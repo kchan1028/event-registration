@@ -207,12 +207,13 @@ export function RegisterIndex() {
                   {e.name}
                   {e.researchOnly ? <span className="tag tag--demo">Research example</span> : e.isDemo && <span className="tag tag--demo">Demo data</span>}
                 </span>
+                {e.cancellation !== 'none' && <span className="small text-warn">{e.cancellation === 'cancelled' ? 'Event cancelled. View details.' : 'Race or day cancellations recorded. Review event details.'}</span>}
                 <span className="event-pick__meta">
                   {e.researchOnly ? 'Read-only research' : e.days.map((d) => formatDate(d.date)).join(' and ')}
                   {e.venue ? ` · ${e.venue}` : ''}
                 </span>
                 <span className="event-pick__races">
-                  {e.researchOnly ? 'Registration unavailable' : `${e.days.flatMap((d) => d.races).join(' · ')} · ${e.categoryCount} categories`}
+                  {e.researchOnly ? 'Registration unavailable' : `${e.days.flatMap((d) => d.races).join(' · ')} · ${e.categoryCount} ${e.cancellation === 'none' ? 'categories' : 'configured categories'}`}
                 </span>
               </a>
             </li>

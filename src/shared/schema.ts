@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { CancellationScopeState } from './cancellations';
 
 export const bibNumberSchema = z.number().int().min(1).max(99999);
 
@@ -209,6 +210,7 @@ export const eventConfigSchema = z.object({
 });
 
 export interface PublicEventSummary {
+  cancellation: CancellationScopeState;
   id: string;
   organizationName: string;
   name: string;
