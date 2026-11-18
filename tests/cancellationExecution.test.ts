@@ -104,8 +104,11 @@ describe('atomic simulated cancellation', () => {
     }
     expect(after[0].headers['content-disposition']).toContain('fictional-draft-export-name-entries');
     expect(after[4].headers['content-disposition']).not.toContain('fictional-draft-export-name');
+    const volunteer = 'export-volunteer@example.test';
+    await s.app.inject({ method: 'GET', url: '/api/me', headers: as(volunteer) });
+    expect((await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members`, payload: { email: volunteer, role: 'check_in_volunteer' } })).statusCode).toBe(200);
     for (const path of paths) {
-      for (const [headers, status] of [[{ authorization: 'Bearer invalid' }, 401], [as('outsider-export@example.test'), 404]] as const) {
+      for (const [headers, status] of [[{ authorization: 'Bearer invalid' }, 401], [as('outsider-export@example.test'), 404], [as(volunteer), 403]] as const) {
         const denied = await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/${path}`, headers });
         expect(denied.statusCode).toBe(status); expect(denied.headers['x-cyclereg-cancellation']).toBeUndefined(); expect(denied.headers['x-cyclereg-export-context']).toBeUndefined();
       }
