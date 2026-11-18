@@ -45,6 +45,18 @@ export interface CancellationConfirmation {
   executionAvailable: false;
 }
 
+/** A conservative financial preflight, never authorization or an executable instruction. */
+export interface CancellationFinancialPreflight {
+  confirmationId: string;
+  eventId: string;
+  assessedAt: string;
+  status: 'financially_eligible_for_simulation' | 'blocked';
+  executionAvailable: false;
+  blockers: { code: 'plan_changed' | 'impact_unreviewable' | 'unsettled_order' | 'unsupported_policy' | 'allocation_review' | 'payment_reconciliation' | 'provider_payment' | 'refund_history'; orderId?: string; entryId?: string }[];
+  entries: { entryId: string; orderId: string; acceptedEntryCents: number; nominalCashCents: number | null }[];
+  simulatedCashCents: number | null;
+}
+
 export interface CancellationAllocationPreview {
   eventId: string;
   currentPublishedVersion: number;
