@@ -6,6 +6,8 @@ import { api, type ApiError, type OrderView, type PublicEvent } from '../api';
 import { formatDateTime } from '../format';
 import { Field } from '../ui';
 
+const count = (n: number, singular: string, plural = `${singular}s`) => `${n} ${n === 1 ? singular : plural}`;
+
 export function CancellationPreview({ eventId, revision, publishedVersion, orders }: { eventId: string; revision: number; publishedVersion: number | null; orders: OrderView[] | null }) {
   const [catalog, setCatalog] = useState<PublicEvent | null>(null);
   const [selection, setSelection] = useState<CancellationSelection>({ scope: 'event' });
@@ -32,11 +34,11 @@ export function CancellationPreview({ eventId, revision, publishedVersion, order
       setCatalog(fresh);
       if ((selection.scope === 'race' && !fresh.config.races.some((r) => r.id === selection.raceId)) || (selection.scope === 'day' && !fresh.config.days.some((d) => d.id === selection.dayId))) {
         setSelection({ scope: 'event' });
-        throw new Error('The selected race or day is no longer published. Choose a scope and preview again.');
+        throw new Error('The selected race or day is no longer published. Scope was reset to Entire event.');
       }
       const data = await api.cancellationImpact(eventId, selection);
       if (current !== generation.current) return;
-      if (data.currentPublishedVersion !== fresh.publishedVersion) throw new Error('The published schedule changed while loading. Preview again.');
+      if (data.currentPublishedVersion !== fresh.publishedVersion) throw new Error('The published schedule changed while loading.');
       setResult({ data, config: fresh.config });
     } catch (e) { if (current === generation.current) setError((e as Error).message); }
     finally { if (current === generation.current) { pending.current = false; setBusy(false); } }
@@ -57,7 +59,7 @@ export function CancellationPreview({ eventId, revision, publishedVersion, order
     </div>
     <button type="button" className="btn btn--secondary" aria-disabled={busy} onClick={() => void load()}>{busy ? 'Loading cancellation preview…' : 'Preview cancellation impact'}</button>
     {error && <p className="alert alert--error" role="alert">Could not load the cancellation preview: {error} Try Preview cancellation impact again.</p>}
-    <p className="small" role="status" aria-atomic="true">{busy ? 'Loading current published cancellation impact…' : data ? `Preview loaded: ${data.entries.length} live ${data.entries.length === 1 ? 'entry' : 'entries'}, ${data.waitlist.length} active waitlist records. Financial reconciliation required.` : ''}</p>
+    <p className="small" role="status" aria-atomic="true">{busy ? 'Loading current published cancellation impact…' : data ? `Preview loaded: ${count(data.entries.length, 'live entry', 'live entries')}, ${count(data.waitlist.length, 'active waitlist record')}.${data.financial.requiresFinancialReconciliation ? ' Financial reconciliation required.' : ''}` : ''}</p>
     {data && <>
       <p className="small">Published version {data.currentPublishedVersion} · Assessed {formatDateTime(data.generatedAt)} · Point-in-time snapshot; reload before making decisions.</p>
       <p><strong>{data.unaffectedLiveEntryIds.length} unaffected live {data.unaffectedLiveEntryIds.length === 1 ? 'entry remains' : 'entries remain'} in the affected orders.</strong> Accepted prices and package allocations stay unchanged.</p>
@@ -66,14 +68,14 @@ export function CancellationPreview({ eventId, revision, publishedVersion, order
       <details><summary>Waitlists ({data.waitlist.length})</summary><ul>{data.waitlist.map((w) => <li key={w.id}>{category(w.categoryId)} · {w.status}</li>)}</ul></details>
       <h4>Hypothetical capacity</h4>
       <p className="small">Assumes removal of all selected reservations, including test entries and live offers. These are distinct-rider counts, not places available for resale.</p>
-      {data.capacity.length ? <div className="table-wrap" tabIndex={0} role="region" aria-label="Hypothetical capacity limits"><table><thead><tr><th scope="col">Limit</th><th scope="col">Used now</th><th scope="col">Used after removal</th><th scope="col">Released</th></tr></thead><tbody>{data.capacity.map((l) => <tr key={`${l.kind}:${l.id}`}><th scope="row">{l.name} ({l.kind.replace('_', ' ')})</th><td>{l.used}</td><td>{l.hypotheticalUsedAfter}</td><td>{l.hypotheticalReleasedPlaces}</td></tr>)}</tbody></table></div> : <p>No configured capacity limits apply.</p>}
+      {data.capacity.length ? <div className="table-wrap" tabIndex={0} role="region" aria-label="Hypothetical capacity limits"><table><thead><tr><th scope="col">Limit</th><th scope="col">Used now</th><th scope="col">Would remain</th><th scope="col">Would release</th></tr></thead><tbody>{data.capacity.map((l) => <tr key={`${l.kind}:${l.id}`}><th scope="row">{l.name} ({l.kind.replace('_', ' ')})</th><td>{l.used}</td><td>{l.hypotheticalUsedAfter}</td><td>{l.hypotheticalReleasedPlaces}</td></tr>)}</tbody></table></div> : <p>No configured capacity limits apply.</p>}
       <h4>Financial review required</h4>
       <p>Original paid entry allocations: {formatDollars(data.financial.acceptedEntryAllocationCents)}. Excluded whole-order fees: {formatDollars(data.financial.orders.reduce((sum, o) => sum + o.excludedWholeOrderFeesCents, 0))}.</p>
       <p className="small">Paid allocations cover confirmed entries on confirmed orders. Holds and unsettled payments need separate review. Policy amounts below are before prior refunds or external credits; they are not a refundable balance.</p>
       <details><summary>Accepted paid policies ({data.financial.entries.length})</summary><ul>{data.financial.entries.map((e) => <li key={e.entryId}>{orderName(e.orderId)} · {category(e.currentCategoryId)} · accepted version {e.acceptedVersion} · paid allocation {formatDollars(e.acceptedEntryCents)}.{e.policy && <> Policy: {formatDollars(e.policy.amountCents)} {e.policy.returnAs === 'cash' ? 'cash' : e.policy.returnAs === 'credit' ? 'credit' : 'rider’s choice of cash or credit'}.</>}{e.reviewReasons.length > 0 && <ul>{e.reviewReasons.map((r) => <li key={r}>{r}</li>)}</ul>}</li>)}</ul></details>
       <h4>Saved start lists and communications</h4>
-      <p>{data.startListSnapshots.length} saved start-list snapshots are affected. Saved files remain unchanged; previous exports cannot be recalled.</p>
-      <p>Audience records: {data.communicationAudience.orderIds.length} orders and {data.communicationAudience.waitlistEntryIds.length} additional waitlist records. These are not a count of unique recipients. Message wording and delivery are not available.</p>
+      <p>{count(data.startListSnapshots.length, 'saved start-list snapshot')} {data.startListSnapshots.length === 1 ? 'is' : 'are'} affected. Saved files remain unchanged; previous exports cannot be recalled.</p>
+      <p>Audience records: {count(data.communicationAudience.orderIds.length, 'order')} and {count(data.communicationAudience.waitlistEntryIds.length, 'additional waitlist record')}. These are not a count of unique recipients. Message wording and delivery are not available.</p>
       <details><summary>Preview limits and next steps</summary><ul>{data.limitations.map((text) => <li key={text}>{text}</li>)}</ul><p>Cancellation confirmation and execution are not available. A future action requires a fresh preview and financial reconciliation.</p></details>
     </>}
   </section>;
