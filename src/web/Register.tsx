@@ -245,6 +245,7 @@ export function Register({ eventId }: { eventId: string }) {
   const statusRead = useRef(0);
   const retryButton = useRef<HTMLButtonElement>(null);
   const refreshButton = useRef<HTMLButtonElement>(null);
+  const eventHeading = useRef<HTMLHeadingElement>(null);
   const readCurrentStatus = async () => {
     const read = ++statusRead.current;
     const latest = await api.publicEvent(eventId);
@@ -266,6 +267,12 @@ export function Register({ eventId }: { eventId: string }) {
     let active = true;
     setCheckingOffer(true);
     setOffer(null);
+    const moveRetryFocus = () => {
+      if (document.activeElement !== retryButton.current) return;
+      const refresh = refreshButton.current;
+      if (refresh && !refresh.disabled) refresh.focus();
+      else eventHeading.current?.focus();
+    };
     const checkOffer = async () => {
       let opened: WaitlistOffer;
       try {
@@ -273,22 +280,28 @@ export function Register({ eventId }: { eventId: string }) {
       } catch (failure) {
         if (active) {
           const error = failure as ApiError;
-          setOfferFailure({ token, message: error.message, retryable: error.status === 0 || error.status === 429 || error.status >= 500 });
+          const retryable = error.status === 0 || error.status === 429 || error.status >= 500;
+          if (!retryable) moveRetryFocus();
+          setOfferFailure({ token, message: error.message, retryable });
         }
         return;
       }
       if (!active) return;
       if (opened.eventId !== eventId) {
+        moveRetryFocus();
         setOfferFailure({ token, message: 'This waitlist offer is for a different event. Open the link from the organizer.', retryable: false });
         return;
       }
-      const latest = await readCurrentStatus().catch(() => null);
+      const latest = await readCurrentStatus().catch(() => undefined);
       if (!active) return;
       if (!latest) {
-        setOfferFailure({ token, message: 'Could not check registration status for this waitlist offer. Try again to check whether you can use it.', retryable: true });
+        const message = latest === null
+          ? 'A newer schedule check replaced this waitlist offer check. Retry the offer to see whether you can use it.'
+          : 'Could not check registration status for this waitlist offer. Try again to check whether you can use it.';
+        setOfferFailure({ token, message, retryable: true });
         return;
       }
-      if (document.activeElement === retryButton.current) refreshButton.current?.focus();
+      moveRetryFocus();
       setEv(latest);
       setOffer(opened);
       setOfferFailure(null);
@@ -379,7 +392,7 @@ export function Register({ eventId }: { eventId: string }) {
           <a className="link small" href={href({ page: 'events' })}>
             All events
           </a>
-          <h1 id="reg-title">{config.event.name}</h1>
+          <h1 id="reg-title" ref={eventHeading} tabIndex={-1}>{config.event.name}</h1>
           <p className="reg__meta">
             {config.days.map((d) => formatDate(d.date)).join(' and ')}
             {config.event.venue ? ` · ${config.event.venue}` : ''} · {ev.organizationName}
@@ -391,7 +404,7 @@ export function Register({ eventId }: { eventId: string }) {
           )}
           {signedIn && offerToken && currentOfferFailure && (
             <div className="note note--warn offer-retry">
-              {!checkingOffer && <p role="alert">{currentOfferFailure.message}</p>}
+              <p role="alert">{checkingOffer ? '' : currentOfferFailure.message}</p>
               {currentOfferFailure.retryable && <button ref={retryButton} type="button" className="btn btn--secondary" aria-disabled={checkingOffer || undefined}
                 onClick={() => { if (!checkingOffer) setOfferAttempt((attempt) => attempt + 1); }}>
                 {checkingOffer ? 'Checking waitlist offer…' : 'Retry waitlist offer'}
