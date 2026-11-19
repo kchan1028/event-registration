@@ -239,8 +239,8 @@ describe('check-in API', () => {
     const volunteer = 'walk-up-volunteer@example.test';
     const headers = as(volunteer);
     const owner = (await app.inject({ method: 'GET', url: '/api/me' })).json<{ account: { id: string } }>().account;
-    const second = (await app.inject({ method: 'GET', url: '/api/me', headers })).json<{ account: { id: string } }>().account;
-    expect(second.id).not.toBe(owner.id);
+    const volunteerAccount = (await app.inject({ method: 'GET', url: '/api/me', headers })).json<{ account: { id: string } }>().account;
+    expect(volunteerAccount.id).not.toBe(owner.id);
     const grant = await app.inject({
       method: 'POST',
       url: `/api/organizations/${organizationId}/members`,
@@ -271,7 +271,9 @@ describe('check-in API', () => {
       expect(await auditRecord()).toEqual(expected);
 
       now = new Date('2027-03-01T18:05:00Z');
-      expect((await app.inject({ ...request, headers })).statusCode).toBe(200);
+      const retry = await app.inject({ ...request, headers });
+      expect(retry.statusCode).toBe(200);
+      expect(retry.json<CheckInRider>().entries.find((entry) => entry.id === entryId)?.walkUp).toBe(true);
       expect(await auditRecord()).toEqual(expected);
     } finally {
       await client.end();
