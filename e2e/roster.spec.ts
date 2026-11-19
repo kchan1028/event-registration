@@ -82,3 +82,66 @@ for (const theme of ['light', 'dark']) {
 
   });
 }
+
+test('a loaded fallback roster stays a reference during a simulated disconnect', async ({ page, browser, baseURL }) => {
+  const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await page.request.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await page.request.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  expect((await page.request.put(`${eventUrl}/bib-settings`, {
+    data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+  })).ok()).toBe(true);
+  const desk: CheckInList = await (await page.request.get(`${eventUrl}/check-in`)).json();
+  const rider = desk.riders.find((candidate) => candidate.result.ready && candidate.bib === null);
+  const raceDay = desk.days.find((day) => day.id === desk.dayId);
+  if (!rider || !raceDay) throw new Error('The fallback rehearsal needs a ready rider without a bib');
+
+  const email = 'roster.volunteer@example.test';
+  expect((await page.request.post(`/api/organizations/${organizationId}/members`, {
+    data: { email, role: 'check_in_volunteer' },
+  })).ok()).toBe(true);
+  const context = await browser.newContext({ baseURL, extraHTTPHeaders: { Authorization: `Bearer test:${email}` } });
+  try {
+    await context.addInitScript((user) => {
+      sessionStorage.setItem('cyclereg.test-session', user);
+      window.print = () => document.body.setAttribute('data-print-requested', 'true');
+    }, email);
+    const volunteer = await context.newPage();
+    await volunteer.goto(`/#/events/${eventId}/roster`);
+    const print = volunteer.getByRole('button', { name: 'Print roster' });
+    const day = volunteer.getByRole('region', { name: `Roster for ${raceDay.label}`, exact: true });
+    const row = day.getByRole('row').filter({ has: volunteer.getByRole('cell', { name: rider.name, exact: true }) });
+    await expect(print).toBeEnabled();
+    await expect(row.getByRole('cell', { name: 'Ready', exact: true })).toBeVisible();
+    const sections = volunteer.getByRole('region', { name: /^Roster for / });
+    await expect(sections).toHaveCount(desk.days.length);
+    const stamps = sections.locator('.roster__stamp');
+    const originalStamps = await stamps.allTextContents();
+
+    await context.setOffline(true);
+    expect(await volunteer.evaluate(() => navigator.onLine)).toBe(false);
+    const issued = await page.request.post(`${eventUrl}/check-in/${rider.orderId}`, {
+      data: { dayId: desk.dayId, bib: null },
+    });
+    expect(issued.ok()).toBe(true);
+    const { bib } = await issued.json();
+
+    await print.click();
+    await expect(volunteer.locator('body')).toHaveAttribute('data-print-requested', 'true');
+    await volunteer.emulateMedia({ media: 'print' });
+    await expect(stamps).toHaveText(originalStamps);
+    for (const section of await sections.all()) {
+      await expect(section.getByText(/does not authorize offline registration/)).toBeVisible();
+    }
+    await expect(row.getByRole('cell', { name: 'Ready', exact: true })).toBeVisible();
+    await expect(row.getByRole('cell', { name: 'Not assigned', exact: true })).toBeVisible();
+
+    await context.setOffline(false);
+    await volunteer.emulateMedia({ media: 'screen' });
+    await volunteer.reload();
+    await expect(row.getByRole('cell', { name: 'Checked in', exact: true })).toBeVisible();
+    await expect(row.getByRole('cell', { name: String(bib), exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
