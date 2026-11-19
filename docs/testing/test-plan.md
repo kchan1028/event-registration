@@ -207,6 +207,10 @@ Run `tests/auth.test.ts` for real expiry at sign-in, no expired-role grant, reci
 
 Run `tests/automatic-bibs.test.ts` with check-in, bib reassignment and start-list regressions. Queue a pending post-close job, a desk check-in and an overlapping bulk apply behind the same event advisory lock in a disposable database. Verify all three are waiting before releasing the lock. The lock order is not prescribed. If the bulk request applies first, preserve every previewed bib. If another writer assigns a selected rider first, refuse the batch with no partial assignment. The adjacent check-in tests also exercise successful apply and stale fingerprint rejection directly. Verify one active bib per rider, no duplicate bibs in the weekend scope, one desk check-in and a completed automatic job.
 
+### Missing waiver at check-in
+
+`tests/checkin.test.ts` blanks the signature name in the waiver snapshot of a disposable paid demo order. Verify lookup gives a registration desk referral and a check-in attempt returns a conflict without issuing a bib or recording check-in. The separate signing evidence stays intact. Rehearse remediation separately once the waiver process is approved.
+
 ### Rider check-in code retrieval
 
 `e2e/sign-in.spec.ts` completes fictional checkout and simulated payment, then uses a fresh phone-sized session to verify that the registration history screen prompts for sign-in. The rider signs back in and opens the confirmed receipt, which shows the original check-in code and QR. This uses the local test provider; real emailed-code delivery and race-morning timing require an operational rehearsal.

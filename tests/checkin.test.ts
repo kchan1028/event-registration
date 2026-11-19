@@ -1,5 +1,6 @@
+import pg from 'pg';
 import { describe, expect, it } from 'vitest';
-import { testApp } from './support/db';
+import { testApp, testDatabaseUrl } from './support/db';
 import { buildDemoEvent } from '../src/shared/demo';
 import { bibRangeForEntries, checkInResult, checkInTiming, mergeReadiness, nextFreeBib } from '../src/shared/checkin';
 import type { EventConfig } from '../src/shared/schema';
@@ -58,8 +59,8 @@ describe('check-in rules', () => {
 type Card = { orderId: string; name: string; checkInCode: string | null; bib: number | null; checkedInAt: string | null; result: { ready: boolean }; bibHistory: { bib: number; reason: string | null }[]; undoneCheckIns: { bib: number | null; bibReleased: boolean; reason: string }[] };
 type List = { dayId: string; days: { id: string }[]; riders: Card[] };
 
-async function setup() {
-  const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z') });
+async function setup(databaseUrl?: string) {
+  const { app } = await testApp({ databaseUrl, now: () => new Date('2027-03-01T18:00:00Z') });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
   const seeded = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in-demo-riders` });
@@ -73,6 +74,44 @@ async function setup() {
 }
 
 describe('check-in API', () => {
+  it('refuses desk check-in for a paid rider with a missing waiver signature', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { rider, list, setBibs, checkIn } = await setup(databaseUrl);
+    const alex = rider('Alex');
+    expect(alex.result.ready).toBe(true);
+    expect((await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] })).statusCode).toBe(200);
+
+    // Checkout requires a signature. Model an incomplete stored waiver only in the disposable fixture.
+    const client = new pg.Client({ connectionString: databaseUrl });
+    await client.connect();
+    try {
+      const changed = await client.query(
+        `UPDATE orders SET waiver_json = waiver_json || '{"signatureName": ""}'::jsonb WHERE id = $1`,
+        [alex.orderId],
+      );
+      expect(changed.rowCount).toBe(1);
+    } finally {
+      await client.end();
+    }
+
+    const blockedCard = async () => (await list(alex.checkInCode!)).riders.find((card) => card.orderId === alex.orderId);
+    const blocked = await blockedCard();
+    expect(blocked).toMatchObject({
+      payment: 'confirmed',
+      bib: null,
+      checkedInAt: null,
+      result: { ready: false, blockers: [{
+        key: 'waiver',
+        label: 'Waiver not accepted',
+        action: 'Send the rider to the registration desk to accept the waiver.',
+      }] },
+    });
+    const refused = await checkIn(alex.orderId);
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toMatchObject({ error: expect.stringContaining('waiver not accepted') });
+    expect(await blockedCard()).toEqual(blocked);
+  });
+
   it('uses the same weekend overlap for desk and bulk assignment while day-scoped bibs stay independent', async () => {
     const { app, eventId, first, rider, checkIn, setBibs } = await setup();
     const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
