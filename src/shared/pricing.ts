@@ -7,8 +7,9 @@ import type { Category, EventConfig } from './schema';
  * demo values in docs/fixtures/).
  *
  * Discount precedence, so discounts never stack on one entry:
- * 1. At most one bundle applies: the one saving the most whose races all have a
- *    selected entry. It covers one entry per bundle race (the most expensive).
+ * 1. At most one bundle applies. Use the rider’s explicit choice if applicable,
+ *    otherwise use the greatest saving when no choice was specified.
+ *    It covers one entry per bundle race (the most expensive).
  *    A bundle either takes a fixed discount or sets a fixed price for those entries.
  * 2. The additional-race discount then applies to entries outside the bundle,
  *    capped at each entry's price:
@@ -106,7 +107,7 @@ function allocate(lines: QuoteLine[], total: number, reason: string): number {
   return total - remaining;
 }
 
-export function quote(config: EventConfig, categoryIds: readonly string[], onDate: string, coupon: CouponTerms | null = null, profile: RiderProfile | null = null): Quote {
+export function quote(config: EventConfig, categoryIds: readonly string[], onDate: string, coupon: CouponTerms | null = null, profile: RiderProfile | null = null, bundleIntent: string | null = null): Quote {
   const settings = config.registration;
   const rates = profile ? (settings.riderRates ?? []).filter((r) => evaluatePath(r.eligibility, profile).status === 'eligible') : [];
   const scopedRates = (categoryId: string) => rates.filter((r) => r.categoryIds ? r.categoryIds.length === 0 || r.categoryIds.includes(categoryId) : r.categoryGenderClass === 'any' || config.categories.some((c) => c.id === categoryId && c.eligibility.paths.length > 0 && c.eligibility.paths.every((p) => p.genderClass === r.categoryGenderClass)));
@@ -133,12 +134,12 @@ export function quote(config: EventConfig, categoryIds: readonly string[], onDat
     });
   }
 
-  // 1. The bundle that saves the most.
+  // 1. The selected package, or the package that saves the most when none was chosen.
   const selectedRaces = new Set(lines.map((l) => l.raceId));
   const inBundle = new Set<QuoteLine>();
   let appliedBundle: Quote['bundle'] = null;
   const options = settings.bundles
-    .filter((b) => new Set(b.raceIds).size >= 2 && b.raceIds.every((r) => selectedRaces.has(r)))
+    .filter((b) => (bundleIntent === null || b.id === bundleIntent) && new Set(b.raceIds).size >= 2 && b.raceIds.every((r) => selectedRaces.has(r)))
     .map((b) => {
       const picked = [...new Set(b.raceIds)].map((raceId) => lines.filter((l) => l.raceId === raceId).sort((x, y) => y.priceCents - x.priceCents)[0]);
       const sum = picked.reduce((s, l) => s + l.priceCents, 0);

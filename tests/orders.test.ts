@@ -319,15 +319,39 @@ describe('Berkeley package order snapshot', () => {
       const config = event.config as EventConfig;
       const categoryIds = codes.map((code) => config.categories.find((c) => c.timingCode === code)!.id);
       expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
-      const res = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: {
+      const selectedBundle = config.registration.bundles[0];
+      config.registration.bundles.push({ id: 'other-weekend', name: 'Other weekend discount', raceIds: selectedBundle.raceIds, priceCents: 100, discountCents: 0 });
+      config.registration.bundles.push({ id: 'no-saving', name: 'No savings at current prices', raceIds: selectedBundle.raceIds, priceCents: null, discountCents: 0 });
+      expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config } })).statusCode).toBe(200);
+      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+      const url = `/api/rider/events/${eventId}/orders`;
+      const payload = {
         clientRequestId: 'berkeley-package-order', categoryIds, rider,
+        bundleIntent: config.registration.bundles[0].id,
         waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' },
-      } });
+      };
+      const incomplete = await app.inject({ method: 'POST', url, payload: { ...payload, categoryIds: categoryIds.slice(0, 1) } });
+      expect(incomplete.statusCode).toBe(422);
+      expect(incomplete.json().error).toContain('Nothing was held');
+      const noSaving = await app.inject({ method: 'POST', url, payload: { ...payload, bundleIntent: 'no-saving' } });
+      expect(noSaving.statusCode).toBe(422);
+      expect(noSaving.json().error).toContain('Nothing was held');
+      expect((await app.inject({ method: 'GET', url: '/api/rider/registrations' })).json()).toEqual([]);
+      const res = await app.inject({ method: 'POST', url, payload });
       expect(res.statusCode).toBe(201);
       const held = res.json();
       expect(held.quote.bundle.omnium.categoryIds).toEqual(categoryIds);
+      expect(held.quote.bundle.id).toBe(selectedBundle.id);
+      expect(held.totalCents).toBe(total);
+      const current = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json();
       config.registration.bundles = [];
-      expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config } })).statusCode).toBe(200);
+      expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: current.revision, config } })).statusCode).toBe(200);
+      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+      const stale = await app.inject({ method: 'POST', url, payload: { ...payload, clientRequestId: 'new-stale-package-order' } });
+      expect(stale.statusCode).toBe(409);
+      const replay = await app.inject({ method: 'POST', url, payload });
+      expect(replay.statusCode).toBe(201);
+      expect(replay.json()).toMatchObject({ id: held.id, quote: held.quote });
       const paid = (await app.inject({ method: 'POST', url: `/api/orders/${held.id}/payment`, payload: { attemptId: 'berkeley-package-payment', outcome: 'success' } })).json();
       expect(paid.status).toBe('confirmed');
       expect(paid.totalCents).toBe(total);

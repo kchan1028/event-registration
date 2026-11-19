@@ -227,6 +227,18 @@ describe('registration windows', () => {
 
 
 describe('Berkeley Omnium package', () => {
+  it('preserves an explicit package even when another package offers a bigger discount', () => {
+    const config = buildBerkeleyOmniumEvent().config;
+    const chosen = config.registration.bundles[0];
+    const cheaper = { id: 'other-weekend', name: 'Other weekend discount', raceIds: chosen.raceIds, priceCents: 9000, discountCents: 0 };
+    config.registration.bundles.push(cheaper);
+    const ids = [id(config, 'RR-M50-34'), id(config, 'CR-M50-34')];
+    expect(quote(config, ids, '2027-03-15')).toMatchObject({ totalCents: 9000, bundle: { id: cheaper.id } });
+    expect(quote(config, ids, '2027-03-15', null, null, chosen.id)).toMatchObject({
+      totalCents: 13000, bundle: { id: chosen.id, omnium: { categoryIds: ids } },
+    });
+  });
+
   it('discounts both races and nominates exactly the bundled entries for podium review', () => {
     const c = buildBerkeleyOmniumEvent().config;
     const ids = [id(c, 'RR-M35-34'), id(c, 'CR-M35-34')];

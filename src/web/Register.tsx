@@ -2,7 +2,7 @@ import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/rese
 import { QrCodeImage } from './QrCodeImage';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
-import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, MESSAGES, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
+import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, MESSAGES, missingBundleRaces, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
 import { evaluateCategory, licenseLabel, summarizeEligibility, summarizePath, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories } from '../shared/format';
@@ -512,7 +512,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
   const scheduleRef = useRef<HTMLDivElement>(null);
   const [errors, setErrors] = useState<{ id: string; message: string }[]>([]);
   const checking = Object.values(draft.profile).some((v) => v !== null);
-  const q = useMemo(() => quote(config, draft.selected, ev.today, draft.coupon ?? null, draft.profile), [config, draft.selected, ev.today, draft.coupon, draft.profile]);
+  const q = useMemo(() => quote(config, draft.selected, ev.today, draft.coupon ?? null, draft.profile, draft.bundleIntent), [config, draft.selected, ev.today, draft.coupon, draft.profile, draft.bundleIntent]);
   const conflicts = useMemo(() => findConflicts(config, draft.selected), [config, draft.selected]);
   const setProfile = (p: Partial<RiderProfile>) => {
     if (p.racingAge === null || p.licenseCategory === null) setMatchesOnly(false);
@@ -531,8 +531,8 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
   };
   const unavailableBundleIds = config.registration.bundles.filter((b) => b.raceIds.some((r) => ev.cancellation.scopes.some((s) => s.scope === 'event' || (s.scope === 'race' && s.raceId === r) || (s.scope === 'day' && config.races.find((race) => race.id === r)?.dayId === s.dayId)) || config.categories.some((c) => c.raceId === r && ev.cancellation.categoryIds.includes(c.id)))).map((b) => b.id);
   const intent = config.registration.bundles.find((b) => b.id === draft.bundleIntent) ?? null;
-  const selectedRaces = new Set(draft.selected.map((id) => config.categories.find((c) => c.id === id)?.raceId));
-  const intentMissing = intent ? intent.raceIds.filter((r) => !selectedRaces.has(r)) : [];
+  const unavailableIntent = !!draft.bundleIntent && !intent;
+  const intentMissing = intent ? missingBundleRaces(config, draft.selected, intent) : [];
 
   const applyDemoRider = (id: string) => {
     const r = DEMO_RIDERS.find((x) => x.id === id);
@@ -580,9 +580,13 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
       if (ev.cancellation.categoryIds.includes(id)) errs.push({ id: `opt-${id}`, message: `${cat?.name ?? 'A selected race'} was cancelled. Remove this entry to continue.` });
       if (cat && !ev.cancellation.categoryIds.includes(id) && ev.remaining[id] === 0 && !offeredHere) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.full}` });
     }
+    if (unavailableIntent) errs.push({ id: 'tray-title', message: 'Your selected package is no longer available. Clear the package choice to continue.' });
     if (intent && unavailableBundleIds.includes(intent.id)) errs.push({ id: 'tray-title', message: 'Your selected package includes a cancelled race. Uncheck the package to continue with unaffected races.' });
     if (intent && !unavailableBundleIds.includes(intent.id) && intentMissing.length) {
-      errs.push({ id: 'tray-title', message: `The ${intent.name} needs one eligible race on each day. Add a race in ${intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.` });
+      errs.push({ id: 'tray-title', message: `The ${intent.name} needs an entry in every included race. Add an entry in ${intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.` });
+    }
+    if (intent && !unavailableBundleIds.includes(intent.id) && !intentMissing.length && q.bundle?.id !== intent.id) {
+      errs.push({ id: 'tray-title', message: 'The selected package does not apply to these entries at their current prices. Change your entries or uncheck the package.' });
     }
     if (q.coupon?.unappliedReason) errs.push({ id: 'f-coupon', message: `${q.coupon.unappliedReason} Remove the code or change your races.` });
     setErrors(errs);
@@ -765,6 +769,16 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           <h2 id="tray-title" className="tray__title" tabIndex={-1}>
             Your entries
           </h2>
+          {unavailableIntent && (
+            <div className="bundle-pick is-on">
+              <p className="small text-warn">Your selected package is no longer available.</p>
+              <button type="button" className="btn btn--secondary" onClick={() => {
+                update((d) => ({ ...d, bundleIntent: null }));
+                setErrors([]);
+                document.getElementById('tray-title')?.focus();
+              }}>Clear package choice</button>
+            </div>
+          )}
           {config.registration.bundles.map((b) => (
             <div key={b.id} className={`bundle-pick ${draft.bundleIntent === b.id ? 'is-on' : ''}`}>
               <label className="check">
@@ -784,7 +798,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           ) : (
             <QuoteTable q={q} raceName={(id) => config.races.find((r) => r.id === id)?.name ?? ''} onRemove={(id) => toggle(id)} />
           )}
-          <BundleHint config={config} selected={draft.selected} q={q} unavailableBundleIds={unavailableBundleIds} />
+          {!draft.bundleIntent && <BundleHint config={config} selected={draft.selected} q={q} unavailableBundleIds={unavailableBundleIds} />}
           {draft.selected.length > 0 && <CouponField eventId={ev.eventId} draft={draft} update={update} q={q} />}
           <button className="btn btn--primary tray__cta" disabled={ev.cancellation.scopes.some((s) => s.scope === 'event')} onClick={next}>
             Continue to racer details
@@ -1296,6 +1310,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
       request: {
         clientRequestId: draft.clientRequestId,
         categoryIds: draft.selected,
+        bundleIntent: draft.bundleIntent,
         rider: riderFrom(draft, needsGuardian) as RiderDetails,
         waiver: { version: config.registration.waiverVersion, read: true as const, agreed: true as const, signatureName: w.signatureName.trim(), signerRole: needsGuardian ? 'guardian' as const : 'rider' as const },
         offerToken: draft.offerToken ?? null,

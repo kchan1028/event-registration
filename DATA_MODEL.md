@@ -314,7 +314,7 @@ A rider's checkout in the app. Payment is simulated; no money moves.
 | `id` | Primary key |
 | `event_id` | References `events`. Indexed |
 | `published_version` | The `event_versions` version the order was priced and checked against. Later edits to the event do not change it |
-| `client_request_id` | Idempotency key from the browser. Unique per event, so a resubmitted checkout returns the same order instead of a duplicate |
+| `client_request_id` | Idempotency key from the browser. Unique per event, so a resubmitted checkout returns the same order instead of a duplicate. Explicit package intent is validated at the initial hold against the published configuration. The accepted quote remains the saved pricing evidence |
 | `status` | `held`, `payment_failed`, `confirmed`, `expired`, `cancelled`, or `needs_attention` (see [Order lifecycle](#order-lifecycle)) |
 | `rider_json` | Rider details: name, email, phone, team, racing age, license category, type and number, competition class, collegiate division, emergency contact, and optional guardian. The current details; organizer corrections update it and keep the earlier values in `rider_corrections` |
 | `waiver_json` | Waiver version, read and agreed flags, typed signature name, and whether the rider or a guardian signed |
