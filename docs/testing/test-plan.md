@@ -62,7 +62,7 @@ In `e2e/organizer.spec.ts`, verify initial focus and focus return after using th
 
 ### Walk-up phone handoff
 
-`e2e/walkup.spec.ts` verifies separate fictional staff/rider sessions, public event-only URL generation, QR fallback address, unpublished-event suppression, declined payment without bib issuance, participant-owned confirmation and staff check-in with one start-list entry. Run receipt QR/guardian and check-in browser regressions when changing the shared QR renderer. Existing server tests remain authoritative for windows, day-of pricing, capacity, guardian consent and readiness. A localhost emulation is not physical-phone scanning, real provider operation or a completed race-day rehearsal.
+`e2e/walkup.spec.ts` verifies separate fictional staff/rider sessions, public event-only URL generation, QR fallback address, unpublished-event suppression, declined payment without bib issuance, participant-owned confirmation and staff check-in with one start-list entry. A separate full-field phone handoff joins the waitlist with no registration, check-in candidate, bib or start-list change. Run receipt QR/guardian and check-in browser regressions when changing the shared QR renderer. Existing server tests remain authoritative for windows, day-of pricing, capacity, guardian consent and readiness. A localhost emulation is not physical-phone scanning, real provider operation or a completed race-day rehearsal.
 
 ### Volunteer runbook rehearsal
 
