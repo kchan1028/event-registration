@@ -221,6 +221,8 @@ Run `tests/automatic-bibs.test.ts` with check-in, bib reassignment and start-lis
 
 The timer handoff in `e2e/handoff.spec.ts` uses a separate fictional Timer and exports account. Lock and download the selected race, verify the server denies check-in reads/writes and ledger download for that account, then issue a bib from the organizer session. Confirm the timer sees the bib revision while the locked CSV remains byte-identical. Actual timing software import and timer acknowledgement remain manual.
 
+`tests/transfers.test.ts` verifies that moving a paid entry between fields in one race updates the current timer CSV and reports the category and start-group changes under the same entry and rider IDs. The locked CSV stays byte-identical.
+
 ### Check-in navigation targets
 
 `e2e/checkin-navigation.spec.ts` checks Builder and the clickable race-day labels at 320, 390 and 1440 CSS pixels in both themes with fine/coarse pointer contexts. Require 44px minimum target dimensions even for short day labels, no page overflow, Tab focus into the day group, arrow-key day selection with visible focus, and keyboard activation of Builder into the category workspace. Run existing check-in accessibility scenarios and phone-handoff regressions when changing header target styles. These are Chromium emulations, not real-phone or screen-reader acceptance.
