@@ -203,7 +203,7 @@ Run `tests/auth.test.ts` for real expiry at sign-in, no expired-role grant, reci
 
 ### Fictional weekend close-out
 
-`e2e/case-studies.spec.ts` follows a fictional two-day purchase through organizer license review, weekend bib reuse, repeat check-in and locked per-race CSV downloads. After a second-day withdrawal and simulated partial refund, verify the exact remaining entry with its original bib and checked-in status in the current export, the removal in the lock revision, one refund ledger row and identical saved CSV contents. Timer import, provider reconciliation and staff rehearsal are separate acceptance gates.
+`e2e/case-studies.spec.ts` follows a fictional two-day purchase through organizer license review, weekend bib reuse, repeat check-in and locked per-race CSV downloads. After a second-day withdrawal and simulated partial refund, verify the exact remaining entry with its original bib and checked-in status in the current export, the removal in the lock revision, one refund ledger row and identical saved CSV contents. Compare the local reconciliation CSV with the order and withdrawn entry. Require distinct declined and successful simulated attempts and one successful entry-linked refund. Timer import, provider reconciliation and staff rehearsal are separate acceptance gates.
 
 ### Concurrent bib allocation
 
