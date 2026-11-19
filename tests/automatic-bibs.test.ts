@@ -130,6 +130,7 @@ describe('post-close automatic bib allocation', () => {
       if (bulk.statusCode === 200) {
         for (const pick of plan.assignments) expect(assigned.get(pick.orderId)).toMatchObject({ bib: pick.bib, automatic_job_id: null });
       } else {
+        expect(bulk.json()).toMatchObject({ error: 'Already has a bib' });
         expect(assigned.get(blake.orderId)?.automatic_job_id).toBe(job.id);
         expect(assigned.get(alex.orderId)?.automatic_job_id ?? null).toBe(desk.json().bib === 150 ? null : job.id);
       }

@@ -201,7 +201,7 @@ Run `tests/auth.test.ts` for real expiry at sign-in, no expired-role grant, reci
 
 ### Concurrent bib allocation
 
-Run `tests/automatic-bibs.test.ts` with check-in, bib reassignment and start-list regressions. Queue a pending post-close job, a desk check-in and an overlapping bulk apply behind the same event advisory lock in a disposable database. Verify all three are waiting before releasing the lock. A successful bulk apply preserves every previewed bib; a conflicting apply leaves no partial assignment. Verify one active bib per rider, no duplicate bibs in the weekend scope, one desk check-in and a completed automatic job.
+Run `tests/automatic-bibs.test.ts` with check-in, bib reassignment and start-list regressions. Queue a pending post-close job, a desk check-in and an overlapping bulk apply behind the same event advisory lock in a disposable database. Verify all three are waiting before releasing the lock. The lock order is not prescribed. If the bulk request applies first, preserve every previewed bib. If another writer assigns a selected rider first, refuse the batch with no partial assignment. The adjacent check-in tests also exercise successful apply and stale fingerprint rejection directly. Verify one active bib per rider, no duplicate bibs in the weekend scope, one desk check-in and a completed automatic job.
 
 ### Organizer handoff rehearsal
 
