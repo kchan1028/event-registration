@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { BIB_SCOPES, rangeFor, canCheckInWithBib, changedBibAssignments, type BibChange, type BibReassignmentPlan, type BibSettings } from '../shared/checkin';
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
@@ -389,6 +389,14 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
   const [undoReason, setUndoReason] = useState('');
 
   const resultRef = useRef<HTMLDivElement>(null);
+  const issuedBibId = useId();
+  const focusNextAfterCheckIn = useRef(false);
+  const focusNextRider = useCallback((button: HTMLButtonElement | null) => {
+    if (button && focusNextAfterCheckIn.current) {
+      focusNextAfterCheckIn.current = false;
+      button.focus();
+    }
+  }, []);
 
   async function markWalkUp(entryId: string) {
     setBusy(true);
@@ -418,15 +426,19 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
     }
   }
 
-  async function checkIn(e: FormEvent) {
+  async function checkIn(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (recovery === 'pending') return;
+    const form = e.currentTarget;
     setBusy(true);
     setError(null);
     onRecovery(undefined);
     try {
       const result = await api.checkIn(eventId, rider.orderId, dayId, rider.bib !== null ? null : bib.trim() ? Number(bib) : null, takeDuration());
       if (result?.orderId === rider.orderId && typeof result.bib === 'number' && typeof result.checkedInAt === 'string') {
+        // Disabling the submit button can move focus to the body during the request.
+        const active = document.activeElement;
+        focusNextAfterCheckIn.current = form.contains(active) || active === document.body;
         onChange(result);
       } else {
         onRecovery('pending');
@@ -562,11 +574,17 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
         </>}
         {done ? (
           <>
-            <p className="ci-bib__label">Bib</p>
-            <p className="ci-bib__number">{rider.bib}</p>
+            <p id={`${issuedBibId}-label`} className="ci-bib__label">Bib</p>
+            <p id={issuedBibId} className="ci-bib__number">{rider.bib}</p>
             <p className="muted small">Checked in at {new Date(rider.checkedInAt!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Checking in again keeps this bib.</p>
             <div className="ci-bib__actions">
-              <button type="button" className="btn btn--primary" onClick={onNext}>
+              <button
+                type="button"
+                className="btn btn--primary"
+                ref={focusNextRider}
+                aria-describedby={`${issuedBibId}-label ${issuedBibId}`}
+                onClick={onNext}
+              >
                 Next rider
               </button>
               {!changing && !undoing && (
