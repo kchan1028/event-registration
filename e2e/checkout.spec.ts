@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures';
 import { seedRegistrationCase } from './support/registration-case';
+import type { CheckInList } from '../src/shared/checkin';
 
 /* Clickable demo purchase flow (product.md 2a) using isolated generated case-study data. */
 
@@ -119,7 +120,7 @@ test('junior with guardian: only the guardian’s typed name signs', async ({ pa
   await expect(page.locator('.done__entry')).toContainText('Guardian signature recorded');
 });
 
-test('uncertain license: paid but needs review, and the organizer clears it', async ({ page }) => {
+test('a paid rider can receive a bib after the organizer reviews the license', async ({ page }) => {
   const eventId = await openEvent(page, 'criterium');
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-sam');
   await page.getByRole('checkbox', { name: /DVC-W345/ }).click();
@@ -130,6 +131,34 @@ test('uncertain license: paid but needs review, and the organizer clears it', as
   await page.getByRole('button', { name: /Complete simulated payment/ }).click();
   await expect(page.locator('.done__entry')).toContainText('License needs review');
 
+  const eventUrl = `/api/events/${eventId}`;
+  const bibSettings = await page.request.put(`${eventUrl}/bib-settings`, {
+    data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+  });
+  expect(bibSettings.ok()).toBe(true);
+  const checkInUrl = `/#/events/${eventId}/check-in`;
+  const detail = page.getByRole('region', { name: 'Rider check-in' });
+  const findRider = async () => {
+    await page.goto(checkInUrl);
+    const search = page.getByRole('searchbox', { name: 'Find a rider' });
+    await search.fill('Sam Demo');
+    await search.press('Enter');
+    await expect(detail.getByRole('heading', { name: 'Sam Demo', exact: true })).toBeVisible();
+  };
+  const readRider = async () => {
+    const response = await page.request.get(`${eventUrl}/check-in`, { params: { q: 'Sam Demo' } });
+    expect(response.ok()).toBe(true);
+    const list: CheckInList = await response.json();
+    expect(list.riders).toHaveLength(1);
+    return list.riders[0];
+  };
+  await findRider();
+  await expect(detail.getByRole('status')).toContainText('Not ready');
+  await expect(detail.getByText('License needs review', { exact: true }).first()).toBeVisible();
+  await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
+  const before = await readRider();
+  expect(before).toMatchObject({ payment: 'confirmed', bib: null, checkedInAt: null });
+
   await page.goto(`/#/events/${eventId}/registrations`);
   await page.getByRole('button', { name: /License review/ }).click();
   const order = page.locator('.order', { hasText: 'Sam Demo' });
@@ -139,6 +168,13 @@ test('uncertain license: paid but needs review, and the organizer clears it', as
   await expect(order).toHaveCount(0);
   await page.getByRole('button', { name: /^All/ }).click();
   await expect(page.locator('.order', { hasText: 'Sam Demo' })).toContainText('License reviewed: Demo license card checked at the desk');
+  await findRider();
+  await expect(detail.getByRole('status')).toContainText('Ready to race');
+  await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
+  await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+  expect(await readRider()).toMatchObject({
+    orderId: before.orderId, entries: before.entries, payment: 'confirmed', bib: 100, checkedInAt: expect.any(String),
+  });
 });
 
 test('rider screens follow the theme toggle and remember it', async ({ page }) => {
