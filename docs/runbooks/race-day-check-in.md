@@ -89,6 +89,15 @@ When connectivity returns, the registration lead coordinates reconciliation befo
 
 Keep printed sheets controlled at the desk, collect them at shift handoff, and give them to the accountable owner for reconciliation and approved retention. Do not photograph or upload rider sheets into public issues. Real-data retention and restricted emergency-contact access remain unresolved; this guide does not invent either policy.
 
+### Reconcile a reference-only outage
+
+**Proposed for fictional rehearsal.** Use the published demo event and add fictional demo riders. Prepare a printable roster, separate fictional volunteer and lead accounts, and mock bibs. Brief both staff on the pause and the route to the lead before starting.
+
+1. **Set up three exceptions.** Use the [lost-response setup](../testing/test-plan.md#check-in-connection-recovery) to leave one check-in response uncertain after the server records it. Treat that mock bib as already handed over in the exercise. Keep one paid demo rider blocked by an unreviewed license. Preassign a bib to a third rider before printing. After printing, the lead uses a separate online session and the usual bib-change preview to assign that rider a free number. The printed number is now out of date.
+2. **Pause at the affected desk.** Hold the mock bibs. Record the event, race day, roster snapshot time, observed time, a reference to the affected row, and what was attempted or seen. Record whether a physical bib may already have been handed over. Keep the notes at the desk. Leave payment, readiness and check-in decisions to a fresh lookup.
+3. **Compare after reconnecting.** The volunteer looks up each rider on the original race day and the lead checks the notes against the current record and inventory. For the saved check-in, confirm the original bib and time without a second check-in or handover. For the unreviewed license, keep the bib at the desk and refer the rider. For the changed bib, use the current assignment and history. Hold any conflicting or unaccounted-for number until the lead can resolve it.
+4. **Close the exercise.** For each note, record the verified outcome or the unresolved hold and its owner. The lead confirms the mock inventory matches the recorded handovers before ordinary issuance resumes for riders without unresolved holds. Record any start-list change and the timer liaison’s separate acknowledgement. Collect all fictional sheets at handoff. Use fictional case labels in place of rider details in the [rehearsal record](../testing/test-plan.md#volunteer-runbook-rehearsal).
+
 ## Shift handoff and rehearsal evidence
 
 Before leaving, show the next authorized volunteer the event/day, pending exceptions, last confirmed bib actions, any uncertain submissions, latest roster time and how to reach the lead/deputy. Sign out when handing over a device; the next person uses their own account. Do not pass along a session or ask riders to use the staff device to register.
