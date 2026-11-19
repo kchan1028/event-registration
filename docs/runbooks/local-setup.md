@@ -134,9 +134,10 @@ SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts
 | `PUBLIC_APP_URL` | Origin Stripe sends riders back to after paying, and the sign-in link in invitation emails. Required in production when Stripe is on | `http://127.0.0.1:5273` outside production | No |
 | `PROFILE_CLAIM_MINIMUM_AGE` | Explicit `18` enables the age gate for support-approved claims; unset keeps claims disabled, any other value refuses startup | unset | No |
 | `PROFILE_CLAIM_SUPPORT_ACCOUNT_IDS` | Comma-separated application account IDs authorized to approve claims; no organizer role or email inference. Remove an ID and restart to revoke future approval/replay authority | unset (no support operators) | Account identifiers are personal data; use fictional accounts in local rehearsals |
-| `EMAIL_MODE` | `ses` sends email through Amazon SES (test-only beta). Unset: emails are recorded in the database and never sent | unset (local) | No |
-| `SES_REGION`, `EMAIL_FROM`, `SES_AWS_PROFILE` | Required with `EMAIL_MODE=ses`: the SES region, a verified sender address, and the named AWS profile for the project's own AWS account. The app never uses the shell's default `AWS_PROFILE` | none | The profile name is not a secret; the credentials it points to are, and stay in `~/.aws`, never in the repository |
-| `SES_CONFIGURATION_SET` | Optional SES configuration set for sending events | unset | No |
+| `EMAIL_MODE` | `resend` enables test email. `local` records emails in the database only | local | No |
+| `EMAIL_FROM` | Sender address for Resend, such as an address on the project's verified domain | unset | No |
+| `RESEND_API_KEY` | Server-side Resend sending key, required in Resend mode | unset | Yes |
+| `EMAIL_TEST_RECIPIENTS` | Comma-separated list of test addresses allowed to receive invitation emails, required in Resend mode | unset | No |
 
 ## Support claim rehearsal (fictional data only)
 
@@ -202,14 +203,13 @@ Record the tested commit, date, event/fixture, completed cases, expected and act
 
 ## Email in test mode (optional)
 
-By default the app records every email (organizer invitations for now) in the `email_messages` table and sends nothing; the team panel says "Email recorded, not sent (local email)". The beta stays test-only, so SES is used only in its sandbox, where it delivers only to addresses you verified.
+In local mode the app records organizer invitation emails in `email_messages` and sends nothing. To rehearse with Resend:
 
-1. In the project's own AWS account (not an employer account), open Amazon SES in one region and verify the sender address or domain, plus each test recipient's address. A new SES account starts in the sandbox; do not request production access for the beta.
-2. Create a named AWS profile for that account with permission to send through SES (`ses:SendEmail`), for example in `~/.aws/credentials`.
-3. Add to `.env`: `EMAIL_MODE=ses`, `SES_REGION=<region>`, `EMAIL_FROM=<verified sender>`, `SES_AWS_PROFILE=<profile name>`. Restart `npm run dev`.
-4. Invite a verified test address from **Team and roles**. The invitation shows "Email sent", or "Email failed to send" with the reason stored in `email_messages.error`; **Resend** tries again.
+1. In the project's Resend account, create a sending key and verify a sender domain. For an initial test, Resend's `onboarding@resend.dev` sender can send to the account owner's address.
+2. In the server's local `.env`, set `EMAIL_MODE=resend`, `EMAIL_FROM=<sender address>`, `RESEND_API_KEY=<sending key>`, and `EMAIL_TEST_RECIPIENTS=<comma-separated test addresses>`. Restart `npm run dev`.
+3. Invite a listed test address from **Team and roles**. Check the invitation shows “Email sent” and confirm receipt in the test inbox. “Email sent” means Resend accepted the request. For a failed send, check `email_messages.error` and use **Resend** in the team panel to retry.
 
-`EMAIL_MODE=ses` is refused with `NODE_ENV=production`.
+If migrating a local setup, replace `EMAIL_MODE=ses` and remove `SES_REGION`, `SES_AWS_PROFILE`, and `SES_CONFIGURATION_SET`. Use `EMAIL_MODE=local` to keep email recorded only. The server refuses `EMAIL_MODE=resend` with `NODE_ENV=production`.
 
 ## Start over
 

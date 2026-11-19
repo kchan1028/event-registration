@@ -308,7 +308,7 @@ Nothing is deployed today ([deploy runbook](../runbooks/deploy-render.md)). Befo
 
 1. **Full automated suite:** `npm run check` and `npm run test:e2e` pass locally on that commit, and CI passed on it.
 2. **Critical user journeys:** each flow in [product.md acceptance criteria](../../product.md#core-flows-and-acceptance-criteria) that the release includes, checked against the running build with fictional data. At minimum: publish a weekend, buy both days, last-place checkout, payment retry, refund, check in, and export to timer.
-3. **Applicable integration checks:** for each provider the release turns on (Clerk sign-in, Stripe test mode, Amazon SES), a check against that provider's test or sandbox instance, not a stub. A provider still Planned or unverified in [roadmap.md](../../roadmap.md) stays unverified until that check runs.
+3. **Applicable integration checks:** for each provider the release turns on (Clerk sign-in, Stripe test mode, Resend), a check against that provider's test or sandbox configuration. For Resend, use the [invitation rehearsal](../runbooks/local-setup.md#email-in-test-mode-optional) and confirm acceptance and receipt at a listed test inbox. A provider still Planned or unverified in [roadmap.md](../../roadmap.md) stays unverified until that check runs.
 4. **Operational readiness:** `GET /api/health` answers 200 on the deployed instance; backups and a demonstrated restore, monitoring, support owner, and a way back to the previous version, as [operations.md](../operations.md#changes-and-releases) requires for the environment.
 
 ## 5. Manual checks

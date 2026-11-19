@@ -6,6 +6,10 @@ CycleReg will handle rider contact details, emergency contacts, license numbers,
 
 Clerk can activate a session in place when its sign-in window returns to the current CycleReg route. The browser keeps the current page state and the API continues to verify every protected request with Clerk. The [rider sign-in regression check](docs/testing/test-plan.md#rider-check-in-code-retrieval) covers this behavior.
 
+## Transactional invitation email (Implemented locally)
+
+The server sends organizer invitation emails through Resend only in test mode with a configured recipient list. Keep the sending key in server-only environment configuration and use controlled test inboxes. The request contains the recipient address and invitation text. The app records API acceptance or send failure and keeps delivery evidence separate from invitation role grants. Production mode refuses Resend sends.
+
 ## Expired invitation guidance (Implemented locally)
 
 The signed-in recipient reads only their own latest expiry notices through `/api/rider/expired-invitations`. Authenticated account email scopes organization/role history, without revealing the team or granting access. A later grant of the same role supersedes its notice. Real identity-provider acceptance remains open.

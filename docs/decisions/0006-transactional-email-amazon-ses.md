@@ -1,6 +1,6 @@
 # 0006. Amazon SES for transactional email
 
-Status: Accepted
+Status: Superseded by [ADR 0007](0007-transactional-email-resend.md) on November 19, 2026. This record describes the original decision.
 Date: 2026-11-15
 Deciders: Project owner
 Related: [Communications](../../product.md#communications), [Sign-in and account security](../../product.md#sign-in-and-account-security), [Phase 2](../../roadmap.md#phase-2--build-the-registration-core), [email provider case study](../research/email-providers.md)
