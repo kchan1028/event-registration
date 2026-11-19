@@ -33,7 +33,7 @@ Paths verified against `main` at commit `740d0b9` (November 16, 2026). When a ch
 
 ## Constraints that are easy to miss
 
-- **Walk-up bibs.** The staff mark belongs to an individual confirmed entry. Check-in allows a first desk assignment only for a marked entry on the selected day. A preassigned bib follows normal readiness and check-in. The public checkout link does not set the mark. Coverage: `e2e/walkup.spec.ts`, `e2e/checkin.spec.ts` and `e2e/checkout.spec.ts`.
+- **Walk-up bibs.** The staff mark belongs to an individual confirmed entry. Check-in allows a first desk assignment only for a marked entry on the selected day. A preassigned bib follows normal readiness and check-in. The public checkout link does not set the mark. Coverage: `tests/checkin.test.ts` for audit record retries, and `e2e/walkup.spec.ts`, `e2e/checkin.spec.ts` and `e2e/checkout.spec.ts` for desk and checkout flows.
 - **Per-event lock.** Any write that can change capacity, holds, bibs, or the ledger runs in `db.transaction()` and takes `db.lock(eventLock(eventId))` first (`repo.ts`). `db.lock()` only works inside a transaction.
 - **Reuse the shared SQL.** "Counts toward capacity" is `liveEntrySql`; "a hold still reserving" is `reservedOrderSql` (both in `repo.ts`). Holds expire by time, not by a background job, so status checks compare against the clock.
 - **Access checks.** Organizer routes call `requireOrg`/`requireEvent` in `auth.ts`; order routes call `requireOrderAccess`. Someone with no role gets 404, not 403, so IDs cannot be probed. `tests/auth.test.ts` checks that every `/api` route registered in `app.ts` with `app.get`, `post`, `put`, or `delete` needs sign-in unless marked public; a route registered another way is not scanned.
