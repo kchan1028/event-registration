@@ -696,7 +696,10 @@ for (const mobile of [false, true]) {
     await expect(alexDraft).toHaveValue('');
     await expect(blakeDraft).toHaveValue('100');
     await alexDraft.fill('101');
+    await panel.getByRole('button', { name: 'Preview bib changes', exact: true }).click();
+    await expect(preview).toBeVisible();
     await panel.getByRole('button', { name: 'Select all assigned (1)', exact: true }).click();
+    await expect(preview).toHaveCount(0);
     await expect(alexSelection).not.toBeChecked();
     await alexSelection.check();
     await expect(alexDraft).toHaveValue('');
