@@ -54,7 +54,7 @@ Last verified: November 15, 2026 with Docker 27.4 and PostgreSQL 17, before sign
 2. Wait for both databases to become available, then for the staging service's first deploy. Check `https://<staging service>.onrender.com/api/health` returns `{"ok":true}`.
 3. Seed staging with fictional data only (no real rider data in staging): run `npm run seed:cases` from the staging service's shell.
 4. Start the first production deploy by hand (production has automatic deploys turned off).
-5. Before the pilot, [rehearse and measure a hosted restore](../testing/test-plan.md#measure-hosted-recovery-before-the-pilot) using fictional source records and a separate restore target. Use an isolated application copy to check the result and record the evidence.
+5. Before the pilot, [rehearse and measure a hosted restore](../testing/test-plan.md#measure-hosted-recovery-before-the-pilot) using a fictional source with the backup configuration intended for the pilot and a separate restore target. Repoint and redeploy an isolated application copy, reconcile its records and record the timing and evidence.
 6. Update this runbook's status, [roadmap.md](../../roadmap.md#phase-2--build-the-registration-core), and [SECURITY.md](../../SECURITY.md).
 
 ## Notes

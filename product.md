@@ -768,11 +768,11 @@ To research before Phase 3:
 - Every account signs in: riders, guardians, and all organizer roles. Sign-in is a passwordless emailed link or code (Phase 2). Riders and guardians keep email sign-in only. Multi-factor authentication (MFA) and sensitive-action re-verification for organizer roles are scheduled as the final pre-launch security gate: no real rider data or live payments until organizer MFA ships. See [Sign-in and account security](#sign-in-and-account-security).
 - No sensitive rider data in public participant lists by default. Define retention and deletion rules before the pilot.
 - Audit money, category, waiver, capacity, and permission changes.
-- Backups with a demonstrated restore against the [approved pilot recovery targets](docs/operations.md#backups-and-recovery). Monitor registration and payment failures and stuck capacity reservations.
+- Backups with a demonstrated restore against the [approved pilot recovery rehearsal targets](docs/operations.md#backups-and-recovery). Monitor registration and payment failures and stuck capacity reservations.
 - Publish a support owner and escalation route for each event. Volunteers must know who handles a race-morning failure.
 - Load and recovery checks use twice the expected pilot opening peak, based on the organizer's historical data.
 
-Before a live pilot, record the expected opening peak, representative event size, and race-morning staff concurrency. Verify checkout, final-place reservation, sign-in, organizer search, QR check-in, exports, and provider retries at twice that baseline. Set measurable response-time and recovery thresholds from the rehearsal rather than treating a large fixture render as load evidence.
+Before a live pilot, record the expected opening peak, representative event size, and race-morning staff concurrency. Verify checkout, final-place reservation, sign-in, organizer search, QR check-in, exports, and provider retries at twice that baseline. Set measurable response-time thresholds and verify the approved recovery targets in rehearsal. A large fixture render does not establish load performance.
 
 Protected CSV attribution is Implemented locally. After authorization and file preparation, record the account, event, export kind, time and any start-list scope. If recording fails, withhold the file. The record is evidence of server-side generation. Operator access, retention and hosted rehearsal remain open.
 

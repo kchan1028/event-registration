@@ -113,7 +113,7 @@ Implemented in the local build (November 15, 2026): `GET /api/health` runs a dat
 
 The [local fictional-data restore procedure](runbooks/local-backup-restore.md) exercises a separate logical archive/restore, record comparison and application recovery checks without touching the working database. It prepares the team for the hosted rehearsal. Hosted scheduled and off-site recovery and staff acceptance remain open.
 
-- Back up the primary datastore on a schedule set by the hosting ADR, and keep copies somewhere a single failure cannot remove.
+- Back up the primary datastore on the schedule and point-in-time recovery policy in the [hosting ADR](decisions/0004-hosted-stack-and-database.md), and keep copies somewhere a single failure cannot remove.
 - A backup counts only after a restore has been demonstrated. Phase 3 requires that demonstration during the mock-weekend rehearsal ([roadmap.md](../roadmap.md#phase-3--make-race-day-operable)).
 - Measure the approved targets in the [hosted recovery rehearsal](testing/test-plan.md#measure-hosted-recovery-before-the-pilot).
 - After any restore, reconcile entries and the ledger with the payment provider before reopening.
@@ -125,7 +125,7 @@ The project owner approved these pilot rehearsal targets on November 19, 2026.
 | Registration opening | 5 minutes | 60 minutes |
 | Race morning | 5 minutes | 30 minutes |
 
-The recovery gap is the time between the latest fully recovered checkpoint and the disruption. The reopening clock includes reconciliation and the operator’s decision. Account for every confirmed payment, entry and affected bib before reopening. Keep the affected desk or registration paused if the time target is exceeded or a discrepancy remains. Hosted measurement and operator acceptance are open.
+The recovery gap is the time between the latest fully recovered checkpoint and the disruption. The reopening clock runs from disruption through detection, restore, application recovery, reconciliation and the operator’s decision. Account for every confirmed payment, entry and affected bib before reopening. Keep the affected desk or registration paused if the time target is exceeded or a discrepancy remains. Hosted measurement and operator acceptance are open.
 
 ## Changes and releases
 
