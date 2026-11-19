@@ -45,6 +45,35 @@ test('Enter right after a scanned code or a unique name opens that rider', async
   await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
 });
 
+test('stopping the scanner releases a stream returned after the camera request', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'BarcodeDetector', { configurable: true, value: class {} });
+    navigator.mediaDevices.getUserMedia = () => new Promise<MediaStream>((resolve) => {
+      document.documentElement.dataset.cameraRequest = 'pending';
+      window.addEventListener('resolve-test-camera', () => {
+        const stream = document.createElement('canvas').captureStream();
+        const [track] = stream.getVideoTracks();
+        Object.defineProperty(window, 'testCameraTrack', { value: track });
+        resolve(stream);
+      }, { once: true });
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/#/events/${eventId}/check-in`);
+  await page.getByRole('button', { name: 'Scan with camera' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-camera-request', 'pending');
+  await page.getByRole('button', { name: 'Stop camera' }).click();
+  await expect(page.getByLabel('Camera view for scanning a check-in QR code')).toHaveCount(0);
+
+  // Resolve the stand-in for the browser permission prompt only after closing the scanner.
+  await page.evaluate(() => window.dispatchEvent(new Event('resolve-test-camera')));
+  await expect.poll(() => page.evaluate(
+    () => (window as Window & { testCameraTrack?: MediaStreamTrack }).testCameraTrack?.readyState,
+  )).toBe('ended');
+  await expect(page.getByRole('searchbox', { name: 'Find a rider' })).toBeEditable();
+});
+
 test('a volunteer distinguishes riders with the same name by their details or confirmation code', async ({ page, browser }) => {
   const api = page.request;
   const { eventId, organizationId } = await (await api.post('/api/demo')).json();
