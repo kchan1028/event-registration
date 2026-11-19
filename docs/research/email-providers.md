@@ -1,6 +1,6 @@
 # Email providers: adding marketing email later
 
-Status: Research, November 15, 2026. Transactional email is decided ([ADR 0006](../decisions/0006-transactional-email-amazon-ses.md): Amazon SES). This case study answers a follow-up question from the owner: which providers would support marketing email (newsletters and promotions to riders who opted in) later, including "whitelisting", meaning good inbox placement for marketing mail.
+Status: Research, November 15, 2026. This research reflects the original SES decision. The current transactional provider is Resend ([ADR 0007](../decisions/0007-transactional-email-resend.md)). This case study answers a follow-up question from the owner: which providers would support marketing email (newsletters and promotions to riders who opted in) later, including "whitelisting", meaning good inbox placement for marketing mail.
 
 All pages were accessed on 2026-11-15. Prices change often; check them again before choosing. Anything marked "unverified" did not come from the provider's own page.
 

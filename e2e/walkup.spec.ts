@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { seedRegistrationCase } from './support/registration-case';
+import type { CheckInList } from '../src/shared/checkin';
 import type { EventConfig } from '../src/shared/schema';
 
 test('phone handoff keeps the rider account separate and returns a paid rider to check-in', async ({ page, browser }) => {
@@ -43,8 +44,9 @@ test('phone handoff keeps the rider account separate and returns a paid rider to
     await rider.getByRole('button', { name: 'Sign and review the order' }).click();
     await rider.getByRole('button', { name: 'Simulate a declined payment' }).click();
     await expect(rider.getByRole('alert')).toContainText('declined');
-    await page.getByRole('searchbox', { name: 'Find a rider' }).fill('Alex Demo');
-    await page.getByRole('searchbox', { name: 'Find a rider' }).press('Enter');
+    const lookup = page.getByRole('searchbox', { name: 'Find a rider' });
+    await lookup.fill('Alex Demo');
+    await lookup.press('Enter');
     await expect(page.getByRole('region', { name: 'Rider check-in' })).toContainText('Alex Demo');
     await expect(page.getByRole('region', { name: 'Rider check-in' })).toContainText('Payment not complete');
     await expect(page.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
@@ -57,9 +59,42 @@ test('phone handoff keeps the rider account separate and returns a paid rider to
     const staffOrders = await page.request.get('/api/rider/registrations');
     expect(staffOrders.status()).toBe(200);
     expect((await staffOrders.json()).filter((o: { eventId: string }) => o.eventId === eventId)).toHaveLength(0);
-    await page.getByRole('searchbox', { name: 'Find a rider' }).press('Enter');
-    await expect(page.getByRole('region', { name: 'Rider check-in' })).toContainText('Ready to race');
-    await page.getByRole('button', { name: /Check in and issue/ }).click();
+    await lookup.press('Enter');
+    const desk = page.getByRole('region', { name: 'Rider check-in' });
+    await expect(desk).toContainText('No preassigned bib');
+    await expect(desk.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
+    const checkInUrl = `/api/events/${eventId}/check-in`;
+    const list: CheckInList = await (await page.request.get(checkInUrl, { params: { q: 'Alex Demo' } })).json();
+    const [card] = list.riders;
+    const entryId = card.entries[0].id;
+    expect(card.entries[0].walkUp).toBe(false);
+    const riderUrl = `${checkInUrl}/${card.orderId}`;
+    const payload = { dayId: list.dayId, entryId };
+    expect((await rider.request.post(`${riderUrl}/walk-up`, { data: payload })).status()).toBe(404);
+    const refused = await page.request.post(riderUrl, { data: { dayId: list.dayId, bib: 100 } });
+    expect(refused.status()).toBe(409);
+    expect(await refused.json()).toMatchObject({ error: expect.stringContaining('No preassigned bib') });
+    const mark = desk.getByRole('button', { name: /^Mark as walk-up/ });
+    await expect(mark).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    await mark.focus();
+    await mark.press('Enter');
+    await expect(desk.getByRole('status')).toBeFocused();
+    await expect(desk.getByText('· Walk-up', { exact: true })).toBeVisible();
+    const retry = await page.request.post(`${riderUrl}/walk-up`, { data: payload });
+    expect(retry.status()).toBe(200);
+    expect(await retry.json()).toMatchObject({
+      bib: null,
+      checkedInAt: null,
+      entries: [expect.objectContaining({ id: entryId, walkUp: true })],
+    });
+    await page.reload();
+    await expect(lookup).toHaveValue('');
+    await lookup.fill('Alex Demo');
+    await lookup.press('Enter');
+    await expect(desk.getByText('· Walk-up', { exact: true })).toBeVisible();
+    await expect(mark).toHaveCount(0);
+    await desk.getByRole('button', { name: /Check in and issue/ }).click();
     await expect(page.getByRole('region', { name: 'Rider check-in' })).toContainText('100');
     const lists = await (await page.request.get(`/api/events/${eventId}/start-lists`)).json();
     expect(lists.races.flatMap((r: { rows: { firstName: string }[] }) => r.rows).filter((r: { firstName: string }) => r.firstName === 'Alex')).toHaveLength(1);
@@ -204,6 +239,7 @@ test('a junior walk-up reaches check-in after guardian consent and simulated pay
     }));
     await search.press('Enter');
     await expect(checkInPanel).toContainText('Ready to race');
+    await checkInPanel.getByRole('button', { name: /^Mark as walk-up/ }).click();
     await checkInPanel.getByRole('button', { name: /Check in and issue/ }).click();
     await expect(checkInPanel).toContainText('Checked in. Hand over the bib below.');
     await expect(checkInPanel.locator('.ci-bib__number')).toHaveText('100');

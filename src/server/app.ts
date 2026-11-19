@@ -75,7 +75,7 @@ export interface AppOptions {
   payments?: PaymentProvider;
   /** Where Stripe sends riders back. Defaults to PUBLIC_APP_URL. */
   appUrl?: string;
-  /** Outgoing email (ADR 0006). Defaults to local (recorded, never sent) unless EMAIL_MODE=ses. */
+  /** Outgoing email (ADR 0007). Defaults to local (recorded, never sent) unless EMAIL_MODE=resend. */
   email?: EmailSender;
   /** Disabled unless age18 and explicit support account IDs are configured. */
   profileClaims?: ProfileClaimSettings;
@@ -103,8 +103,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const waitlist = createWaitlist(db, repo, clock);
   const caseStudies = createCaseStudyFixtures(db, repo, orders);
   const emailSender = opts.email ?? emailFromEnv();
-  // The sign-in link in invitation emails. Only SES sends (never in production), so local email needs no URL setting.
-  const access = createAccess(db, provider, clock, createMailer(db, emailSender, clock), appUrl || (emailSender.mode === 'ses' ? publicAppUrl() : ''));
+  // Senders need a public URL for the invitation sign-in link.
+  const access = createAccess(db, provider, clock, createMailer(db, emailSender, clock), appUrl || (emailSender.mode !== 'local' ? publicAppUrl() : ''));
   const automaticBibs = createAutomaticBibs(db, repo, checkIn, access, clock);
   const refunds = createRefunds(db, paymentProvider, clock, repo);
   const cancellationAllocations = createCancellationAllocations(db, repo, clock);
@@ -165,7 +165,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   async function onEvent<P extends { id: string } = { id: string }>(
     req: { account?: Account; params: unknown },
     permission: Permission,
-    schema: z.ZodType<P, z.ZodTypeDef, unknown> = idParam as unknown as z.ZodType<P, z.ZodTypeDef, unknown>,
+    schema: z.ZodType<P> = idParam as unknown as z.ZodType<P>,
   ): Promise<P & { roles: Role[] }> {
     const params = schema.parse(req.params);
     return { ...params, roles: await access.requireEvent(me(req), params.id, permission) };
@@ -256,7 +256,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const body = memberBody.parse(req.body);
     return access.removeMember(id, body.email, body.role, me(req));
   });
-  // An owner hands their owner role to someone who has signed in. Recorded in the role history.
+  // An owner hands their owner role to a signed-in teammate. Recorded in the role history.
   app.post('/api/organizations/:id/ownership-transfer', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrg(me(req), id, 'members.manage');
@@ -629,8 +629,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/order-entries/:id/license-review', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { entryId: id }, { permission: 'entries.manage' });
-    const body = z.object({ note: z.string().trim().min(3, 'Say how the license was checked.').max(300) }).parse(req.body);
-    return orders.reviewLicense(id, body.note);
+    const body = z.object({ note: z.string().trim().max(300).optional() }).parse(req.body ?? {});
+    return orders.reviewLicense(id, body.note || null);
   });
 
   // Race-day check-in. Volunteers see readiness and bib only.
@@ -650,6 +650,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       .object({ dayId: z.string().min(1).max(64), bib: bibNumberSchema.nullable().default(null), durationMs: z.number().int().min(0).max(86_400_000).nullable().default(null) })
       .parse(req.body);
     return checkIn.checkIn(p.id, p.orderId, body.dayId, body.bib, body.durationMs);
+  });
+
+  app.post('/api/events/:id/check-in/:orderId/walk-up', async (req) => {
+    const { id, orderId } = await onEvent(req, 'checkin', checkInParams);
+    const { dayId, entryId } = z.object({ dayId: idStr, entryId: idStr }).parse(req.body);
+    return checkIn.markWalkUp(id, orderId, dayId, entryId, me(req).id);
   });
 
   app.post('/api/events/:id/check-in/:orderId/bib/preview', async (req) => {
@@ -725,7 +731,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.post('/api/events/:id/check-in-demo-riders', async (req, reply) => {
     const { id } = await onEvent(req, 'event.edit');
-    return reply.status(201).send(await checkIn.addDemoRiders(id));
+    return reply.status(201).send(await checkIn.addDemoRiders(id, me(req).id));
   });
 
   // Start lists and the sample timer export. No contact or payment data.

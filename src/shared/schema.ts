@@ -186,7 +186,7 @@ export const eventConfigSchema = z.object({
     demoNotice: z.string().max(400),
   }),
   ruleSet: z.object({ source: z.string().max(200), season: z.number().int().min(2000).max(2100) }),
-  registration: registrationSettingsSchema.default(DEFAULT_REGISTRATION_SETTINGS),
+  registration: registrationSettingsSchema.prefault(DEFAULT_REGISTRATION_SETTINGS),
   days: z.array(z.object({ id, date, label: z.string().max(60) })).min(1).max(7),
   races: z
     .array(z.object({ id, dayId: id, name: z.string().max(120), discipline: z.enum(['road_race', 'criterium']), course: z.string().max(200) }))

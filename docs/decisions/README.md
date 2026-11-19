@@ -77,7 +77,8 @@ Roadmap impact (roadmap.md):
 | [0003](0003-sign-in-and-mfa.md) | Sign-in with required multi-factor authentication (amended 2026-11-15: email sign-in on Clerk's free plan; MFA on Clerk Pro, SMS off, for organizer roles only, at the final pre-launch security gate) | Accepted | 2026-11-14 |
 | [0004](0004-hosted-stack-and-database.md) | Hosted stack and database (Render, Render Postgres) | Accepted | 2026-11-14 |
 | [0005](0005-merchant-and-settlement-model.md) | Merchant and settlement model for Stripe payments | Proposed | 2026-11-14 |
-| [0006](0006-transactional-email-amazon-ses.md) | Amazon SES for transactional email | Accepted | 2026-11-15 |
+| [0006](0006-transactional-email-amazon-ses.md) | Amazon SES for transactional email | Superseded by 0007 | 2026-11-15 |
+| [0007](0007-transactional-email-resend.md) | Resend for transactional email | Accepted | 2026-11-19 |
 
 ## Decision backlog
 
@@ -91,9 +92,9 @@ These are unresolved. They are ordered roughly by when the roadmap needs them. "
 | Application stack | Phase 2 for the core | Prototype stack decided in ADR 0001 (TypeScript, Node.js, React, SQLite). Hosted product: ADR 0004 keeps TypeScript, Node.js, and React with managed PostgreSQL; the local build moved to PostgreSQL on November 15, 2026 | Successor maintainability and hosting cost matter more than novelty; choose after the federation and payment questions (roadmap next actions) |
 | Primary datastore and capacity enforcement | Phase 2 | Decided in ADR 0004: PostgreSQL. The local build takes a per-event transaction lock (advisory lock) for capacity, holds, payments, and bibs. Earlier options: SQLite immediate transactions (ADR 0001), atomic conditional counters, a queue that serializes reservations | Correctness under concurrency first; then operational simplicity for a small team |
 | Hosting, backups, and monitoring | Phase 2 | Managed platform; self-managed cloud resources | Managed services cost more but need less volunteer expertise; restore must be demonstrated either way. Signals to monitor are in [operations.md](../operations.md#monitoring-and-alerts) |
-| Support coverage and incident response | Phase 3 exit | Volunteer support owner per event; paid support; a hybrid | Who answers on opening day and race morning, freeze lengths, and response targets. See [operations.md](../operations.md) |
+| Support coverage and incident response | Phase 3 exit | Volunteer support owner per event; paid support; a hybrid | Named coverage, event-specific rehearsal end times and pilot organizer acceptance for live freezes and response targets. See [operations.md](../operations.md) |
 | Authentication | Phase 2 email sign-in; final pre-launch organizer security gate | First factor: email magic links, passwords, or third-party sign-in. Second factor (decided in ADR 0003: organizer roles only, before the live pilot; riders and guardians use email sign-in only): passkeys, authenticator apps, SMS fallback for riders and guardians only (never organizers) | MFA is required by [product.md](../../product.md#sign-in-and-account-security) before the live pilot; choose methods that occasional riders and guardians can complete, and phishing-resistant factors for organizers |
-| Transactional email provider | Phase 2 | Decided in ADR 0006: Amazon SES. Marketing email later: see the [case study](../research/email-providers.md) | Delivery status and suppression handling are required |
+| Transactional email provider | Phase 2 | Decided in ADR 0007: Resend. Marketing email later: see the [case study](../research/email-providers.md) | Delivery status and suppression handling are required |
 | Timing-software export format | Deferred for possible future development | Sample CSV is available | Validate with actual timing software if interoperability is selected |
 | Data retention and deletion periods | Before the pilot | To be set with the club and federation requirements | Waiver and financial records may need long retention; other data should be kept as briefly as possible |
 | Product name | Before any public page | CycleReg (working name, availability not checked) | Trademark and domain availability |

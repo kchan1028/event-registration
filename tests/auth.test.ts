@@ -1,13 +1,14 @@
 import { readFileSync } from 'node:fs';
 import type { FastifyRequest } from 'fastify';
+import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 import type { AuthProvider } from '../src/server/auth';
 import { authProviderFromEnv } from '../src/server/auth';
-import { emailFromEnv, type EmailSender } from '../src/server/email';
+import type { EmailSender } from '../src/server/email';
 import type { EventConfig } from '../src/shared/schema';
 import { INVITATION_DAYS } from '../src/shared/roles';
 import { as, fakeAuth } from './support/auth';
-import { testApp } from './support/db';
+import { testApp, testDatabaseUrl } from './support/db';
 
 // Sign-in and organizer roles (ADR 0003 Phase 2, product.md "Sign-in and account security").
 // Sessions are faked: `as(email)` signs a request in as a fictional .test address.
@@ -20,8 +21,8 @@ const RIDER = { firstName: 'Test', lastName: 'Rider', email: RIDER_EMAIL, team: 
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 /** Two clubs: Valley (with a published demo event and one rider order) and Hills (empty). */
-async function twoClubs() {
-  const { app } = await testApp({ auth: fakeAuth() });
+async function twoClubs(databaseUrl?: string) {
+  const { app } = await testApp({ auth: fakeAuth(), databaseUrl });
   const call = (email: string, method: Method, url: string, payload?: unknown) =>
     app.inject({ method, url, headers: as(email), ...(payload === undefined ? {} : { payload: payload as object }) });
 
@@ -261,7 +262,7 @@ describe('organizer roles', () => {
     const sent: { to: string; subject: string; text: string }[] = [];
     let fail = false;
     const email: EmailSender = {
-      mode: 'ses',
+      mode: 'resend',
       async send(m) {
         if (fail) throw new Error('Email address is not verified.');
         sent.push(m);
@@ -295,13 +296,6 @@ describe('organizer roles', () => {
     await access.addMember(org.id, 'seeded@valley.test', 'owner', null);
     expect(sent).toHaveLength(2);
     expect(await status('seeded@valley.test')).toBeUndefined();
-  });
-
-  it('keeps email local unless EMAIL_MODE=ses is fully configured, and never in production', () => {
-    expect(emailFromEnv({}).mode).toBe('local');
-    expect(() => emailFromEnv({ EMAIL_MODE: 'ses', SES_REGION: 'us-west-2', EMAIL_FROM: 'beta@example.test' })).toThrow(/SES_AWS_PROFILE/);
-    expect(() => emailFromEnv({ EMAIL_MODE: 'ses', NODE_ENV: 'production', SES_REGION: 'us-west-2', EMAIL_FROM: 'beta@example.test', SES_AWS_PROFILE: 'cyclereg-beta' })).toThrow(/test-only/);
-    expect(emailFromEnv({ EMAIL_MODE: 'ses', SES_REGION: 'us-west-2', EMAIL_FROM: 'beta@example.test', SES_AWS_PROFILE: 'cyclereg-beta' }).mode).toBe('ses');
   });
 
   it('never removes the last owner', async () => {
@@ -343,7 +337,22 @@ describe('organizer roles', () => {
     // Someone who has never signed in cannot take ownership.
     expect((await transfer(OWNER, successor)).statusCode).toBe(422);
     await call(successor, 'GET', '/api/me');
-    await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: successor, role: 'finance' });
+    const membersUrl = `/api/organizations/${valley}/members`;
+    const formerMember = { email: RIDER_EMAIL, role: 'check_in_volunteer' };
+    expect((await call(OWNER, 'POST', membersUrl, formerMember)).statusCode).toBe(200);
+    expect((await call(OWNER, 'POST', `${membersUrl}/remove`, formerMember)).statusCode).toBe(200);
+    const before = (await call(OWNER, 'GET', membersUrl)).json();
+    // Signing in, having a different organization's role, or having a removed role is insufficient.
+    for (const outsider of [successor, OTHER_OWNER, formerMember.email]) {
+      const refusal = await transfer(OWNER, outsider);
+      expect(refusal.statusCode).toBe(422);
+      expect(refusal.json()).toMatchObject({ error: 'Add this person to your team before handing over ownership.' });
+    }
+    const afterRefusals = await call(OWNER, 'GET', membersUrl);
+    expect(afterRefusals.statusCode).toBe(200);
+    expect(afterRefusals.json()).toEqual(before);
+
+    expect((await call(OWNER, 'POST', membersUrl, { email: successor, role: 'finance' })).statusCode).toBe(200);
     await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: OWNER, role: 'registration_manager' });
     // Only an owner can hand over, and not to themselves.
     expect((await transfer(successor, successor)).statusCode).toBe(403);
@@ -362,6 +371,69 @@ describe('organizer roles', () => {
     expect((await transfer(OWNER, successor)).statusCode).toBe(403);
     expect((await call(OTHER_OWNER, 'POST', `/api/organizations/${valley}/ownership-transfer`, { email: OTHER_OWNER })).statusCode).toBe(404);
   });
+
+  it.each([
+    { first: 'removal', transferStatus: 422, finalOwner: OWNER },
+    { first: 'transfer', transferStatus: 200, finalOwner: RIDER_EMAIL },
+  ])('serializes ownership transfer and role removal with $first first', async ({ first, transferStatus, finalOwner }) => {
+    const databaseUrl = await testDatabaseUrl();
+    const { call, valley } = await twoClubs(databaseUrl);
+    const membersUrl = `/api/organizations/${valley}/members`;
+    const predecessorRole = { email: RIDER_EMAIL, role: 'finance' };
+    expect((await call(OWNER, 'POST', membersUrl, predecessorRole)).statusCode).toBe(200);
+    // The second owner can remove the role in either ordering.
+    expect((await call(OWNER, 'POST', membersUrl, { email: OTHER_OWNER, role: 'owner' })).statusCode).toBe(200);
+    const remove = () => call(OTHER_OWNER, 'POST', `${membersUrl}/remove`, predecessorRole);
+    const transfer = () => call(OWNER, 'POST', `/api/organizations/${valley}/ownership-transfer`, { email: RIDER_EMAIL });
+
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    const requests: ReturnType<typeof call>[] = [];
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`org-members:${valley}`]);
+      const waitForQueue = async (count: number) => {
+        await expect.poll(async () => {
+          const { rows } = await blocker.query<{ count: number }>(
+            `SELECT count(*)::int AS count
+               FROM pg_locks held JOIN pg_locks waiting USING (database, classid, objid, objsubid)
+              WHERE held.pid = pg_backend_pid() AND held.locktype = 'advisory' AND held.granted
+                AND waiting.locktype = 'advisory' AND NOT waiting.granted`,
+          );
+          return rows[0].count;
+        }, { timeout: 5000, message: 'Requests waiting for the organization membership lock' }).toBe(count);
+      };
+      const [firstRequest, secondRequest] = first === 'removal' ? [remove, transfer] : [transfer, remove];
+      requests.push(firstRequest());
+      await waitForQueue(1);
+      requests.push(secondRequest());
+      await waitForQueue(2);
+    } finally {
+      try {
+        await blocker.query('ROLLBACK');
+        await Promise.allSettled(requests);
+      } finally {
+        await blocker.end();
+      }
+    }
+
+    const [firstResponse, secondResponse] = await Promise.all(requests);
+    const [removed, transferred] = first === 'removal' ? [firstResponse, secondResponse] : [secondResponse, firstResponse];
+    expect(removed.statusCode, removed.body).toBe(200);
+    expect(transferred.statusCode, transferred.body).toBe(transferStatus);
+    if (first === 'removal') {
+      expect(transferred.json()).toMatchObject({ error: 'Add this person to your team before handing over ownership.' });
+    }
+    const final = await call(OTHER_OWNER, 'GET', membersUrl);
+    expect(final.statusCode, final.body).toBe(200);
+    const { members, history } = final.json<{ members: { email: string; role: string }[]; history: { action: string; email: string; by: string }[] }>();
+    expect(members.filter((member) => member.role === 'owner').map((member) => member.email).sort())
+      .toEqual([OTHER_OWNER, finalOwner].sort());
+    expect(members).not.toContainEqual(expect.objectContaining(predecessorRole));
+    expect(history.filter((change) => change.action === 'ownership_transferred')).toEqual(first === 'transfer'
+      ? [expect.objectContaining({ email: RIDER_EMAIL, by: OWNER })]
+      : []);
+  }, 15_000);
 
   it('refuses an unknown role', async () => {
     const { call, valley } = await twoClubs();

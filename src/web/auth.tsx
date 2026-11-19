@@ -39,7 +39,16 @@ export function AuthRoot({ children }: { children: ReactNode }) {
   if (TEST_MODE) return <TestSession>{children}</TestSession>;
   if (CLERK_KEY)
     return (
-      <ClerkProvider publishableKey={CLERK_KEY}>
+      <ClerkProvider
+        publishableKey={CLERK_KEY}
+        routerPush={(to) => {
+          // Clerk can return to the current hash route during session activation. Reloading it drops checkout state.
+          if (new URL(to, window.location.href).href !== window.location.href) window.location.assign(to);
+        }}
+        routerReplace={(to) => {
+          if (new URL(to, window.location.href).href !== window.location.href) window.location.replace(to);
+        }}
+      >
         <ClerkSession>{children}</ClerkSession>
       </ClerkProvider>
     );

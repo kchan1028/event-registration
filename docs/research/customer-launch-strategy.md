@@ -70,7 +70,7 @@ Source inspection found an event transaction lock for admission, atomic order/en
 
 Test-mode payments reuse session/idempotency information; webhook handling checks signatures, event identity, session, amount and currency. Late success rechecks capacity or becomes an explicit exception; refunds reserve amounts and preserve retry identity. They do not prove live operation or reconciliation. Existing [issue #84](https://github.com/kchan1028/event-registration/issues/84), accessed November 16, is a payment release blocker concerning a retryable provider error during concurrent Pay requests. It explicitly does **not** demonstrate a duplicate charge and was not reproduced against the provider in this research.
 
-Existing [#117](https://github.com/kchan1028/event-registration/issues/117) reports header overflow at 390px, not a freshly reproduced checkout failure. [#98](https://github.com/kchan1028/event-registration/issues/98) records a bib-draft owner question; [#105](https://github.com/kchan1028/event-registration/issues/105) records stale audit text. None is closed here; closure evidence belongs in [AUDIT.md](../../AUDIT.md).
+Existing [#117](https://github.com/kchan1028/event-registration/issues/117) reports header overflow at 390px, not a freshly reproduced checkout failure. [#98](https://github.com/kchan1028/event-registration/issues/98) tracks the bib-draft decision and fix; [#105](https://github.com/kchan1028/event-registration/issues/105) records stale audit text. None is closed here; closure evidence belongs in [AUDIT.md](../../AUDIT.md).
 
 ### Launch blockers differ from optional improvements
 

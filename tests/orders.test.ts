@@ -193,8 +193,11 @@ describe('rider checkout: holds and simulated payment', () => {
     const o = (await order([code('RR-M35-34')])).json() as Order;
     const paid = (await pay(o.id, 'success')).json() as Order;
     expect(paid.entries[0].readiness.find((r) => r.key === 'license')!.state).toBe('needs_review');
-    expect((await app.inject({ method: 'POST', url: `/api/order-entries/${paid.entries[0].id}/license-review`, payload: { note: '' } })).statusCode).toBe(400);
-    const reviewed = (await app.inject({ method: 'POST', url: `/api/order-entries/${paid.entries[0].id}/license-review`, payload: { note: 'License card seen' } })).json() as Order;
+    const reviewUrl = `/api/order-entries/${paid.entries[0].id}/license-review`;
+    expect((await app.inject({ method: 'POST', url: reviewUrl, payload: { note: 123 } })).statusCode).toBe(400);
+    const confirmation = await app.inject({ method: 'POST', url: reviewUrl, payload: {} });
+    expect(confirmation.statusCode).toBe(200);
+    const reviewed = confirmation.json() as Order;
     expect(reviewed.entries[0].readiness.find((r) => r.key === 'license')!.state).toBe('done');
     const list = (await app.inject({ method: 'GET', url: `/api/events/${eventId}/orders` })).json() as Order[];
     expect(list).toHaveLength(1);

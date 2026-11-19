@@ -119,9 +119,9 @@ At the payment step, ask the participant to choose **Simulate a declined payment
 
 **Scenario:** "Sam Demo registered for Demo Harbor Criterium: pricing and eligibility lab and just showed her license card at the desk. Record that her license has been checked."
 
-**Success:** In the **CycleReg generated case studies** organization's Demo Harbor Criterium: pricing and eligibility lab, opens **Registrations**, finds Sam, chooses **Review license**, writes how it was checked, and selects **Mark reviewed**.
+**Success:** In the **CycleReg generated case studies** organization's Demo Harbor Criterium: pricing and eligibility lab, opens **Registrations**, finds Sam, chooses **Review license**, and selects **Mark reviewed**.
 
-**Watch for:** finding the right organization and event; using the license review filter; writing a meaningful note; believing that paying had already cleared her.
+**Watch for:** finding the right organization and event; using the license review filter; believing that paying had already cleared her.
 
 **Follow-up:** "Is Sam now ready to race? What else would a check-in volunteer see?"
 
@@ -144,6 +144,8 @@ At the payment step, ask the participant to choose **Simulate a declined payment
 3. Open **Registrations** for the same event, find **Harper Demo**, and write down or print the check-in code shown under the order. This is the code for V2.
 4. Return to **Race-day check-in**, choose **Saturday**, find **Alex Demo**, and check Alex in with the next bib. V5 needs Alex to hold a bib already.
 5. Select **Next rider** so the search box is empty.
+
+The check-in demo loader creates fictional paid walk-ups for the desk exercises. Preassign bibs separately when rehearsing advance registration.
 
 The demo riders include ready riders (Alex, Blake, Casey, Emery, Harper), riders whose license still needs review (Dana, Gray), and one unpaid rider (Frankie).
 

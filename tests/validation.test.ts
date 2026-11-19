@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildDemoEvent } from '../src/shared/demo';
 import { cloneCategory, codesInUse, configFromTemplate, copyCode, duplicateCategory, moveCategory } from '../src/shared/factory';
 import { formatLength } from '../src/shared/format';
-import { eventConfigSchema, type EventConfig } from '../src/shared/schema';
+import { DEFAULT_REGISTRATION_SETTINGS, eventConfigSchema, type EventConfig } from '../src/shared/schema';
 import { countIssues, validateConfig } from '../src/shared/validation';
 
 const demo = () => buildDemoEvent().config;
@@ -14,6 +14,14 @@ describe('demonstration data', () => {
     const c = demo();
     expect(() => eventConfigSchema.parse(c)).not.toThrow();
     expect(countIssues(validateConfig(c)).errors).toBe(0);
+  });
+
+  it('parses an event saved before registration settings with independent defaults', () => {
+    const legacy = { ...demo(), registration: undefined };
+    const first = eventConfigSchema.parse(legacy);
+    const second = eventConfigSchema.parse(legacy);
+    expect(first.registration).toEqual(DEFAULT_REGISTRATION_SETTINGS);
+    expect(first.registration.bundles).not.toBe(second.registration.bundles);
   });
 
   it('covers elite, masters, women, junior, and collegiate fields and is labeled as an example', () => {

@@ -88,6 +88,7 @@ describe('category extras API', () => {
 
     // No event or day bib range is set, yet check-in issues a bib from the category's range.
     const list = (await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in?q=Pat` })).json() as { dayId: string };
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${created.id}/walk-up`, payload: { dayId: list.dayId, entryId: created.entries[0].id } })).statusCode).toBe(200);
     const checked = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${created.id}`, payload: { dayId: list.dayId, bib: null } });
     expect(checked.statusCode).toBe(200);
     expect((checked.json() as { bib: number }).bib).toBe(500);

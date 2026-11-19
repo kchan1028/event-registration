@@ -4,9 +4,23 @@ CycleReg will handle rider contact details, emergency contacts, license numbers,
 
 > **Status: local build with email sign-in, fictional data only.** Every API route except the health check, the public event list, rider event pages, and the Stripe webhook (trusted only by its verified signature) requires passwordless email sign-in (Clerk, [ADR 0003](docs/decisions/0003-sign-in-and-mfa.md) Phase 2), and organizer routes check the caller's role in the event's organization on the server (`src/server/auth.ts`, `src/shared/roles.ts`). Data is stored in a local PostgreSQL database ([setup](docs/runbooks/local-setup.md)). There is no deployed website, no payments with real money, and no real rider data. Payments are simulated or use Stripe test mode; live keys are refused. Email sign-in is one factor: anyone who controls an account's inbox can sign in as it. So the app must not hold real rider data or take live payments until MFA and sensitive-action re-verification are enforced for every organizer role at the final pre-launch security gate; riders and guardians stay on email sign-in by owner decision; until then hosted use is limited to staging and rehearsals with fictional data, and the [Render deploy](docs/runbooks/deploy-render.md) still waits on its other gates. Unless a section says otherwise, the security requirements below are Planned, not Implemented.
 
+Clerk can activate a session in place when its sign-in window returns to the current CycleReg route. The browser keeps the current page state and the API continues to verify every protected request with Clerk. The [rider sign-in regression check](docs/testing/test-plan.md#rider-check-in-code-retrieval) covers this behavior.
+
+## Clerk session revocation
+
+Revoking a Clerk session prevents it from receiving fresh tokens. CycleReg verifies issued tokens against their validity period on each request. An already-issued token can retain access through its expiration time and the verifier’s five-second clock tolerance. The [Phase 2 development rehearsal](roadmap.md#phase-2--build-the-registration-core) records the observed timing. Organization role removal is separate and applies on the next request.
+
+## Transactional invitation email (Implemented locally)
+
+The server sends organizer invitation emails through Resend only in test mode with a configured recipient list. Keep the sending key in server-only environment configuration and use controlled test inboxes. The request contains the recipient address and invitation text. The app records API acceptance or send failure and keeps delivery evidence separate from invitation role grants. Production mode refuses Resend sends.
+
 ## Expired invitation guidance (Implemented locally)
 
 The signed-in recipient reads only their own latest expiry notices through `/api/rider/expired-invitations`. Authenticated account email scopes organization/role history, without revealing the team or granting access. A later grant of the same role supersedes its notice. Real identity-provider acceptance remains open.
+
+## Organization ownership transfer (Implemented locally)
+
+The server checks that the caller is a current owner and the successor is a signed-in account with a current role in the same organization. Both checks run under the organization membership lock. The transfer adds the successor’s Owner role, removes the caller’s Owner role and records one actor-attributed history entry in the same transaction. A refused transfer leaves membership and history intact.
 
 ## Reviewed cancellation plans (Implemented locally)
 
@@ -97,6 +111,9 @@ Concurrent requests use the existing order-scoped provider key and fixed request
 The check-in QR scanner processes camera frames on the device. Stopping the scanner or leaving its view releases the camera stream, including a stream returned after the view closes while permission is pending.
 
 ## Walk-up phone handoff (Implemented locally)
+
+The walk-up marker requires the event’s check-in permission. Under the event lock, the server verifies the confirmed entry belongs to the selected rider and race day and records the staff account and time. Public checkout and the QR/link cannot mark an entry. The server checks for a same-day marked confirmed entry before first bib assignment at the desk and still enforces payment and readiness. Staff views show the marker without exposing its actor.
+
 
 Check-in staff can display only the public event registration address and QR. It contains no rider details, offer tokens or staff-page query parameters. Registration stays under the participant/guardian account; the staff session is not handed to the rider. No new API route, role, account access, payment method or waiver bypass is added. The published-event guard suppresses handoff for an unpublished event; server registration validation remains authoritative. Shared kiosks and staff-entered orders remain outside this increment. Local loopback addresses cannot serve another device; real-phone use requires reachable staging with the existing security gates.
 

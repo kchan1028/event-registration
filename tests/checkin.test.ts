@@ -1,8 +1,10 @@
 import pg from 'pg';
 import { describe, expect, it } from 'vitest';
+import { as } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
 import { buildDemoEvent } from '../src/shared/demo';
 import { bibRangeForEntries, checkInResult, checkInTiming, mergeReadiness, nextFreeBib } from '../src/shared/checkin';
+import type { CheckInRider } from '../src/shared/checkin';
 import type { EventConfig } from '../src/shared/schema';
 import type { ReadinessItem } from '../src/shared/checkout';
 
@@ -57,11 +59,11 @@ describe('check-in rules', () => {
 });
 
 type Card = { orderId: string; name: string; checkInCode: string | null; bib: number | null; checkedInAt: string | null; result: { ready: boolean }; bibHistory: { bib: number; reason: string | null }[]; undoneCheckIns: { bib: number | null; bibReleased: boolean; reason: string }[] };
-type List = { dayId: string; days: { id: string }[]; riders: Card[] };
+type List = { dayId: string; days: { id: string }[]; riders: (Card & Pick<CheckInRider, 'entries'>)[] };
 
-async function setup(databaseUrl?: string) {
-  const { app } = await testApp({ databaseUrl, now: () => new Date('2027-03-01T18:00:00Z') });
-  const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
+async function setup(databaseUrl?: string, now = () => new Date('2027-03-01T18:00:00Z')) {
+  const { app } = await testApp({ databaseUrl, now });
+  const { eventId, organizationId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string; organizationId: string };
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
   const seeded = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in-demo-riders` });
   const list = async (q = '', day?: string) =>
@@ -70,7 +72,7 @@ async function setup(databaseUrl?: string) {
   const rider = (name: string) => first.riders.find((r) => r.name.startsWith(name))!;
   const checkIn = (orderId: string, bib: number | null = null, dayId = first.dayId) => app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${orderId}`, payload: { dayId, bib } });
   const setBibs = (payload: Record<string, unknown>) => app.inject({ method: 'PUT', url: `/api/events/${eventId}/bib-settings`, payload });
-  return { app, eventId, seeded, list, first, rider, checkIn, setBibs };
+  return { app, eventId, organizationId, seeded, list, first, rider, checkIn, setBibs };
 }
 
 describe('check-in API', () => {
@@ -225,6 +227,57 @@ describe('check-in API', () => {
     expect(seeded.statusCode).toBe(201);
     expect(first.riders.some((r) => r.result.ready)).toBe(true);
     expect(first.riders.some((r) => !r.result.ready)).toBe(true);
+  });
+
+  it('preserves the first walk-up audit record when another staff member retries', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const markedAt = new Date('2027-03-01T18:00:00Z');
+    let now = markedAt;
+    const { app, eventId, organizationId, first, rider } = await setup(databaseUrl, () => now);
+    const { orderId, entries } = rider('Alex');
+    const entryId = entries[0].id;
+    const volunteer = 'walk-up-volunteer@example.test';
+    const headers = as(volunteer);
+    const owner = (await app.inject({ method: 'GET', url: '/api/me' })).json<{ account: { id: string } }>().account;
+    const volunteerAccount = (await app.inject({ method: 'GET', url: '/api/me', headers })).json<{ account: { id: string } }>().account;
+    expect(volunteerAccount.id).not.toBe(owner.id);
+    const grant = await app.inject({
+      method: 'POST',
+      url: `/api/organizations/${organizationId}/members`,
+      payload: { email: volunteer, role: 'check_in_volunteer' },
+    });
+    expect(grant.statusCode).toBe(200);
+
+    const client = new pg.Client({ connectionString: databaseUrl });
+    await client.connect();
+    try {
+      // The desk demo pre-marks paid entries. Start this fictional entry unmarked, like ordinary checkout.
+      const reset = await client.query(
+        'UPDATE order_entries SET walk_up_marked_at = NULL, walk_up_marked_by = NULL WHERE event_id = $1 AND id = $2',
+        [eventId, entryId],
+      );
+      expect(reset.rowCount).toBe(1);
+      const auditRecord = async () => (await client.query(
+        'SELECT walk_up_marked_at, walk_up_marked_by FROM order_entries WHERE event_id = $1 AND id = $2',
+        [eventId, entryId],
+      )).rows[0];
+      const request = {
+        method: 'POST' as const,
+        url: `/api/events/${eventId}/check-in/${orderId}/walk-up`,
+        payload: { dayId: first.dayId, entryId },
+      };
+      expect((await app.inject(request)).statusCode).toBe(200);
+      const expected = { walk_up_marked_at: markedAt, walk_up_marked_by: owner.id };
+      expect(await auditRecord()).toEqual(expected);
+
+      now = new Date('2027-03-01T18:05:00Z');
+      const retry = await app.inject({ ...request, headers });
+      expect(retry.statusCode).toBe(200);
+      expect(retry.json<CheckInRider>().entries.find((entry) => entry.id === entryId)?.walkUp).toBe(true);
+      expect(await auditRecord()).toEqual(expected);
+    } finally {
+      await client.end();
+    }
   });
 
   it('needs a bib range before issuing bibs', async () => {

@@ -278,14 +278,20 @@ test('a paid rider can receive a bib only on a day they entered', async ({ page 
     orderId: rider.orderId, payment: 'confirmed', entries: [], bib: null, checkedInAt: null, bibHistory: [],
   })]);
 
+  const wrongDayMark = await api.post(`${eventUrl}/check-in/${rider.orderId}/walk-up`, {
+    data: { dayId: other.id, entryId: rider.entries[0].id },
+  });
+  expect(wrongDayMark.status()).toBe(404);
+
   await selectDay(entered.label);
   await search.press('Enter');
   await expect(detail).toContainText('Ready to race');
+  await detail.getByRole('button', { name: /^Mark as walk-up/ }).click();
   await detail.getByRole('button', { name: 'Check in and issue next bib' }).click();
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
   const correctDay = await list({ day: entered.id, q: code });
   expect(correctDay.riders).toEqual([expect.objectContaining({
-    orderId: rider.orderId, entries: rider.entries, bib: 100, checkedInAt: expect.any(String),
+    orderId: rider.orderId, entries: rider.entries.map((entry) => ({ ...entry, walkUp: true })), bib: 100, checkedInAt: expect.any(String),
   })]);
   const wrongDay = await list({ day: other.id, q: code });
   expect(wrongDay.riders).toEqual([expect.objectContaining({
@@ -678,6 +684,28 @@ for (const mobile of [false, true]) {
     await panel.getByRole('textbox', { name: `New bib for ${blake.name}`, exact: true }).fill('100');
     await panel.getByRole('button', { name: 'Preview bib changes', exact: true }).click();
     const preview = panel.getByRole('region', { name: 'Proposed bib changes', exact: true });
+    await expect(preview.getByRole('row', { name: new RegExp(alex.name) })).toContainText('Saturday');
+    const alexSelection = panel.getByRole('checkbox', { name: alex.name, exact: true });
+    const alexDraft = panel.getByRole('textbox', { name: `New bib for ${alex.name}`, exact: true });
+    const blakeDraft = panel.getByRole('textbox', { name: `New bib for ${blake.name}`, exact: true });
+    await alexSelection.uncheck();
+    await expect(preview).toHaveCount(0);
+    await expect(alexDraft).toBeDisabled();
+    await expect(alexDraft).toHaveValue('');
+    await alexSelection.check();
+    await expect(alexDraft).toHaveValue('');
+    await expect(blakeDraft).toHaveValue('100');
+    await alexDraft.fill('101');
+    await panel.getByRole('button', { name: 'Preview bib changes', exact: true }).click();
+    await expect(preview).toBeVisible();
+    await panel.getByRole('button', { name: 'Select all assigned (1)', exact: true }).click();
+    await expect(preview).toHaveCount(0);
+    await expect(alexSelection).not.toBeChecked();
+    await alexSelection.check();
+    await expect(alexDraft).toHaveValue('');
+    await expect(blakeDraft).toHaveValue('100');
+    await alexDraft.fill('101');
+    await panel.getByRole('button', { name: 'Preview bib changes', exact: true }).click();
     await expect(preview.getByRole('row', { name: new RegExp(alex.name) })).toContainText('Saturday');
     await expect(panel).toContainText('Whole event');
     await expect(panel).toContainText('Sunday criterium');

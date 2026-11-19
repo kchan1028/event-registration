@@ -395,7 +395,7 @@ export const api = {
   transferEntry: (entryId: string, toCategoryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/transfer`, { toCategoryId, reason }),
   withdrawEntry: (entryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/withdraw`, { reason }),
   correctRider: (orderId: string, changes: RiderCorrection, reason: string) => request<OrderView>('POST', `/api/orders/${orderId}/rider-corrections`, { changes, reason }),
-  reviewLicense: (entryId: string, note: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/license-review`, { note }),
+  reviewLicense: (entryId: string, note?: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/license-review`, { note }),
   checkInList: (eventId: string, dayId: string | null, q: string) =>
     request<CheckInList>('GET', `/api/events/${eventId}/check-in?${new URLSearchParams({ ...(dayId ? { day: dayId } : {}), q })}`),
   automaticBibs: (eventId: string) => request<AutomaticBibJob[]>('GET', `/api/events/${eventId}/automatic-bibs`),
@@ -405,6 +405,8 @@ export const api = {
   applyBibs: (eventId: string, batch: BibBatch, fingerprint: string) => request<BibPlan & { applied: number }>('POST', `/api/events/${eventId}/bibs/apply`, { ...batch, fingerprint }),
   saveBibSettings: (eventId: string, settings: BibSettings) => request<BibSettings>('PUT', `/api/events/${eventId}/bib-settings`, settings),
   checkIn: (eventId: string, orderId: string, dayId: string, bib: number | null, durationMs: number | null = null) => request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}`, { dayId, bib, durationMs }),
+  markWalkUp: (eventId: string, orderId: string, dayId: string, entryId: string) =>
+    request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}/walk-up`, { dayId, entryId }),
   undoCheckIn: (eventId: string, orderId: string, dayId: string, reason: string) => request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}/undo`, { dayId, reason }),
   previewBibChange: (eventId: string, orderId: string, input: BibChange) => request<BibReassignmentPlan>('POST', `/api/events/${eventId}/check-in/${orderId}/bib/preview`, input),
   changeBib: (eventId: string, orderId: string, input: BibChange, fingerprint: string) => request<CheckInRider>('POST', `/api/events/${eventId}/check-in/${orderId}/bib`, { ...input, fingerprint }),

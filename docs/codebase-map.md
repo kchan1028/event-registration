@@ -24,7 +24,7 @@ Paths verified against `main` at commit `740d0b9` (November 16, 2026). When a ch
 | Waitlists | `src/server/waitlist.ts` | `waitlist.ts` | `waitlist.test.ts` |
 | Rider identity across orders | `src/server/identity.ts`, `src/web/registrations/SameRider.tsx` | `riderIdentity.ts` | `identity.test.ts` |
 | Sign-in, roles, team, guardians | `src/server/auth.ts`, `juniors.ts`, `profileClaims.ts`, `src/web/auth.tsx`, `Team.tsx`, `MyRegistrations.tsx` | `roles.ts` (`can`, permissions), `juniors.ts`, `profileClaims.ts` | `auth.test.ts`, `juniors.test.ts`, `profileClaims.test.ts`, `guardian-rollback.test.ts`; `e2e/sign-in.spec.ts`, `e2e/handoff.spec.ts`, `e2e/invitation-recovery.spec.ts` |
-| Email (test-only SES) | `src/server/email.ts` | | `auth.test.ts` (invitation emails) |
+| Email (test-only Resend) | `src/server/email.ts` | | `auth.test.ts` (invitation workflow), `email.test.ts` (provider adapter) |
 | Check-in, bibs, roster | `src/server/checkin.ts`, `automaticBibs.ts`, `src/web/CheckIn.tsx`, `BibBatchPanel.tsx`, `Roster.tsx` | `checkin.ts`, `roster.ts` | `checkin.test.ts`, `automatic-bibs.test.ts`, `bib-reassignment.test.ts`, `roster.test.ts`; `e2e/checkin.spec.ts`, `checkin-recovery.spec.ts` |
 | Start lists and timer export | `src/server/startlists.ts`, `src/web/StartLists.tsx` | `startlist.ts` | `startlists.test.ts`, `e2e/handoff.spec.ts` (timer role and lock revisions) |
 | Demo and case-study data | `src/server/seed-cli.ts`, `case-study-cli.ts`, `caseStudies.ts` | `demo.ts`, `fixtures.ts`, `caseStudies.ts`, and the named event files (`berkeleyOmnium.ts`, `burlingame.ts`, and others) | `case-studies.test.ts`, per-event test files, and `e2e/case-studies.spec.ts` (including fictional weekend close-out) |
@@ -33,6 +33,8 @@ Paths verified against `main` at commit `740d0b9` (November 16, 2026). When a ch
 
 ## Constraints that are easy to miss
 
+- **Check-in recovery.** After a lost individual check-in response, the desk waits for explicit lookup of the same rider and race day before displaying the bib or allowing another check-in. Coverage: `e2e/checkin-recovery.spec.ts`.
+- **Walk-up bibs.** The staff mark belongs to an individual confirmed entry. Check-in allows a first desk assignment only for a marked entry on the selected day. A preassigned bib follows normal readiness and check-in. The public checkout link does not set the mark. Coverage: `tests/checkin.test.ts` for audit record retries, and `e2e/walkup.spec.ts`, `e2e/checkin.spec.ts` and `e2e/checkout.spec.ts` for desk and checkout flows.
 - **Per-event lock.** Any write that can change capacity, holds, bibs, or the ledger runs in `db.transaction()` and takes `db.lock(eventLock(eventId))` first (`repo.ts`). `db.lock()` only works inside a transaction.
 - **Reuse the shared SQL.** "Counts toward capacity" is `liveEntrySql`; "a hold still reserving" is `reservedOrderSql` (both in `repo.ts`). Holds expire by time, not by a background job, so status checks compare against the clock.
 - **Access checks.** Organizer routes call `requireOrg`/`requireEvent` in `auth.ts`; order routes call `requireOrderAccess`. Someone with no role gets 404, not 403, so IDs cannot be probed. `tests/auth.test.ts` checks that every `/api` route registered in `app.ts` with `app.get`, `post`, `put`, or `delete` needs sign-in unless marked public; a route registered another way is not scanned.

@@ -41,7 +41,7 @@ Each event must publish, before registration opens:
 - a backup contact if the support owner cannot respond; and
 - where volunteers find the printable fallback and the event runbook.
 
-A volunteer should never have to guess who handles a race-morning failure.
+A volunteer should never have to guess who handles a race-morning failure. The [support coverage rehearsal](testing/test-plan.md#support-coverage-rehearsal) uses fictional assignments by owner decision on November 19, 2026. Named coverage and funding remain open.
 
 ## Operating calendar for an event
 
@@ -61,25 +61,27 @@ An event moves through these stages in order. The two freezes protect the busies
 | Stage | What happens | Exit check |
 |---|---|---|
 | Setup and publishing checks | Organizer configures categories, limits, prices, bib ranges, and questions; publishing checks run | Preview of every day reviewed by the registration lead |
-| Pre-opening freeze (proposed: 48 hours) | No code or configuration changes except fixes approved by the technical lead | Support owner confirmed; monitoring and alerts tested |
+| Pre-opening rehearsal freeze (starts 48 hours before registration opens) | No code or configuration changes except fixes approved by the technical lead | Support owner confirmed; monitoring and alerts tested |
 | Registration opening | Support owner watches payments, capacity, and email for the first hours | No stuck reservations, failed payment notifications, or bounced confirmations left unexplained |
 | Open registration period | Exception queue worked at least every few days; corrections logged with a reason | Queue has no item older than the agreed limit |
-| Race-week freeze (proposed: from 72 hours before the first start) | Changes limited to rider-level corrections and approved fixes | Start-list snapshot sent to the timer; fallback roster printed |
+| Race-week rehearsal freeze (starts 72 hours before the first start) | Changes limited to rider-level corrections and approved fixes | Start-list snapshot sent to the timer; fallback roster printed |
 | Race morning | Check-in, bib assignment, field changes, timer updates | Every change after the snapshot appears in the change report |
 | Close-out | Refunds settled, ledger reconciled with provider statements, exports archived | Treasurer signs off reconciliation |
 | Handoff and review | Lessons recorded; template cloned for next year; ownership transferred if needed | A successor can open the event and its runbook without the original owner's credentials |
 
-Freeze lengths are proposals for the pilot organizer to confirm.
+The project owner approved both freeze start times for Phase 3 rehearsal on November 19, 2026. Before scheduling the exercise, the pilot organizer and registration lead confirm each end time and record both windows and the event time zone in the event runbook. Include the registration-opening exercise in the first window and the race-morning desk exercise in the second. Live freeze acceptance remains with the pilot organizer.
 
 ## Incident severity
 
 An incident is anything that stops riders registering, stops volunteers checking riders in, or makes money, capacity, or entry records wrong.
 
-| Severity | Examples | Response target (proposed) |
+| Severity | Examples | Initial response |
 |---|---|---|
-| Critical | Oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, private data exposed, checkout down during registration opening, check-in unusable on race morning | Support owner engaged immediately; technical lead paged; registration paused if records are being corrupted |
-| High | Payment notifications delayed, confirmation emails not sending, required start-list handoff fails, a role sees data it should not | Same day, or within the hour on opening day or race morning |
-| Normal | A single rider's record wrong, a confusing message, a slow report | Next working session |
+| Critical | Oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, private data exposed, checkout down during registration opening, check-in unusable on race morning | For the approved rehearsal windows, contact the support owner and technical lead immediately on detection. Pause affected registration if records are being corrupted. Out-of-window targets remain open. |
+| High | Payment notifications delayed, confirmation emails not sending, required start-list handoff fails, a role sees data it should not | Within one hour of detection or report during the approved rehearsal windows. Same-day response outside those windows remains proposed. |
+| Normal | A single rider's record wrong, a confusing message, a slow report | Next working session (proposed) |
+
+The project owner approved the critical and high initial-response targets for the two rehearsal windows on November 19, 2026. Initial response means acknowledging the incident, identifying the accountable role and recording the first action or escalation. It does not end the safe-reopening clock.
 
 The critical examples match the integrity failures that [product.md](../product.md#success-measures) says must be zero, and any unresolved critical defect blocks the pilot ([roadmap.md](../roadmap.md#critical-risks-and-decision-points)).
 
@@ -87,7 +89,7 @@ The critical examples match the integrity failures that [product.md](../product.
 
 1. **Stop the damage.** If money, capacity, or entries are being recorded wrongly, pause registration for the affected event. Pausing is preferred over letting bad records pile up.
 2. **Tell people.** The support owner posts a short status to organizers and, if riders are affected, a rider-facing notice that says what is wrong and what to do. Do not promise a time you cannot meet.
-3. **Fix or fall back.** Race morning uses the printable fallback roster and exception checklist if check-in cannot be restored quickly. Connectivity is required for live changes; offline sync does not exist and must not be promised.
+3. **Fix or fall back.** If check-in cannot be restored quickly, use the printable roster and exception checklist as references and hold affected bib handovers. The [proposed outage rehearsal](runbooks/race-day-check-in.md#reconcile-a-reference-only-outage) covers lead escalation and recovery with fictional data. Connectivity is required for live changes; offline sync does not exist and must not be promised.
 4. **Reconcile.** Before reopening, compare entries, capacity counts, and the ledger against the payment provider's records. Correct with an audit reason; never edit history.
 5. **Record it.** Write a short incident note: what happened, who was affected, what was done, and what will prevent it. Link it from the event's review.
 
@@ -107,16 +109,25 @@ Proposed signals, from [product.md](../product.md#quality-requirements). Tools a
 
 Alerts must not include card data, emergency contacts, or other restricted fields.
 
-Implemented in the local build (November 15, 2026): `GET /api/health` runs a database query and answers 503 when it fails, so a platform health check (Render's health-check path, per [ADR 0004](decisions/0004-hosted-stack-and-database.md)) can take an instance out of service. On `SIGTERM` the server stops taking new requests, finishes the ones in progress, and closes its database connections. No platform is configured yet; the planned Render setup is in [docs/runbooks/deploy-render.md](runbooks/deploy-render.md).
+Implemented in the local build (November 15, 2026): `GET /api/health` runs a database query and answers 503 when it fails, so a platform health check (Render's health-check path, per [ADR 0004](decisions/0004-hosted-stack-and-database.md)) can take an instance out of service. On `SIGTERM` the server stops taking new requests, finishes the ones in progress, and closes its database connections. The [local database health check](testing/test-plan.md#local-database-health-check) verifies the outage and return to HTTP 200 without restarting the application. No platform is configured yet. The planned Render setup is in [docs/runbooks/deploy-render.md](runbooks/deploy-render.md).
 
 ## Backups and recovery
 
-The [local fictional-data restore procedure](runbooks/local-backup-restore.md) exercises a separate logical archive/restore, record comparison and application recovery checks without touching the working database. It is technical rehearsal preparation; hosted scheduled/off-site recovery, agreed targets and staff acceptance remain open.
+The [local fictional-data restore procedure](runbooks/local-backup-restore.md) exercises a separate logical archive/restore, record comparison and application recovery checks without touching the working database. It prepares the team for the hosted rehearsal. Hosted scheduled and off-site recovery and staff acceptance remain open.
 
-- Back up the primary datastore on a schedule set by the hosting ADR, and keep copies somewhere a single failure cannot remove.
+- Back up the primary datastore on the schedule and point-in-time recovery policy in the [hosting ADR](decisions/0004-hosted-stack-and-database.md), and keep copies somewhere a single failure cannot remove.
 - A backup counts only after a restore has been demonstrated. Phase 3 requires that demonstration during the mock-weekend rehearsal ([roadmap.md](../roadmap.md#phase-3--make-race-day-operable)).
-- Record a target for how much data may be lost and how long a restore may take, agreed with the pilot organizer before the pilot.
+- Measure the approved targets in the [hosted recovery rehearsal](testing/test-plan.md#measure-hosted-recovery-before-the-pilot).
 - After any restore, reconcile entries and the ledger with the payment provider before reopening.
+
+The project owner approved these pilot rehearsal targets on November 19, 2026.
+
+| Window | Maximum database recovery gap | Maximum time to safe reopening |
+|---|---:|---:|
+| Registration opening | 5 minutes | 60 minutes |
+| Race morning | 5 minutes | 30 minutes |
+
+The database recovery gap is the time between the latest recovered committed change and the disruption. The reopening clock runs from disruption through detection, restore, application recovery, reconciliation and the operator’s decision. Account for every confirmed payment, entry and affected bib before reopening. Keep the affected desk or registration paused while a discrepancy remains. If the time target is exceeded, record the overrun and escalate to the project owner. Reopen only after reconciliation and authorization to resume. Hosted measurement and operator acceptance are open.
 
 ## Changes and releases
 
@@ -155,20 +166,20 @@ The [readiness checklist](research/prelaunch-readiness.md#race-day-readiness-che
 ## Open questions
 
 1. Who funds and staffs support after launch? ([product.md](../product.md#open-decisions), question 3)
-2. What freeze lengths and response targets does the pilot organizer accept?
-3. What data loss and restore-time targets are acceptable for registration opening and race morning?
+2. Freeze starts and critical/high initial-response targets are approved for rehearsal. Event-specific window end times, live operating acceptance and actual coverage remain open under [Operating calendar](#operating-calendar-for-an-event) and [Incident severity](#incident-severity).
+3. Recovery targets approved November 19, 2026. Hosted proof and operator acceptance remain open under [Backups and recovery](#backups-and-recovery).
 4. Which monitoring and alerting tools fit a small volunteer team? (hosting ADR)
 5. What retention periods apply to waivers, financial records, and everything else?
 
 ### November 16, 2026 research follow-up
 
-The existing questions above remain open. Owners below are roles to assign, not commitments. Research and synthetic scenario design can proceed under the provisional assumptions; no answer is inferred from silence.
+Unresolved operating decisions and validation steps are listed below. The named roles still need assigned operators. Research and fictional scenario design can proceed under the provisional assumptions.
 
 | Existing question | Owner / why it matters | Provisional assumption, blocked work and revisit |
 |---|---|---|
 | 1, support coverage | Project owner; named primary/deputy needed for independent operation | Assume no committed coverage. Live event support remains blocked; revisit before hosted pilot rehearsal. Includes responsibility for paid-but-not-ready follow-up and measurement review. |
-| 2, freeze/response targets | Product owner with registration lead; race-morning disruption needs an agreed response | Existing proposed values are not approved. Rehearsal design proceeds; accepted incident response remains blocked until organizer review before rehearsal. |
-| 3, data-loss/restore targets | Technical lead and treasurer, unassigned; restore must preserve money, capacity and entries | No approved RPO/RTO assumed. Isolated synthetic restoration can be planned; recovery sign-off blocked until targets agreed, before hosted rehearsal. |
+| 2, freeze/response targets | Product owner with registration lead; race-morning disruption needs an agreed response | Rehearsal freeze starts and critical/high response targets approved November 19, 2026. Rehearse both windows. Confirm event-specific window end times before rehearsal. Live acceptance, named staffing and out-of-window response targets remain open. |
+| 3, recovery measurement | Technical lead and treasurer, unassigned; restore must preserve money, capacity and entries | Targets approved November 19, 2026. Hosted measurement and recovery sign-off remain open. Run the hosted rehearsal once its environment and operators are approved. |
 | 4, monitoring/tools | Technical/support lead, unassigned; failures need an accountable receiver | No monitoring service, alert thresholds or after-hours rota accepted. Synthetic fault cases proceed; hosted operational sign-off blocked pending routing/tool review. |
 | 5, retention | Project owner/privacy responsibility unassigned; waivers, financial records, paper rosters and opaque telemetry keys remain personal data | No retention period or analytics collection approved. Synthetic measurements proceed; real-data collection blocked until access/retention approval before pilot. |
 
