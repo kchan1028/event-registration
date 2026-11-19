@@ -10,7 +10,7 @@ import { BibBatchPanel, type BibBatchMode } from './BibBatchPanel';
 import { href } from './App';
 import { Icon, ThemeToggle } from './ui';
 
-type CheckInRecovery = 'pending' | 'verified';
+type CheckInRecovery = 'pending' | Pick<CheckInRider, 'bib' | 'checkedInAt'>;
 
 function recoveryKey(eventId: string, dayId: string, orderId: string) {
   return JSON.stringify([eventId, dayId, orderId]);
@@ -118,7 +118,9 @@ export function CheckIn({ eventId }: { eventId: string }) {
       if (fresh.riders.length === 1) {
         const rider = fresh.riders[0];
         const key = recoveryKey(eventId, fresh.dayId, rider.orderId);
-        if (recovery.get(key) === 'pending') updateRecovery(key, 'verified');
+        if (recovery.get(key) === 'pending') {
+          updateRecovery(key, { bib: rider.bib, checkedInAt: rider.checkedInAt });
+        }
         select(rider);
       }
     } catch (err) {
@@ -127,7 +129,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
   }
 
   function replace(r: CheckInRider) {
-    if (selectedRecoveryKey && recovery.get(selectedRecoveryKey) === 'verified') updateRecovery(selectedRecoveryKey, undefined);
+    if (selectedRecoveryKey && typeof recovery.get(selectedRecoveryKey) === 'object') updateRecovery(selectedRecoveryKey, undefined);
     setData((d) => (d ? { ...d, riders: d.riders.map((x) => (x.orderId === r.orderId ? r : x)) } : d));
     void load(q, dayId);
   }
@@ -414,9 +416,11 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
     setError(null);
     onRecovery(undefined);
     try {
-      onChange(await api.checkIn(eventId, rider.orderId, dayId, rider.bib !== null ? null : bib.trim() ? Number(bib) : null, takeDuration()));
+      const result = await api.checkIn(eventId, rider.orderId, dayId, rider.bib !== null ? null : bib.trim() ? Number(bib) : null, takeDuration());
+      if (result) onChange(result);
+      else onRecovery('pending');
     } catch (err) {
-      if (err instanceof ApiError && err.status === 0) onRecovery('pending');
+      if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) onRecovery('pending');
       else setError((err as ApiError).message);
     } finally {
       setBusy(false);
@@ -450,6 +454,7 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
   const ready = rider.result.ready;
   const hasBib = canCheckInWithBib(rider);
   const done = !!rider.checkedInAt && rider.bib !== null;
+  const verified = typeof recovery === 'object' && recovery.bib === rider.bib && recovery.checkedInAt === rider.checkedInAt;
   let guidance = 'Do not issue a bib. Send the rider to the registration desk.';
   if (ready) {
     if (done) guidance = 'Checked in. Hand over the bib below.';
@@ -472,14 +477,14 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
         <div>
           <p className="ci-result__head">{ready ? 'Ready to race' : 'Not ready'}</p>
           <p className="ci-result__sub">{guidance}</p>
-          {recovery === 'verified' && <p className="ci-result__sub">
+          {verified && <p className="ci-result__sub">
             {done ? `Lookup confirmed check-in with bib ${rider.bib}.` : 'Lookup confirmed check-in was not recorded.'}
           </p>}
         </div>
       </div>
 
       {recovery === 'pending' && (
-        <p className="text-error small" role="alert">Connection lost. Check-in could not be confirmed.</p>
+        <p className="text-error small" role="alert">Check-in could not be confirmed.</p>
       )}
 
       {!ready && (
@@ -622,7 +627,7 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
         )}
       </div>}
 
-      {rider.bibHistory.some((h) => h.releasedAt) && (
+      {recovery !== 'pending' && rider.bibHistory.some((h) => h.releasedAt) && (
         <div className="ci-section">
           <h3>Bib history</h3>
           <ul className="ci-history">
@@ -635,7 +640,7 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
         </div>
       )}
 
-      {rider.undoneCheckIns.length > 0 && (
+      {recovery !== 'pending' && rider.undoneCheckIns.length > 0 && (
         <div className="ci-section">
           <h3>Undone check-ins</h3>
           <ul className="ci-history">

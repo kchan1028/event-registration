@@ -2,8 +2,9 @@ import { expect, test } from './fixtures';
 import type { CheckInList, CheckInRider } from '../src/shared/checkin';
 
 for (const mobile of [false, true]) {
-  for (const committed of [false, true]) {
-    test(`check-in recovers when ${committed ? 'the committed response is lost' : 'the request never reaches the server'} (${mobile ? 'phone' : 'desktop'})`, async ({ page, browser }) => {
+  for (const failure of ['unreceived request', 'lost response', 'gateway timeout', 'unreadable response']) {
+    const committed = failure !== 'unreceived request';
+    test(`check-in recovery (${failure}, ${mobile ? 'phone' : 'desktop'})`, async ({ page, browser }) => {
       const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
       expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
       expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
@@ -33,10 +34,12 @@ for (const mobile of [false, true]) {
         await volunteer.route(url, async (route) => {
           interrupted++;
           if (committed) expect((await route.fetch()).status()).toBe(200);
-          await route.abort('connectionfailed');
+          if (failure === 'gateway timeout') await route.fulfill({ status: 504 });
+          else if (failure === 'unreadable response') await route.fulfill({ status: 200, body: '' });
+          else await route.abort('connectionfailed');
         });
         await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
-        await expect(detail.getByRole('alert')).toHaveText('Connection lost. Check-in could not be confirmed.');
+        await expect(detail.getByRole('alert')).toHaveText('Check-in could not be confirmed.');
         await expect(detail.getByRole('status')).toContainText('Look up this rider again before handing over a bib or retrying check-in.');
         await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
         await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
@@ -59,8 +62,21 @@ for (const mobile of [false, true]) {
         await volunteer.route(lookupUrl, (route) => route.abort('connectionfailed'));
         await search.press('Enter');
         await expect(volunteer.getByText(/Cannot reach the CycleReg server/)).toBeVisible();
-        await expect(detail.getByRole('alert')).toHaveText('Connection lost. Check-in could not be confirmed.');
+        await expect(detail.getByRole('alert')).toHaveText('Check-in could not be confirmed.');
         await volunteer.unroute(lookupUrl);
+
+        if (failure === 'lost response' && !mobile) {
+          const days = volunteer.getByRole('radiogroup', { name: 'Race day' });
+          const otherDay = days.getByRole('radio', { name: 'Sunday', exact: true });
+          await days.getByText('Sunday', { exact: true }).click();
+          await expect(otherDay).toBeChecked();
+          await search.press('Enter');
+          await expect(detail.getByRole('heading', { name: rider.name })).toBeVisible();
+          await expect(detail.getByRole('status')).not.toContainText('Lookup confirmed');
+          const originalDay = days.getByRole('radio', { name: 'Saturday', exact: true });
+          await days.getByText('Saturday', { exact: true }).click();
+          await expect(originalDay).toBeChecked();
+        }
 
         // Neither another rider's lookup nor a background results refresh resolves this rider's warning.
         await search.fill(next.checkInCode);
@@ -73,7 +89,7 @@ for (const mobile of [false, true]) {
         await expect(row).toContainText('Verify check-in');
         await row.click();
         await expect(detail).toBeFocused();
-        await expect(detail.getByRole('alert')).toHaveText('Connection lost. Check-in could not be confirmed.');
+        await expect(detail.getByRole('alert')).toHaveText('Check-in could not be confirmed.');
         await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
 
         // Follow the desk guide: look up the existing rider before another action.
