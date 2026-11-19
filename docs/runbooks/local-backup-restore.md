@@ -198,7 +198,7 @@ try {
 } finally { await app.close(); }
 if (mode === 'seed') {
   const result = await manifest(source);
-  for (const table of ['orders', 'order_entries', 'payment_attempts', 'bib_assignments', 'check_ins', 'start_list_snapshots', 'start_list_locks', 'organization_members', 'protected_export_audit']) {
+  for (const table of ['orders', 'order_entries', 'payment_attempts', 'bib_assignments', 'check_ins', 'start_list_snapshots', 'start_list_locks', 'organization_members', 'membership_changes', 'protected_export_audit']) {
     assert(result.data.some((row) => row.table === table && row.count > 0), `${table} must be populated`);
   }
   writeFileSync(`${directory}/manifest.json`, JSON.stringify(result));
@@ -223,9 +223,9 @@ cat data/restore-rehearsal/local.dump.sha256
 npx tsx data/restore-rehearsal/rehearse.ts verify
 ```
 
-Do not start the application or run migrations against the empty target before restoring. Verification first compares the recovered public tables and selected schema metadata, then opens the application and checks health, the existing checked-in bib, paid-but-blocked readiness and the locked start list. Verify the former owner has lost team administration, retains the Finance role, and the successor can read the original handoff history. It retries the existing check-in and the blocked check-in, and verifies neither changes the table manifest. A new protected ledger download by the successor must append one attributed row while the two restored audit rows and all other persisted state remain unchanged. This checks the current sample's records; it does not prove all schema objects, every financial recovery path or real provider reconciliation.
+Do not start the application or run migrations against the empty target before restoring. Verification first compares the recovered public tables and selected schema metadata, then opens the application and checks health. It confirms that the former owner is denied team administration and retains the Finance role, and that the successor can read the original handoff history. It also verifies the existing checked-in bib, paid-but-blocked readiness and the locked start list. It retries the existing check-in and the blocked check-in, and verifies neither changes the table manifest. A new protected ledger download by the successor must append one attributed row while the two restored audit rows and all other persisted state remain unchanged. This checks the current sample's records; it does not prove all schema objects, every financial recovery path or real provider reconciliation.
 
-Expected: `Restored table hashes/counts, columns, constraints, indexes and sequences match.` The recovered check-in/start-list assertions pass, followed by `Restored audit rows and new attributed ledger generation passed.` A mismatch is a failed recovery. Keep the archive/source for investigation and do not substitute the target for a working service. Do not import missing records or replay payments merely to make totals match.
+Expected: `Restored table hashes/counts, columns, constraints, indexes and sequences match.` Then expect `Restored ownership handoff, retained roles and actor-attributed history passed.` The recovered check-in and start-list assertions pass, followed by `Restored audit rows and new attributed ledger generation passed.` A mismatch is a failed recovery. Keep the archive/source for investigation and do not substitute the target for a working service. Do not import missing records or replay payments merely to make totals match.
 
 ## 4. Rehearse refusal and rollback
 
