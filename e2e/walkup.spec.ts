@@ -170,14 +170,17 @@ test('a junior walk-up reaches check-in after guardian consent and simulated pay
     await guardian.getByLabel('As parent or guardian, I agree to this waiver for the rider', { exact: true }).check();
     await guardian.getByRole('button', { name: 'Sign and review the order' }).click();
 
+    const pay = guardian.getByRole('button', { name: /Complete simulated payment/ });
+    await expect(pay).toBeVisible();
     const search = page.getByRole('searchbox', { name: 'Find a rider' });
     await search.fill('Casey Walkup');
     await search.press('Enter');
     const checkInPanel = page.getByRole('region', { name: 'Rider check-in' });
     await expect(checkInPanel).toContainText('Payment not complete');
+    await expect(checkInPanel).not.toContainText('Guardian has not accepted the waiver');
     await expect(checkInPanel.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
 
-    await guardian.getByRole('button', { name: /Complete simulated payment/ }).click();
+    await pay.click();
     await expect(guardian.locator('.done__entry')).toContainText('Guardian signature recorded');
 
     const registrations = await guardian.request.get('/api/rider/registrations');
