@@ -198,7 +198,7 @@ npx tsx data/restore-rehearsal/rehearse.ts verify
 
 Do not start the application or run migrations against the empty target before restoring. Verification first compares the recovered public tables and selected schema metadata, then opens the application and checks health, the existing checked-in bib, paid-but-blocked readiness and the locked start list. It retries the existing check-in and the blocked check-in, and verifies neither changes the table manifest. A new protected ledger download must append one attributed row while the two restored audit rows and all other persisted state remain unchanged. This checks the current sample's records; it does not prove all schema objects, every financial recovery path or real provider reconciliation.
 
-Expected: restored hashes/counts match, the recovered check-in/start-list assertions pass, and the protected audit verification passes. A mismatch is a failed recovery. Keep the archive/source for investigation and do not substitute the target for a working service. Do not import missing records or replay payments merely to make totals match.
+Expected: `Restored table hashes/counts, columns, constraints, indexes and sequences match.` The recovered check-in/start-list assertions pass, followed by `Restored audit rows and new attributed ledger generation passed.` A mismatch is a failed recovery. Keep the archive/source for investigation and do not substitute the target for a working service. Do not import missing records or replay payments merely to make totals match.
 
 ## 4. Rehearse refusal and rollback
 
