@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import type { CheckInList } from '../src/shared/checkin';
+import type { EventConfig } from '../src/shared/schema';
 
 /*
  * Race-day check-in search. A barcode scanner types the check-in code and presses Enter at once,
@@ -111,6 +112,87 @@ test('a volunteer uses the confirmation code to distinguish riders with the same
   } finally {
     await context.close();
   }
+});
+
+test('a paid rider can receive a bib only on a day they entered', async ({ page }) => {
+  const api = page.request;
+  const { eventId } = await (await api.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await api.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  const event = await api.get(eventUrl);
+  expect(event.ok()).toBe(true);
+  const { config } = await event.json() as { config: EventConfig };
+  const category = config.categories.find((row) => row.timingCode === 'RR-M35-34')!;
+  const reservation = await api.post(`/api/rider/events/${eventId}/orders`, { data: {
+    clientRequestId: 'wrong-day-rehearsal',
+    categoryIds: [category.id],
+    rider: { firstName: 'Taylor', lastName: 'Fictional', email: 'wrong-day@example.test', team: '',
+      racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men',
+      collegiateDivision: null, guardian: null, emergencyContact: { name: 'Fictional Contact', phone: '555-555-0199' } },
+    waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Taylor Fictional', signerRole: 'rider' },
+  } });
+  expect(reservation.status()).toBe(201);
+  const order = await reservation.json();
+  expect((await api.post(`/api/orders/${order.id}/payment`, {
+    data: { attemptId: 'wrong-day-payment', outcome: 'success' },
+  })).ok()).toBe(true);
+  expect((await api.post(`/api/order-entries/${order.entries[0].id}/license-review`, {
+    data: { note: 'Fictional license reviewed for race-day rehearsal' },
+  })).ok()).toBe(true);
+  expect((await api.put(`${eventUrl}/bib-settings`, {
+    data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+  })).ok()).toBe(true);
+
+  const list = async (params?: Record<string, string>): Promise<CheckInList> => {
+    const response = await api.get(`${eventUrl}/check-in`, { params });
+    expect(response.ok()).toBe(true);
+    return response.json();
+  };
+  const first = await list();
+  const [entered, other] = first.days;
+  const rider = first.riders.find((candidate) => candidate.orderId === order.id);
+  if (!rider?.checkInCode) throw new Error('The paid entry must appear on the first day with a check-in code');
+  expect(rider.result.ready).toBe(true);
+  const code = rider.checkInCode;
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/#/events/${eventId}/check-in`);
+  const days = page.getByRole('radiogroup', { name: 'Race day' });
+  const selectDay = async (label: string) => {
+    await days.getByText(label, { exact: true }).click();
+    await expect(days.getByRole('radio', { name: label, exact: true })).toBeChecked();
+  };
+  const search = page.getByRole('searchbox', { name: 'Find a rider' });
+  const detail = page.getByRole('region', { name: 'Rider check-in' });
+  await selectDay(other.label);
+  await search.fill(code);
+  await search.press('Enter');
+  await expect(detail).toContainText(rider.name);
+  await expect(detail).toContainText('Not ready');
+  await expect(detail).toContainText('No entry on this race day');
+  await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
+
+  const refused = await api.post(`${eventUrl}/check-in/${rider.orderId}`, { data: { dayId: other.id, bib: null } });
+  expect(refused.status()).toBe(409);
+  expect(await refused.json()).toMatchObject({ error: expect.stringMatching(/no entry on this race day/i) });
+  const afterRefusal = await list({ day: other.id, q: code });
+  expect(afterRefusal.riders).toEqual([expect.objectContaining({
+    orderId: rider.orderId, payment: 'confirmed', entries: [], bib: null, checkedInAt: null, bibHistory: [],
+  })]);
+
+  await selectDay(entered.label);
+  await search.press('Enter');
+  await expect(detail).toContainText('Ready to race');
+  await detail.getByRole('button', { name: 'Check in and issue next bib' }).click();
+  await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+  const correctDay = await list({ day: entered.id, q: code });
+  expect(correctDay.riders).toEqual([expect.objectContaining({
+    orderId: rider.orderId, entries: rider.entries, bib: 100, checkedInAt: expect.any(String),
+  })]);
+  const wrongDay = await list({ day: other.id, q: code });
+  expect(wrongDay.riders).toEqual([expect.objectContaining({
+    orderId: rider.orderId, entries: [], checkedInAt: null,
+  })]);
 });
 
 test('fallback roster lists every rider and puts blocked riders on the exception checklist', async ({ page }) => {
