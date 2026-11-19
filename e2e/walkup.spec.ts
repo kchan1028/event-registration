@@ -80,6 +80,13 @@ test('phone handoff keeps the rider account separate and returns a paid rider to
     await mark.press('Enter');
     await expect(desk.getByRole('status')).toBeFocused();
     await expect(desk.getByText('· Walk-up', { exact: true })).toBeVisible();
+    const retry = await page.request.post(`${riderUrl}/walk-up`, { data: payload });
+    expect(retry.status()).toBe(200);
+    expect(await retry.json()).toMatchObject({
+      bib: null,
+      checkedInAt: null,
+      entries: [expect.objectContaining({ id: entryId, walkUp: true })],
+    });
     await desk.getByRole('button', { name: /Check in and issue/ }).click();
     await expect(page.getByRole('region', { name: 'Rider check-in' })).toContainText('100');
     const lists = await (await page.request.get(`/api/events/${eventId}/start-lists`)).json();
