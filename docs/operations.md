@@ -109,6 +109,19 @@ Alerts must not include card data, emergency contacts, or other restricted field
 
 Implemented in the local build (November 15, 2026): `GET /api/health` runs a database query and answers 503 when it fails, so a platform health check (Render's health-check path, per [ADR 0004](decisions/0004-hosted-stack-and-database.md)) can take an instance out of service. On `SIGTERM` the server stops taking new requests, finishes the ones in progress, and closes its database connections. The [local database health check](testing/test-plan.md#local-database-health-check) verifies the outage and return to HTTP 200 without restarting the application. No platform is configured yet. The planned Render setup is in [docs/runbooks/deploy-render.md](runbooks/deploy-render.md).
 
+### Proposed pilot alert routing
+
+Start with service-health notifications and an operator review of provider records. The service and accounts still need approval. Assign a primary, deputy and escalation route before a hosted rehearsal. Test that the intended recipients actually receive and acknowledge the signal.
+
+| Signal | Proposed source and first response | Recipient role |
+|---|---|---|
+| Service unhealthy | Evaluate Render notifications alongside the existing health-check path. Check the affected service and whether the desk or checkout is unavailable. If a safe workflow is blocked, follow [incident handling](#handling-an-incident). [Render health checks](https://render.com/docs/health-checks), [Render notifications](https://render.com/docs/notifications) | Technical lead; support owner coordinates the desk |
+| Payment notification missing or delayed | Review failed or pending event deliveries in Stripe Workbench and compare the provider reference with the CycleReg reconciliation export. Treat delivery and business reconciliation as separate checks. An unmatched provider reference needs finance review before any payment retry. [Stripe event deliveries](https://docs.stripe.com/webhooks#view-event-deliveries) | Technical lead and finance; support owner coordinates |
+| Organizer invitation delivery failure | Review the invitation's send result and the corresponding provider delivery event. Resend documents failure, delay, bounce and suppression events. Clerk sign-in email follows its own provider rehearsal. [Resend email event types](https://resend.com/docs/webhooks/event-types#email-events) | Support owner |
+| Recovery coverage missing | Verify that the expected point is available and stays within the recovery plan. Review backup evidence before the event and escalate a missing or unusable point. [Render Postgres recovery and backups](https://render.com/docs/postgresql-backups) | Technical lead |
+
+For the rehearsal, use fictional records and keep messages limited to environment, signal, observation time, accountable role and a restricted reference where needed. Provider dashboards can support a manual check. Treat automatic delivery or alerting as verified only after the intended recipient receives and acknowledges it. Checkout error rate, expired holds, sign-in spikes and automated provider-event alerts remain open.
+
 ## Backups and recovery
 
 The [local fictional-data restore procedure](runbooks/local-backup-restore.md) exercises a separate logical archive/restore, record comparison and application recovery checks without touching the working database. It prepares the team for the hosted rehearsal. Hosted scheduled and off-site recovery and staff acceptance remain open.
