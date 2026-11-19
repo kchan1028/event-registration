@@ -117,9 +117,17 @@ test('a loaded fallback roster stays a reference during a simulated disconnect',
     await expect(sections).toHaveCount(desk.days.length);
     const stamps = sections.locator('.roster__stamp');
     const originalStamps = await stamps.allTextContents();
+    const healthReachable = () => volunteer.evaluate(async () => {
+      try {
+        return (await fetch('/api/health', { cache: 'no-store' })).ok;
+      } catch {
+        return false;
+      }
+    });
 
+    expect(await healthReachable()).toBe(true);
     await context.setOffline(true);
-    expect(await volunteer.evaluate(() => navigator.onLine)).toBe(false);
+    expect(await healthReachable()).toBe(false);
     const issued = await page.request.post(`${eventUrl}/check-in/${rider.orderId}`, {
       data: { dayId: desk.dayId, bib: null },
     });
@@ -137,6 +145,7 @@ test('a loaded fallback roster stays a reference during a simulated disconnect',
     await expect(row.getByRole('cell', { name: 'Not assigned', exact: true })).toBeVisible();
 
     await context.setOffline(false);
+    expect(await healthReachable()).toBe(true);
     await volunteer.emulateMedia({ media: 'screen' });
     await volunteer.reload();
     await expect(row.getByRole('cell', { name: 'Checked in', exact: true })).toBeVisible();
