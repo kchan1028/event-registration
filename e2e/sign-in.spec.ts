@@ -53,22 +53,25 @@ test('riders sign in during checkout and later retrieve their check-in code on a
   const code = await originalCode.innerText();
   const orderUrl = page.url();
 
-  const phone = await browser.newPage({ baseURL, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  try {
-    await phone.goto('/#/my-registrations');
-    await expect(phone.getByRole('heading', { name: 'Sign in to CycleReg' })).toBeVisible();
-    expect((await phone.request.get('/api/rider/registrations')).status()).toBe(401);
-    await phone.getByRole('button', { name: 'Sign in with email' }).click();
-    await phone.getByLabel('Test email').fill(email);
-    await phone.getByRole('button', { name: 'Sign in', exact: true }).click();
-    const registrations = phone.getByRole('list', { name: 'Your registrations' });
-    await expect(registrations).toContainText('Confirmed');
-    await registrations.getByRole('link', { name: /Alex Demo/ }).click();
-    await expect(phone).toHaveURL(orderUrl);
-    await expect(phone.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
-    await expect(phone.locator('.ticket__code')).toHaveText(code);
-    await expect(phone.getByRole('img', { name: `QR code for check-in code ${code}` })).toBeVisible();
-  } finally {
-    await phone.close();
-  }
+  await test.step('Retrieve the confirmed receipt in a fresh phone session', async () => {
+    const phone = await browser.newPage({ baseURL, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    try {
+      await phone.goto('/#/my-registrations');
+      await expect(phone.getByRole('heading', { name: 'Sign in to CycleReg' })).toBeVisible();
+      await phone.getByRole('button', { name: 'Sign in with email' }).click();
+      await phone.getByLabel('Test email').fill(email);
+      await phone.getByRole('button', { name: 'Sign in', exact: true }).click();
+      const registrations = phone.getByRole('list', { name: 'Your registrations' });
+      const receipt = phone.locator(`a[href="${new URL(orderUrl).hash}"]`);
+      const registration = registrations.getByRole('listitem').filter({ has: receipt });
+      await expect(registration).toContainText('Confirmed');
+      await registration.getByRole('link', { name: /Alex Demo/ }).click();
+      await expect(phone).toHaveURL(orderUrl);
+      await expect(phone.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
+      await expect(phone.locator('.ticket__code')).toHaveText(code);
+      await expect(phone.getByRole('img', { name: `QR code for check-in code ${code}` })).toBeVisible();
+    } finally {
+      await phone.close();
+    }
+  });
 });

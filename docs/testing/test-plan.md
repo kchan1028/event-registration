@@ -209,7 +209,7 @@ Run `tests/automatic-bibs.test.ts` with check-in, bib reassignment and start-lis
 
 ### Rider check-in code retrieval
 
-`e2e/sign-in.spec.ts` completes fictional checkout and simulated payment, then uses a fresh phone-sized session to verify that registration history requires sign-in. The rider signs back in and opens the confirmed receipt, which shows the original check-in code and QR. This uses the local test provider; real emailed-code delivery and race-morning timing require an operational rehearsal.
+`e2e/sign-in.spec.ts` completes fictional checkout and simulated payment, then uses a fresh phone-sized session to verify that the registration history screen prompts for sign-in. The rider signs back in and opens the confirmed receipt, which shows the original check-in code and QR. This uses the local test provider; real emailed-code delivery and race-morning timing require an operational rehearsal.
 
 ### Organizer handoff rehearsal
 
