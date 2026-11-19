@@ -334,7 +334,7 @@ Build:
 Verification:
 
 - Concurrent checkout for the last place, expired reservations, and bundle rollback.
-- Stripe sandbox payment failure, delayed success, timeout, duplicate/out-of-order notifications, refund retry, and cancellation scenarios. (Failure, delayed success, duplicate and out-of-order notifications, late payment, and cancellation verified locally November 15, 2026 with signed test events in `tests/payments.test.ts`; refund retry verified with a stubbed Stripe client in `tests/refunds.test.ts`; a real sandbox run remains.)
+- Stripe sandbox payment failure, delayed success, timeout, duplicate/out-of-order notifications, refund retry, and cancellation scenarios. (Failure, delayed success, duplicate and out-of-order notifications, late payment, and cancellation verified locally November 15, 2026 with signed test events in `tests/payments.test.ts`; refund retry verified with a stubbed Stripe client in `tests/refunds.test.ts`; a [real sandbox rehearsal](docs/runbooks/local-setup.md#phase-2-stripe-sandbox-rehearsal) remains.)
 - Duplicate email prevention, failed-delivery visibility, and waitlist-offer expiry.
 - Self-service changes with paid differences/refunds, blocked capacity/eligibility, concurrent final coupon redemption (verified locally November 15, 2026 in `tests/coupons.test.ts`), and report/export reconciliation.
 - Role access, private-data visibility, waiver/version integrity, and keyboard/mobile use.
