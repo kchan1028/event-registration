@@ -68,7 +68,7 @@ Details: [demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-
 | Feature | Status | What it does |
 |---|---|---|
 | Rider lookup | Implemented | Search fictional registrations by name, team, bib, or check-in code |
-| Ready or blocked check-in | Implemented | Show outstanding requirements before check-in; use a fresh lookup to verify an uncertain check-in; repeated check-in is safe; undo requires a reason and retains history |
+| Ready or blocked check-in | Implemented | Show outstanding requirements before check-in; use a fresh lookup to verify an uncertain check-in. After a full reload, reselect the race day and look up the rider; repeated check-in is safe; undo requires a reason and retains history |
 | QR check-in scanning | Implemented locally | Scan the confirmation QR code in Chrome or Edge and use the same repeat-safe check-in path; stopping the scanner releases a camera stream that arrives after closing. Live camera and volunteer rehearsal remain open |
 | Bib assignment | Implemented | Preassign advance bibs by event or day; first desk assignment requires a staff-marked walk-up; prevent active collisions and retain history |
 | Printable fallback roster | Implemented | Read stacked rider entries on phones with snapshot readiness and next steps visible; desktop/print keep the reference-only tables, blocked-rider checklist and lead review notes without private contact or payment details. Paper notes do not clear requirements or create entries; real-printer and contingency rehearsal checks remain open |
