@@ -256,7 +256,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const body = memberBody.parse(req.body);
     return access.removeMember(id, body.email, body.role, me(req));
   });
-  // An owner hands their owner role to someone who has signed in. Recorded in the role history.
+  // An owner hands their owner role to a signed-in teammate. Recorded in the role history.
   app.post('/api/organizations/:id/ownership-transfer', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrg(me(req), id, 'members.manage');
