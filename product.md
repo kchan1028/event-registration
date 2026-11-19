@@ -884,7 +884,9 @@ Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/R
 
 ### Check-in recovery warning decision
 
-Resolved November 19, 2026 by the project owner. During the November 16 local rehearsal, a connection warning remained beside a confirmed check-in after a lookup ([issue #153](https://github.com/kchan1028/event-registration/issues/153)). After a lost check-in response, tell the volunteer that check-in may have been recorded and to look up the rider. When a fresh lookup confirms check-in and the bib for that rider and day, clear the warning and show the recorded time and bib. If the lookup fails or the rider is still unchecked, keep the warning and retry guidance. Retry only when a successful lookup shows the rider is still ready and unchecked. Payment and readiness remain independent. Volunteer comprehension and physical bib handover remain to be rehearsed.
+Decided November 19, 2026 by the project owner. After a lost check-in response, show that the result is unconfirmed and require a successful explicit lookup of the same rider and race day before another check-in attempt or bib handover. Replace the warning with a verified result that identifies the recorded bib or says check-in was not recorded. A failed lookup or a background refresh does not resolve the warning. Payment and readiness remain independent. The observation came from a simulated browser walkthrough ([#153](https://github.com/kchan1028/event-registration/issues/153)); verify comprehension with volunteers before acceptance.
+
+Open follow-up, raised November 19, 2026; owner: project owner. Should pending recovery survive a full reload on a shared check-in device? The current warning lasts for the desk page session. Staff can continue with the runbook’s explicit lookup after reload. Any persistent reminder awaits a decision about browser data retention. Revisit during volunteer rehearsal ([#259](https://github.com/kchan1028/event-registration/issues/259)).
 
 ### Ownership-transfer successor prerequisite
 

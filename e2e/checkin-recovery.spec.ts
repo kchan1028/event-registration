@@ -2,8 +2,9 @@ import { expect, test } from './fixtures';
 import type { CheckInList, CheckInRider } from '../src/shared/checkin';
 
 for (const mobile of [false, true]) {
-  for (const committed of [false, true]) {
-    test(`check-in recovers when ${committed ? 'the committed response is lost' : 'the request never reaches the server'} (${mobile ? 'phone' : 'desktop'})`, async ({ page, browser }) => {
+  for (const failure of ['unreceived request', 'lost response', 'gateway timeout', 'unreadable response', 'invalid response']) {
+    const committed = failure !== 'unreceived request';
+    test(`check-in recovery (${failure}, ${mobile ? 'phone' : 'desktop'})`, async ({ page, browser }) => {
       const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
       expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
       expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
@@ -24,11 +25,7 @@ for (const mobile of [false, true]) {
         await volunteer.goto(`/#/events/${eventId}/check-in`);
         const search = volunteer.getByRole('searchbox', { name: 'Find a rider' });
         const detail = volunteer.getByRole('region', { name: 'Rider check-in' });
-        const lookupUrl = (url: URL) => url.pathname === `/api/events/${eventId}/check-in` && url.searchParams.get('q') === rider.checkInCode;
-        const searchResults = volunteer.waitForResponse((response) => lookupUrl(new URL(response.url())) && response.ok());
         await search.fill(rider.checkInCode);
-        // Let the debounced search settle before interrupting the action below.
-        await searchResults;
         await search.press('Enter');
         await expect(detail).toContainText('Ready to race');
 
@@ -37,15 +34,20 @@ for (const mobile of [false, true]) {
         await volunteer.route(url, async (route) => {
           interrupted++;
           if (committed) expect((await route.fetch()).status()).toBe(200);
-          await route.abort('connectionfailed');
+          if (failure === 'gateway timeout') await route.fulfill({ status: 504 });
+          else if (failure === 'unreadable response') await route.fulfill({ status: 200, body: '' });
+          else if (failure === 'invalid response') await route.fulfill({ status: 200, json: {} });
+          else await route.abort('connectionfailed');
         });
         await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
-        const warning = detail.getByRole('alert');
-        await expect(warning).toContainText('Check-in may have been recorded. Look up this rider again.');
+        await expect(detail.getByRole('alert')).toHaveText('Check-in could not be confirmed.');
+        await expect(detail.getByRole('status')).toContainText('Search for this rider’s check-in code or narrow the search to one match before handing over a bib or retrying check-in.');
+        await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
+        await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
         expect(interrupted).toBe(1);
-        if (!committed) await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
         await volunteer.unroute(url);
 
+        // A concurrent lookup can refresh the screen even though the action response was lost.
         const afterFailure: CheckInList = await (await volunteer.request.get(`/api/events/${eventId}/check-in`)).json();
         const recorded = afterFailure.riders.find((r) => r.orderId === rider.orderId)!;
         expect(recorded.bib).toBe(committed ? 100 : null);
@@ -56,27 +58,54 @@ for (const mobile of [false, true]) {
         expect(recorded.result).toEqual(rider.result);
         expect(recorded.readiness).toEqual(rider.readiness);
 
-        // A lookup that also loses its response must leave the original warning in place.
+        // A failed fresh lookup cannot resolve the pending result.
+        const lookupUrl = (url: URL) => url.pathname === `/api/events/${eventId}/check-in`;
         await volunteer.route(lookupUrl, (route) => route.abort('connectionfailed'));
-        const failedLookup = volunteer.waitForEvent('requestfailed', (request) => lookupUrl(new URL(request.url())));
         await search.press('Enter');
-        await failedLookup;
-        await expect(warning).toContainText('Check-in may have been recorded');
+        await expect(volunteer.getByText(/Cannot reach the CycleReg server/)).toBeVisible();
+        await expect(detail.getByRole('alert')).toHaveText('Check-in could not be confirmed.');
         await volunteer.unroute(lookupUrl);
 
-        // Follow the desk guide: look up the existing rider before another action.
-        const freshLookup = volunteer.waitForResponse((response) => lookupUrl(new URL(response.url())) && response.ok());
+        if (failure === 'lost response' && !mobile) {
+          const days = volunteer.getByRole('radiogroup', { name: 'Race day' });
+          const otherDay = days.getByRole('radio', { name: 'Sunday', exact: true });
+          await days.getByText('Sunday', { exact: true }).click();
+          await expect(otherDay).toBeChecked();
+          await search.press('Enter');
+          await expect(detail.getByRole('heading', { name: rider.name })).toBeVisible();
+          await expect(detail.getByRole('status')).not.toContainText('Lookup confirmed');
+          const originalDay = days.getByRole('radio', { name: 'Saturday', exact: true });
+          await days.getByText('Saturday', { exact: true }).click();
+          await expect(originalDay).toBeChecked();
+        }
+
+        // Neither another rider's lookup nor a background results refresh resolves this rider's warning.
+        await search.fill(next.checkInCode);
         await search.press('Enter');
-        await freshLookup;
+        await expect(detail.getByRole('heading', { name: next.name })).toBeVisible();
+        await expect(detail.getByRole('alert')).toHaveCount(0);
+        await search.fill(rider.checkInCode);
+        const row = volunteer.getByRole('complementary', { name: 'Find a rider' })
+          .getByRole('button', { name: new RegExp(rider.name) });
+        await expect(row).toContainText('Verify check-in');
+        await row.click();
+        await expect(detail).toBeFocused();
+        await expect(detail.getByRole('alert')).toHaveText('Check-in could not be confirmed.');
+        await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
+
+        // Follow the desk guide: look up the existing rider before another action.
+        await search.press('Enter');
+        await expect(detail.getByRole('status')).toContainText(committed
+          ? 'Lookup confirmed check-in with bib 100.'
+          : 'Lookup confirmed check-in was not recorded.');
+        await expect(detail.getByRole('alert')).toHaveCount(0);
         if (!committed) {
-          await expect(warning).toContainText('If they are still ready and unchecked, retry check-in.');
           await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
           await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
+          await expect(detail.getByRole('status')).not.toContainText('Lookup confirmed');
         }
         await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
-        await expect(warning).toHaveCount(0);
         await expect(detail.locator('.ci-bib__number')).toHaveText('100');
-        await expect(detail.getByText(/^Checked in at /)).toBeVisible();
         await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
 
         const repeated = await volunteer.request.post(`/api/events/${eventId}/check-in/${rider.orderId}`, { data: { dayId: list.dayId, bib: null } });
