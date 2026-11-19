@@ -102,7 +102,7 @@ The gate cannot be marked met while any row lacks a passing re-test.
 
 ```text
 Phase 1 usability part of the exit gate:  met / not met
-Remaining for the exit gate: timer accepts the sample format (yes / no), scope fits the team (yes / no)
+Remaining for the exit gate: scope fits the team (yes / no)
 Signed off by (role): ______________     Date: __________
 ```
 

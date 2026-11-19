@@ -46,7 +46,7 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Writing rules, status vocabulary, glossary | This file | |
 | Setup and troubleshooting | [runbooks/](runbooks/local-setup.md) | Local setup, troubleshooting, a technical local restore rehearsal, phone handoff and check-in volunteer guides exist; hosted/accepted recovery procedures remain Proposed |
 | Visual system of the interface | [DESIGN.md](../DESIGN.md) | Tokens, type, components; distinguishes the built baseline from Planned design direction |
-| Timer export format review and answers | [timer-export-review.md](timer-export-review.md) | Proposed until the timer accepts the format |
+| Timer export format review and answers | [timer-export-review.md](timer-export-review.md) | Research for possible future interoperability |
 | USA Cycling questions and answers | [usac-questions.md](usac-questions.md) | Proposed until answered; confirmed requirements move to product.md with source and date |
 | Payment model options and answers | [payment-model-questions.md](payment-model-questions.md) | Proposed until an ADR records the choice |
 | Usability test plan, scripts, tasks, and results | [usability/](usability/README.md) | Kit implemented; results summaries are added after sessions, with participant codes only |

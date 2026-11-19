@@ -1,8 +1,8 @@
 # Timer export review packet
 
-Status: Proposed sample format, written November 14, 2026. Not yet reviewed by a timer or official. The Phase 1 exit gate needs the timer to accept the sample format (see [roadmap.md](../roadmap.md#phase-1--test-the-experience-without-live-money)).
+Status: Research packet retained for possible future development. The sample CSV is available today. Format approval and validation in timing software were deferred on November 19, 2026. See [product scope](../product.md#out-of-scope-initially).
 
-Send this page and the sample file to the event's timer and chief official, ask the questions below, and record the answers here. The answers decide the export format before Phase 3 and close the open questions in [product.md](../product.md#results-site-updates-research).
+If the project owner selects timing interoperability for future development, use this packet and the sample file to gather feedback from the timer and chief official.
 
 ## What to send
 
@@ -98,4 +98,4 @@ What this means for the export: one CSV in USA Cycling's format can feed both up
 
 1. Fill in the answers above and note the date in the status line.
 2. If the format changes, update the export in `src/shared/startlist.ts`, regenerate the sample, and send it back for a round-trip test: the timer imports the file into their software and confirms riders, bibs, and categories arrive correctly.
-3. When the timer accepts the format, record the acceptance in [roadmap.md](../roadmap.md#delivery-status) as evidence for the Phase 1 exit gate, and move the answered questions out of the research list in [product.md](../product.md#results-site-updates-research).
+3. When the timer accepts the format, record the acceptance in [roadmap.md](../roadmap.md#delivery-status) as evidence for the future interoperability work, and move the answered questions out of the research list in [product.md](../product.md#results-site-updates-research).

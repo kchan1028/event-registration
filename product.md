@@ -29,7 +29,7 @@ An organizer can prepare a two-day race weekend, open registration, manage chang
 | Registration lead | Resolve registration exceptions | One prioritized queue with the reason and next action |
 | Check-in volunteer | Confirm readiness and issue bibs | Fast lookup and an unmistakable ready/blocked result |
 | Rider or parent | Enter eligible races and prepare | Clear fields, total cost, requirements, receipt, and check-in instructions |
-| Timer / official | Receive reliable start lists | Stable identifiers and an agreed export format |
+| Timer / official | Receive reliable start lists | Stable identifiers and clear revisions in the sample export |
 | Club treasurer | Reconcile proceeds | Entries, refunds, fees, and payouts trace to one ledger |
 | Successor organizer | Take over next season | Reusable setup, role access, history, and an operating guide |
 
@@ -374,14 +374,14 @@ Acceptance: an authorized organizer finds one rider's multiple race entries with
 
 ### 5. Race-day operations
 
-Status: check-in search, ready/blocked result, bib ranges, bib history, repeat-safe check-in, undoing a mistaken check-in with a reason, and measured check-in times (median and 95th percentile per day) are Implemented in the local build on fake data (see [roadmap.md](roadmap.md#check-in)). Start-list snapshots with recorded changes, an organizer start-list lock whose later changes show as revisions, and a sample CSV export are Implemented too (see [roadmap.md](roadmap.md#start-lists-and-timer-export)); the CSV format is not yet agreed with a timer. A printable fallback roster with an exception checklist is Implemented (see [roadmap.md](roadmap.md#check-in)). QR check-in codes on the confirmation and camera scanning at check-in (Chrome and Edge) are Implemented; an agreed export format with a tested round trip is Planned.
+Status: check-in search, ready/blocked result, bib ranges, bib history, repeat-safe check-in, undoing a mistaken check-in with a reason, and measured check-in times (median and 95th percentile per day) are Implemented in the local build on fake data (see [roadmap.md](roadmap.md#check-in)). Start-list snapshots with recorded changes, an organizer start-list lock whose later changes show as revisions, and a sample CSV export are Implemented too (see [roadmap.md](roadmap.md#start-lists-and-timer-export)); the CSV format is not yet agreed with a timer. A printable fallback roster with an exception checklist is Implemented (see [roadmap.md](roadmap.md#check-in)). QR check-in codes on the confirmation and camera scanning at check-in (Chrome and Edge) are Implemented.
 
 - Search or scan a check-in code; codes identify entries and contain no sensitive rider details.
 - Show readiness, missing requirements, race/category, and bib assignment clearly.
 - Configure bib ranges per event/day and prevent collisions within the configured scope.
 - Preserve bib history when a rider changes fields. Support repeat check-in without duplicate assignment.
 - Produce a timestamped start-list snapshot per race and record later changes.
-- Export CSV in formats agreed with the actual timer and officials; test round trips before launch.
+- Export a sample start-list CSV with stable identifiers. Keep locked exports reproducible and show changes in current lists.
 - Provide a minimal printable roster and exception checklist as a race-day fallback. Keep emergency contacts separate and access-restricted.
 - First release requires connectivity for live changes. Full offline synchronization is deferred and must not be advertised.
 
@@ -639,7 +639,7 @@ Acceptance for the first help increment: each priority task in the table above e
 | Category import | Valid CSV rows populate a draft; invalid/ambiguous rules produce actionable row errors and cannot publish silently |
 | Published configuration change | Impact preview identifies affected entries; accepted prices and rules remain auditable; start-list revisions are visible |
 | Check in | Volunteer finds a rider, sees blockers, and issues the correct bib; repeated scans remain safe |
-| Export to timer | Agreed fields and IDs survive export/import; withdrawn riders and subsequent changes are clear |
+| Export start list | Stable IDs appear in the sample CSV; withdrawn riders and later changes are visible in current lists and lock revisions |
 | Refund | Ledger, registration state, capacity, receipt, and provider records agree |
 | Organizer handoff | A second authorized organizer can operate the event and access its runbook without the original owner's credentials |
 | Demo purchase flow | Using fake data only, a tester goes from event list through entry choice, racer details, waiver signature, order review with all fees, simulated payment, and confirmation without facilitator help; missing required fields block progress with field-level messages; back navigation keeps entered data; every payment-related screen and the receipt are labeled as simulated, and no real payment details are requested |
@@ -706,7 +706,7 @@ The local build stores data in a PostgreSQL database on the developer's computer
 |---|---|
 | USA Cycling | Confirm partner access, license/category validation, one-day licenses, accepted waiver/guardian workflows, and required reporting directly with USAC |
 | Payments | Stripe selected in ADR 0002; hosted Checkout planned. Confirm the merchant/Connect operating model, organizer onboarding, revenue allocation, payouts, refunds, disputes, and tax responsibility before live use |
-| Timer / officials | Obtain actual accepted files and required race-day changes workflow |
+| Timer / officials | Understand existing race-day changes; investigate accepted file formats only if timing interoperability is selected for future development |
 | Email | Select a transactional provider with delivery status and suppression handling |
 | Existing registrations | Confirm export rights and mappings; never assume signatures or payment tokens transfer |
 | Results sites (road-results.com) | Research how results are updated and which registration fields (name, license number, team, category) a timer needs to build the upload file. See [Results site updates](#results-site-updates-research) |
@@ -854,7 +854,7 @@ Capture abandonment and support requests without recording payment details or se
 
 Timing hardware, finish-line timing, omnium points/results scoring, rankings, training plans, route/weather tools, federation membership administration, international federation integrations, marketplace discovery, fundraising, and a native mobile app.
 
-Race results and weather may be linked from the event website. They do not belong on the registration critical path. Supplying the rider fields a timer needs for results uploads is in scope once [researched](#results-site-updates-research).
+Race results and weather may be linked from the event website. They do not belong on the registration critical path. Project-owner decision, November 19, 2026: timing-software integration, format approval, import and round-trip testing, and results-upload support are deferred for possible future development. The existing sample start-list CSV and revisions remain in scope. The project owner will revisit whether interoperability belongs in CycleReg if organizer discovery establishes a need. No integration is committed. See [future research](#results-site-updates-research).
 
 ## Business model hypothesis
 
@@ -862,7 +862,7 @@ A transparent per-paid-entry platform fee, with the organizer choosing whether t
 
 ## Launch criteria
 
-Do not replace Berkeley Omnium's registration merely because the software is available. Require validated federation and payment workflows, correct timer exports, successful event-day rehearsal, measurable workload benefit, and a named support owner. Category setup must pass every configuration fixture and acceptance criterion above using an organizer-approved road race and criterium schedule. Start with a lower-risk cycling event. Berkeley Omnium remains on its existing system until those gates pass.
+Do not replace Berkeley Omnium's registration merely because the software is available. Require validated federation and payment workflows, correct start lists and revisions, successful event-day rehearsal, measurable workload benefit, and a named support owner. Category setup must pass every configuration fixture and acceptance criterion above using an organizer-approved road race and criterium schedule. Start with a lower-risk cycling event. Berkeley Omnium remains on its existing system until those gates pass.
 
 ## Open decisions
 
@@ -873,9 +873,9 @@ Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/R
 3. Who will fund development and provide operational support after launch?
 4. Will USAC approve integration and the proposed license/waiver workflow?
 5. Stripe is selected. Which merchant, Connect charge/transfer, settlement, refund, dispute, and tax-responsibility model works for the club and multi-organization season passes? Public research (November 15, 2026, [payment model questions](docs/payment-model-questions.md#findings)) shows a single club account with hosted Checkout meets the Stripe-side needs and that nonprofit pricing does not apply to registration fees; the receiving entity is a nonprofit corporation with its own bank account, and the organizer would handle disputes. Who approves a switch and the corporation's 501(c) status are still unanswered.
-6. What timer formats, refund policies, retention periods, and organizer permissions are required?
+6. What refund policies, retention periods, and organizer permissions are required? Timing-software formats are deferred.
 7. Decided 2026-11-15: riders and guardians use email sign-in only, so checkout has no second-factor step; MFA applies to organizer roles before the live pilot. Still open: how fast an emailed code arrives on race morning, and what riders do when it does not.
-8. How do results reach road-results.com for our events, and what should the timer export include to support it?
+8. Deferred November 19, 2026: should CycleReg support timing-software imports or results uploads at all? Revisit if organizer discovery establishes a need. The [research questions](#results-site-updates-research) remain available for that decision.
 
 9. Interim rule decided 2026-11-15 by the project owner: the local build requires a guardian and guardian signature for every rider with racing age 18 or under, in any category. Racing age is age on December 31, so this catches every rider who may be 17 on race day and also asks some riders who are already 18. Still open: the federation's accepted minor-signature policy and whether a date of birth is needed to decide legal age on race day.
 10. Who owns the initial Berkeley reference study and approved schedule review, and which safe local-device arrangement supports phone/screen-reader testing? Confirm participants and session availability before scheduling; no outreach has occurred.

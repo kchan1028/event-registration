@@ -73,7 +73,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Per-category rider questions, waiver addenda, and bib ranges | Implemented; automated tests in CI |
 | QR check-in code on the rider confirmation; camera scanning at check-in in Chrome and Edge | Implemented; live camera scan not yet checked |
 | Change resolution workflow for paid entries affected by a published change | Implemented; automated tests in CI |
-| Live payments and refunds with real money, an agreed timer format | Planned |
+| Live payments and refunds with real money | Planned |
 
 <details>
 <summary>More screens: category editor, rider preview, publishing, rider checkout, registrations, phone layouts</summary>

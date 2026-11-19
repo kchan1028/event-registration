@@ -30,4 +30,4 @@ These names go in the [decision memo](decision-memo.md#team-and-owners) once agr
 |---|---|---|
 | Accountable organizer | Owns the event's registration decisions and signs off on Phase 3 rehearsal | Not yet agreed |
 | Support owner | Answers registration and check-in failures on opening day and race morning; follows the [operations model](../operations.md) | Not yet agreed |
-| Timer | Accepts the start-list and results exports | Not yet agreed |
+| Staff using start lists | Can retrieve current and locked start lists and identify revisions | Pending staff rehearsal |
