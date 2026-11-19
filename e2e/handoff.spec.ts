@@ -1,5 +1,7 @@
 import { E2E_ORGANIZER, expect, test } from './fixtures';
 import type { CheckInList } from '../src/shared/checkin';
+import { parseCsv } from '../src/shared/csv';
+import type { StartLists } from '../src/server/startlists';
 
 test('successor takes ownership in a separate account while outgoing roles remain scoped', async ({ page, browser }) => {
   const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
@@ -74,4 +76,73 @@ test('successor takes ownership in a separate account while outgoing roles remai
     expect(csv.status()).toBe(200);
     expect(await csv.text()).toContain(ready.entries[0].id);
   } finally { await context.close(); }
+});
+
+test('timer role downloads a locked start list and sees the desk revision', async ({ page, browser }) => {
+  const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  const listsUrl = `${eventUrl}/start-lists`;
+  expect((await page.request.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await page.request.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  expect((await page.request.put(`${eventUrl}/bib-settings`, {
+    data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+  })).ok()).toBe(true);
+  const desk: CheckInList = await (await page.request.get(`${eventUrl}/check-in`)).json();
+  const rider = desk.riders.find((candidate) => candidate.result.ready && candidate.bib === null);
+  if (!rider) throw new Error('The fixture needs a ready rider without a bib');
+  const entryId = rider.entries[0].id;
+
+  const email = 'rehearsal.timer@example.test';
+  expect((await page.request.post(`/api/organizations/${organizationId}/members`, {
+    data: { email, role: 'timer_export' },
+  })).ok()).toBe(true);
+  const context = await browser.newContext({ extraHTTPHeaders: { Authorization: `Bearer test:${email}` } });
+  try {
+    await context.addInitScript((user) => sessionStorage.setItem('cyclereg.test-session', user), email);
+    const timer = await context.newPage();
+    await timer.goto(`/#/events/${eventId}/startlists`);
+    await expect(timer.getByRole('heading', { name: 'Start lists and timer export', exact: true })).toBeVisible();
+    const response = await timer.request.get(listsUrl);
+    expect(response.ok()).toBe(true);
+    const lists: Awaited<ReturnType<StartLists['overview']>> = await response.json();
+    const race = lists.races.find((candidate) => candidate.rows.some((row) => row.entryId === entryId));
+    if (!race) throw new Error('The ready rider must appear in a start list');
+    const raceUrl = `${listsUrl}/${race.raceId}`;
+
+    const checkInUrl = `${eventUrl}/check-in/${rider.orderId}`;
+    const checkInData = { dayId: desk.dayId, bib: null };
+    expect((await timer.request.get(`${eventUrl}/check-in`)).status()).toBe(403);
+    expect((await timer.request.post(checkInUrl, { data: checkInData })).status()).toBe(403);
+    expect((await timer.request.get(`${eventUrl}/exports/ledger.csv`)).status()).toBe(403);
+
+    await timer.getByRole('radio', { name: race.raceName, exact: true }).check();
+    const locked = timer.waitForResponse((res) => res.url().endsWith(`${raceUrl}/lock`) && res.request().method() === 'POST');
+    await timer.getByRole('button', { name: 'Lock start list', exact: true }).click();
+    const lock = await locked;
+    expect(lock.status()).toBe(201);
+    const { version } = await lock.json();
+    const lockedUrl = `${raceUrl}/csv?snapshot=${version}`;
+    const downloaded = timer.waitForResponse((res) => res.url().endsWith(lockedUrl));
+    await timer.getByRole('link', { name: 'Download the locked list', exact: true }).click();
+    const csv = await downloaded;
+    expect(csv.status()).toBe(200);
+    const saved = await csv.text();
+    const [columns, ...rows] = parseCsv(saved);
+    const savedEntry = rows.find((row) => row[columns.indexOf('entry_id')] === entryId);
+    expect(savedEntry?.[columns.indexOf('bib')]).toBe('');
+    expect(savedEntry?.[columns.indexOf('checked_in')]).toBe('N');
+
+    const issued = await page.request.post(checkInUrl, { data: checkInData });
+    expect(issued.ok()).toBe(true);
+    const { bib } = await issued.json();
+    expect(bib).toBe(100);
+    await timer.reload();
+    await timer.getByRole('radio', { name: race.raceName, exact: true }).check();
+    await expect(timer.getByRole('region', { name: `Revisions since the lock (v${version})` })).toContainText(`bib none → ${bib}`);
+    const repeated = await timer.request.get(lockedUrl);
+    expect(repeated.status()).toBe(200);
+    expect(await repeated.text()).toBe(saved);
+  } finally {
+    await context.close();
+  }
 });

@@ -26,7 +26,7 @@ Paths verified against `main` at commit `740d0b9` (November 16, 2026). When a ch
 | Sign-in, roles, team, guardians | `src/server/auth.ts`, `juniors.ts`, `profileClaims.ts`, `src/web/auth.tsx`, `Team.tsx`, `MyRegistrations.tsx` | `roles.ts` (`can`, permissions), `juniors.ts`, `profileClaims.ts` | `auth.test.ts`, `juniors.test.ts`, `profileClaims.test.ts`, `guardian-rollback.test.ts`; `e2e/sign-in.spec.ts`, `e2e/handoff.spec.ts`, `e2e/invitation-recovery.spec.ts` |
 | Email (test-only SES) | `src/server/email.ts` | | `auth.test.ts` (invitation emails) |
 | Check-in, bibs, roster | `src/server/checkin.ts`, `automaticBibs.ts`, `src/web/CheckIn.tsx`, `BibBatchPanel.tsx`, `Roster.tsx` | `checkin.ts`, `roster.ts` | `checkin.test.ts`, `automatic-bibs.test.ts`, `bib-reassignment.test.ts`, `roster.test.ts`; `e2e/checkin.spec.ts`, `checkin-recovery.spec.ts` |
-| Start lists and timer export | `src/server/startlists.ts`, `src/web/StartLists.tsx` | `startlist.ts` | `startlists.test.ts` |
+| Start lists and timer export | `src/server/startlists.ts`, `src/web/StartLists.tsx` | `startlist.ts` | `startlists.test.ts`, `e2e/handoff.spec.ts` (timer role and lock revisions) |
 | Demo and case-study data | `src/server/seed-cli.ts`, `case-study-cli.ts`, `caseStudies.ts` | `demo.ts`, `fixtures.ts`, `caseStudies.ts`, and the named event files (`berkeleyOmnium.ts`, `burlingame.ts`, and others) | `case-studies.test.ts`, per-event test files, and `e2e/case-studies.spec.ts` (including fictional weekend close-out) |
 
 `src/web/api.ts` is the browser's API client; types it sends or receives come from `src/shared/`. `src/web/ui.tsx` holds shared controls; `styles.css` holds all styles.
