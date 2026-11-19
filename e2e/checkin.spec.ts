@@ -195,6 +195,72 @@ test('a paid rider can receive a bib only on a day they entered', async ({ page 
   })]);
 });
 
+test('a volunteer can retry check-in after the organizer extends an exhausted bib range', async ({ page, browser }) => {
+  const api = page.request;
+  const { eventId, organizationId } = await (await api.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await api.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await api.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  const setRange = async (last: number) => {
+    expect((await api.put(`${eventUrl}/bib-settings`, {
+      data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last }] },
+    })).ok()).toBe(true);
+  };
+  await setRange(100);
+  const readList = async (): Promise<CheckInList> => {
+    const response = await api.get(`${eventUrl}/check-in`);
+    expect(response.ok()).toBe(true);
+    return response.json();
+  };
+  const initial = await readList();
+  const [first, next] = initial.riders.filter((rider) => rider.result.ready && rider.bib === null);
+  if (!first || !next?.checkInCode) throw new Error('The demo needs two ready riders without bibs');
+  const issued = await api.post(`${eventUrl}/check-in/${first.orderId}`, { data: { dayId: initial.dayId, bib: null } });
+  expect(issued.ok()).toBe(true);
+  const recordedFirst = await issued.json();
+  expect(recordedFirst).toMatchObject({ bib: 100, checkedInAt: expect.any(String) });
+
+  const email = 'range.volunteer@example.test';
+  expect((await api.post(`/api/organizations/${organizationId}/members`, {
+    data: { email, role: 'check_in_volunteer' },
+  })).ok()).toBe(true);
+  const context = await browser.newContext({
+    extraHTTPHeaders: { Authorization: `Bearer test:${email}` },
+    viewport: { width: 390, height: 844 },
+  });
+  try {
+    await context.addInitScript((user) => sessionStorage.setItem('cyclereg.test-session', user), email);
+    const volunteer = await context.newPage();
+    await volunteer.goto(`/#/events/${eventId}/check-in`);
+    const search = volunteer.getByRole('searchbox', { name: 'Find a rider' });
+    const detail = volunteer.getByRole('region', { name: 'Rider check-in' });
+    await search.fill(next.checkInCode);
+    await search.press('Enter');
+    await expect(detail).toContainText(next.name);
+    await expect(detail).toContainText('Ready to race');
+    const issue = detail.getByRole('button', { name: 'Check in and issue next bib' });
+    await issue.click();
+    await expect(detail.getByRole('alert')).toContainText('Every bib from 100 to 100 is in use. Extend the bib range.');
+    const afterFailure = await readList();
+    expect(afterFailure.riders.find((rider) => rider.orderId === next.orderId)).toMatchObject({
+      bib: null, checkedInAt: null, bibHistory: [], entries: next.entries, result: next.result,
+    });
+
+    await setRange(101);
+    await issue.click();
+    await expect(detail.locator('.ci-bib__number')).toHaveText('101');
+    const afterRetry = await readList();
+    expect(afterRetry.riders.find((rider) => rider.orderId === next.orderId)).toMatchObject({
+      bib: 101, checkedInAt: expect.any(String), entries: next.entries,
+    });
+    expect(afterRetry.riders.find((rider) => rider.orderId === first.orderId)).toMatchObject({
+      bib: 100, checkedInAt: recordedFirst.checkedInAt, bibHistory: recordedFirst.bibHistory,
+    });
+  } finally {
+    await context.close();
+  }
+});
+
 test('fallback roster lists every rider and puts blocked riders on the exception checklist', async ({ page }) => {
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
