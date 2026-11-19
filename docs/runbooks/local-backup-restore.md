@@ -8,7 +8,7 @@ The technical lead runs this in an isolated checkout/worktree, one rehearsal at 
 
 Use matching PostgreSQL 17 server/dump/restore tools in that container. The dump uses custom format; the restore uses one transaction and stops on errors. It deliberately omits ownership and access-control restoration: application membership tables are checked, but PostgreSQL cluster roles, grants and tablespaces are not established by this procedure. Do not use `--create` or `--clean`: restore goes into a separately created empty database, never back into the source.
 
-The helper explicitly selects simulated payment, recorded-only email and local script authentication. It loads no `.env` file and starts no network listener. The fixed application clock and demonstration riders are fictional. A source database must be empty before seeding.
+The helper explicitly selects simulated payment, recorded-only email and local test authentication for two fictional organizer accounts. It loads no `.env` file and starts no network listener. The fixed application clock and demonstration riders are fictional. A source database must be empty before seeding.
 
 ## 1. Create new databases
 
@@ -37,7 +37,7 @@ printf 'Created target: %s\n' "$RESTORE_TARGET_DB"
 
 ## 2. Write the rehearsal helper and seed
 
-The helper creates an example weekend with paid/unpaid entries, a paid-but-blocked rider, one issued bib/check-in, a locked start list and attributed protected CSVs. It records every public table's row count and hash, plus columns, constraints, indexes and sequence metadata. The source application closes before dumping, so this is a quiescent snapshot exercise, not evidence of backup consistency under concurrent writers.
+The helper creates an example weekend with paid/unpaid entries, a paid-but-blocked rider, one issued bib/check-in, a locked start list, attributed protected CSVs and a recorded ownership handoff. It records every public table's row count and hash, plus columns, constraints, indexes and sequence metadata. The source application closes before dumping, so this is a quiescent snapshot exercise, not evidence of backup consistency under concurrent writers.
 
 ```bash
 cat > data/restore-rehearsal/rehearse.ts <<'TS'
@@ -46,7 +46,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import pg from 'pg';
 import { buildApp } from '../../src/server/app';
-import { scriptAuth } from '../../src/server/auth';
+import { testAuth } from '../../src/server/auth';
 import { localEmail } from '../../src/server/email';
 import { paymentsFromEnv } from '../../src/server/payments';
 
@@ -97,14 +97,18 @@ if (mode === 'verify') {
   assert.deepEqual(await manifest(target), JSON.parse(readFileSync(`${directory}/manifest.json`, 'utf8')));
   console.log('Restored table hashes/counts, columns, constraints, indexes and sequences match.');
 }
-const { app } = buildApp({ databaseUrl: url(database), auth: scriptAuth(), email: localEmail(), payments: paymentsFromEnv({}), now: () => new Date('2027-03-01T18:00:00Z') });
-async function request(method: 'GET' | 'POST' | 'PUT', path: string, status: number, payload?: object) {
-  const response = await app.inject({ method, url: path, payload });
+const formerOwner = 'restore.owner@example.test';
+const successor = 'restore.successor@example.test';
+const { app } = buildApp({ databaseUrl: url(database), auth: testAuth(), email: localEmail(), payments: paymentsFromEnv({}), now: () => new Date('2027-03-01T18:00:00Z') });
+const headersFor = (email: string) => ({ authorization: `Bearer test:${email}` });
+let actor = formerOwner;
+async function request(method: 'GET' | 'POST' | 'PUT', path: string, status: number, payload?: object, email = actor) {
+  const response = await app.inject({ method, url: path, payload, headers: headersFor(email) });
   assert.equal(response.statusCode, status, `${method} ${path}: ${response.body}`);
   return response.json();
 }
 async function download(path: string) {
-  const response = await app.inject({ method: 'GET', url: path });
+  const response = await app.inject({ method: 'GET', url: path, headers: headersFor(actor) });
   assert.equal(response.statusCode, 200, 'Protected CSV must return 200.');
   assert.match(String(response.headers['content-disposition']), /^attachment;/);
   assert.match(String(response.headers['content-type']), /^text\/csv/);
@@ -112,7 +116,7 @@ async function download(path: string) {
 
 try {
   if (mode === 'seed') {
-    const { eventId } = await request('POST', '/api/demo', 201);
+    const { eventId, organizationId } = await request('POST', '/api/demo', 201);
     await request('POST', `/api/events/${eventId}/publish`, 200, { acknowledgeWarnings: true });
     await request('POST', `/api/events/${eventId}/check-in-demo-riders`, 201);
     await request('PUT', `/api/events/${eventId}/bib-settings`, 200, { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
@@ -136,10 +140,33 @@ try {
       { ...generation, export_kind: 'ledger', race_id: null, snapshot_version: null },
       { ...generation, export_kind: 'start_list', race_id: raceId, snapshot_version: 1 },
     ]);
-    writeFileSync(`${directory}/fixture.json`, JSON.stringify({ eventId, actorId: account.id, dayId: list.dayId, readyId: ready.orderId, blockedId: blocked.orderId, raceId, lists: await request('GET', `/api/events/${eventId}/start-lists`, 200) }));
+    const organization = `/api/organizations/${organizationId}`;
+    const { account: incoming } = await request('GET', '/api/me', 200, undefined, successor);
+    await request('POST', `${organization}/members`, 200, { email: successor, role: 'check_in_volunteer' });
+    await request('POST', `${organization}/members`, 200, { email: formerOwner, role: 'finance' });
+    await request('POST', `${organization}/ownership-transfer`, 200, { email: successor });
+    await request('GET', `${organization}/members`, 403);
+    actor = successor;
+    const team = await request('GET', `${organization}/members`, 200);
+    assert.deepEqual(team.members, [
+      { accountId: account.id, email: formerOwner, role: 'finance' },
+      { accountId: incoming.id, email: successor, role: 'check_in_volunteer' },
+      { accountId: incoming.id, email: successor, role: 'owner' },
+    ]);
+    assert.deepEqual(team.history.filter((entry: { action: string }) => entry.action === 'ownership_transferred'), [
+      { action: 'ownership_transferred', email: successor, role: 'owner', by: formerOwner, at: '2027-03-01T18:00:00.000Z' },
+    ]);
+    writeFileSync(`${directory}/fixture.json`, JSON.stringify({
+      eventId, organization, successorId: incoming.id, team, dayId: list.dayId, readyId: ready.orderId,
+      blockedId: blocked.orderId, raceId, lists: await request('GET', `/api/events/${eventId}/start-lists`, 200),
+    }));
   } else {
     const fixture = JSON.parse(readFileSync(`${directory}/fixture.json`, 'utf8'));
     await request('GET', '/api/health', 200);
+    await request('GET', `${fixture.organization}/members`, 403);
+    actor = successor;
+    assert.deepEqual(await request('GET', `${fixture.organization}/members`, 200), fixture.team);
+    console.log('Restored ownership handoff, retained roles and actor-attributed history passed.');
     const list = await request('GET', `/api/events/${fixture.eventId}/check-in`, 200);
     const ready = list.riders.find((r: any) => r.orderId === fixture.readyId);
     const blocked = list.riders.find((r: any) => r.orderId === fixture.blockedId);
@@ -160,7 +187,7 @@ try {
     assert.deepEqual(allAudit.filter((row) => restoredAudit.some((old) => old.id === row.id)), restoredAudit);
     const [appended] = allAudit.filter((row) => !restoredAudit.some((old) => old.id === row.id));
     assert.deepEqual({ ...appended, id: null }, {
-      id: null, actor_account_id: fixture.actorId, export_kind: 'ledger', race_id: null,
+      id: null, actor_account_id: fixture.successorId, export_kind: 'ledger', race_id: null,
       snapshot_version: null, generated_at: new Date('2027-03-01T18:00:00Z'),
     });
     const after = await manifest(target);
@@ -171,7 +198,7 @@ try {
 } finally { await app.close(); }
 if (mode === 'seed') {
   const result = await manifest(source);
-  for (const table of ['orders', 'order_entries', 'payment_attempts', 'bib_assignments', 'check_ins', 'start_list_snapshots', 'start_list_locks', 'organization_members', 'protected_export_audit']) {
+  for (const table of ['orders', 'order_entries', 'payment_attempts', 'bib_assignments', 'check_ins', 'start_list_snapshots', 'start_list_locks', 'organization_members', 'membership_changes', 'protected_export_audit']) {
     assert(result.data.some((row) => row.table === table && row.count > 0), `${table} must be populated`);
   }
   writeFileSync(`${directory}/manifest.json`, JSON.stringify(result));
@@ -196,9 +223,9 @@ cat data/restore-rehearsal/local.dump.sha256
 npx tsx data/restore-rehearsal/rehearse.ts verify
 ```
 
-Do not start the application or run migrations against the empty target before restoring. Verification first compares the recovered public tables and selected schema metadata, then opens the application and checks health, the existing checked-in bib, paid-but-blocked readiness and the locked start list. It retries the existing check-in and the blocked check-in, and verifies neither changes the table manifest. A new protected ledger download must append one attributed row while the two restored audit rows and all other persisted state remain unchanged. This checks the current sample's records; it does not prove all schema objects, every financial recovery path or real provider reconciliation.
+Do not start the application or run migrations against the empty target before restoring. Verification first compares the recovered public tables and selected schema metadata, then opens the application and checks health. It confirms that the former owner is denied team administration and retains the Finance role, and that the successor can read the original handoff history. It also verifies the existing checked-in bib, paid-but-blocked readiness and the locked start list. It retries the existing check-in and the blocked check-in, and verifies neither changes the table manifest. A new protected ledger download by the successor must append one attributed row while the two restored audit rows and all other persisted state remain unchanged. This checks the current sample's records; it does not prove all schema objects, every financial recovery path or real provider reconciliation.
 
-Expected: `Restored table hashes/counts, columns, constraints, indexes and sequences match.` The recovered check-in/start-list assertions pass, followed by `Restored audit rows and new attributed ledger generation passed.` A mismatch is a failed recovery. Keep the archive/source for investigation and do not substitute the target for a working service. Do not import missing records or replay payments merely to make totals match.
+Expected: `Restored table hashes/counts, columns, constraints, indexes and sequences match.` Then expect `Restored ownership handoff, retained roles and actor-attributed history passed.` The recovered check-in and start-list assertions pass, followed by `Restored audit rows and new attributed ledger generation passed.` A mismatch is a failed recovery. Keep the archive/source for investigation and do not substitute the target for a working service. Do not import missing records or replay payments merely to make totals match.
 
 ## 4. Rehearse refusal and rollback
 
