@@ -408,7 +408,7 @@ describe('organizer roles', () => {
                 AND waiting.locktype = 'advisory' AND NOT waiting.granted`,
           );
           return rows[0].count;
-        }, { timeout: 5000 }).toBe(count);
+        }, { timeout: 5000, message: 'Requests waiting for the organization membership lock' }).toBe(count);
       };
       const [firstRequest, secondRequest] = first === 'removal' ? [remove, transfer] : [transfer, remove];
       requests.push(firstRequest());
@@ -428,6 +428,9 @@ describe('organizer roles', () => {
     const [removed, transferred] = first === 'removal' ? [firstResponse, secondResponse] : [secondResponse, firstResponse];
     expect(removed.statusCode, removed.body).toBe(200);
     expect(transferred.statusCode, transferred.body).toBe(transferStatus);
+    if (first === 'removal') {
+      expect(transferred.json()).toMatchObject({ error: 'Add this person to your team before handing over ownership.' });
+    }
     const final = await call(OTHER_OWNER, 'GET', membersUrl);
     expect(final.statusCode, final.body).toBe(200);
     const { members, history } = final.json<{ members: { email: string; role: string }[]; history: { action: string; email: string; by: string }[] }>();
