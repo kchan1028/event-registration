@@ -15,8 +15,8 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
   const [choice, setChoice] = useState<'manual' | 'sequence'>('manual');
   const [reason, setReason] = useState('');
   const [acknowledgeCheckedIn, setAcknowledgeCheckedIn] = useState(false);
-  const [newBibs, setNewBibs] = useState<Record<string, string>>({});
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selection, setSelection] = useState(() => new Map<string, string>());
+  const selected = [...selection.keys()];
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,16 +39,26 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
     setMessage('');
   }
   function clearSelection() {
-    setSelected([]);
+    setSelection(new Map());
     setAcknowledgeCheckedIn(false);
-    setNewBibs({});
+    invalidate();
+  }
+  function toggleRider(orderId: string, checked: boolean) {
+    setSelection((current) => {
+      const next = new Map(current);
+      if (checked) next.set(orderId, current.get(orderId) ?? '');
+      else next.delete(orderId);
+      return next;
+    });
     invalidate();
   }
   async function refreshRiders() {
     const result = await api.checkInList(eventId, dayId, '');
     if (active.current) {
       setData(result);
-      setSelected((ids) => ids.filter((id) => result.riders.some((r) => r.orderId === id && !bibBatchExclusion(r, mode))));
+      setSelection((current) => new Map([...current].filter(([id]) =>
+        result.riders.some((r) => r.orderId === id && !bibBatchExclusion(r, mode)),
+      )));
     }
   }
 
@@ -64,9 +74,8 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
         onChanged();
         if (!active.current) return;
         setPreview(null);
-        setSelected([]);
+        setSelection(new Map());
         setAcknowledgeCheckedIn(false);
-        setNewBibs({});
         setMessage(`${result.applied} ${result.applied === 1 ? 'bib' : 'bibs'} ${reassigning ? 'changed; start-list revisions saved' : 'assigned'}. Readiness and check-in are unchanged.`);
         setData((current) => current && ({ ...current, riders: current.riders.map((r) => {
           const assignment = result.assignments.find((a) => a.orderId === r.orderId);
@@ -78,7 +87,7 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
         const scope = { dayId, ...(raceId ? { raceId } : {}), ...(categoryId ? { categoryId } : {}) };
         if (reassigning) {
           const parsed = bibReassignmentSchema.safeParse(choice === 'manual'
-            ? { ...scope, mode: choice, reason, acknowledgeCheckedIn, assignments: selected.map((orderId) => ({ orderId, bib: Number(newBibs[orderId] ?? '') })) }
+            ? { ...scope, mode: choice, reason, acknowledgeCheckedIn, assignments: [...selection].map(([orderId, draft]) => ({ orderId, bib: Number(draft) })) }
             : { ...scope, mode: choice, reason, acknowledgeCheckedIn, orderIds: selected, sort });
           if (!parsed.success) { setError(`${parsed.error.issues[0].message} Check the reason and replacement numbers.`); return; }
           const plan = await api.previewReassignments(eventId, parsed.data);
@@ -134,7 +143,10 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
       {reassigning && <label className="ci-batch__choice"><input type="checkbox" disabled={busy} checked={acknowledgeCheckedIn} onChange={(e) => { setAcknowledgeCheckedIn(e.target.checked); invalidate(); }} />I approve changing checked-in riders’ bibs. Select those riders individually.</label>}
       <p className="muted small">Numbers must fit every applicable category range, using the event/day range where a category has none. A weekend bib uses the overlap across days. Narrowing the selection does not widen that overlap.</p>
       <div className="ci-bib__actions">
-        <button type="button" className="btn btn--secondary btn--small" disabled={busy || !selectable.length || selectable.length > MAX_BIB_BATCH_SIZE} onClick={() => { setSelected(selectable.map((r) => r.orderId)); invalidate(); }}>Select all {reassigning ? 'assigned' : 'unassigned'} ({selectable.length})</button>
+        <button type="button" className="btn btn--secondary btn--small" disabled={busy || !selectable.length || selectable.length > MAX_BIB_BATCH_SIZE} onClick={() => {
+          setSelection((current) => new Map(selectable.map((r) => [r.orderId, current.get(r.orderId) ?? ''])));
+          invalidate();
+        }}>Select all {reassigning ? 'assigned' : 'unassigned'} ({selectable.length})</button>
         <button type="button" className="btn btn--ghost btn--small" disabled={busy || !selected.length} onClick={clearSelection}>Clear selection</button>
         <span role="status">{selected.length} selected · maximum {MAX_BIB_BATCH_SIZE.toLocaleString('en-US')} per batch</span>
       </div>
@@ -142,10 +154,21 @@ export function BibBatchPanel({ eventId, dayId, mode, onChanged, onClose }: { ev
         <table><thead><tr><th scope="col">Select rider</th><th scope="col">Categories</th><th scope="col">Current bib</th>{reassigning && choice === 'manual' && <th scope="col">New bib</th>}<th scope="col">Allocation status</th></tr></thead>
           <tbody>{riders.map((r) => {
             const exclusion = bibBatchExclusion(r, mode);
+            const isSelected = selection.has(r.orderId);
             return <tr key={r.orderId}>
-              <th scope="row"><label className="ci-batch__choice"><input type="checkbox" disabled={busy || !!exclusion || (!selected.includes(r.orderId) && selected.length >= MAX_BIB_BATCH_SIZE)} checked={selected.includes(r.orderId)} onChange={(e) => { setSelected((ids) => e.target.checked ? [...ids, r.orderId] : ids.filter((id) => id !== r.orderId)); invalidate(); }} />{r.name}</label></th>
+              <th scope="row"><label className="ci-batch__choice">
+                <input type="checkbox" disabled={busy || !!exclusion || (!isSelected && selected.length >= MAX_BIB_BATCH_SIZE)}
+                  checked={isSelected} onChange={(e) => toggleRider(r.orderId, e.target.checked)} />{r.name}
+              </label></th>
               <td>{r.entries.map((e) => e.categoryName).join(', ')}</td><td>{r.bib ?? 'Unassigned'}</td>
-              {reassigning && choice === 'manual' && <td><input className="input ci-batch__number" inputMode="numeric" aria-label={`New bib for ${r.name}`} disabled={busy || !selected.includes(r.orderId)} value={newBibs[r.orderId] ?? ''} onChange={(e) => { setNewBibs((bibs) => ({ ...bibs, [r.orderId]: e.target.value.replace(/\D/g, '') })); invalidate(); }} /></td>}
+              {reassigning && choice === 'manual' && <td>
+                <input className="input ci-batch__number" inputMode="numeric" aria-label={`New bib for ${r.name}`}
+                  disabled={busy || !isSelected} value={selection.get(r.orderId) ?? ''} onChange={(e) => {
+                    const draft = e.target.value.replace(/\D/g, '');
+                    setSelection((current) => new Map(current).set(r.orderId, draft));
+                    invalidate();
+                  }} />
+              </td>}
               <td>{exclusion ?? (reassigning ? data.checkedInScope.includes(r.orderId) ? 'Checked in; explicit approval required' : 'Existing assignment' : r.result.ready ? 'Available for allocation' : 'Available; readiness blocked')}</td>
             </tr>;
           })}</tbody></table>

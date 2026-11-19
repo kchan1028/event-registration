@@ -382,7 +382,7 @@ These remain within the existing Phase 3 scope; this status clarification adds n
 
 Phone roster decision resolved November 16, 2026: [stacked phone entries](product.md#phone-roster-review-decision) are Implemented locally ([#144](https://github.com/kchan1028/event-registration/issues/144)); desktop and print retain tables. The phone view shows snapshot readiness and next-step guidance without sideways scrolling. Real-phone, screen-reader and volunteer acceptance remain open.
 
-Minor replacement-draft behavior remains an owner decision ([#98](https://github.com/kchan1028/event-registration/issues/98)); do not treat a proposed interaction preference as approved scope.
+Bib reassignment draft clearing is Implemented locally ([#98](https://github.com/kchan1028/event-registration/issues/98)). Removing a rider clears their replacement number and invalidates the preview. Staff rehearsal remains open.
 
 ### Dependencies and external approvals
 
