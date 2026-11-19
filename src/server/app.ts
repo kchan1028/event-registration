@@ -416,7 +416,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const body = z
       .object({
         clientRequestId: z.string().min(8).max(64),
-        categoryIds: z.array(z.string().min(1).max(64)).min(1).max(10),
+        categoryIds: z.array(idStr).min(1).max(10),
+        bundleIntent: idStr.nullable().optional(),
         rider: z.unknown(),
         waiver: z.unknown(),
         extras: z.unknown().optional(),

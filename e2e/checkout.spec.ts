@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from './fixtures';
+import { E2E_ORGANIZER, expect, test, type Page } from './fixtures';
 import { seedRegistrationCase } from './support/registration-case';
 import type { CheckInList } from '../src/shared/checkin';
 
@@ -101,6 +101,32 @@ test('weekend bundle needs both days; missing details show field messages and a 
   await page.getByLabel('Contact phone').fill('555-555-0123');
   await page.getByRole('button', { name: 'Continue to the waiver' }).click();
   await expect(page.getByRole('heading', { name: 'Waiver' })).toBeVisible();
+});
+
+test('a removed package refuses the reservation until the rider clears their choice', async ({ page }) => {
+  const eventId = await openEvent(page, 'omnium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByLabel('Racing age').fill('40');
+  await page.getByLabel(/I want the/).check();
+  for (const code of [/DRW-RR-M35/, /DRW-CR-M35/]) await page.getByRole('checkbox', { name: code }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+
+  const headers = { Authorization: `Bearer test:${E2E_ORGANIZER}` };
+  const event = await (await page.request.get(`/api/events/${eventId}`, { headers })).json();
+  event.config.registration.bundles = [];
+  expect((await page.request.put(`/api/events/${eventId}/config`, { headers, data: { config: event.config, revision: event.revision } })).ok()).toBe(true);
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { headers, data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.locator('.error-summary')).toContainText('Your selected package is no longer available');
+  await page.getByRole('button', { name: /Choose races/ }).click();
+  await page.getByRole('button', { name: 'Clear package choice' }).click();
+  await expect(page.getByRole('heading', { name: 'Your entries' })).toBeFocused();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
 });
 
 test('junior with guardian: only the guardian’s typed name signs', async ({ page }) => {

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { evaluateCategory, type EligibilityResult, type RiderProfile } from './eligibility';
 import { formatTime } from './format';
 import { normalizeText } from './lookup';
-import { COLLEGIATE_DIVISIONS, COMPETITION_CLASSES, LICENSE_CATEGORIES, LICENSE_TYPES, type Category, type EventConfig } from './schema';
+import { COLLEGIATE_DIVISIONS, COMPETITION_CLASSES, LICENSE_CATEGORIES, LICENSE_TYPES, type Bundle, type Category, type EventConfig } from './schema';
 
 /**
  * Rider checkout rules shared by the browser and the server:
@@ -233,6 +233,12 @@ export interface SelectionCheck {
   eligibility: Record<string, EligibilityResult>;
   conflicts: Conflict[];
   needsGuardian: boolean;
+}
+
+export function missingBundleRaces(config: EventConfig, categoryIds: readonly string[], bundle: Bundle): string[] {
+  const selectedIds = new Set(categoryIds);
+  const selectedRaces = new Set(config.categories.filter((category) => selectedIds.has(category.id)).map((category) => category.raceId));
+  return bundle.raceIds.filter((raceId) => !selectedRaces.has(raceId));
 }
 
 /** Server-side gate for an order; the browser uses the same rules to explain them early. */

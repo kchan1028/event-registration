@@ -319,15 +319,27 @@ describe('Berkeley package order snapshot', () => {
       const config = event.config as EventConfig;
       const categoryIds = codes.map((code) => config.categories.find((c) => c.timingCode === code)!.id);
       expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
-      const res = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: {
+      const url = `/api/rider/events/${eventId}/orders`;
+      const payload = {
         clientRequestId: 'berkeley-package-order', categoryIds, rider,
+        bundleIntent: config.registration.bundles[0].id,
         waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' },
-      } });
+      };
+      const incomplete = await app.inject({ method: 'POST', url, payload: { ...payload, categoryIds: categoryIds.slice(0, 1) } });
+      expect(incomplete.statusCode).toBe(422);
+      expect(incomplete.json().error).toContain('Nothing was held');
+      const res = await app.inject({ method: 'POST', url, payload });
       expect(res.statusCode).toBe(201);
       const held = res.json();
       expect(held.quote.bundle.omnium.categoryIds).toEqual(categoryIds);
       config.registration.bundles = [];
       expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config } })).statusCode).toBe(200);
+      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+      const stale = await app.inject({ method: 'POST', url, payload: { ...payload, clientRequestId: 'new-stale-package-order' } });
+      expect(stale.statusCode).toBe(409);
+      const replay = await app.inject({ method: 'POST', url, payload });
+      expect(replay.statusCode).toBe(201);
+      expect(replay.json()).toMatchObject({ id: held.id, quote: held.quote });
       const paid = (await app.inject({ method: 'POST', url: `/api/orders/${held.id}/payment`, payload: { attemptId: 'berkeley-package-payment', outcome: 'success' } })).json();
       expect(paid.status).toBe('confirmed');
       expect(paid.totalCents).toBe(total);

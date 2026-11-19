@@ -2,7 +2,7 @@ import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/rese
 import { randomInt } from 'node:crypto';
 import { canAdmit, remainingForCategory, type LimitUsage } from '../shared/capacity';
 import { evaluateCategory } from '../shared/eligibility';
-import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNow, needsGuardian, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance, type WaiverEvidence } from '../shared/checkout';
+import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNow, missingBundleRaces, needsGuardian, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance, type WaiverEvidence } from '../shared/checkout';
 import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { termsOf } from '../shared/coupons';
@@ -382,7 +382,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
      */
     async createOrder(
       eventId: string,
-      input: { clientRequestId: string; categoryIds: string[]; rider?: unknown; waiver?: unknown; extras?: unknown; offerToken?: string | null; couponCode?: string | null },
+      input: { clientRequestId: string; categoryIds: string[]; bundleIntent?: string | null; rider?: unknown; waiver?: unknown; extras?: unknown; offerToken?: string | null; couponCode?: string | null },
       /** The signed-in rider's account; null only for orders the demo seeders place. */
       accountId: string | null,
     ) {
@@ -412,6 +412,13 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         // Registration windows are checked when places are held; a hold taken while open may be paid within its time.
         const check = checkSelection(config, input.categoryIds, profileOf(rider), { nowLocal: localNow(config.event.timeZone, clock()) });
         if (!check.ok) throw new HttpError(422, check.problems[0], check.problems);
+        if (input.bundleIntent) {
+          const bundle = config.registration.bundles.find((candidate) => candidate.id === input.bundleIntent);
+          if (!bundle) throw new HttpError(409, 'Your selected package is no longer available. Review your race selection. Nothing was held.');
+          if (missingBundleRaces(config, input.categoryIds, bundle).length > 0) {
+            throw new HttpError(422, `The ${bundle.name} needs an entry in every included race. Review your race selection. Nothing was held.`);
+          }
+        }
         if (check.needsGuardian && !rider.guardian) throw new HttpError(422, 'Riders with a racing age of 18 or under need a parent or guardian. Enter their name.');
         const signatureProblem = checkSignature(rider, waiver, check.needsGuardian);
         if (signatureProblem) throw new HttpError(422, signatureProblem);
