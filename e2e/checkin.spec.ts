@@ -10,7 +10,7 @@ import type { EventConfig } from '../src/shared/schema';
 
 type Rider = { orderId: string; name: string; checkInCode: string; result: { ready: boolean } };
 
-test('Enter right after a scanned code or a unique name opens that rider', async ({ page }) => {
+test('typed code and name lookup work after camera permission is denied', async ({ page }) => {
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
   await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
@@ -22,10 +22,22 @@ test('Enter right after a scanned code or a unique name opens that rider', async
   const ready = riders.find((r) => r.result.ready)!;
   const blocked = riders.find((r) => !r.result.ready)!;
 
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'BarcodeDetector', { configurable: true, value: class {} });
+    navigator.mediaDevices.getUserMedia = async () => {
+      throw new DOMException('Test camera permission denied', 'NotAllowedError');
+    };
+  });
   await page.goto(`/#/events/${eventId}/check-in`);
   const search = page.getByRole('searchbox', { name: 'Find a rider' });
   const detail = page.getByRole('region', { name: 'Rider check-in' });
   await expect(page.getByText(`${riders.length} riders on`)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Scan with camera', exact: true }).click();
+  const cameraError = page.getByRole('alert').filter({ hasText: 'The camera could not be opened.' });
+  await expect(cameraError).toContainText('type the code instead');
+  await page.getByRole('button', { name: 'Stop camera', exact: true }).click();
+  await expect(cameraError).toHaveCount(0);
 
   // Scanner style: lowercase code without the dash, Enter with no pause.
   await search.fill(ready.checkInCode.replace('-', '').toLowerCase());
