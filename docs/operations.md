@@ -111,12 +111,21 @@ Implemented in the local build (November 15, 2026): `GET /api/health` runs a dat
 
 ## Backups and recovery
 
-The [local fictional-data restore procedure](runbooks/local-backup-restore.md) exercises a separate logical archive/restore, record comparison and application recovery checks without touching the working database. It is technical rehearsal preparation; hosted scheduled/off-site recovery, agreed targets and staff acceptance remain open.
+The [local fictional-data restore procedure](runbooks/local-backup-restore.md) exercises a separate logical archive/restore, record comparison and application recovery checks without touching the working database. It prepares the team for the hosted rehearsal. Hosted scheduled and off-site recovery and staff acceptance remain open.
 
-- Back up the primary datastore on a schedule set by the hosting ADR, and keep copies somewhere a single failure cannot remove.
+- Back up the primary datastore on the schedule and point-in-time recovery policy in the [hosting ADR](decisions/0004-hosted-stack-and-database.md), and keep copies somewhere a single failure cannot remove.
 - A backup counts only after a restore has been demonstrated. Phase 3 requires that demonstration during the mock-weekend rehearsal ([roadmap.md](../roadmap.md#phase-3--make-race-day-operable)).
-- Record a target for how much data may be lost and how long a restore may take, agreed with the pilot organizer before the pilot.
+- Measure the approved targets in the [hosted recovery rehearsal](testing/test-plan.md#measure-hosted-recovery-before-the-pilot).
 - After any restore, reconcile entries and the ledger with the payment provider before reopening.
+
+The project owner approved these pilot rehearsal targets on November 19, 2026.
+
+| Window | Maximum database recovery gap | Maximum time to safe reopening |
+|---|---:|---:|
+| Registration opening | 5 minutes | 60 minutes |
+| Race morning | 5 minutes | 30 minutes |
+
+The database recovery gap is the time between the latest recovered committed change and the disruption. The reopening clock runs from disruption through detection, restore, application recovery, reconciliation and the operator’s decision. Account for every confirmed payment, entry and affected bib before reopening. Keep the affected desk or registration paused while a discrepancy remains. If the time target is exceeded, record the overrun and escalate to the project owner. Reopen only after reconciliation and authorization to resume. Hosted measurement and operator acceptance are open.
 
 ## Changes and releases
 
@@ -156,19 +165,19 @@ The [readiness checklist](research/prelaunch-readiness.md#race-day-readiness-che
 
 1. Who funds and staffs support after launch? ([product.md](../product.md#open-decisions), question 3)
 2. What freeze lengths and response targets does the pilot organizer accept?
-3. What data loss and restore-time targets are acceptable for registration opening and race morning?
+3. Recovery targets approved November 19, 2026. Hosted proof and operator acceptance remain open under [Backups and recovery](#backups-and-recovery).
 4. Which monitoring and alerting tools fit a small volunteer team? (hosting ADR)
 5. What retention periods apply to waivers, financial records, and everything else?
 
 ### November 16, 2026 research follow-up
 
-The existing questions above remain open. Owners below are roles to assign, not commitments. Research and synthetic scenario design can proceed under the provisional assumptions; no answer is inferred from silence.
+Unresolved operating decisions and validation steps are listed below. The named roles still need assigned operators. Research and fictional scenario design can proceed under the provisional assumptions.
 
 | Existing question | Owner / why it matters | Provisional assumption, blocked work and revisit |
 |---|---|---|
 | 1, support coverage | Project owner; named primary/deputy needed for independent operation | Assume no committed coverage. Live event support remains blocked; revisit before hosted pilot rehearsal. Includes responsibility for paid-but-not-ready follow-up and measurement review. |
 | 2, freeze/response targets | Product owner with registration lead; race-morning disruption needs an agreed response | Existing proposed values are not approved. Rehearsal design proceeds; accepted incident response remains blocked until organizer review before rehearsal. |
-| 3, data-loss/restore targets | Technical lead and treasurer, unassigned; restore must preserve money, capacity and entries | No approved RPO/RTO assumed. Isolated synthetic restoration can be planned; recovery sign-off blocked until targets agreed, before hosted rehearsal. |
+| 3, recovery measurement | Technical lead and treasurer, unassigned; restore must preserve money, capacity and entries | Targets approved November 19, 2026. Hosted measurement and recovery sign-off remain open. Run the hosted rehearsal once its environment and operators are approved. |
 | 4, monitoring/tools | Technical/support lead, unassigned; failures need an accountable receiver | No monitoring service, alert thresholds or after-hours rota accepted. Synthetic fault cases proceed; hosted operational sign-off blocked pending routing/tool review. |
 | 5, retention | Project owner/privacy responsibility unassigned; waivers, financial records, paper rosters and opaque telemetry keys remain personal data | No retention period or analytics collection approved. Synthetic measurements proceed; real-data collection blocked until access/retention approval before pilot. |
 
