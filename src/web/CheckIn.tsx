@@ -583,6 +583,10 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
                 className="btn btn--primary"
                 ref={focusNextRider}
                 aria-describedby={`${issuedBibId}-label ${issuedBibId}`}
+                onKeyDown={(event) => {
+                  // The Enter press that submitted check-in can still be held when focus arrives.
+                  if (event.key === 'Enter' && event.repeat) event.preventDefault();
+                }}
                 onClick={onNext}
               >
                 Next rider
