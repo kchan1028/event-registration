@@ -41,7 +41,7 @@ Each event must publish, before registration opens:
 - a backup contact if the support owner cannot respond; and
 - where volunteers find the printable fallback and the event runbook.
 
-A volunteer should never have to guess who handles a race-morning failure. The [support coverage rehearsal](testing/test-plan.md#support-coverage-rehearsal) exercises the primary and deputy routes before operators sign off.
+A volunteer should never have to guess who handles a race-morning failure. The [support coverage rehearsal](testing/test-plan.md#support-coverage-rehearsal) uses fictional assignments by owner decision on November 19, 2026. Named coverage and funding remain open.
 
 ## Operating calendar for an event
 

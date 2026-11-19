@@ -326,9 +326,11 @@ The [prelaunch readiness assessment](../research/prelaunch-readiness.md) maps ex
 
 ### Support coverage rehearsal
 
-Use the existing [desk contact sheet](../runbooks/race-day-check-in.md#before-the-desk-opens-registration-lead) to record a primary, deputy, contact route and coverage window for registration opening and race morning. Use fictional role labels in the shared rehearsal record. Keep actual contact details in the event’s restricted operating materials.
+Use fictional role assignments only. The facilitator records a primary, deputy and simulated contact routes on the [desk contact sheet](../runbooks/race-day-check-in.md#before-the-desk-opens-registration-lead). Use the registration-opening and race-morning windows recorded for the [freeze rehearsal](#freeze-and-incident-response-rehearsal). Keep actual contact details in the event's restricted operating materials.
 
-For each window, have a volunteer report a fictional incident using that sheet. In one case the primary answers. In a second case the facilitator tells the volunteer the primary is unavailable, and the volunteer contacts the deputy. Record who acknowledges, who takes ownership and how they reach the registration or technical lead. At shift handoff, the incoming operator uses their own account and can identify the unresolved holds, current owner and next action. The exercise does not establish live availability. Obtain each named operator’s acceptance for their window before operational sign-off.
+For each window, give a volunteer a fictional critical incident and a high-severity incident. In one case the primary answers. In the other, simulate no response and have the volunteer use the deputy route after the facilitator's recorded cue. Use the [initial-response targets](../operations.md#incident-severity). Keep critical escalation immediate and record detection, acknowledgement, when the handoff to the deputy occurs, and who owns the next action. Notify the fictional primary that the deputy took over so both roles see the same owner.
+
+Use the [existing desk shift handoff checklist](../runbooks/race-day-check-in.md#shift-handoff-and-rehearsal-evidence) for the incoming volunteer. If an app action is needed, each person uses their own account with only the required organization permissions. Exercise results establish neither actual availability nor funding. [Live support coverage](../operations.md#open-questions) remains open until named operators accept their windows and the project owner confirms the plan.
 
 ### Freeze and incident response rehearsal
 
