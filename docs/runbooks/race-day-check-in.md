@@ -48,9 +48,9 @@ For an incorrect individual number, use **Change bib**, enter the new number and
 
 For a mistaken check-in, use **Undo check-in** and record the reason. Before confirming, recover any physical bib already handed out. Undo normally releases its number back to the available pool; a number used by another checked-in day can remain reserved. If the physical bib is missing, stop and escalate to the registration lead before undo/reuse so the same number cannot be handed to another rider. Recheck the current recorded assignment before any further issue.
 
-If the request times out or the connection drops after a click, stop handing out numbers, reconnect and search again. Confirm the recorded check-in/bib before retrying. Repeated online check-in is designed to retain the same bib; that does not prevent duplicate physical handover. Escalate any uncertain or conflicting record instead of selecting another number to make the error disappear.
+If the connection drops during check-in, stop handing out bibs, reconnect and search for the same rider and race day. Use the check-in code to narrow the search to one rider. The warning stays until that lookup succeeds. If lookup confirms check-in, use the displayed bib and time to verify the record and check that the physical bib has not already been handed out. If lookup confirms no check-in was recorded, retry only when the rider is ready. Escalate any conflict to the registration lead.
 
-The [local connection-recovery checks](../testing/test-plan.md#check-in-connection-recovery) exercise unreceived requests and lost committed responses with fictional volunteer accounts. An earlier action warning can remain alongside a fresh lookup result; its presentation awaits [owner review](../../product.md#check-in-recovery-warning-decision). These automated checks do not establish volunteer comprehension, real network/device recovery or physical inventory control.
+The [local connection-recovery checks](../testing/test-plan.md#check-in-connection-recovery) exercise unreceived requests and lost committed responses with fictional volunteer accounts. Volunteer comprehension, physical connectivity recovery and inventory control remain open.
 
 ## Blocked riders and escalation
 

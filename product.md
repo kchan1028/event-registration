@@ -884,7 +884,7 @@ Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/R
 
 ### Check-in recovery warning decision
 
-Open, raised November 16, 2026; owner: project owner. After a lost check-in response, should a successful same-rider lookup clear or replace the earlier action warning, and how should the screen distinguish current confirmation from an uncertain past response? A simulated local browser walkthrough observed the earlier warning alongside a refreshed checked-in result ([#153](https://github.com/kchan1028/event-registration/issues/153)); volunteer confusion or duplicate physical handover has not been demonstrated. The existing reconnect-and-lookup procedure and repeat-safe recording can be rehearsed unchanged. No new interaction is approved; changing the warning awaits this decision. Revisit before volunteer acceptance and the controlled pilot, preserving lookup of the recorded state and independent readiness/payment rules.
+Decided November 19, 2026 by the project owner. After a lost check-in response, show that the result is unconfirmed and require a successful explicit lookup of the same rider and race day before another check-in attempt or bib handover. Replace the warning with a verified result that identifies the recorded bib or says check-in was not recorded. A failed lookup or a background refresh does not resolve the warning. Payment and readiness remain independent. The observation came from a simulated browser walkthrough ([#153](https://github.com/kchan1028/event-registration/issues/153)); verify comprehension with volunteers before acceptance.
 
 ### Ownership-transfer successor prerequisite
 

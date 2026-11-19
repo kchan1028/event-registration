@@ -10,6 +10,12 @@ import { BibBatchPanel, type BibBatchMode } from './BibBatchPanel';
 import { href } from './App';
 import { Icon, ThemeToggle } from './ui';
 
+type CheckInRecovery = 'pending' | 'verified';
+
+function recoveryKey(eventId: string, dayId: string, orderId: string) {
+  return JSON.stringify([eventId, dayId, orderId]);
+}
+
 /**
  * Race-day check-in. Built for a volunteer at a folding table: find the rider,
  * read one unmistakable ready/blocked result, issue the bib. No payment amounts,
@@ -21,6 +27,9 @@ export function CheckIn({ eventId }: { eventId: string }) {
   const [data, setData] = useState<CheckInList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [recovery, setRecovery] = useState(() => new Map<string, CheckInRecovery>());
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const lookupVersion = useRef(0);
   const [batchMode, setBatchMode] = useState<BibBatchMode | null>(null);
   const [showBibs, setShowBibs] = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
@@ -36,14 +45,19 @@ export function CheckIn({ eventId }: { eventId: string }) {
   };
 
   const load = useCallback(
-    (query: string, day: string | null) =>
-      api
+    (query: string, day: string | null) => {
+      const version = lookupVersion.current;
+      return api
         .checkInList(eventId, day, query)
         .then((d) => {
+          if (version !== lookupVersion.current) return;
           setData(d);
           setError(null);
         })
-        .catch((e: ApiError) => setError(e.message)),
+        .catch((e: ApiError) => {
+          if (version === lookupVersion.current) setError(e.message);
+        });
+    },
     [eventId],
   );
 
@@ -58,6 +72,17 @@ export function CheckIn({ eventId }: { eventId: string }) {
   const riders = data?.riders ?? [];
   const selected = riders.find((r) => r.orderId === selectedId) ?? null;
   const day = data?.days.find((d) => d.id === data.dayId);
+  const selectedRecoveryKey = selected && data ? recoveryKey(eventId, data.dayId, selected.orderId) : null;
+
+  function updateRecovery(key: string, state: CheckInRecovery | undefined) {
+    setRecovery((current) => {
+      if (current.get(key) === state) return current;
+      const next = new Map(current);
+      if (state) next.set(key, state);
+      else next.delete(key);
+      return next;
+    });
+  }
 
   function select(r: CheckInRider) {
     setSelectedId(r.orderId);
@@ -81,22 +106,35 @@ export function CheckIn({ eventId }: { eventId: string }) {
   async function lookup(text: string) {
     const query = text.trim();
     if (!query) return;
+    const version = ++lookupVersion.current;
+    setLookupError(null);
     try {
       const fresh = await api.checkInList(eventId, dayId, query);
+      if (version !== lookupVersion.current) return;
+      // Discard background reads that started before this explicit result arrived.
+      lookupVersion.current++;
       setData(fresh);
       setError(null);
-      if (fresh.riders.length === 1) select(fresh.riders[0]);
+      if (fresh.riders.length === 1) {
+        const rider = fresh.riders[0];
+        const key = recoveryKey(eventId, fresh.dayId, rider.orderId);
+        if (recovery.get(key) === 'pending') updateRecovery(key, 'verified');
+        select(rider);
+      }
     } catch (err) {
-      setError((err as ApiError).message);
+      if (version === lookupVersion.current) setLookupError((err as ApiError).message);
     }
   }
 
   function replace(r: CheckInRider) {
+    if (selectedRecoveryKey && recovery.get(selectedRecoveryKey) === 'verified') updateRecovery(selectedRecoveryKey, undefined);
     setData((d) => (d ? { ...d, riders: d.riders.map((x) => (x.orderId === r.orderId ? r : x)) } : d));
     void load(q, dayId);
   }
 
   function nextRider() {
+    lookupVersion.current++;
+    setLookupError(null);
     setSelectedId(null);
     startedAt.current = null;
     setQ('');
@@ -126,6 +164,8 @@ export function CheckIn({ eventId }: { eventId: string }) {
                   name="ci-day"
                   checked={d.id === data.dayId}
                   onChange={() => {
+                    lookupVersion.current++;
+                    setLookupError(null);
                     setDayId(d.id);
                     setSelectedId(null);
                   }}
@@ -215,10 +255,13 @@ export function CheckIn({ eventId }: { eventId: string }) {
                   onChange={(e) => {
                     if (!q && e.target.value && startedAt.current === null) startedAt.current = performance.now();
                     if (!e.target.value) startedAt.current = null;
+                    lookupVersion.current++;
+                    setLookupError(null);
                     setQ(e.target.value);
                   }}
                 />
               </form>
+              {lookupError && <p className="text-error small" role="alert">{lookupError}</p>}
               <button
                 type="button"
                 className="btn btn--secondary btn--small ci__scan-btn"
@@ -252,7 +295,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
                       <button type="button" className={`ci-row ${r.orderId === selectedId ? 'is-selected' : ''}`} aria-current={r.orderId === selectedId ? 'true' : undefined} onClick={() => select(r)}>
                         <span className="ci-row__name">{r.name}</span>
                         <span className="ci-row__meta">{[r.team, r.entries.map((e) => e.categoryName).join(', ')].filter(Boolean).join(' · ') || 'No entry today'}</span>
-                        <RowStatus r={r} />
+                        <RowStatus r={r} needsLookup={recovery.get(recoveryKey(eventId, data.dayId, r.orderId)) === 'pending'} />
                       </button>
                     </li>
                   ))}
@@ -261,8 +304,10 @@ export function CheckIn({ eventId }: { eventId: string }) {
             </aside>
 
             <section className="ci__detail" ref={detailRef} tabIndex={-1} aria-label="Rider check-in">
-              {selected ? (
-                <RiderDetail key={selected.orderId + data.dayId} eventId={eventId} dayId={data.dayId} rider={selected} onChange={replace} onNext={nextRider} takeDuration={takeDuration} />
+              {selected && selectedRecoveryKey ? (
+                <RiderDetail key={selectedRecoveryKey} eventId={eventId} dayId={data.dayId} rider={selected}
+                  recovery={recovery.get(selectedRecoveryKey)} onRecovery={(state) => updateRecovery(selectedRecoveryKey, state)}
+                  onChange={replace} onNext={nextRider} takeDuration={takeDuration} />
               ) : (
                 <div className="ci__placeholder">
                   <p>Search for a rider or scan their check-in code.</p>
@@ -295,7 +340,10 @@ function CheckInBar({ eventId, eventName, children }: { eventId: string; eventNa
   );
 }
 
-function RowStatus({ r }: { r: CheckInRider }) {
+function RowStatus({ r, needsLookup }: { r: CheckInRider; needsLookup: boolean }) {
+  if (needsLookup) {
+    return <span className="ci-chip ci-chip--blocked"><Icon name="warn" size={14} /> Verify check-in</span>;
+  }
   if (r.checkedInAt) {
     return (
       <span className="ci-chip ci-chip--done">
@@ -317,7 +365,7 @@ function RowStatus({ r }: { r: CheckInRider }) {
   );
 }
 
-function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: { eventId: string; dayId: string; rider: CheckInRider; onChange: (r: CheckInRider) => void; onNext: () => void; takeDuration: () => number | null }) {
+function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, onNext, takeDuration }: { eventId: string; dayId: string; rider: CheckInRider; recovery: CheckInRecovery | undefined; onRecovery: (state: CheckInRecovery | undefined) => void; onChange: (r: CheckInRider) => void; onNext: () => void; takeDuration: () => number | null }) {
   const [bib, setBib] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -361,12 +409,15 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
 
   async function checkIn(e: FormEvent) {
     e.preventDefault();
+    if (recovery === 'pending') return;
     setBusy(true);
     setError(null);
+    onRecovery(undefined);
     try {
       onChange(await api.checkIn(eventId, rider.orderId, dayId, rider.bib !== null ? null : bib.trim() ? Number(bib) : null, takeDuration()));
     } catch (err) {
-      setError((err as ApiError).message);
+      if (err instanceof ApiError && err.status === 0) onRecovery('pending');
+      else setError((err as ApiError).message);
     } finally {
       setBusy(false);
     }
@@ -405,6 +456,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
     else if (hasBib) guidance = 'Check them in and hand over a bib.';
     else guidance = 'No preassigned bib. Refer advance entries to the registration lead for allocation.';
   }
+  if (recovery === 'pending') guidance = 'Look up this rider again before handing over a bib or retrying check-in.';
 
   return (
     <div className="ci-detail">
@@ -420,8 +472,15 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
         <div>
           <p className="ci-result__head">{ready ? 'Ready to race' : 'Not ready'}</p>
           <p className="ci-result__sub">{guidance}</p>
+          {recovery === 'verified' && <p className="ci-result__sub">
+            {done ? `Lookup confirmed check-in with bib ${rider.bib}.` : 'Lookup confirmed check-in was not recorded.'}
+          </p>}
         </div>
       </div>
+
+      {recovery === 'pending' && (
+        <p className="text-error small" role="alert">Connection lost. Check-in could not be confirmed.</p>
+      )}
 
       {!ready && (
         <ul className="ci-blockers">
@@ -447,7 +506,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
                   {e.walkUp && <span className="muted small"> · Walk-up</span>}
                   {!e.walkUp && rider.payment === 'confirmed' && rider.bib === null && (
                     <div className="ci-entries__walk-up">
-                      <button type="button" className="btn btn--secondary" disabled={busy}
+                      <button type="button" className="btn btn--secondary" disabled={busy || recovery === 'pending'}
                         aria-label={`Mark as walk-up: ${e.categoryName}, ${e.raceName}`} onClick={() => void markWalkUp(e.id)}>
                         Mark as walk-up
                       </button>
@@ -477,7 +536,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
         </ul>
       </div>
 
-      <div className="ci-section ci-bib">
+      {recovery !== 'pending' && <div className="ci-section ci-bib">
         {!done && rider.bib !== null && <>
           <p className="ci-bib__label">Assigned bib (before check-in)</p>
           <p className="ci-bib__number">{rider.bib}</p>
@@ -561,7 +620,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
             {error}
           </p>
         )}
-      </div>
+      </div>}
 
       {rider.bibHistory.some((h) => h.releasedAt) && (
         <div className="ci-section">

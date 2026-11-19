@@ -36,9 +36,11 @@ for (const mobile of [false, true]) {
           await route.abort('connectionfailed');
         });
         await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
-        await expect(detail.getByRole('alert')).toContainText('Cannot reach the CycleReg server');
+        await expect(detail.getByRole('alert')).toHaveText('Connection lost. Check-in could not be confirmed.');
+        await expect(detail.getByRole('status')).toContainText('Look up this rider again before handing over a bib or retrying check-in.');
+        await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
+        await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
         expect(interrupted).toBe(1);
-        if (!committed) await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
         await volunteer.unroute(url);
 
         // A concurrent lookup can refresh the screen even though the action response was lost.
@@ -52,9 +54,39 @@ for (const mobile of [false, true]) {
         expect(recorded.result).toEqual(rider.result);
         expect(recorded.readiness).toEqual(rider.readiness);
 
+        // A failed fresh lookup cannot resolve the pending result.
+        const lookupUrl = (url: URL) => url.pathname === `/api/events/${eventId}/check-in`;
+        await volunteer.route(lookupUrl, (route) => route.abort('connectionfailed'));
+        await search.press('Enter');
+        await expect(volunteer.getByText(/Cannot reach the CycleReg server/)).toBeVisible();
+        await expect(detail.getByRole('alert')).toHaveText('Connection lost. Check-in could not be confirmed.');
+        await volunteer.unroute(lookupUrl);
+
+        // Neither another rider's lookup nor a background results refresh resolves this rider's warning.
+        await search.fill(next.checkInCode);
+        await search.press('Enter');
+        await expect(detail.getByRole('heading', { name: next.name })).toBeVisible();
+        await expect(detail.getByRole('alert')).toHaveCount(0);
+        await search.fill(rider.checkInCode);
+        const row = volunteer.getByRole('complementary', { name: 'Find a rider' })
+          .getByRole('button', { name: new RegExp(rider.name) });
+        await expect(row).toContainText('Verify check-in');
+        await row.click();
+        await expect(detail).toBeFocused();
+        await expect(detail.getByRole('alert')).toHaveText('Connection lost. Check-in could not be confirmed.');
+        await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
+
         // Follow the desk guide: look up the existing rider before another action.
         await search.press('Enter');
-        if (!committed) await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
+        await expect(detail.getByRole('status')).toContainText(committed
+          ? 'Lookup confirmed check-in with bib 100.'
+          : 'Lookup confirmed check-in was not recorded.');
+        await expect(detail.getByRole('alert')).toHaveCount(0);
+        if (!committed) {
+          await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
+          await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
+          await expect(detail.getByRole('status')).not.toContainText('Lookup confirmed');
+        }
         await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
         await expect(detail.locator('.ci-bib__number')).toHaveText('100');
         await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
