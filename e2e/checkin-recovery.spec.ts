@@ -67,7 +67,7 @@ for (const mobile of [false, true]) {
         await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
         await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
         expect(interrupted).toBe(1);
-        if (!reload) await volunteer.unroute(url);
+        await volunteer.unroute(url);
 
         const afterFailure = await readList(list.dayId);
         const recorded = afterFailure.riders.find((r) => r.orderId === rider.orderId)!;
@@ -80,6 +80,12 @@ for (const mobile of [false, true]) {
         expect(recorded.readiness).toEqual(rider.readiness);
 
         if (reload) {
+          let requestsAfterReload = 0;
+          volunteer.on('request', (request) => {
+            if (request.method() === 'POST' && new URL(request.url()).pathname === `${listUrl}/${rider.orderId}`) {
+              requestsAfterReload++;
+            }
+          });
           await volunteer.reload();
           await expect(search).toHaveValue('');
           await expect(detail).toContainText('Search for a rider or scan their check-in code.');
@@ -89,8 +95,7 @@ for (const mobile of [false, true]) {
           await search.fill(rider.checkInCode);
           await search.press('Enter');
           await expect(detail.getByRole('heading', { name: rider.name })).toBeVisible();
-          expect(interrupted).toBe(1);
-          await volunteer.unroute(url);
+          expect(requestsAfterReload).toBe(0);
 
           if (!committed) {
             await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
@@ -107,6 +112,12 @@ for (const mobile of [false, true]) {
             readiness: rider.readiness,
           });
           expect(recovered?.bibHistory).toHaveLength(1);
+          if (!recovered?.checkedInAt) throw new Error('The recovered check-in has no recorded time');
+          const time = await volunteer.evaluate((recordedAt) => (
+            new Date(recordedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+          ), recovered.checkedInAt);
+          await expect(detail).toContainText(`Checked in at ${time}.`);
+          expect(requestsAfterReload).toBe(committed ? 0 : 1);
           return;
         }
 
