@@ -76,12 +76,18 @@ test('unpublished event does not expose a registration handoff', async ({ page }
   await expect(panel.getByRole('link')).toHaveCount(0);
 });
 
-test('a full-field walk-up can join the waitlist without getting an entry or bib', async ({ page, browser }) => {
+test('walk-up distinguishes a closed registration window from an open waitlist', async ({ page, browser }) => {
   const eventId = await seedRegistrationCase(page.request, 'criterium');
   const eventUrl = `/api/events/${eventId}`;
   const { config, revision } = await (await page.request.get(eventUrl)).json() as { config: EventConfig; revision: number };
   const full = config.categories.find((category) => category.timingCode === 'DVC-M35')!;
+  const closed = config.categories.find((category) => category.timingCode === 'DVC-M45')!;
+  config.registration.demoIgnoreWindows = false;
+  full.registration.opensAt = null;
+  full.registration.closesAt = null;
   full.waitlistEnabled = true;
+  closed.registration.opensAt = null;
+  closed.registration.closesAt = '2000-01-01T09:00';
   expect((await page.request.put(`${eventUrl}/config`, { data: { config, revision } })).ok()).toBe(true);
   expect((await page.request.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
 
@@ -105,8 +111,14 @@ test('a full-field walk-up can join the waitlist without getting an entry or bib
     await rider.addInitScript((account) => sessionStorage.setItem('cyclereg.test-session', account), email);
     await rider.goto(address);
     await rider.getByLabel('Racing age').fill('40');
-    await rider.getByLabel('License category').selectOption('3');
+    await rider.getByLabel('License category').selectOption('4');
     await rider.getByLabel('Competition class').selectOption({ label: 'Men' });
+    const closedOption = rider.getByRole('checkbox', { name: /DVC-M45/ });
+    await expect(closedOption).toHaveAttribute('aria-disabled', 'true');
+    await expect(closedOption).toHaveAccessibleDescription('Registration closed');
+    await closedOption.press('Space');
+    await expect(closedOption).toHaveAttribute('aria-checked', 'false');
+
     const option = rider.getByRole('checkbox', { name: /DVC-M35/ });
     await expect(option).toHaveAttribute('aria-disabled', 'true');
     await expect(option).toHaveAttribute('aria-checked', 'false');
