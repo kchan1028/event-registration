@@ -56,8 +56,13 @@ for (const hasTouch of [false, true]) {
   });
 }
 
-for (const width of [390, 1440]) {
-  test(`volunteer can look up riders and issue a bib with only the keyboard at ${width}px`, async ({ page, browser }) => {
+for (const { width, delaySave } of [
+  { width: 390, delaySave: false },
+  { width: 1440, delaySave: false },
+  { width: 1440, delaySave: true },
+]) {
+  const scenario = delaySave ? ' during a delayed response' : '';
+  test(`volunteer can look up riders and issue a bib with only the keyboard at ${width}px${scenario}`, async ({ page, browser }) => {
     const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
     const checkInUrl = `/api/events/${eventId}/check-in`;
     expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
@@ -72,6 +77,7 @@ for (const width of [390, 1440]) {
     const headers = { Authorization: `Bearer test:${email}` };
     const context = await browser.newContext({ viewport: { width, height: 900 }, extraHTTPHeaders: {} });
 
+    let releaseSave: (() => void) | undefined;
     try {
       await context.addInitScript((address) => sessionStorage.setItem('cyclereg.test-session', address), email);
       const desk = await context.newPage();
@@ -96,28 +102,62 @@ for (const width of [390, 1440]) {
       await expect(detail.getByRole('textbox', { name: /Bib/ })).toBeFocused();
       await desk.keyboard.press('Tab');
       await expect(issue).toBeFocused();
+      const issuePath = `${checkInUrl}/${ready.orderId}`;
+      if (delaySave) {
+        const gate = new Promise<void>((resolve) => { releaseSave = resolve; });
+        await desk.route(`**${issuePath}`, async (route) => {
+          const response = await route.fetch();
+          await gate;
+          await route.fulfill({ response });
+        });
+      }
       const issueRequest = desk.waitForRequest((request) => (
-        request.method() === 'POST' && new URL(request.url()).pathname === `${checkInUrl}/${ready.orderId}`
+        request.method() === 'POST' && new URL(request.url()).pathname === issuePath
       ));
       await desk.keyboard.down('Enter');
       expect((await (await issueRequest).allHeaders()).authorization).toBe(headers.Authorization);
-      await expect(detail.getByText('100', { exact: true })).toBeVisible();
-      const nextRider = detail.getByRole('button', { name: 'Next rider', exact: true });
-      await expect(nextRider).toBeFocused();
-      await expect(nextRider).toHaveAccessibleDescription('Bib 100');
-      // A second keydown while Enter is held represents keyboard auto-repeat.
-      await desk.keyboard.down('Enter');
-      await desk.keyboard.up('Enter');
-      await expect(nextRider).toBeFocused();
-      await expect(detail.getByText('100', { exact: true })).toBeVisible();
-      await desk.keyboard.press('Enter');
-      await expect(search).toBeFocused();
-      await expect(search).toHaveValue('');
+      let newerLookupReplies = 0;
+      if (delaySave) {
+        await desk.keyboard.up('Enter');
+        desk.on('response', (response) => {
+          const url = new URL(response.url());
+          if (url.pathname === checkInUrl && url.searchParams.get('q') === blocked.checkInCode) {
+            newerLookupReplies++;
+          }
+        });
+        await search.fill(blocked.checkInCode);
+      } else {
+        await expect(detail.getByText('100', { exact: true })).toBeVisible();
+        const nextRider = detail.getByRole('button', { name: 'Next rider', exact: true });
+        await expect(nextRider).toBeFocused();
+        await expect(nextRider).toHaveAccessibleDescription('Bib 100');
+        // A second keydown while Enter is held represents keyboard auto-repeat.
+        await desk.keyboard.down('Enter');
+        await desk.keyboard.up('Enter');
+        await expect(nextRider).toBeFocused();
+        await expect(detail.getByText('100', { exact: true })).toBeVisible();
+        await desk.keyboard.press('Enter');
+        await expect(search).toBeFocused();
+        await expect(search).toHaveValue('');
+      }
 
-      await desk.keyboard.type(blocked.checkInCode);
+      if (!delaySave) await desk.keyboard.type(blocked.checkInCode);
       await desk.keyboard.press('Enter');
       await expect(detail.getByRole('heading', { name: blocked.name, exact: true })).toBeVisible();
       await expect(detail).toBeFocused();
+      if (releaseSave) {
+        // Let the explicit and debounced lookups settle before observing the save refresh.
+        await expect.poll(() => newerLookupReplies).toBeGreaterThanOrEqual(2);
+        const refresh = desk.waitForResponse((response) => (
+          response.request().method() === 'GET' && new URL(response.url()).pathname === checkInUrl
+        ));
+        releaseSave();
+        const response = await refresh;
+        expect(response.ok()).toBe(true);
+        expect(new URL(response.url()).searchParams.get('q')).toBe(blocked.checkInCode);
+        await expect(detail.getByRole('heading', { name: blocked.name, exact: true })).toBeVisible();
+        await expect(detail).toBeFocused();
+      }
       await expect(detail.getByRole('status')).toContainText('Not ready');
       await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
 
@@ -131,6 +171,7 @@ for (const width of [390, 1440]) {
       expect(final.riders.find((rider) => rider.orderId === ready.orderId)).toMatchObject({ bib: 100, checkedInAt: expect.any(String) });
       expect(final.riders.find((rider) => rider.orderId === blocked.orderId)).toMatchObject({ bib: null, checkedInAt: null });
     } finally {
+      releaseSave?.();
       await context.close();
     }
   });

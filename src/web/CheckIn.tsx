@@ -66,8 +66,8 @@ export function CheckIn({ eventId }: { eventId: string }) {
     return () => clearTimeout(t);
   }, [q, dayId, load]);
 
-  const refreshAfterBatch = useRef(() => {});
-  refreshAfterBatch.current = () => { void load(q, dayId); };
+  const refreshCurrentList = useRef(() => {});
+  refreshCurrentList.current = () => { void load(q, dayId); };
 
   const riders = data?.riders ?? [];
   const selected = riders.find((r) => r.orderId === selectedId) ?? null;
@@ -135,10 +135,13 @@ export function CheckIn({ eventId }: { eventId: string }) {
     }
   }
 
-  function replace(r: CheckInRider) {
+  function replace(r: CheckInRider, savedDayId: string) {
     clearVerification();
-    setData((d) => (d ? { ...d, riders: d.riders.map((x) => (x.orderId === r.orderId ? r : x)) } : d));
-    void load(q, dayId);
+    setData((current) => {
+      if (current?.dayId !== savedDayId) return current;
+      return { ...current, riders: current.riders.map((rider) => (rider.orderId === r.orderId ? r : rider)) };
+    });
+    refreshCurrentList.current();
   }
 
   function nextRider() {
@@ -205,7 +208,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
 
       {data && showRegistration && <WalkUpRegistration eventId={eventId} published={data.published} />}
 
-      {data && batchMode && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId + batchMode} eventId={eventId} dayId={data.dayId} mode={batchMode} onChanged={() => refreshAfterBatch.current()} onClose={() => setBatchMode(null)} />}
+      {data && batchMode && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId + batchMode} eventId={eventId} dayId={data.dayId} mode={batchMode} onChanged={() => refreshCurrentList.current()} onClose={() => setBatchMode(null)} />}
 
       {data && showBibs && can(data.roles, 'checkin.settings') && <>
         <BibSettingsPanel data={data} onSaved={() => void load(q, dayId)} onClose={() => setShowBibs(false)} />
@@ -318,7 +321,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
               {selected && selectedRecoveryKey ? (
                 <RiderDetail key={selectedRecoveryKey} eventId={eventId} dayId={data.dayId} rider={selected}
                   recovery={recovery.get(selectedRecoveryKey)} onRecovery={(state) => updateRecovery(selectedRecoveryKey, state)}
-                  onChange={replace} onNext={nextRider} takeDuration={takeDuration} />
+                  onChange={(rider) => replace(rider, data.dayId)} onNext={nextRider} takeDuration={takeDuration} />
               ) : (
                 <div className="ci__placeholder">
                   <p>Search for a rider or scan their check-in code.</p>
