@@ -146,3 +146,77 @@ test('timer role downloads a locked start list and sees the desk revision', asyn
     await context.close();
   }
 });
+
+test('incoming desk volunteer sees the existing bib and can check in the next rider', async ({ page, browser, baseURL }) => {
+  const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await page.request.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await page.request.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  expect((await page.request.put(`${eventUrl}/bib-settings`, {
+    data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+  })).ok()).toBe(true);
+  const desk: CheckInList = await (await page.request.get(`${eventUrl}/check-in`)).json();
+  const [first, next] = desk.riders.filter((rider) => rider.result.ready && rider.bib === null);
+  if (!first?.checkInCode || !next?.checkInCode) throw new Error('The shift rehearsal needs two ready riders with check-in codes');
+  const firstCode = first.checkInCode;
+  const nextCode = next.checkInCode;
+
+  const openDesk = async (email: string) => {
+    expect((await page.request.post(`/api/organizations/${organizationId}/members`, {
+      data: { email, role: 'check_in_volunteer' },
+    })).ok()).toBe(true);
+    const context = await browser.newContext({
+      baseURL, extraHTTPHeaders: { Authorization: `Bearer test:${email}` },
+    });
+    await context.addInitScript((user) => sessionStorage.setItem('cyclereg.test-session', user), email);
+    const volunteer = await context.newPage();
+    const readDesk = async () => {
+      const response = await volunteer.request.get(`${eventUrl}/check-in?day=${desk.dayId}`);
+      expect(response.ok()).toBe(true);
+      return await response.json() as CheckInList;
+    };
+    const detail = volunteer.getByRole('region', { name: 'Rider check-in' });
+    const search = volunteer.getByRole('searchbox', { name: 'Find a rider' });
+    const lookup = async (code: string) => {
+      await search.fill(code);
+      await search.press('Enter');
+    };
+    await volunteer.goto(`/#/events/${eventId}/check-in`);
+    expect((await readDesk()).roles).toEqual(['check_in_volunteer']);
+    return { context, detail, lookup, readDesk };
+  };
+
+  const outgoing = await openDesk('outgoing.volunteer@example.test');
+  let before: CheckInList['riders'][number] | undefined;
+  try {
+    await outgoing.lookup(firstCode);
+    await outgoing.detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
+    await expect(outgoing.detail.locator('.ci-bib__number')).toHaveText('100');
+    before = (await outgoing.readDesk()).riders.find((rider) => rider.orderId === first.orderId);
+    expect(before).toMatchObject({
+      bib: 100, checkedInAt: expect.any(String), bibHistory: [expect.objectContaining({ bib: 100 })],
+    });
+  } finally {
+    await outgoing.context.close();
+  }
+
+  const incoming = await openDesk('incoming.volunteer@example.test');
+  try {
+    await incoming.lookup(firstCode);
+    await expect(incoming.detail.getByRole('status')).toContainText('Checked in.');
+    await expect(incoming.detail.locator('.ci-bib__number')).toHaveText('100');
+    await expect(incoming.detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
+
+    await incoming.detail.getByRole('button', { name: 'Next rider', exact: true }).click();
+    await incoming.lookup(nextCode);
+    await incoming.detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
+    await expect(incoming.detail.locator('.ci-bib__number')).toHaveText('101');
+    const final = await incoming.readDesk();
+    expect(final.riders.find((rider) => rider.orderId === first.orderId)).toEqual(before);
+    expect(final.riders.find((rider) => rider.orderId === next.orderId)).toMatchObject({
+      bib: 101, checkedInAt: expect.any(String), bibHistory: [expect.objectContaining({ bib: 101 })],
+    });
+  } finally {
+    await incoming.context.close();
+  }
+});
