@@ -261,6 +261,64 @@ test('a volunteer can retry check-in after the organizer extends an exhausted bi
   }
 });
 
+test('undoing the wrong rider check-in releases the bib for the intended rider', async ({ page }) => {
+  const api = page.request;
+  const { eventId } = await (await api.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await api.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await api.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  expect((await api.put(`${eventUrl}/bib-settings`, {
+    data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 100 }] },
+  })).ok()).toBe(true);
+
+  const list = async (): Promise<CheckInList> => {
+    const response = await api.get(`${eventUrl}/check-in`);
+    expect(response.ok()).toBe(true);
+    return response.json();
+  };
+  const { riders } = await list();
+  const [wrong, intended] = riders.filter((rider) => rider.result.ready && rider.bib === null);
+  if (!wrong?.checkInCode || !intended?.checkInCode) throw new Error('The demo needs two ready riders with check-in codes and no bibs');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/#/events/${eventId}/check-in`);
+  const search = page.getByRole('searchbox', { name: 'Find a rider' });
+  const detail = page.getByRole('region', { name: 'Rider check-in' });
+  const find = async (code: string, name: string) => {
+    await search.fill(code);
+    await search.press('Enter');
+    await expect(detail.getByRole('heading', { name, exact: true })).toBeVisible();
+  };
+  const issue = detail.getByRole('button', { name: 'Check in and issue next bib', exact: true });
+  const undo = detail.getByRole('button', { name: 'Undo check-in', exact: true });
+  await find(wrong.checkInCode, wrong.name);
+  await issue.click();
+  await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+  await undo.click();
+  await detail.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+
+  // Simulate that staff have recovered the physical bib before releasing it.
+  const reason = 'Wrong rider checked in. Demo bib recovered.';
+  await undo.click();
+  await detail.getByRole('textbox', { name: 'Reason' }).fill(reason);
+  await undo.click();
+  await expect(issue).toBeVisible();
+  await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
+
+  await find(intended.checkInCode, intended.name);
+  await issue.click();
+  await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+  const saved = await list();
+  expect(saved.riders.find((rider) => rider.orderId === wrong.orderId)).toMatchObject({
+    bib: null, checkedInAt: null, entries: wrong.entries,
+    undoneCheckIns: [expect.objectContaining({ bib: 100, bibReleased: true, reason })],
+  });
+  expect(saved.riders.find((rider) => rider.orderId === intended.orderId)).toMatchObject({
+    bib: 100, checkedInAt: expect.any(String), entries: intended.entries, undoneCheckIns: [],
+  });
+});
+
 test('fallback roster lists every rider and puts blocked riders on the exception checklist', async ({ page }) => {
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
