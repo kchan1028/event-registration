@@ -512,7 +512,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
   const scheduleRef = useRef<HTMLDivElement>(null);
   const [errors, setErrors] = useState<{ id: string; message: string }[]>([]);
   const checking = Object.values(draft.profile).some((v) => v !== null);
-  const q = useMemo(() => quote(config, draft.selected, ev.today, draft.coupon ?? null, draft.profile), [config, draft.selected, ev.today, draft.coupon, draft.profile]);
+  const q = useMemo(() => quote(config, draft.selected, ev.today, draft.coupon ?? null, draft.profile, draft.bundleIntent), [config, draft.selected, ev.today, draft.coupon, draft.profile, draft.bundleIntent]);
   const conflicts = useMemo(() => findConflicts(config, draft.selected), [config, draft.selected]);
   const setProfile = (p: Partial<RiderProfile>) => {
     if (p.racingAge === null || p.licenseCategory === null) setMatchesOnly(false);
@@ -584,6 +584,9 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
     if (intent && unavailableBundleIds.includes(intent.id)) errs.push({ id: 'tray-title', message: 'Your selected package includes a cancelled race. Uncheck the package to continue with unaffected races.' });
     if (intent && !unavailableBundleIds.includes(intent.id) && intentMissing.length) {
       errs.push({ id: 'tray-title', message: `The ${intent.name} needs one eligible race on each day. Add a race in ${intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.` });
+    }
+    if (intent && !unavailableBundleIds.includes(intent.id) && !intentMissing.length && q.bundle?.id !== intent.id) {
+      errs.push({ id: 'tray-title', message: 'The selected package does not apply to these entries at their current prices. Change your entries or uncheck the package.' });
     }
     if (q.coupon?.unappliedReason) errs.push({ id: 'f-coupon', message: `${q.coupon.unappliedReason} Remove the code or change your races.` });
     setErrors(errs);

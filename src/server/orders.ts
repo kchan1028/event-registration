@@ -463,7 +463,10 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
               throw err;
             })
           : null;
-        const q = quote(config, input.categoryIds, todayIn(config.event.timeZone, clock()), coupon ? termsOf(coupon) : null, profileOf(rider));
+        const q = quote(config, input.categoryIds, todayIn(config.event.timeZone, clock()), coupon ? termsOf(coupon) : null, profileOf(rider), input.bundleIntent);
+        if (input.bundleIntent && q.bundle?.id !== input.bundleIntent) {
+          throw new HttpError(422, 'The selected package does not apply to these entries at their current prices. Review your race selection or clear the package choice. Nothing was held.');
+        }
         if (q.coupon?.unappliedReason) throw new HttpError(422, `${q.coupon.unappliedReason} Go back to Choose races and remove the code to continue. Nothing was held.`);
         if (accountId && rider.guardian) await juniors.requireRegistrationAllowed(accountId, rider);
         const t = nowIso();
