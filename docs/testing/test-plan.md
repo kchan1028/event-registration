@@ -213,7 +213,7 @@ Run `tests/automatic-bibs.test.ts` with check-in, bib reassignment and start-lis
 
 ### Waiver and guardian blockers at check-in
 
-`tests/checkin.test.ts` uses disposable paid demo orders with two altered waiver snapshots: a blank signature name and a junior’s own signature in place of the required guardian’s. Verify lookup gives the corresponding registration desk referral and each check-in attempt returns a conflict without issuing a bib or recording check-in. The separate signing evidence stays intact. Rehearse remediation separately once the waiver process is approved.
+`tests/checkin.test.ts` uses disposable paid demo orders with two altered waiver snapshots: a blank signature name and a junior’s own signature in place of the required guardian’s. Verify lookup gives the corresponding registration desk referral and each check-in attempt returns a conflict without issuing a bib or recording check-in. The separate signing evidence stays intact. Use the [proposed manual desk procedure](../runbooks/race-day-check-in.md#manual-license-and-waiver-exceptions) for a fictional staff rehearsal. Give the lead a current mock license, a stale or mismatched one, a missing waiver, and a missing required guardian signature. Confirm the volunteer refers each case without writing a note. The lead can confirm the valid mock license without a typed note. The other cases stay blocked and no bib is handed over. Rehearse live remediation only after the event’s process is accepted.
 
 ### Rider check-in code retrieval
 
