@@ -172,7 +172,7 @@ The following questions remain in existing authoritative homes. Research and syn
 |---|---|---|
 | Merchant, fees, refunds, disputes and cancellation liquidity | [ADR 0005](../decisions/0005-merchant-and-settlement-model.md), [product decisions 5–6](../../product.md#open-decisions); owner/treasurer | Live money and complete financial sign-off. |
 | Accepted waiver, guardian/license path and applicable event-year rules | [USAC questions](../usac-questions.md), product decisions 4/9; owner/federation liaison | Sanctioned real-rider operation; provisional local guardian policy stays explicit. |
-| Named support lead/deputy, alert and freeze thresholds, and hosted recovery evidence | [operations questions 1–4](../operations.md#open-questions); owner/technical lead | Hosted recovery and developer-independent race day. |
+| Named support lead/deputy, alert thresholds, event-specific freeze end times and live acceptance, and hosted recovery evidence | [operations questions 1–4](../operations.md#open-questions); owner/technical lead | Hosted recovery and developer-independent race day. |
 | Timer contract, version acknowledgement and paper reconciliation | [timer review](../timer-export-review.md), product decisions 6/8; timer liaison/registration lead | Accepted export round trip and continuity proof. |
 | Retention, telemetry access and safe device/assistive-technology setup | Operations question 5, product decisions 6/10; owner/privacy and accessibility responsibility unassigned | Real-data instrumentation and verified manual access. |
 
