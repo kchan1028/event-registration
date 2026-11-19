@@ -583,7 +583,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
     if (unavailableIntent) errs.push({ id: 'tray-title', message: 'Your selected package is no longer available. Clear the package choice to continue.' });
     if (intent && unavailableBundleIds.includes(intent.id)) errs.push({ id: 'tray-title', message: 'Your selected package includes a cancelled race. Uncheck the package to continue with unaffected races.' });
     if (intent && !unavailableBundleIds.includes(intent.id) && intentMissing.length) {
-      errs.push({ id: 'tray-title', message: `The ${intent.name} needs one eligible race on each day. Add a race in ${intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.` });
+      errs.push({ id: 'tray-title', message: `The ${intent.name} needs an entry in every included race. Add an entry in ${intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.` });
     }
     if (intent && !unavailableBundleIds.includes(intent.id) && !intentMissing.length && q.bundle?.id !== intent.id) {
       errs.push({ id: 'tray-title', message: 'The selected package does not apply to these entries at their current prices. Change your entries or uncheck the package.' });
@@ -798,7 +798,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           ) : (
             <QuoteTable q={q} raceName={(id) => config.races.find((r) => r.id === id)?.name ?? ''} onRemove={(id) => toggle(id)} />
           )}
-          <BundleHint config={config} selected={draft.selected} q={q} unavailableBundleIds={unavailableBundleIds} />
+          {!draft.bundleIntent && <BundleHint config={config} selected={draft.selected} q={q} unavailableBundleIds={unavailableBundleIds} />}
           {draft.selected.length > 0 && <CouponField eventId={ev.eventId} draft={draft} update={update} q={q} />}
           <button className="btn btn--primary tray__cta" disabled={ev.cancellation.scopes.some((s) => s.scope === 'event')} onClick={next}>
             Continue to racer details

@@ -82,7 +82,7 @@ test('weekend bundle needs both days; missing details show field messages and a 
   await page.getByLabel(/I want the/).check();
   await page.getByRole('checkbox', { name: /DRW-RR-M35/ }).click();
   await page.getByRole('button', { name: 'Continue to racer details' }).click();
-  await expect(page.locator('.error-summary')).toContainText('needs one eligible race on each day');
+  await expect(page.locator('.error-summary')).toContainText('needs an entry in every included race');
 
   await page.getByRole('checkbox', { name: /DRW-CR-M35/ }).click();
   await expect(page.locator('.tray .quote__total')).toContainText('$80.25');

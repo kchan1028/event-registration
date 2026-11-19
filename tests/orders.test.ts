@@ -336,6 +336,7 @@ describe('Berkeley package order snapshot', () => {
       const noSaving = await app.inject({ method: 'POST', url, payload: { ...payload, bundleIntent: 'no-saving' } });
       expect(noSaving.statusCode).toBe(422);
       expect(noSaving.json().error).toContain('Nothing was held');
+      expect((await app.inject({ method: 'GET', url: '/api/rider/registrations' })).json()).toEqual([]);
       const res = await app.inject({ method: 'POST', url, payload });
       expect(res.statusCode).toBe(201);
       const held = res.json();
