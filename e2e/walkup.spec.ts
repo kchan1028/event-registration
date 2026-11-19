@@ -44,8 +44,9 @@ test('phone handoff keeps the rider account separate and returns a paid rider to
     await rider.getByRole('button', { name: 'Sign and review the order' }).click();
     await rider.getByRole('button', { name: 'Simulate a declined payment' }).click();
     await expect(rider.getByRole('alert')).toContainText('declined');
-    await page.getByRole('searchbox', { name: 'Find a rider' }).fill('Alex Demo');
-    await page.getByRole('searchbox', { name: 'Find a rider' }).press('Enter');
+    const lookup = page.getByRole('searchbox', { name: 'Find a rider' });
+    await lookup.fill('Alex Demo');
+    await lookup.press('Enter');
     await expect(page.getByRole('region', { name: 'Rider check-in' })).toContainText('Alex Demo');
     await expect(page.getByRole('region', { name: 'Rider check-in' })).toContainText('Payment not complete');
     await expect(page.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
@@ -58,7 +59,7 @@ test('phone handoff keeps the rider account separate and returns a paid rider to
     const staffOrders = await page.request.get('/api/rider/registrations');
     expect(staffOrders.status()).toBe(200);
     expect((await staffOrders.json()).filter((o: { eventId: string }) => o.eventId === eventId)).toHaveLength(0);
-    await page.getByRole('searchbox', { name: 'Find a rider' }).press('Enter');
+    await lookup.press('Enter');
     const desk = page.getByRole('region', { name: 'Rider check-in' });
     await expect(desk).toContainText('No preassigned bib');
     await expect(desk.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
@@ -88,7 +89,7 @@ test('phone handoff keeps the rider account separate and returns a paid rider to
       entries: [expect.objectContaining({ id: entryId, walkUp: true })],
     });
     await page.reload();
-    const lookup = page.getByRole('searchbox', { name: 'Find a rider' });
+    await expect(lookup).toHaveValue('');
     await lookup.fill('Alex Demo');
     await lookup.press('Enter');
     await expect(desk.getByText('· Walk-up', { exact: true })).toBeVisible();
