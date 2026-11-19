@@ -129,6 +129,26 @@ test('generated omnium supports a complete rider purchase and organizer recovery
     expect(ledger.status()).toBe(200);
     const [ledgerHeader, ...ledgerRows] = parseCsv(await ledger.text());
     expect(ledgerRows.filter((r) => r[ledgerHeader.indexOf('order_number')] === weekend.orderNumber && r[ledgerHeader.indexOf('kind')] === 'refund').map((r) => r[ledgerHeader.indexOf('amount')])).toEqual(['-10']);
+    const reconciliation = await page.request.get(`/api/events/${eventId}/exports/reconciliation.csv`);
+    expect(reconciliation.status()).toBe(200);
+    const [reconciliationHeader, ...reconciliationRows] = parseCsv(await reconciliation.text());
+    const evidence = reconciliationRows
+      .filter((row) => row[reconciliationHeader.indexOf('order_id')] === weekend.id)
+      .map((row) => Object.fromEntries(reconciliationHeader.map((column, index) => [column, row[index]])));
+    expect(evidence).toHaveLength(3);
+    for (const record of evidence) {
+      expect(record).toMatchObject({
+        basis: 'local_record_not_provider_settlement',
+        order_number: weekend.orderNumber,
+        order_total_cents: String(weekend.totalCents),
+        provider: 'simulated',
+      });
+    }
+    expect(evidence.filter((record) => record.record_kind === 'payment_attempt').map((record) => record.result_status).sort())
+      .toEqual(['confirmed', 'payment_failed']);
+    expect(evidence.find((record) => record.record_kind === 'refund')).toMatchObject({
+      entry_id: withdrawn.id, amount_cents: '1000', result_status: 'succeeded',
+    });
     for (const copy of copies) {
       const frozen = await page.request.get(copy.url);
       expect(frozen.status()).toBe(200);
