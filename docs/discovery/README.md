@@ -40,7 +40,7 @@ Record names in [decision-memo.md](decision-memo.md#team-and-owners), not here, 
 ## Suggested order (2 to 3 weeks)
 
 1. **Week 1.** Assign the product owner and registration lead. Ask the registration lead for anonymized copies of the current category setup, an exception list, and a reconciliation example. Send the USAC questions early. The timer export review packet is retained for possible future development.
-2. **Week 1 to 2.** Run the race director, registration lead, treasurer, and timer interviews. Fill in the workflow map as you go.
+2. **Week 1 to 2.** Run the race director, registration lead, and treasurer interviews. Fill in the workflow map as you go.
 3. **Week 2.** Interview at least five riders or parents. If an event happens in the window, observe check-in and time it with the baseline sheet.
 4. **Week 2 to 3.** Finish the baseline, score the options comparison, shortlist pilot events, and write the decision memo.
 

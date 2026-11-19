@@ -25,9 +25,9 @@ The roadmap's [Phase 0 exit gate](../../roadmap.md#phase-0--establish-the-case-t
 
 | Deliverable | Status | Where |
 |---|---|---|
-| Interviews: race director, registration lead, treasurer, timer | Partial: race director, registration lead, and treasurer answered by one person; timer not interviewed | [D01](interviews/D01.md) |
+| Interviews: race director, registration lead, treasurer | Partial: race director, registration lead, and treasurer answered by one person | [D01](interviews/D01.md) |
 | Interviews: at least five riders or parents | 1 of 5. The project owner offered more answers as a racer (2026-11-15); those are D01 follow-ups, not new interviews. Four riders or parents outside the project are still needed | [D01](interviews/D01.md) (rider answers) |
-| Sample data | Partial. Category setups are public on BikeReg and berkeleyomnium.com (2026-11-15) and already back the Berkeley fixtures. A timer export, an exception list, and a reconciliation example are not public and are still needed, anonymized | [fixtures](../fixtures/README.md) |
+| Sample data | Partial. Category setups are public on BikeReg and berkeleyomnium.com (2026-11-15) and already back the Berkeley fixtures. An anonymized exception list and reconciliation example are still needed | [fixtures](../fixtures/README.md) |
 | Workflow observation | | Date and event |
 | Workflow map | Partial, from D01 estimates | [workflow-map.md](workflow-map.md) |
 | Workload baseline | Partial, estimates only | [workload-baseline.md](workload-baseline.md) |
@@ -53,7 +53,7 @@ _The options comparison result, the recommendation, and the one reason that deci
 | Pilot accountable organizer | | |
 | Pilot support owner | | |
 
-One person holds the product owner, registration lead, USAC contact, and payments roles, and is also interviewee D01 and a racer. That keeps decisions fast, but the Phase 0 gate still needs evidence from people outside the project (the timer, riders or parents, a second organizer) so the decision does not rest on one view. The technical lead, pilot accountable organizer, and pilot support owner are still open; the roadmap's handoff goal needs at least one of them to be someone else.
+One person holds the product owner, registration lead, USAC contact, and payments roles, and is also interviewee D01 and a racer. That keeps decisions fast, but the Phase 0 gate still needs evidence from people outside the project (riders or parents and a second organizer) so the decision does not rest on one view. The technical lead, pilot accountable organizer, and pilot support owner are still open; the roadmap's handoff goal needs at least one of them to be someone else.
 
 Budget: _who funds development, hosting, and payment fees, and for how long_
 
