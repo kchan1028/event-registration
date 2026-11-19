@@ -627,7 +627,7 @@ for (const mobile of [false, true]) {
   });
 }
 
-test('individual correction requires a fresh preview without checking the rider in', async ({ page }) => {
+test('individual correction recovers from stale and conflicting previews without checking the rider in', async ({ page }) => {
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
   await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
@@ -659,7 +659,8 @@ test('individual correction requires a fresh preview without checking the rider 
   // The organizer changes the range while the old preview is open. Both numbers still fit.
   const before = await api.get(`/api/events/${eventId}/check-in`);
   expect(before.ok()).toBe(true);
-  const original = (await before.json() as CheckInList).riders.find((rider) => rider.orderId === alex.orderId);
+  const beforeRiders = (await before.json() as CheckInList).riders;
+  const original = beforeRiders.find((rider) => rider.orderId === alex.orderId);
   expect(original).toMatchObject({ bib: 100, checkedInAt: null });
   expect((await api.put(`/api/events/${eventId}/bib-settings`, {
     data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 200 }] },
@@ -674,10 +675,35 @@ test('individual correction requires a fresh preview without checking the rider 
 
   await form.getByRole('button', { name: 'Preview bib change', exact: true }).click();
   await expect(form.getByRole('region', { name: 'Proposed bib changes', exact: true })).toContainText('130');
+  const other = beforeRiders.find(
+    (rider) => rider.orderId !== alex.orderId && rider.result.ready && rider.bib === null,
+  );
+  if (!other) throw new Error('The demo needs another ready rider without a bib');
+  const claimed = await api.post(`/api/events/${eventId}/check-in/${other.orderId}`, { data: { dayId: initial.dayId, bib: 130 } });
+  expect(claimed.ok()).toBe(true);
+  const otherAssignment = await claimed.json();
+  expect(otherAssignment).toMatchObject({ bib: 130, checkedInAt: expect.any(String) });
+
   await apply.click();
-  await expect(detail.locator('.ci-bib__number')).toHaveText('130');
-  const after = await (await api.get(`/api/events/${eventId}/check-in`)).json();
-  expect(after.riders.find((r: Rider) => r.orderId === alex.orderId)).toMatchObject({ bib: 130, checkedInAt: null });
+  await expect(detail.getByRole('alert')).toContainText('Bib 130 belongs to a rider outside this batch.');
+  await expect(apply).toHaveCount(0);
+  await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+  const conflict = await api.get(`/api/events/${eventId}/check-in`);
+  expect(conflict.ok()).toBe(true);
+  const atConflict = (await conflict.json() as CheckInList).riders;
+  expect(atConflict.find((rider) => rider.orderId === alex.orderId)).toEqual(original);
+  expect(atConflict.find((rider) => rider.orderId === other.orderId)).toEqual(otherAssignment);
+
+  await form.getByRole('textbox', { name: 'New bib', exact: true }).fill('131');
+  await form.getByRole('button', { name: 'Preview bib change', exact: true }).click();
+  await expect(form.getByRole('region', { name: 'Proposed bib changes', exact: true })).toContainText('131');
+  await apply.click();
+  await expect(detail.locator('.ci-bib__number')).toHaveText('131');
+  const after = await api.get(`/api/events/${eventId}/check-in`);
+  expect(after.ok()).toBe(true);
+  const final = (await after.json() as CheckInList).riders;
+  expect(final.find((rider) => rider.orderId === alex.orderId)).toMatchObject({ bib: 131, checkedInAt: null });
+  expect(final.find((rider) => rider.orderId === other.orderId)).toEqual(otherAssignment);
 });
 
 for (const mobile of [false, true]) {
