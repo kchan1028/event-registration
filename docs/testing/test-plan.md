@@ -324,6 +324,12 @@ Automated tests do not replace these. Record what was observed separately from w
 
 The [prelaunch readiness assessment](../research/prelaunch-readiness.md) maps existing requirements to focused interrupted-reservation, provider/reconciliation and race-day recovery scenarios. Its [measurement specification](../research/prelaunch-readiness.md#proposed-launch-measurement-specification) is Proposed: use synthetic replay and report timing coverage/exclusions; it does not add instrumentation, new sample thresholds or an accepted release gate. Keep execution results in the PR or dated rehearsal report.
 
+### Freeze and incident response rehearsal
+
+Use the [approved rehearsal freeze starts](../operations.md#operating-calendar-for-an-event) and [initial-response targets](../operations.md#incident-severity). Record the event time zone, scheduled registration opening, first scheduled race start, and the start and end of each rehearsal window. During both windows, present a nonessential change request and an urgent fix. Verify the routine change waits and that staff identify the approval and notification route for the urgent fix. Exercise the decision with fictional scenarios and record the outcome.
+
+Present a critical incident and a separate high-severity incident during each window. Record when staff first detect or receive each report, when they acknowledge it, who takes responsibility and the first action. Verify that critical escalation starts as soon as staff detect or receive the incident, and that high-severity initial response starts within one hour. Track reconciliation and the decision to reopen against the [separate recovery targets](../operations.md#backups-and-recovery). Named coverage and pilot organizer acceptance still need verification.
+
 ### Phase 2 Stripe sandbox acceptance
 
 Use the [Stripe sandbox rehearsal](../runbooks/local-setup.md#phase-2-stripe-sandbox-rehearsal) with the owner's existing sandbox and a disposable fictional local event. Record real signed notification and refund evidence, exact reconciliation by provider reference, and any blocked scenarios separately from local fixture results. Test mode does not establish live settlement or payout acceptance.
