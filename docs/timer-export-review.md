@@ -20,7 +20,7 @@ The app exports one CSV per race, per saved snapshot, or for all races of an eve
 - **Who is in it.** Confirmed (paid) entries only. Unpaid holds, cancelled orders or entries, withdrawn entries, and the builder's simulated test entries are left out.
 - **Order.** Within a race, rows sort by start time, category code, bib (unassigned last), last name, then first name. An all-races file groups rows in published race order.
 - **One row per entry.** A rider in two races appears twice, once per race, with the same `rider_id`.
-- **Match revisions by entry ID.** Use `entry_id` to match the same entry across downloads. Use `rider_id` to group entries for a rider. An organizer linking orders can change the group ID on affected rows, so compare the CSVs directly for that change.
+- **Match revisions by entry ID.** Use `entry_id` to match the same entry across downloads. Use `rider_id` to group entries for a rider. Linking or unlinking orders can change the rider grouping ID on affected rows, so compare the CSVs directly for that change.
 - **Snapshots.** The organizer saves a numbered, timestamped snapshot when sending a list. Later changes (added, removed, or changed riders) are shown against it, so the organizer can tell the timer exactly what changed.
 - **File format.** UTF-8 text, comma separated, a header row, Windows line endings (CRLF). Fields containing commas or quotes are quoted. A value that starts with `=`, `+`, `-`, or `@` gets a leading apostrophe so a spreadsheet does not run it as a formula.
 - **Not included.** Email, phone, guardian, emergency contact, payment amounts, and order numbers. These stay out unless officials need them and access controls exist.
@@ -38,7 +38,7 @@ Cancellation download labels are Implemented locally: filenames and HTTP headers
 | `category_code` | Timer classification code for scoring and awards | Text | `DVC-M45` |
 | `category` | Registration category name riders see | Text | `Men Cat 4/5` |
 | `race_length` | Length as configured; never an invented distance or finish time | Text | `35 min + 2 laps`, `64 km · 4 laps` |
-| `bib` | Current assigned bib for the applicable day or weekend, including preassigned numbers. Blank if unassigned. Use `checked_in` to tell whether check-in was recorded for the race day. | Whole number | `101` |
+| `bib` | Assigned bib for the applicable day or weekend at export time, or as recorded in a saved snapshot. Includes preassigned numbers. Blank if unassigned. Use `checked_in` to tell whether check-in was recorded for the race day. | Whole number | `101` |
 | `last_name`, `first_name` | Rider name | Text | `Demo`, `Alex` |
 | `team` | Team or club; may be blank | Text | `Demo Wheelers` |
 | `license_number` | License number as the rider entered it (not verified with USA Cycling) | Text | `DEMO-100001` |
