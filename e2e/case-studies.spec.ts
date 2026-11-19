@@ -42,7 +42,6 @@ test('generated omnium supports a complete rider purchase and organizer recovery
   await expect(page.getByRole('link', { name: 'Download ledger (CSV)' })).toBeVisible();
   const order = page.locator('.order', { hasText: 'Ávery Example-Longname' });
   await order.getByRole('button', { name: 'Review license' }).first().click();
-  await order.getByRole('textbox').fill('Fictional license reviewed for browser test');
   await order.getByRole('button', { name: 'Mark reviewed' }).click();
   await page.getByRole('button', { name: /^All/ }).click();
   await expect(page.locator('.order', { hasText: 'Ávery Example-Longname' })).toContainText('License reviewed');

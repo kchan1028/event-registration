@@ -176,7 +176,11 @@ describe('registration lookup and corrections API', () => {
   it('a new license number clears earlier license reviews, and the correction records it', async () => {
     const s = await setup();
     const o = await s.buy(RIDER, ['RR-M35-34']);
-    await s.app.inject({ method: 'POST', url: `/api/order-entries/${o.entries[0].id}/license-review`, payload: { note: 'License card seen' } });
+    const reviewUrl = `/api/order-entries/${o.entries[0].id}/license-review`;
+    expect((await s.app.inject({ method: 'POST', url: reviewUrl, payload: { note: 'License card seen' } })).statusCode).toBe(200);
+    const confirmed = await s.app.inject({ method: 'POST', url: reviewUrl, payload: {} });
+    expect(confirmed.statusCode).toBe(200);
+    expect(confirmed.json().entries[0]).toMatchObject({ licenseReviewed: true, licenseReviewNote: 'License card seen' });
     const fixedTeam = (await s.correct(o.id, { team: 'New Team' }, 'Changed clubs')).json() as Order;
     expect(fixedTeam.entries[0].licenseReviewed).toBe(true);
     const fixedLicense = (await s.correct(o.id, { licenseNumber: 'DEMO-556' }, 'Number typed wrong')).json() as Order;

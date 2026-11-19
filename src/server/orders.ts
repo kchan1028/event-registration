@@ -706,15 +706,15 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       });
     },
 
-    /** Organizer marks a license as reviewed. Needs a reason; the time is recorded. A withdrawn entry is refused. */
-    async reviewLicense(entryId: string, note: string) {
+    /** Organizer marks a license as reviewed and records the time. A supplied note replaces the previous note. */
+    async reviewLicense(entryId: string, note: string | null) {
       return db.transaction(async () => {
         await lockEventOf(`SELECT event_id FROM order_entries WHERE id = $1`, entryId);
         const row = await db.get<{ order_id: string; status: EntryRow['status'] }>(`SELECT order_id, status FROM order_entries WHERE id = $1`, [entryId]);
         if (!row) throw new HttpError(404, 'Entry not found.');
         if (row.status === 'withdrawn') throw new HttpError(409, 'This entry was withdrawn, so its license cannot be reviewed.');
         if (row.status === 'cancelled') throw new HttpError(409, 'This entry was cancelled, so its license cannot be reviewed.');
-        await db.run(`UPDATE order_entries SET license_reviewed = true, license_review_note = $1, license_reviewed_at = $2 WHERE id = $3`, [note, nowIso(), entryId]);
+        await db.run(`UPDATE order_entries SET license_reviewed = true, license_review_note = COALESCE($1, license_review_note), license_reviewed_at = $2 WHERE id = $3`, [note, nowIso(), entryId]);
         return view(row.order_id);
       });
     },
