@@ -199,6 +199,10 @@ Run `tests/orders.test.ts`, `tests/juniors.test.ts` and `tests/migrations.test.t
 
 Run `tests/auth.test.ts` for real expiry at sign-in, no expired-role grant, recipient-only notice access, denial of team access and disappearance after a later grant. `e2e/invitation-recovery.spec.ts` explicitly stubs notice responses for presentation: both themes, 390/1440 widths, panel-scoped axe, load failure and refresh recovery. The browser fixture does not prove real expiry or identity-provider behavior; those remain separate API and external acceptance checks.
 
+### Fictional weekend close-out
+
+`e2e/case-studies.spec.ts` follows a fictional two-day purchase through organizer license review, weekend bib reuse, repeat check-in and locked per-race CSV downloads. After a second-day withdrawal and simulated partial refund, verify the exact remaining entry in the current export, the removal in the lock revision, one refund ledger row and identical saved CSV contents. Timer import, provider reconciliation and staff rehearsal are separate acceptance gates.
+
 ### Concurrent bib allocation
 
 Run `tests/automatic-bibs.test.ts` with check-in, bib reassignment and start-list regressions. Queue a pending post-close job, a desk check-in and an overlapping bulk apply behind the same event advisory lock in a disposable database. Verify all three are waiting before releasing the lock. The lock order is not prescribed. If the bulk request applies first, preserve every previewed bib. If another writer assigns a selected rider first, refuse the batch with no partial assignment. The adjacent check-in tests also exercise successful apply and stale fingerprint rejection directly. Verify one active bib per rider, no duplicate bibs in the weekend scope, one desk check-in and a completed automatic job.
