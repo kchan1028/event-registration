@@ -217,7 +217,9 @@ Run `tests/automatic-bibs.test.ts` with check-in, bib reassignment and start-lis
 
 ### Rider check-in code retrieval
 
-`e2e/sign-in.spec.ts` completes fictional checkout and simulated payment, then uses a fresh phone-sized session to verify that the registration history screen prompts for sign-in. The rider signs back in and opens the confirmed receipt, which shows the original check-in code and QR. This uses the local test provider; real emailed-code delivery and race-morning timing require an operational rehearsal.
+`e2e/sign-in.spec.ts` completes fictional checkout and simulated payment, then uses a fresh phone-sized session to verify that the registration history screen prompts for sign-in. The rider signs back in and opens the confirmed receipt, which shows the original check-in code and QR. This uses the local test provider.
+
+Repeat the scenario with a Clerk development instance and a fictional account after changes to browser sign-in or routing. Start signed out on the event's registration page, select a race, and sign up by email code when checkout prompts. Confirm checkout resumes with the selected race and rider details. After simulated payment, open My Registrations directly in a fresh phone-sized browser, sign in by email code, and verify the original check-in code and QR. Clerk's test codes cover session activation and navigation. Real inbox delivery and race-morning timing require an operational rehearsal.
 
 ### Organizer handoff rehearsal
 
