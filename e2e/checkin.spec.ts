@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
+import type { CheckInList } from '../src/shared/checkin';
 
 /*
  * Race-day check-in search. A barcode scanner types the check-in code and presses Enter at once,
@@ -41,6 +42,75 @@ test('Enter right after a scanned code or a unique name opens that rider', async
   await expect(detail).toContainText(blocked.name);
   await expect(detail).toContainText('Not ready');
   await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
+});
+
+test('a volunteer uses the confirmation code to distinguish riders with the same name', async ({ page, browser }) => {
+  const api = page.request;
+  const { eventId, organizationId } = await (await api.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await api.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await api.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  expect((await api.put(`${eventUrl}/bib-settings`, {
+    data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+  })).ok()).toBe(true);
+
+  const initial: CheckInList = await (await api.get(`${eventUrl}/check-in`)).json();
+  const ready = initial.riders.find((rider) => rider.result.ready && rider.bib === null);
+  const blocked = initial.riders.find((rider) => !rider.result.ready && rider.bib === null);
+  if (!ready?.checkInCode || !blocked?.checkInCode) throw new Error('The fixture needs one ready and one blocked rider with check-in codes');
+  expect(ready.checkInCode).not.toBe(blocked.checkInCode);
+  for (const [rider, team] of [[ready, 'Blue Demo Team'], [blocked, 'Gold Demo Team']] as const) {
+    expect((await api.post(`/api/orders/${rider.orderId}/rider-corrections`, {
+      data: { changes: { firstName: 'Taylor', lastName: 'Fictional', team }, reason: 'Prepare a same-name rehearsal' },
+    })).ok()).toBe(true);
+  }
+
+  const email = 'lookup.volunteer@example.test';
+  expect((await api.post(`/api/organizations/${organizationId}/members`, {
+    data: { email, role: 'check_in_volunteer' },
+  })).ok()).toBe(true);
+  const context = await browser.newContext({
+    extraHTTPHeaders: { Authorization: `Bearer test:${email}` },
+    viewport: { width: 390, height: 844 },
+  });
+  try {
+    await context.addInitScript((user) => sessionStorage.setItem('cyclereg.test-session', user), email);
+    const volunteer = await context.newPage();
+    await volunteer.goto(`/#/events/${eventId}/check-in`);
+    const search = volunteer.getByRole('searchbox', { name: 'Find a rider' });
+    const detail = volunteer.getByRole('region', { name: 'Rider check-in' });
+    await search.fill('Taylor Fictional');
+    await search.press('Enter');
+    await expect(volunteer.getByText('2 matches', { exact: true })).toBeVisible();
+    await expect(volunteer.getByRole('button', { name: /Taylor Fictional.*Blue Demo Team/ })).toBeVisible();
+    await expect(volunteer.getByRole('button', { name: /Taylor Fictional.*Gold Demo Team/ })).toBeVisible();
+    await expect(detail).toContainText('Search for a rider or scan their check-in code.');
+
+    await search.fill(ready.checkInCode);
+    await search.press('Enter');
+    await expect(detail).toContainText('Blue Demo Team');
+    await expect(detail).toContainText('Ready to race');
+    await detail.getByRole('button', { name: 'Check in and issue next bib' }).click();
+    await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+
+    await search.fill(blocked.checkInCode);
+    await search.press('Enter');
+    await expect(detail).toContainText('Gold Demo Team');
+    await expect(detail).toContainText('Not ready');
+    await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
+
+    const result = await volunteer.request.get(`${eventUrl}/check-in`, { params: { q: 'Taylor Fictional' } });
+    expect(result.ok()).toBe(true);
+    const saved: CheckInList = await result.json();
+    expect(saved.roles).toEqual(['check_in_volunteer']);
+    expect(saved.riders).toHaveLength(2);
+    expect(saved.riders).toEqual(expect.arrayContaining([
+      expect.objectContaining({ orderId: ready.orderId, bib: 100, checkedInAt: expect.any(String) }),
+      expect.objectContaining({ orderId: blocked.orderId, bib: null, checkedInAt: null }),
+    ]));
+  } finally {
+    await context.close();
+  }
 });
 
 test('fallback roster lists every rider and puts blocked riders on the exception checklist', async ({ page }) => {
