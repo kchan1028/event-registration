@@ -42,7 +42,7 @@ for (const mobile of [false, true]) {
         const list = reload ? await readList(sunday?.id) : initial;
         expect(list.roles).toEqual(['check_in_volunteer']);
         const [rider, next] = list.riders.filter((r) => r.result.ready && r.bib === null);
-        if (!rider?.checkInCode || !next?.checkInCode) throw new Error('The fictional fixture needs two ready, unassigned riders with check-in codes');
+        if (!rider?.checkInCode) throw new Error('The fictional fixture needs a ready, unassigned rider with a check-in code');
         await volunteer.goto(`/#/events/${eventId}/check-in`);
         if (reload) await selectRaceDay(volunteer, 'Sunday');
         const search = volunteer.getByRole('searchbox', { name: 'Find a rider' });
@@ -90,7 +90,8 @@ for (const mobile of [false, true]) {
           await expect(search).toHaveValue('');
           await expect(detail).toContainText('Search for a rider or scan their check-in code.');
           await expect(detail.getByRole('alert')).toHaveCount(0);
-          await expect(volunteer.getByRole('radio', { name: 'Saturday', exact: true })).toBeChecked();
+          const days = volunteer.getByRole('radiogroup', { name: 'Race day' });
+          await expect(days.getByRole('radio', { name: 'Saturday', exact: true })).toBeChecked();
           await selectRaceDay(volunteer, 'Sunday');
           await search.fill(rider.checkInCode);
           await search.press('Enter');
@@ -103,6 +104,7 @@ for (const mobile of [false, true]) {
           }
           await expect(detail.locator('.ci-bib__number')).toHaveText('100');
           await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
+          await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
           const recovered = (await readList(list.dayId)).riders.find((candidate) => candidate.orderId === rider.orderId);
           expect(recovered).toMatchObject({
             bib: 100,
@@ -120,6 +122,8 @@ for (const mobile of [false, true]) {
           expect(requestsAfterReload).toBe(committed ? 0 : 1);
           return;
         }
+
+        if (!next?.checkInCode) throw new Error('Same-page recovery needs a second ready rider with a check-in code');
 
         // A failed fresh lookup cannot resolve the pending result.
         const lookupUrl = (url: URL) => url.pathname === `/api/events/${eventId}/check-in`;
