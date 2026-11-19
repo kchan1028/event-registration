@@ -47,6 +47,7 @@ describe('organizer transfers', () => {
     const config = (await s.get()).config;
     const source = config.categories.find((category) => category.id === s.code(from))!;
     const destination = config.categories.find((category) => category.id === s.code(to))!;
+    expect(destination.raceId).toBe(source.raceId);
     const listsUrl = `/api/events/${s.eventId}/start-lists`;
     const raceUrl = `${listsUrl}/${source.raceId}`;
     const lock = await s.app.inject({ method: 'POST', url: `${raceUrl}/lock` });
@@ -57,16 +58,21 @@ describe('organizer transfers', () => {
       expect(downloaded.statusCode).toBe(200);
       return downloaded.body;
     };
-    const exportedField = (body: string) => {
+    const exportedEntries = (body: string) => {
       const [header, ...rows] = parseCsv(body);
       return rows.filter((row) => row[header.indexOf('entry_id')] === entry.id)
-        .map((row) => row[header.indexOf('category_code')]);
+        .map((row) => ({
+          field: row[header.indexOf('category_code')],
+          riderId: row[header.indexOf('rider_id')],
+        }));
     };
     const locked = await csv(lockedUrl);
-    expect(exportedField(locked)).toEqual([from]);
+    const lockedEntries = exportedEntries(locked);
+    expect(lockedEntries).toEqual([{ field: from, riderId: expect.stringMatching(/\S/) }]);
+    const [{ riderId }] = lockedEntries;
 
     expect((await s.transfer(entry.id, to)).statusCode).toBe(200);
-    expect(exportedField(await csv(`${raceUrl}/csv`))).toEqual([to]);
+    expect(exportedEntries(await csv(`${raceUrl}/csv`))).toEqual([{ field: to, riderId }]);
     expect(await csv(lockedUrl)).toBe(locked);
 
     const response = await s.app.inject({ method: 'GET', url: listsUrl });
@@ -77,14 +83,11 @@ describe('organizer transfers', () => {
       added: [],
       removed: [],
       changed: [{
-        before: { entryId: entry.id, classificationCode: from, categoryName: source.name },
-        after: { entryId: entry.id, classificationCode: to, categoryName: destination.name },
+        before: { entryId: entry.id, riderId, classificationCode: from, categoryName: source.name },
+        after: { entryId: entry.id, riderId, classificationCode: to, categoryName: destination.name },
         fields: expect.arrayContaining(['classificationCode', 'categoryName', 'startGroup']),
       }],
     });
-    const [revision] = race!.changesSinceLock!.changed;
-    expect(revision.before.riderId).toBeTruthy();
-    expect(revision.after.riderId).toBe(revision.before.riderId);
   });
 
   it('compares transfers using the rider rate without changing the paid total', async () => {
