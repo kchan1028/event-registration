@@ -184,7 +184,7 @@ Each person signs in with their own email (one account per email). Organizations
 
 ### Phase 2 Stripe sandbox rehearsal
 
-The full rehearsal is In progress. See the [Phase 2 roadmap](../../roadmap.md#phase-2--build-the-registration-core) for the partial reconciliation results. Use the owner's existing Stripe sandbox, a new disposable local database, and fictional riders and events. Use the [test-mode setup](#stripe-test-mode-optional) above and verify the app labels checkout as test mode before creating an order. Make sure the signing secret belongs to the running listener and the listener is forwarding to the API port in use. Keep test keys, signing secrets, hosted session URLs, complete CSVs and webhook bodies out of the shared evidence.
+Status: In progress. See the [Phase 2 roadmap](../../roadmap.md#phase-2--build-the-registration-core) for the partial reconciliation results. Use the owner's existing Stripe sandbox, a new disposable local database, and fictional riders and events. Use the [test-mode setup](#stripe-test-mode-optional) above and verify the app labels checkout as test mode before creating an order. Make sure the signing secret belongs to the running listener and the listener is forwarding to the API port in use. Keep test keys, signing secrets, hosted session URLs, complete CSVs and webhook bodies out of the shared evidence.
 
 Run each case with fresh orders unless it explicitly calls for a retry of the same order. Record the configured hold duration and verify order, entry and payment states separately.
 
