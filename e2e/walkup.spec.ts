@@ -87,6 +87,12 @@ test('phone handoff keeps the rider account separate and returns a paid rider to
       checkedInAt: null,
       entries: [expect.objectContaining({ id: entryId, walkUp: true })],
     });
+    await page.reload();
+    const lookup = page.getByRole('searchbox', { name: 'Find a rider' });
+    await lookup.fill('Alex Demo');
+    await lookup.press('Enter');
+    await expect(desk.getByText('· Walk-up', { exact: true })).toBeVisible();
+    await expect(mark).toHaveCount(0);
     await desk.getByRole('button', { name: /Check in and issue/ }).click();
     await expect(page.getByRole('region', { name: 'Rider check-in' })).toContainText('100');
     const lists = await (await page.request.get(`/api/events/${eventId}/start-lists`)).json();
