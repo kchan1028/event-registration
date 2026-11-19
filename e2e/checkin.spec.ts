@@ -45,7 +45,7 @@ test('Enter right after a scanned code or a unique name opens that rider', async
   await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
 });
 
-test('a volunteer uses the confirmation code to distinguish riders with the same name', async ({ page, browser }) => {
+test('a volunteer distinguishes riders with the same name by their details or confirmation code', async ({ page, browser }) => {
   const api = page.request;
   const { eventId, organizationId } = await (await api.post('/api/demo')).json();
   const eventUrl = `/api/events/${eventId}`;
@@ -83,9 +83,22 @@ test('a volunteer uses the confirmation code to distinguish riders with the same
     await search.fill('Taylor Fictional');
     await search.press('Enter');
     await expect(volunteer.getByText('2 matches', { exact: true })).toBeVisible();
-    await expect(volunteer.getByRole('button', { name: /Taylor Fictional.*Blue Demo Team/ })).toBeVisible();
-    await expect(volunteer.getByRole('button', { name: /Taylor Fictional.*Gold Demo Team/ })).toBeVisible();
     await expect(detail).toContainText('Search for a rider or scan their check-in code.');
+
+    for (const [rider, team] of [[ready, 'Blue Demo Team'], [blocked, 'Gold Demo Team']] as const) {
+      const match = volunteer.getByRole('button', { name: new RegExp(`Taylor Fictional.*${team}`) });
+      await match.click();
+      await expect(match).toHaveAttribute('aria-current', 'true');
+      await expect(detail).toContainText(`${team} · racing age ${rider.racingAge}`);
+      await expect(detail.getByRole('heading', { name: 'Racing today', exact: true })).toBeVisible();
+      const entries = detail.locator('.ci-entries').getByRole('listitem');
+      await expect(entries).toHaveCount(rider.entries.length);
+      for (const [index, entry] of rider.entries.entries()) {
+        await expect(entries.nth(index)).toContainText(entry.categoryName);
+        await expect(entries.nth(index)).toContainText(entry.raceName);
+      }
+      await expect(detail.getByRole('status')).toContainText(rider.result.ready ? 'Ready to race' : 'Not ready');
+    }
 
     await search.fill(ready.checkInCode);
     await search.press('Enter');
