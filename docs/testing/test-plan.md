@@ -209,7 +209,7 @@ Run `tests/automatic-bibs.test.ts` with check-in, bib reassignment and start-lis
 
 ### Missing waiver at check-in
 
-`tests/checkin.test.ts` models a missing stored waiver signature in a disposable paid demo order. Verify lookup gives a registration desk referral and a check-in attempt returns a conflict without issuing a bib or recording check-in. The fixture exercises the missing-signature state directly. Rehearse remediation separately once the waiver process is approved.
+`tests/checkin.test.ts` blanks the signature name in the waiver snapshot of a disposable paid demo order. Verify lookup gives a registration desk referral and a check-in attempt returns a conflict without issuing a bib or recording check-in. The separate signing evidence stays intact. Rehearse remediation separately once the waiver process is approved.
 
 ### Rider check-in code retrieval
 
