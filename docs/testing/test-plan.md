@@ -207,9 +207,9 @@ Run `tests/auth.test.ts` for real expiry at sign-in, no expired-role grant, reci
 
 Run `tests/automatic-bibs.test.ts` with check-in, bib reassignment and start-list regressions. Queue a pending post-close job, a desk check-in and an overlapping bulk apply behind the same event advisory lock in a disposable database. Verify all three are waiting before releasing the lock. The lock order is not prescribed. If the bulk request applies first, preserve every previewed bib. If another writer assigns a selected rider first, refuse the batch with no partial assignment. The adjacent check-in tests also exercise successful apply and stale fingerprint rejection directly. Verify one active bib per rider, no duplicate bibs in the weekend scope, one desk check-in and a completed automatic job.
 
-### Missing waiver at check-in
+### Waiver and guardian blockers at check-in
 
-`tests/checkin.test.ts` blanks the signature name in the waiver snapshot of a disposable paid demo order. Verify lookup gives a registration desk referral and a check-in attempt returns a conflict without issuing a bib or recording check-in. The separate signing evidence stays intact. Rehearse remediation separately once the waiver process is approved.
+`tests/checkin.test.ts` uses disposable paid demo orders with two altered waiver snapshots: a blank signature name and a junior’s own signature in place of the required guardian’s. Verify lookup gives the corresponding registration desk referral and each check-in attempt returns a conflict without issuing a bib or recording check-in. The separate signing evidence stays intact. Rehearse remediation separately once the waiver process is approved.
 
 ### Rider check-in code retrieval
 
