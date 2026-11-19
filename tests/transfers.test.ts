@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
+import { parseCsv } from '../src/shared/csv';
 import { blankPath } from '../src/shared/factory';
 import type { EventConfig } from '../src/shared/schema';
+import type { StartLists } from '../src/server/startlists';
 
 /* Organizer transfers and withdrawals (product.md acceptance: "Category change"). */
 
@@ -36,6 +38,55 @@ async function setup() {
 }
 
 describe('organizer transfers', () => {
+  it('reports a field transfer as a revision to a locked timer list', async () => {
+    const s = await setup();
+    const from = 'RR-M35-34';
+    const to = 'RR-D23';
+    const order = await s.buy([from]);
+    const [entry] = order.entries;
+    const config = (await s.get()).config;
+    const source = config.categories.find((category) => category.id === s.code(from))!;
+    const destination = config.categories.find((category) => category.id === s.code(to))!;
+    const listsUrl = `/api/events/${s.eventId}/start-lists`;
+    const raceUrl = `${listsUrl}/${source.raceId}`;
+    const lock = await s.app.inject({ method: 'POST', url: `${raceUrl}/lock` });
+    expect(lock.statusCode).toBe(201);
+    const lockedUrl = `${raceUrl}/csv?snapshot=${lock.json().version}`;
+    const csv = async (url: string) => {
+      const downloaded = await s.app.inject({ method: 'GET', url });
+      expect(downloaded.statusCode).toBe(200);
+      return downloaded.body;
+    };
+    const exportedField = (body: string) => {
+      const [header, ...rows] = parseCsv(body);
+      return rows.filter((row) => row[header.indexOf('entry_id')] === entry.id)
+        .map((row) => row[header.indexOf('category_code')]);
+    };
+    const locked = await csv(lockedUrl);
+    expect(exportedField(locked)).toEqual([from]);
+
+    expect((await s.transfer(entry.id, to)).statusCode).toBe(200);
+    expect(exportedField(await csv(`${raceUrl}/csv`))).toEqual([to]);
+    expect(await csv(lockedUrl)).toBe(locked);
+
+    const response = await s.app.inject({ method: 'GET', url: listsUrl });
+    expect(response.statusCode).toBe(200);
+    const lists: Awaited<ReturnType<StartLists['overview']>> = response.json();
+    const race = lists.races.find((candidate) => candidate.raceId === source.raceId);
+    expect(race?.changesSinceLock).toMatchObject({
+      added: [],
+      removed: [],
+      changed: [{
+        before: { entryId: entry.id, classificationCode: from, categoryName: source.name },
+        after: { entryId: entry.id, classificationCode: to, categoryName: destination.name },
+        fields: expect.arrayContaining(['classificationCode', 'categoryName', 'startGroup']),
+      }],
+    });
+    const [revision] = race!.changesSinceLock!.changed;
+    expect(revision.before.riderId).toBeTruthy();
+    expect(revision.after.riderId).toBe(revision.before.riderId);
+  });
+
   it('compares transfers using the rider rate without changing the paid total', async () => {
     const s = await setup();
     const ev = await s.get();
