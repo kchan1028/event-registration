@@ -712,10 +712,16 @@ function CameraScan({ onCode, onClose }: { onCode: (code: string) => void; onClo
     const detector = new Detector({ formats: ['qr_code'] });
     (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-        if (done || !videoRef.current) return;
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        const opened = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        const video = videoRef.current;
+        if (done || !video) {
+          opened.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        stream = opened;
+        video.srcObject = stream;
+        await video.play();
+        if (done) return;
         timer = window.setInterval(async () => {
           if (done || !videoRef.current) return;
           try {
@@ -730,6 +736,7 @@ function CameraScan({ onCode, onClose }: { onCode: (code: string) => void; onClo
           }
         }, 250);
       } catch {
+        if (done) return;
         setError('The camera could not be opened. Allow camera access for this page, or type the code instead.');
       }
     })();
