@@ -246,7 +246,7 @@ Shared bibs must fit the overlap of every applicable entry range across their co
 
 To correct an issued bib after refund, withdrawal, or cancellation, search by rider name, bib, or check-in code. Inactive riders appear only if they still hold an active bib in the selected collision scope. Use **Change bib**, enter a reason, acknowledge a checked-in change, preview, and apply. Payment, refund, entry, readiness, and check-in states remain unchanged. These owner decisions resolve the questions in [issues #95 and #97](../../product.md#automatic-and-bulk-bib-assignment).
 
-Review follow-up (November 15, 2026; owner: unassigned; [issue #98](https://github.com/kchan1028/event-registration/issues/98)): should a replacement draft remain when a rider is unticked? Provisional behavior retains the draft but never sends it for an unticked rider. Other protected changes can proceed. Revisit when picking up #98; do not change draft retention without the owner’s decision. The region-name and whitespace findings from that issue are corrected.
+Unticking a rider or using **Select all** to replace a selection clears the typed replacement number for riders removed from the selection. Numbers for riders still selected remain in place. Select the rider again and enter a new value before previewing. See the [bib reassignment requirements](../../product.md#automatic-and-bulk-bib-assignment).
 
 
 ### Unresolved refund recovery
