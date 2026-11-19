@@ -19,7 +19,7 @@ The app exports one CSV per race, per saved snapshot, or for all races of an eve
 
 - **Who is in it.** Confirmed (paid) entries only. Unpaid holds, cancelled orders or entries, withdrawn entries, and the builder's simulated test entries are left out.
 - **Order.** Within a race, rows sort by start time, category code, bib (unassigned last), last name, then first name. An all-races file groups rows in published race order.
-- **One row per entry.** A rider in two races appears twice, once per race, with the same `rider_id`.
+- **One row per entry.** A rider entered in two races appears once per race. The rows share a `rider_id` when the entries are on the same order or on linked orders.
 - **Match revisions by entry ID.** Use `entry_id` to match the same entry across downloads. Use `rider_id` to group entries for a rider. Linking or unlinking orders can change the rider grouping ID on affected rows, so compare the CSVs directly for that change.
 - **Snapshots.** The organizer saves a numbered, timestamped snapshot when sending a list. Later changes (added, removed, or changed riders) are shown against it, so the organizer can tell the timer exactly what changed.
 - **File format.** UTF-8 text, comma separated, a header row, Windows line endings (CRLF). Fields containing commas or quotes are quoted. A value that starts with `=`, `+`, `-`, or `@` gets a leading apostrophe so a spreadsheet does not run it as a formula.
@@ -47,7 +47,7 @@ Cancellation download labels are Implemented locally: filenames and HTTP headers
 | `license_status` | Whether an organizer reviewed the license | `reviewed` or `needs_review` | `needs_review` |
 | `checked_in` | Checked in for that race day | `Y` or `N` | `Y` |
 | `entry_id` | Stable ID for this entry | Text | `oe_2ca41be52185` |
-| `rider_id` | Rider grouping ID. For linked orders, the earliest order ID is used. The revision panel does not list a change to this field alone. | Text | `ord_343502c91430` |
+| `rider_id` | Rider grouping ID. For linked orders, the earliest order ID is used. A saved snapshot keeps the ID recorded when it was saved. The revision panel does not list a change to this field alone. | Text | `ord_343502c91430` |
 
 ## What the sample shows
 
