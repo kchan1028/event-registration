@@ -14,7 +14,7 @@ Status: Implemented documentation for local fictional-data rehearsals, November 
 |---|---|
 | Event link and race day | Unassigned |
 | Registration lead and deputy; how to reach them | Unassigned |
-| Support owner and deputy; how to reach them | Unassigned |
+| Support owner and deputy for registration opening and race morning; coverage times and how to reach them | Unassigned |
 | Timer/officials liaison; how changes reach them | Unassigned |
 | Finance contact for payment/refund questions | Unassigned |
 | Latest printed roster time and storage location | Unassigned |
