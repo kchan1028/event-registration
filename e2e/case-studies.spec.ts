@@ -58,9 +58,14 @@ test('generated omnium supports a complete rider purchase and organizer recovery
     const first: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
     expect(new Set(weekend.entries.map((entry) => entry.dayId)).size).toBe(2);
     expect(first.days).toHaveLength(2);
+    const batch = { dayId: first.dayId, orderIds: [weekend.id] };
+    const preview = await page.request.post(`/api/events/${eventId}/bibs/preview`, { data: batch });
+    expect(preview.ok()).toBe(true);
+    const { fingerprint } = await preview.json();
+    expect((await page.request.post(`/api/events/${eventId}/bibs/apply`, { data: { ...batch, fingerprint } })).ok()).toBe(true);
     for (const day of first.days) {
       const list: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in?day=${day.id}`)).json();
-      expect(list.riders.find((r) => r.orderId === weekend.id)?.result.ready).toBe(true);
+      expect(list.riders.find((r) => r.orderId === weekend.id)).toMatchObject({ bib: 100, result: { ready: true } });
       const checked = await page.request.post(`/api/events/${eventId}/check-in/${weekend.id}`, { data: { dayId: day.id, bib: null } });
       expect(checked.status()).toBe(200);
       const original: CheckInRider = await checked.json();

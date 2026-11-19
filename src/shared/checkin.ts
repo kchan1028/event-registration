@@ -112,13 +112,17 @@ export interface CheckInRider {
   team: string;
   racingAge: number;
   payment: PaymentState;
-  entries: { id: string; categoryId: string; categoryName: string; code: string; raceName: string; startTime: string | null }[];
+  entries: { id: string; categoryId: string; categoryName: string; code: string; raceName: string; startTime: string | null; walkUp: boolean }[];
   readiness: ReadinessItem[];
   result: CheckInResult;
   bib: number | null;
   bibHistory: { bib: number; assignedAt: string; releasedAt: string | null; reason: string | null }[];
   checkedInAt: string | null;
   undoneCheckIns: { checkedInAt: string; undoneAt: string; bib: number | null; bibReleased: boolean; reason: string }[];
+}
+
+export function canCheckInWithBib(rider: Pick<CheckInRider, 'bib' | 'entries'>): boolean {
+  return rider.bib !== null || rider.entries.some((entry) => entry.walkUp);
 }
 
 export interface CheckInList {

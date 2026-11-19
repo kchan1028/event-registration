@@ -98,6 +98,9 @@ The check-in QR scanner processes camera frames on the device. Stopping the scan
 
 ## Walk-up phone handoff (Implemented locally)
 
+The walk-up marker requires the event’s check-in permission. Under the event lock, the server verifies the confirmed entry belongs to the selected rider and race day and records the staff account and time. Public checkout and the QR/link cannot mark an entry. The server checks for a same-day marked confirmed entry before first bib assignment at the desk and still enforces payment and readiness. Staff views show the marker without exposing its actor.
+
+
 Check-in staff can display only the public event registration address and QR. It contains no rider details, offer tokens or staff-page query parameters. Registration stays under the participant/guardian account; the staff session is not handed to the rider. No new API route, role, account access, payment method or waiver bypass is added. The published-event guard suppresses handoff for an unpublished event; server registration validation remains authoritative. Shared kiosks and staff-entered orders remain outside this increment. Local loopback addresses cannot serve another device; real-phone use requires reachable staging with the existing security gates.
 
 ## Supported versions

@@ -52,7 +52,8 @@ async function setup() {
     const paid = await app.inject({ method: 'POST', url: `/api/orders/${id}/payment`, payload: { attemptId: `attempt-${n}-xxxx`, outcome: 'success' } });
     expect(paid.statusCode).toBe(200);
     // Clear the license so the rider is ready at check-in.
-    for (const e of (paid.json() as { entries: { id: string }[] }).entries) {
+    for (const e of (paid.json() as { entries: { id: string; dayId: string }[] }).entries) {
+      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${id}/walk-up`, payload: { dayId: e.dayId, entryId: e.id } })).statusCode).toBe(200);
       expect((await app.inject({ method: 'POST', url: `/api/order-entries/${e.id}/license-review`, payload: { note: 'License card seen' } })).statusCode).toBe(200);
     }
     return id;

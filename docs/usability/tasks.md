@@ -145,6 +145,8 @@ At the payment step, ask the participant to choose **Simulate a declined payment
 4. Return to **Race-day check-in**, choose **Saturday**, find **Alex Demo**, and check Alex in with the next bib. V5 needs Alex to hold a bib already.
 5. Select **Next rider** so the search box is empty.
 
+The check-in demo loader creates fictional paid walk-ups for the desk exercises. Preassign bibs separately when rehearsing advance registration.
+
 The demo riders include ready riders (Alex, Blake, Casey, Emery, Harper), riders whose license still needs review (Dana, Gray), and one unpaid rider (Frankie).
 
 **Warm-up questions.** What happens at your registration tent on race morning? What are the most common problems? How do you know a rider is allowed to race?

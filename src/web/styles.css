@@ -3590,6 +3590,13 @@ fieldset:disabled .field label {
   align-items: baseline;
   gap: var(--s-3);
 }
+.ci-entries__walk-up {
+  margin-top: var(--s-2);
+}
+.ci-entries__walk-up .btn {
+  white-space: normal;
+  text-align: left;
+}
 .ci-entries__time {
   white-space: nowrap;
   font: 600 18px/1 var(--font-num);

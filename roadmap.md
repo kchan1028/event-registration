@@ -366,6 +366,8 @@ Early independent build: the local API can preview and atomically assign bibs to
 
 ### Remaining implementation and operating preparation
 
+**Bib handover decision (November 19, 2026):** Implemented locally. Staff explicitly mark a confirmed entry as a walk-up before first bib assignment at the desk. Advance riders use preassigned bibs. The QR/link uses ordinary checkout. Staff rehearsal remains open under the [bib assignment requirements](product.md#automatic-and-bulk-bib-assignment).
+
 These remain within the existing Phase 3 scope; this status clarification adds no requirements or new completion gates.
 
 | Work | What remains | Completion evidence |

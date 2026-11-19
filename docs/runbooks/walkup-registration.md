@@ -14,7 +14,7 @@ For another device to open the QR, the site must be reachable from that device. 
 2. Ask the rider or guardian to scan the event QR or type the displayed public address on their own phone. Keep the staff account on the staff device. The preview link is for checking the page, not a shared kiosk.
 3. The participant signs in to their own account, selects available entries, reviews the total, supplies required details and consent, and completes the configured payment flow. The demo is simulated; Stripe test mode uses hosted test payment only. Staff never collect card numbers or type a signature for a rider.
 4. Ask for their name or confirmation code and search again in check-in. A pending/failed payment or unresolved requirement is not clearance. Do not start another order to solve an unknown payment outcome; recover the existing order or escalate to the registration lead.
-5. Resolve permitted exceptions through authorized review. When the result is **Ready to race**, use normal check-in/bib issuance. Check the resulting timestamped start list; do not maintain a second hand-entered entrant list.
+5. Select **Mark as walk-up** on the confirmed entry. The QR and link open ordinary registration. Resolve permitted exceptions through authorized review. When the result is **Ready to race**, check in and issue the bib. Check the resulting timestamped start list; do not maintain a second hand-entered entrant list.
 
 ## Unavailable or interrupted registration
 

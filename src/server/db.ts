@@ -703,6 +703,10 @@ export const MIGRATIONS: string[] = [
     )
   );
   CREATE INDEX protected_export_audit_event_idx ON protected_export_audit(event_id, generated_at, id);`,
+  `ALTER TABLE order_entries
+    ADD COLUMN walk_up_marked_at timestamptz,
+    ADD COLUMN walk_up_marked_by text REFERENCES accounts(id) ON DELETE RESTRICT,
+    ADD CONSTRAINT walk_up_marker_complete CHECK ((walk_up_marked_at IS NULL) = (walk_up_marked_by IS NULL));`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

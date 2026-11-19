@@ -385,6 +385,7 @@ describe('atomic simulated cancellation', () => {
     const s = await prepared(); const dayId = s.config.races.find((r) => r.id === s.cat('RR-M35-34').raceId)!.dayId;
     for (const e of s.order.entries) await s.app.inject({ method: 'POST', url: `/api/order-entries/${e.id}/license-review`, payload: { note: 'Fictional reviewed license' } });
     await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/bib-settings`, payload: { scope: 'day', ranges: [{ scope: dayId, first: 100, last: 199 }] } });
+    expect((await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/check-in/${s.order.id}/walk-up`, payload: { dayId, entryId: s.order.entries[0].id } })).statusCode).toBe(200);
     const before = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/check-in/${s.order.id}`, payload: { dayId, bib: null } }); expect(before.statusCode, before.body).toBe(200);
     const historical = (await s.sql('SELECT checked_in_at FROM check_ins WHERE order_id=$1', [s.order.id])).rows;
     expect((await s.execute(input((await s.makePlan()).id))).statusCode).toBe(200);

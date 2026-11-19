@@ -278,14 +278,20 @@ test('a paid rider can receive a bib only on a day they entered', async ({ page 
     orderId: rider.orderId, payment: 'confirmed', entries: [], bib: null, checkedInAt: null, bibHistory: [],
   })]);
 
+  const wrongDayMark = await api.post(`${eventUrl}/check-in/${rider.orderId}/walk-up`, {
+    data: { dayId: other.id, entryId: rider.entries[0].id },
+  });
+  expect(wrongDayMark.status()).toBe(404);
+
   await selectDay(entered.label);
   await search.press('Enter');
   await expect(detail).toContainText('Ready to race');
+  await detail.getByRole('button', { name: /^Mark as walk-up/ }).click();
   await detail.getByRole('button', { name: 'Check in and issue next bib' }).click();
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
   const correctDay = await list({ day: entered.id, q: code });
   expect(correctDay.riders).toEqual([expect.objectContaining({
-    orderId: rider.orderId, entries: rider.entries, bib: 100, checkedInAt: expect.any(String),
+    orderId: rider.orderId, entries: rider.entries.map((entry) => ({ ...entry, walkUp: true })), bib: 100, checkedInAt: expect.any(String),
   })]);
   const wrongDay = await list({ day: other.id, q: code });
   expect(wrongDay.riders).toEqual([expect.objectContaining({

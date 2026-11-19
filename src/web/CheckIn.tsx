@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { BIB_SCOPES, rangeFor, changedBibAssignments, type BibChange, type BibReassignmentPlan, type BibSettings } from '../shared/checkin';
+import { BIB_SCOPES, rangeFor, canCheckInWithBib, changedBibAssignments, type BibChange, type BibReassignmentPlan, type BibSettings } from '../shared/checkin';
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
 import { can } from '../shared/roles';
@@ -329,6 +329,21 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
   const [undoing, setUndoing] = useState(false);
   const [undoReason, setUndoReason] = useState('');
 
+  const resultRef = useRef<HTMLDivElement>(null);
+
+  async function markWalkUp(entryId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      onChange(await api.markWalkUp(eventId, rider.orderId, dayId, entryId));
+      resultRef.current?.focus();
+    } catch (err) {
+      setError((err as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function undo(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -382,7 +397,14 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
   }
 
   const ready = rider.result.ready;
+  const hasBib = canCheckInWithBib(rider);
   const done = !!rider.checkedInAt && rider.bib !== null;
+  let guidance = 'Do not issue a bib. Send the rider to the registration desk.';
+  if (ready) {
+    if (done) guidance = 'Checked in. Hand over the bib below.';
+    else if (hasBib) guidance = 'Check them in and hand over a bib.';
+    else guidance = 'No preassigned bib. Refer advance entries to the registration lead for allocation.';
+  }
 
   return (
     <div className="ci-detail">
@@ -391,13 +413,13 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
         <p className="muted">{[rider.team || 'No team', `racing age ${rider.racingAge}`].join(' · ')}</p>
       </div>
 
-      <div className={`ci-result ${ready ? 'ci-result--ready' : 'ci-result--blocked'}`} role="status">
+      <div className={`ci-result ${ready ? 'ci-result--ready' : 'ci-result--blocked'}`} role="status" ref={resultRef} tabIndex={-1}>
         <svg aria-hidden="true" viewBox="0 0 16 16" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d={ready ? 'm3.5 8.5 3 3 6-7' : 'M4 4l8 8M12 4l-8 8'} />
         </svg>
         <div>
           <p className="ci-result__head">{ready ? 'Ready to race' : 'Not ready'}</p>
-          <p className="ci-result__sub">{ready ? (done ? 'Checked in. Hand over the bib below.' : 'Check them in and hand over a bib.') : 'Do not issue a bib. Send the rider to the registration desk.'}</p>
+          <p className="ci-result__sub">{guidance}</p>
         </div>
       </div>
 
@@ -419,10 +441,19 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
             {rider.entries.map((e) => (
               <li key={e.id}>
                 <span className="ci-entries__time">{formatTime(e.startTime)}</span>
-                <span>
+                <div>
                   <strong>{e.categoryName}</strong>
                   <span className="muted small"> · {e.raceName}</span>
-                </span>
+                  {e.walkUp && <span className="muted small"> · Walk-up</span>}
+                  {!e.walkUp && rider.payment === 'confirmed' && rider.bib === null && (
+                    <div className="ci-entries__walk-up">
+                      <button type="button" className="btn btn--secondary" disabled={busy}
+                        aria-label={`Mark as walk-up: ${e.categoryName}, ${e.raceName}`} onClick={() => void markWalkUp(e.id)}>
+                        Mark as walk-up
+                      </button>
+                    </div>
+                  )}
+                </div>
                 {e.code && <code className="ci-entries__code">{e.code}</code>}
               </li>
             ))}
@@ -492,7 +523,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
             )}
 
           </>
-        ) : ready && !changing ? (
+        ) : ready && hasBib && !changing ? (
           <form onSubmit={checkIn} className="ci-bib__issue">
             {rider.bib === null && <label>
               Bib <span className="muted small">(leave empty for the next free bib)</span>
