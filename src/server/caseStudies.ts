@@ -75,6 +75,7 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
       const ids = eventIds.map((_, index) => `$${index + 1}`).join(', ');
       const orderIds = `SELECT id FROM orders WHERE event_id IN (${ids})`;
       // Children before parents: none of these foreign keys cascade.
+      await db.run(`DELETE FROM protected_export_audit WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM cancellation_request_refusals WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM cancellation_executions WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM cancellation_confirmations WHERE event_id IN (${ids})`, eventIds);

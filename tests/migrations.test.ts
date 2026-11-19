@@ -7,6 +7,32 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const TEXT_TIMESTAMPS = `SELECT table_name, column_name FROM information_schema.columns
   WHERE table_schema = 'public' AND data_type = 'text' AND (column_name LIKE '%\\_at' OR column_name LIKE '%expires%')`;
 
+it('adds protected export auditing on upgrade without backfilling requests', async () => {
+  const url = await testDatabaseUrl({ empty: true });
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+    for (let version = 1; version <= 36; version++) {
+      await client.query(MIGRATIONS[version - 1]);
+      await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
+    }
+    await client.query("INSERT INTO organizations(id,name,created_at) VALUES ('org_audit_upgrade','Fictional club',now())");
+  } finally {
+    await client.end();
+  }
+  const db = openDb(url);
+  try {
+    await db.migrate();
+    await db.migrate();
+    expect(await db.get("SELECT name FROM organizations WHERE id='org_audit_upgrade'")).toEqual({ name: 'Fictional club' });
+    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 37')).toEqual({ version: 37 });
+    expect(await db.all('SELECT id FROM protected_export_audit')).toEqual([]);
+  } finally {
+    await db.close();
+  }
+});
+
 describe('migration 36: terminal cancellation request refusals', () => {
   it('enforces matching request identities and supported terminal refusal statuses', async () => {
     const databaseUrl = await testDatabaseUrl(); const { app } = await testApp({ databaseUrl });
@@ -35,7 +61,7 @@ describe('migration 36: terminal cancellation request refusals', () => {
       await db.migrate(); await db.migrate();
       expect(await db.get(`SELECT to_jsonb(o) AS value FROM organizations o WHERE id='org_refusal_upgrade'`)).toEqual(before);
       expect(await db.get('SELECT count(*)::int AS n FROM cancellation_request_refusals')).toEqual({ n: 0 });
-      expect(await db.get('SELECT max(version) AS version FROM schema_migrations')).toEqual({ version: 36 });
+      expect(await db.get('SELECT version FROM schema_migrations WHERE version = 36')).toEqual({ version: 36 });
     } finally { await db.close(); }
   });
 });
