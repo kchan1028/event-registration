@@ -135,3 +135,62 @@ test('a full-field walk-up can join the waitlist without getting an entry or bib
   expect((await checkIn.json()).riders).toEqual([]);
   expect(await readStartLists()).toEqual(before);
 });
+
+test('a junior walk-up reaches check-in after guardian consent and simulated payment', async ({ page, browser }) => {
+  const eventId = await seedRegistrationCase(page.request, 'criterium');
+  const eventUrl = `/api/events/${eventId}`;
+  const bibSettings = await page.request.put(`${eventUrl}/bib-settings`, {
+    data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+  });
+  expect(bibSettings.ok()).toBe(true);
+  await page.goto(`/#/events/${eventId}/check-in`);
+  await page.getByRole('button', { name: 'Register a walk-up' }).click();
+  const address = await page.getByLabel('Public registration address').inputValue();
+
+  const email = 'guardian.walkup@example.test';
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    extraHTTPHeaders: { Authorization: `Bearer test:${email}` },
+  });
+  try {
+    const guardian = await context.newPage();
+    await guardian.addInitScript((account) => sessionStorage.setItem('cyclereg.test-session', account), email);
+    await guardian.goto(address);
+    await guardian.getByLabel('Use a demo rider (fake data)').selectOption('rider-casey');
+    await guardian.getByRole('checkbox', { name: /DVC-J1014/ }).click();
+    await guardian.getByRole('button', { name: 'Continue to racer details' }).click();
+    await guardian.getByLabel('Last name (required)', { exact: true }).fill('Walkup');
+    await guardian.getByLabel('Guardian email', { exact: true }).fill(email);
+    await guardian.getByRole('button', { name: 'Continue to the waiver' }).click();
+    await expect(guardian.getByRole('heading', { name: 'Waiver' })).toBeVisible();
+
+    const checkIn = await page.request.get(`${eventUrl}/check-in`, { params: { q: 'Casey Walkup' } });
+    expect(checkIn.ok()).toBe(true);
+    expect((await checkIn.json()).riders).toEqual([]);
+
+    await guardian.getByLabel('I have read the whole waiver').check();
+    await guardian.getByLabel(/Type your full name to sign/).fill('Jordan Demo');
+    await guardian.getByLabel('As parent or guardian, I agree to this waiver for the rider', { exact: true }).check();
+    await guardian.getByRole('button', { name: 'Sign and review the order' }).click();
+    await guardian.getByRole('button', { name: /Complete simulated payment/ }).click();
+    await expect(guardian.locator('.done__entry')).toContainText('Guardian signature recorded');
+
+    const registrations = await guardian.request.get('/api/rider/registrations');
+    expect(registrations.ok()).toBe(true);
+    expect(await registrations.json()).toContainEqual(expect.objectContaining({
+      eventId,
+      placedByYou: true,
+      rider: expect.objectContaining({ firstName: 'Casey', lastName: 'Walkup' }),
+    }));
+    const search = page.getByRole('searchbox', { name: 'Find a rider' });
+    await search.fill('Casey Walkup');
+    await search.press('Enter');
+    const checkInPanel = page.getByRole('region', { name: 'Rider check-in' });
+    await expect(checkInPanel).toContainText('Ready to race');
+    await checkInPanel.getByRole('button', { name: /Check in and issue/ }).click();
+    await expect(checkInPanel).toContainText('Checked in. Hand over the bib below.');
+    await expect(checkInPanel.locator('.ci-bib__number')).toHaveText('100');
+  } finally {
+    await context.close();
+  }
+});
