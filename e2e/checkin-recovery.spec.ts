@@ -1,3 +1,4 @@
+import type { Route } from '@playwright/test';
 import { expect, test } from './fixtures';
 import type { CheckInList, CheckInRider } from '../src/shared/checkin';
 
@@ -93,12 +94,35 @@ for (const mobile of [false, true]) {
         await expect(detail.getByRole('alert')).toHaveText('Check-in could not be confirmed.');
         await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
 
+        // Hold the debounced search and let the explicit lookup return first.
+        const delayed: Route[] = [];
+        const riderNameLookup = (url: URL) => lookupUrl(url) && url.searchParams.get('q') === rider.name;
+        if (failure === 'lost response') {
+          await volunteer.route(riderNameLookup, async (route) => {
+            if (delayed.length === 0) delayed.push(route);
+            else await route.continue();
+          });
+          await search.fill(rider.name);
+          await expect.poll(() => delayed.length).toBe(1);
+        }
+
         // Follow the desk guide: look up the existing rider before another action.
         await search.press('Enter');
         await expect(detail.getByRole('status')).toContainText(committed
           ? 'Lookup confirmed check-in with bib 100.'
           : 'Lookup confirmed check-in was not recorded.');
         await expect(detail.getByRole('alert')).toHaveCount(0);
+        if (delayed.length > 0) {
+          const delivered = volunteer.waitForResponse((response) => riderNameLookup(new URL(response.url())));
+          await delayed[0].fulfill({ json: { ...list, riders: [rider] } });
+          expect(await (await delivered).finished()).toBeNull();
+          // Let the browser deliver the stale body and flush any queued render.
+          await volunteer.evaluate(() => new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          }));
+          await expect(detail.getByRole('status')).toContainText('Lookup confirmed check-in with bib 100.');
+          await volunteer.unroute(riderNameLookup);
+        }
         if (!committed) {
           await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
           await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
