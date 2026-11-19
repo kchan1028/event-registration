@@ -77,7 +77,7 @@ An incident is anything that stops riders registering, stops volunteers checking
 
 | Severity | Examples | Initial response |
 |---|---|---|
-| Critical | Oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, private data exposed, checkout down during registration opening, check-in unusable on race morning | For the approved rehearsal windows, contact the support owner and technical lead immediately on detection. Pause affected registration if records are being corrupted. |
+| Critical | Oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, private data exposed, checkout down during registration opening, check-in unusable on race morning | For the approved rehearsal windows, contact the support owner and technical lead immediately on detection. Pause affected registration if records are being corrupted. Out-of-window targets remain open. |
 | High | Payment notifications delayed, confirmation emails not sending, timer export rejected, a role sees data it should not | Within one hour of detection or report during the approved rehearsal windows. Same-day response outside those windows remains proposed. |
 | Normal | A single rider's record wrong, a confusing message, a slow report | Next working session (proposed) |
 
