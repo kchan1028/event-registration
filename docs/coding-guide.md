@@ -254,7 +254,7 @@ Tests prove the acceptance criteria in [product.md](../product.md#core-flows-and
 | State machines | Every permitted transition succeeds; every other transition is rejected |
 | Permissions | Each role can do what it should and nothing else; private fields hidden from roles without access |
 | Configuration changes | Impact preview lists affected entries; paid prices and rules unchanged |
-| Exports | Timer export round trip with the actual timer's format |
+| Exports | Correct sample CSV, reproducible locked exports, and current revisions |
 | Accessibility | Automated checks plus manual keyboard and screen-reader passes on checkout and check-in |
 | Time | Events near midnight and daylight-saving changes in the event's time zone |
 

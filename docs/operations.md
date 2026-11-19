@@ -32,7 +32,7 @@ These map to the roles in [roadmap.md](../roadmap.md#responsibilities). They are
 | Technical lead | Fixes system faults, restores from backup, rotates secrets, approves changes during a freeze |
 | Registration lead | Works the exception queue; decides rider-level corrections; trains check-in volunteers |
 | Treasurer | Refund approvals, payout checks, reconciliation against provider statements |
-| Timer / officials liaison | Confirms start-list snapshots and exports; reports race-day field changes back |
+| Timer / officials liaison, where applicable | Confirms start-list snapshots and exports; reports race-day field changes back |
 | Event owner (organizer role) | Publishes the event's support contact; transfers ownership to a successor |
 
 Each event must publish, before registration opens:
@@ -78,7 +78,7 @@ An incident is anything that stops riders registering, stops volunteers checking
 | Severity | Examples | Initial response |
 |---|---|---|
 | Critical | Oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, private data exposed, checkout down during registration opening, check-in unusable on race morning | For the approved rehearsal windows, contact the support owner and technical lead immediately on detection. Pause affected registration if records are being corrupted. Out-of-window targets remain open. |
-| High | Payment notifications delayed, confirmation emails not sending, timer export rejected, a role sees data it should not | Within one hour of detection or report during the approved rehearsal windows. Same-day response outside those windows remains proposed. |
+| High | Payment notifications delayed, confirmation emails not sending, required start-list handoff fails, a role sees data it should not | Within one hour of detection or report during the approved rehearsal windows. Same-day response outside those windows remains proposed. |
 | Normal | A single rider's record wrong, a confusing message, a slow report | Next working session (proposed) |
 
 The project owner approved the critical and high initial-response targets for the two rehearsal windows on November 19, 2026. Initial response means acknowledging the incident, identifying the accountable role and recording the first action or escalation. It does not end the safe-reopening clock.
@@ -183,4 +183,4 @@ Unresolved operating decisions and validation steps are listed below. The named 
 | 4, monitoring/tools | Technical/support lead, unassigned; failures need an accountable receiver | No monitoring service, alert thresholds or after-hours rota accepted. Synthetic fault cases proceed; hosted operational sign-off blocked pending routing/tool review. |
 | 5, retention | Project owner/privacy responsibility unassigned; waivers, financial records, paper rosters and opaque telemetry keys remain personal data | No retention period or analytics collection approved. Synthetic measurements proceed; real-data collection blocked until access/retention approval before pilot. |
 
-Related decisions remain in [product.md decisions 4–6 and 8–10](../product.md#open-decisions), [ADR 0005](decisions/0005-merchant-and-settlement-model.md), [federation questions](usac-questions.md) and [timer review](timer-export-review.md). The new research does not resolve merchant liability, event-year waiver/licensing approval, timer acknowledgement or safe device/accessibility arrangements. Revisit those existing records before the corresponding live-money, sanctioned-event or physical rehearsal gate.
+Related decisions remain in [product.md decisions 4–6 and 8–10](../product.md#open-decisions), [ADR 0005](decisions/0005-merchant-and-settlement-model.md), [federation questions](usac-questions.md) and [timer review](timer-export-review.md). The new research does not resolve merchant liability, event-year waiver/licensing approval, timer acknowledgement where applicable or safe device/accessibility arrangements. Revisit those existing records before the corresponding live-money, sanctioned-event or physical rehearsal gate.

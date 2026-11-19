@@ -16,7 +16,7 @@ CycleReg proposes a guided cycling workflow: categories modeled the way road and
 | Registration lead | One prioritized exception queue with the reason and next action |
 | Check-in volunteer | Fast lookup and an unmistakable ready or blocked result |
 | Rider or parent | Clear fields, total cost, requirements, receipt, and check-in instructions |
-| Timer or official | Reliable start lists with stable identifiers in an agreed format |
+| Timer or official | Reliable start lists with stable identifiers and clear revisions in the sample export |
 | Club treasurer | Entries, refunds, fees, and payouts that trace to one ledger |
 | Successor organizer | Reusable setup, role access, history, and an operating guide |
 
@@ -73,7 +73,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Per-category rider questions, waiver addenda, and bib ranges | Implemented; automated tests in CI |
 | QR check-in code on the rider confirmation; camera scanning at check-in in Chrome and Edge | Implemented; live camera scan not yet checked |
 | Change resolution workflow for paid entries affected by a published change | Implemented; automated tests in CI |
-| Live payments and refunds with real money, an agreed timer format | Planned |
+| Live payments and refunds with real money | Planned |
 
 <details>
 <summary>More screens: category editor, rider preview, publishing, rider checkout, registrations, phone layouts</summary>
@@ -142,7 +142,7 @@ Open `http://127.0.0.1:5273/`, sign in with your email, and select **Load Berkel
 
 ## How it is meant to work
 
-The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented with **simulated** payment; real payment confirmation and the race-day scan are planned. In the organizer workflow, the "Before registration opens" steps are implemented except category questions; the exception queue, check-in, start-list snapshots, and sample timer export are implemented; QR scanning, an agreed timer format, and the after-event stages are planned.
+The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented with **simulated** payment; real payment confirmation and the race-day scan are planned. In the organizer workflow, the "Before registration opens" steps are implemented except category questions; the exception queue, check-in, start-list snapshots, and sample timer export are implemented; QR scanning and the after-event stages are planned.
 
 ### 1. Rider registration journey
 
@@ -275,7 +275,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | My registrations and explicit guardian access | Implemented locally: up to two guardians through private invitation APIs and acknowledged acceptance on My registrations; read-only junior viewing. Private guardian removal APIs require a reason and acknowledgement. Guardian invitation creation/cancellation, removal and history controls are available on My registrations. Support-approved age-18 claim API is Implemented locally and disabled by default until explicitly configured; same-name former-guardian junior checkout is blocked for support review. Claim screens, guardian email and disputed restoration remain Planned |
 | Real payments, USA Cycling checks, MFA, hosting | Not built |
 
-**Next milestone: Phase 0 exit gate, plus the rest of Phase 1.** Phase 0 shows whether a recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup; if not, the roadmap says to stop the build. Every Phase 1 deliverable is built. What remains for the Phase 1 exit gate is running the usability tests with the [test kit](docs/usability/README.md) and getting the timer to accept the sample export format. The first actions are in [roadmap.md](roadmap.md#next-actions).
+**Next milestone: Phase 0 exit gate, plus the rest of Phase 1.** Phase 0 shows whether a recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup; if not, the roadmap says to stop the build. Every Phase 1 deliverable is built. What remains for the Phase 1 exit gate is running the usability tests with the [test kit](docs/usability/README.md). The first actions are in [roadmap.md](roadmap.md#next-actions).
 
 ## Documentation
 

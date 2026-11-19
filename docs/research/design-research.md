@@ -1,5 +1,7 @@
 # Make registration decisions clear before race day
 
+**Scope update (November 19, 2026):** References below to timing-software format acceptance, import or round trips as launch or phase requirements reflect the earlier scope. Those checks are deferred for possible future development. See [current product scope](../../product.md#out-of-scope-initially).
+
 Research date: **November 16, 2026**. Status: **Proposed design research for review**, not approved requirements, implementation work, a replacement roadmap, or evidence of live-event readiness. Project baseline: `5f5ee673ebaca9e2cfdb2c5b9c91b02c1caa2f5a`.
 
 ## Executive recommendation

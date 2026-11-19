@@ -78,7 +78,7 @@ Details: [demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-
 
 The [check-in volunteer guide](docs/runbooks/race-day-check-in.md) documents the local desk workflow and role boundaries. Independent staff rehearsal and an approved connectivity fallback remain open.
 
-Details: [check-in status](roadmap.md#check-in) and [start-list status](roadmap.md#start-lists-and-timer-export). Volunteer usability tests and a timer-approved export remain open.
+Details: [check-in status](roadmap.md#check-in) and [start-list status](roadmap.md#start-lists-and-timer-export). Volunteer usability tests remain open.
 
 ## Local demo and interface
 
@@ -134,7 +134,7 @@ These are not available in the app. Phase order and dependencies remain in [road
 | Federation license and waiver verification | Planned; access and approval required | [Future USA Cycling integration](product.md#future-usa-cycling-waiver-and-license-integration) |
 | Rider self-service changes, withdrawals, and policy-governed transfers | Planned beyond existing organizer actions | [Rider self-service](product.md#rider-self-service) |
 | Automated waitlist promotion and offer-email delivery | Planned | [Capacity and entry integrity](product.md#3-capacity-and-entry-integrity) |
-| Timer-approved export and round-trip validation | Planned beyond the current sample CSV | [Race-day operations](product.md#5-race-day-operations) |
+| Timing-software integration and round-trip validation | Deferred for possible future development | [Product scope](product.md#out-of-scope-initially) |
 | Confirmations, receipts, targeted operational email, and delivery tracking | Planned | [Communications](product.md#communications) |
 | Coupon/referral codes, redemption limits, and count-based pricing | Planned beyond current discounts | [Promotions](product.md#promotions) |
 | Participant workspace, reusable rider identity, saved filtered views, history, and safe bulk actions | Planned beyond event-level lookup | [Participant management](product.md#participant-management) |

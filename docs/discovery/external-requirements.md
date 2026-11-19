@@ -10,7 +10,7 @@ The USAC questions were emailed on November 15, 2026; nothing else has been sent
 |---|---|---|---|---|
 | USAC integration and accepted license and waiver processes | KC (project owner), assigned 2026-11-15 | Yes, emailed to USA Cycling 2026-11-15 | No (waiting) | Public research recorded 2026-11-15 in [USAC questions](../usac-questions.md#what-public-sources-already-say); not an answer from USAC |
 | Payment-provider operating model | KC (project owner), assigned 2026-11-15 | No | No | Public Stripe research and D01 club answers recorded 2026-11-15 in [payment model questions](../payment-model-questions.md#findings); club answers recorded the same day; approver and 501(c) status still open |
-| Results path to road-results.com | KC (project owner), assigned 2026-11-15; more research first | No | No | Public research recorded 2026-11-15 in the [timer export review](../timer-export-review.md#what-public-sources-already-say); who uploads for our events still needs the timer |
+| Results path to road-results.com | KC (project owner), assigned 2026-11-15; more research first | No | No | Public research recorded 2026-11-15 in the [timer export review](../timer-export-review.md#what-public-sources-already-say); follow-up deferred 2026-11-19 |
 
 ## USA Cycling
 
@@ -26,7 +26,7 @@ The models, the questions for the treasurer and for each provider, and the place
 
 ## Results path to road-results.com
 
-The questions and a sample start list are in the [timer export review packet](../timer-export-review.md); send it to the timer and record answers there. Also ask one recent promoter of a comparable event who uploads results and from what file. Background: [results site updates](../../product.md#results-site-updates-research) in product.md.
+The questions and a sample start list are in the [timer export review packet](../timer-export-review.md); retain it for use if timing interoperability is selected for future development. Background: [results site updates](../../product.md#results-site-updates-research) in product.md.
 
 | Event | Who uploads | File used | Columns that matter | Date asked | Source |
 |---|---|---|---|---|---|
