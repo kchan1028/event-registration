@@ -93,6 +93,7 @@ interface EntryRow {
   license_reviewed: boolean;
   license_review_note: string | null;
   license_reviewed_at: string | null;
+  walk_up_marked_at: string | null;
 }
 
 /** Rows grouped by their order, keeping each order's rows in the order given. */
@@ -235,6 +236,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         startTime: sg?.startTime ?? null,
         status: e.status === 'held' && status === 'expired' ? 'released' : e.status,
         licenseReviewed: e.license_reviewed,
+        walkUp: e.walk_up_marked_at !== null,
         licenseReviewNote: e.license_review_note,
         /** What the rider paid for this entry at purchase (after discounts). Never changed by a transfer or withdrawal. */
         amountPaidCents: paid?.totalCents ?? 0,

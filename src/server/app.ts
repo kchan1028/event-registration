@@ -652,6 +652,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return checkIn.checkIn(p.id, p.orderId, body.dayId, body.bib, body.durationMs);
   });
 
+  app.post('/api/events/:id/check-in/:orderId/walk-up', async (req) => {
+    const { id, orderId } = await onEvent(req, 'checkin', checkInParams);
+    const { dayId, entryId } = z.object({ dayId: idStr, entryId: idStr }).parse(req.body);
+    return checkIn.markWalkUp(id, orderId, dayId, entryId, me(req).id);
+  });
+
   app.post('/api/events/:id/check-in/:orderId/bib/preview', async (req) => {
     const p = await onEvent(req, 'checkin', checkInParams);
     return checkIn.previewBibChange(p.id, p.orderId, bibChangeSchema.parse(req.body));
@@ -725,7 +731,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.post('/api/events/:id/check-in-demo-riders', async (req, reply) => {
     const { id } = await onEvent(req, 'event.edit');
-    return reply.status(201).send(await checkIn.addDemoRiders(id));
+    return reply.status(201).send(await checkIn.addDemoRiders(id, me(req).id));
   });
 
   // Start lists and the sample timer export. No contact or payment data.

@@ -1,6 +1,6 @@
 import { cancellationRosterStatus } from './cancellationClosure';
 import { createHash, randomUUID } from 'node:crypto';
-import { bibScopeKey, bibSettingsSchema, bibBatchExclusion, changedBibAssignments, type BibChange, type BibReassignment, type BibReassignmentPlan, type BibReassignmentResult, type BibBatch, type BibPlan, type PaymentState, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, bibRangeForEntries, type BibSettings } from '../shared/checkin';
+import { bibScopeKey, bibSettingsSchema, bibBatchExclusion, changedBibAssignments, type BibChange, type BibReassignment, type BibReassignmentPlan, type BibReassignmentResult, type BibBatch, type BibPlan, type PaymentState, canCheckInWithBib, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, bibRangeForEntries, type BibSettings } from '../shared/checkin';
 import { checkSelection, needsGuardian, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { evaluateCategory } from '../shared/eligibility';
 import { newId } from '../shared/factory';
@@ -94,7 +94,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       team: o.rider.team,
       racingAge: o.rider.racingAge,
       payment,
-      entries: today.map((e) => ({ id: e.id, categoryId: e.categoryId, categoryName: e.categoryName, code: e.code, raceName: e.raceName, startTime: e.startTime })),
+      entries: today.map((e) => ({ id: e.id, categoryId: e.categoryId, categoryName: e.categoryName, code: e.code, raceName: e.raceName, startTime: e.startTime, walkUp: e.status === 'confirmed' && e.walkUp })),
       readiness,
       result,
       bib: bibRows.find((r) => r.released_at === null)?.bib ?? null,
@@ -147,6 +147,13 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     const rider = await riderFor(eventId, orderId);
     const s = await settings(eventId);
     return riderCard(rider, dayId, await dayState(eventId, dayId, bibScopeKey(s, dayId)));
+  }
+
+  async function saveWalkUpMarker(entryId: string, eventId: string, actorId: string) {
+    await db.run(
+      'UPDATE order_entries SET walk_up_marked_at = $1, walk_up_marked_by = $2 WHERE id = $3 AND event_id = $4 AND status = $5 AND walk_up_marked_at IS NULL',
+      [nowIso(), actorId, entryId, eventId, 'confirmed'],
+    );
   }
 
   function requireBatchScope(cfg: EventConfig, { dayId, raceId, categoryId }: Pick<BibBatch, 'dayId' | 'raceId' | 'categoryId'>) {
@@ -416,6 +423,19 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       });
     },
 
+    async markWalkUp(eventId: string, orderId: string, dayId: string, entryId: string, actorId: string) {
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        requireDay(await config(eventId), dayId);
+        const rider = await riderFor(eventId, orderId);
+        const entry = rider.entries.find((candidate) => candidate.id === entryId && candidate.dayId === dayId);
+        if (!entry) throw new HttpError(404, 'Entry not found for this rider and race day.');
+        if (entry.status !== 'confirmed') throw new HttpError(409, 'Confirm the entry before marking it as a walk-up.');
+        await saveWalkUpMarker(entryId, eventId, actorId);
+        return cardFor(eventId, rider.id, dayId);
+      });
+    },
+
     /**
      * Check a ready rider in and issue a bib. Repeating it is safe: the first
      * check-in time and the existing bib come back unchanged.
@@ -428,6 +448,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         const card = await cardFor(eventId, orderId, dayId);
         if (card.checkedInAt && card.bib !== null) return card;
         if (!card.result.ready) throw new HttpError(409, `Not ready to race: ${card.result.blockers.map((b) => b.label.toLowerCase()).join(', ')}.`);
+        if (!canCheckInWithBib(card)) throw new HttpError(409, 'No preassigned bib. Refer advance entries to the registration lead for allocation.');
         const s = await settings(eventId);
         if (card.bib === null) await assign(eventId, orderId, dayId, s, requestedBib);
         // Only a first, plausible measurement is kept; a repeat check-in never overwrites it.
@@ -494,7 +515,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
      * Fictional riders for trying check-in: paid with a simulated payment, a mix
      * of reviewed and unreviewed licenses, and one unpaid hold.
      */
-    async addDemoRiders(eventId: string) {
+    async addDemoRiders(eventId: string, actorId: string) {
       const { config: cfg } = await repo.getPublished(eventId, 'Publish the event first. Check-in uses the published schedule.');
       const created: string[] = [];
       for (const p of CHECK_IN_DEMO_RIDERS) {
@@ -519,7 +540,11 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         };
         // No account: these are fictional riders placed by the organizer's demo button.
         const order = await orders.createOrder(eventId, { clientRequestId: `demo-checkin-${randomUUID()}`, categoryIds, rider, waiver }, null);
-        if (p.paid) await orders.pay(order.id, `demo-${randomUUID()}`, 'success');
+        if (p.paid) {
+          await orders.pay(order.id, `demo-${randomUUID()}`, 'success');
+          // These desk demo riders are explicitly generated as fictional walk-ups.
+          for (const entry of order.entries) await saveWalkUpMarker(entry.id, eventId, actorId);
+        }
         if (p.licenseReviewed) for (const e of order.entries) await orders.reviewLicense(e.id, 'Demo: license card shown at the desk (simulated).');
         created.push(order.id);
       }

@@ -50,7 +50,7 @@ Details and limits: [category builder](product.md#1a-road-race-and-criterium-cat
 |---|---|---|
 | Expired invitation recovery | Implemented locally; [verification](https://github.com/kchan1028/event-registration/pull/162) | Home shows only the signed-in recipient’s expired organization/role notices, explains owner-assisted renewal and clears a notice after a later grant of the same role; expiry never grants access |
 | Browse published events | Implemented | View already-published events and schedules; browsing does not create demo fixtures |
-| Walk-up phone handoff | Implemented locally | Check-in shares a published event registration QR/address; the rider/guardian registers on their own phone/account. Staff then check readiness and issue bibs. No staff-entered order or kiosk mode |
+| Walk-up phone handoff | Implemented locally | Check-in shares a published event registration QR/address; the rider/guardian registers on their own phone/account. Staff explicitly mark confirmed walk-up entries and check readiness before first desk bib assignment. No staff-entered order or kiosk mode |
 | Responsive header navigation | Implemented | Shared headers wrap to keep theme, registration lookup and sign-out actions reachable; coarse-pointer account actions meet the 44px target; interactive brand links in registration, catalog and My registrations headers do too |
 | Choose entries | Implemented | Select eligible categories, see capacity and review requirements, and receive schedule-conflict warnings |
 | Order pricing | Implemented | Show entries, discounts, and configured fees before simulated payment; prevent discount stacking |
@@ -70,7 +70,7 @@ Details: [demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-
 | Rider lookup | Implemented | Search fictional registrations by name, team, bib, or check-in code |
 | Ready or blocked check-in | Implemented | Show outstanding requirements before check-in; repeated check-in is safe; undo requires a reason and retains history |
 | QR check-in scanning | Implemented locally | Scan the confirmation QR code in Chrome or Edge and use the same repeat-safe check-in path; stopping the scanner releases a camera stream that arrives after closing. Live camera and volunteer rehearsal remain open |
-| Bib assignment | Implemented | Assign bibs by event or day, prevent active collisions, and retain change history |
+| Bib assignment | Implemented | Preassign advance bibs by event or day; first desk assignment requires a staff-marked walk-up; prevent active collisions and retain history |
 | Printable fallback roster | Implemented | Read stacked rider entries on phones with snapshot readiness and next steps visible; desktop/print keep the reference-only tables, blocked-rider checklist and lead review notes without private contact or payment details. Paper notes do not clear requirements or create entries; real-printer and contingency rehearsal checks remain open |
 | Printable cancellation notices | Implemented locally | Event/day/race closure on each day’s fallback roster, including print; no financial settlement or offline clearance implied |
 | Start lists | Implemented | List confirmed entries by race, with numbered snapshots and changes between versions |
