@@ -8,7 +8,7 @@ Clerk can activate a session in place when its sign-in window returns to the cur
 
 ## Clerk session revocation
 
-Revoking a Clerk session prevents it from receiving fresh tokens. CycleReg verifies issued tokens against their validity period on each request. An already-issued token can retain access until expiration. The [Phase 2 development rehearsal](roadmap.md#phase-2--build-the-registration-core) records the observed timing. Organization role removal is separate and applies on the next request.
+Revoking a Clerk session prevents it from receiving fresh tokens. CycleReg verifies issued tokens against their validity period on each request. An already-issued token can retain access through its expiration time and the verifier’s five-second clock tolerance. The [Phase 2 development rehearsal](roadmap.md#phase-2--build-the-registration-core) records the observed timing. Organization role removal is separate and applies on the next request.
 
 ## Transactional invitation email (Implemented locally)
 
