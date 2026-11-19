@@ -87,7 +87,7 @@ The critical examples match the integrity failures that [product.md](../product.
 
 1. **Stop the damage.** If money, capacity, or entries are being recorded wrongly, pause registration for the affected event. Pausing is preferred over letting bad records pile up.
 2. **Tell people.** The support owner posts a short status to organizers and, if riders are affected, a rider-facing notice that says what is wrong and what to do. Do not promise a time you cannot meet.
-3. **Fix or fall back.** Race morning uses the printable fallback roster and exception checklist if check-in cannot be restored quickly. Connectivity is required for live changes; offline sync does not exist and must not be promised.
+3. **Fix or fall back.** If check-in cannot be restored quickly, use the printable roster and exception checklist as references and hold affected bib handovers. The [proposed outage rehearsal](runbooks/race-day-check-in.md#reconcile-a-reference-only-outage) covers lead escalation and recovery with fictional data. Connectivity is required for live changes; offline sync does not exist and must not be promised.
 4. **Reconcile.** Before reopening, compare entries, capacity counts, and the ledger against the payment provider's records. Correct with an audit reason; never edit history.
 5. **Record it.** Write a short incident note: what happened, who was affected, what was done, and what will prevent it. Link it from the event's review.
 
