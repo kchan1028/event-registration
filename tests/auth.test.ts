@@ -344,9 +344,12 @@ describe('organizer roles', () => {
     expect((await transfer(OWNER, successor)).statusCode).toBe(422);
     await call(successor, 'GET', '/api/me');
     const membersUrl = `/api/organizations/${valley}/members`;
+    const formerMember = { email: RIDER_EMAIL, role: 'check_in_volunteer' };
+    expect((await call(OWNER, 'POST', membersUrl, formerMember)).statusCode).toBe(200);
+    expect((await call(OWNER, 'POST', `${membersUrl}/remove`, formerMember)).statusCode).toBe(200);
     const before = (await call(OWNER, 'GET', membersUrl)).json();
-    // A signed-in account needs a current role in this organization.
-    for (const outsider of [successor, OTHER_OWNER]) {
+    // Signing in, having a different organization's role, or having a removed role is insufficient.
+    for (const outsider of [successor, OTHER_OWNER, formerMember.email]) {
       const refusal = await transfer(OWNER, outsider);
       expect(refusal.statusCode).toBe(422);
       expect(refusal.json()).toMatchObject({ error: 'Add this person to your team before handing over ownership.' });
