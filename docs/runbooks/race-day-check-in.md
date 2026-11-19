@@ -50,7 +50,7 @@ For a mistaken check-in, use **Undo check-in** and record the reason. Before con
 
 If the request times out or the connection drops after a click, stop handing out numbers, reconnect and search again. Confirm the recorded check-in/bib before retrying. Repeated online check-in is designed to retain the same bib; that does not prevent duplicate physical handover. Escalate any uncertain or conflicting record instead of selecting another number to make the error disappear.
 
-The [local connection-recovery checks](../testing/test-plan.md#check-in-connection-recovery) exercise unreceived requests and lost committed responses with fictional volunteer accounts. An earlier action warning can remain alongside a fresh lookup result; its presentation awaits [owner review](../../product.md#check-in-recovery-warning-decision). These automated checks do not establish volunteer comprehension, real network/device recovery or physical inventory control.
+The [local connection-recovery checks](../testing/test-plan.md#check-in-connection-recovery) exercise unreceived requests and lost committed responses with fictional volunteer accounts. A fresh lookup that confirms check-in clears the warning and shows the saved time and bib. If the lookup fails or the rider is still unchecked, the warning stays visible. Retry check-in only after a lookup shows the rider is ready and still unchecked. These automated checks do not establish volunteer comprehension, real network/device recovery or physical inventory control.
 
 ## Blocked riders and escalation
 

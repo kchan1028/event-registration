@@ -320,7 +320,7 @@ function RowStatus({ r }: { r: CheckInRider }) {
 function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: { eventId: string; dayId: string; rider: CheckInRider; onChange: (r: CheckInRider) => void; onNext: () => void; takeDuration: () => number | null }) {
   const [bib, setBib] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; checkInUncertain?: boolean } | null>(null);
   const [changing, setChanging] = useState(false);
   const [newBib, setNewBib] = useState('');
   const [reason, setReason] = useState('');
@@ -338,7 +338,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
       onChange(await api.markWalkUp(eventId, rider.orderId, dayId, entryId));
       resultRef.current?.focus();
     } catch (err) {
-      setError((err as ApiError).message);
+      setError({ message: (err as ApiError).message });
     } finally {
       setBusy(false);
     }
@@ -353,7 +353,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
       setUndoing(false);
       setUndoReason('');
     } catch (err) {
-      setError((err as ApiError).message);
+      setError({ message: (err as ApiError).message });
     } finally {
       setBusy(false);
     }
@@ -366,7 +366,15 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
     try {
       onChange(await api.checkIn(eventId, rider.orderId, dayId, rider.bib !== null ? null : bib.trim() ? Number(bib) : null, takeDuration()));
     } catch (err) {
-      setError((err as ApiError).message);
+      const failure = err as ApiError;
+      if (failure.status === 0) {
+        setError({
+          message: 'Cannot reach the CycleReg server. Check-in may have been recorded. Look up this rider again. If they are still ready and unchecked, retry check-in.',
+          checkInUncertain: true,
+        });
+      } else {
+        setError({ message: failure.message });
+      }
     } finally {
       setBusy(false);
     }
@@ -390,7 +398,7 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
       }
     } catch (err) {
       setBibPreview(null);
-      setError((err as ApiError).message);
+      setError({ message: (err as ApiError).message });
     } finally {
       setBusy(false);
     }
@@ -399,6 +407,10 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
   const ready = rider.result.ready;
   const hasBib = canCheckInWithBib(rider);
   const done = !!rider.checkedInAt && rider.bib !== null;
+  const recovered = done && error?.checkInUncertain;
+  useEffect(() => {
+    if (recovered) setError(null);
+  }, [recovered]);
   let guidance = 'Do not issue a bib. Send the rider to the registration desk.';
   if (ready) {
     if (done) guidance = 'Checked in. Hand over the bib below.';
@@ -556,9 +568,9 @@ function RiderDetail({ eventId, dayId, rider, onChange, onNext, takeDuration }: 
                 </div>
               </form>
             )}
-        {error && (
+        {error && !recovered && (
           <p className="text-error small" role="alert">
-            {error}
+            {error.message}
           </p>
         )}
       </div>
