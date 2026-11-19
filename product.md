@@ -352,7 +352,7 @@ Acceptance: two independent builds produce equal configurations and stable IDs; 
 ### 4. Organizer workspace
 
 - Search by rider, team, bib, license number, or order.
-- Filter incomplete signatures, license review, failed payments, duplicate entries, and pending changes.
+- Filter incomplete signatures, license review, failed payments, duplicate entries, and pending changes. Authorized staff confirm a license review without writing a note. The review time is recorded.
 - Allow authorized corrections with a reason and an audit trail.
   - Status (November 15, 2026): Implemented in the local build for one event's registrations (see [roadmap.md](roadmap.md#rider-checkout)). **Registrations** searches by rider or guardian name, email, team, order number, or check-in code. An organizer corrects a rider's name, email, phone, team, license number, or emergency contact with a required reason; every correction is kept with before and after values. Eligibility fields (racing age, license category and type, competition class, collegiate division) are not correctable there; changing them goes through a transfer or a new registration so eligibility is rechecked. Corrections never change the price, entries, or waiver signature. A new license number clears earlier license reviews on the order (product decision, November 15, 2026). Not built: bib and license-number search on Registrations (bib search exists at check-in), and guardian corrections. Since November 15, 2026 each new correction records and shows the signed-in organizer who made it; earlier corrections show no actor.
 - Record race-specific status separately from order/payment status.

@@ -138,7 +138,7 @@ export function ReasonForm({
   /** Accessible name of the form. */
   label: string;
   intro?: ReactNode;
-  reasonLabel: string;
+  reasonLabel?: string;
   placeholder?: string;
   hint?: string;
   submitLabel: string;
@@ -174,7 +174,7 @@ export function ReasonForm({
     return (
       <span className="review-form" role="group" aria-label={label}>
         {children}
-        <input className="input" aria-label={reasonLabel} placeholder={placeholder} value={reason} onChange={(e) => setReason(e.target.value)} />
+        {reasonLabel && <input className="input" aria-label={reasonLabel} placeholder={placeholder} value={reason} onChange={(e) => setReason(e.target.value)} />}
         <button className="btn btn--primary btn--small" disabled={busy || disabled} onClick={() => void submit()}>
           {submitLabel}
         </button>
@@ -193,9 +193,11 @@ export function ReasonForm({
     <form className="correction" onSubmit={submit} noValidate aria-label={label}>
       {intro && <p className="small muted">{intro}</p>}
       {children}
-      <Field label={reasonLabel} hint={hint}>
-        {(id, d) => <input id={id} aria-describedby={d} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />}
-      </Field>
+      {reasonLabel && (
+        <Field label={reasonLabel} hint={hint}>
+          {(id, d) => <input id={id} aria-describedby={d} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />}
+        </Field>
+      )}
       {err && (
         <p className="text-error small" role="alert">
           {err}

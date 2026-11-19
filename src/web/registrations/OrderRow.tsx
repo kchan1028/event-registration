@@ -110,18 +110,15 @@ function EntryLine({ entry, confirmed, canManage, onChange, children }: { entry:
       ) : confirmed ? (
         entry.licenseReviewed ? (
           <span className="readiness__item readiness__item--done">
-            <Icon name="check" size={14} /> License reviewed: {entry.licenseReviewNote}
+            <Icon name="check" size={14} /> License reviewed{entry.licenseReviewNote && `: ${entry.licenseReviewNote}`}
           </span>
         ) : open ? (
           <ReasonForm
             variant="inline"
             label={`Review the license for ${entry.categoryName}`}
-            reasonLabel={`How was the license for ${entry.categoryName} checked?`}
-            placeholder="How you checked it, for example: license card seen"
             submitLabel="Mark reviewed"
-            missing={'Write how you checked the license, for example "license card seen".'}
-            onSubmit={async (note) => {
-              onChange(await api.reviewLicense(entry.id, note));
+            onSubmit={async () => {
+              onChange(await api.reviewLicense(entry.id));
               setOpen(false);
             }}
             onCancel={() => setOpen(false)}

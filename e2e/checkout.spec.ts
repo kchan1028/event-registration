@@ -163,11 +163,12 @@ test('a paid rider can receive a bib after the organizer reviews the license', a
   await page.getByRole('button', { name: /License review/ }).click();
   const order = page.locator('.order', { hasText: 'Sam Demo' });
   await order.getByRole('button', { name: 'Review license' }).click();
-  await order.getByRole('textbox').fill('Demo license card checked at the desk');
+  const confirmReview = order.getByRole('group', { name: /^Review the license for/ });
+  await expect(confirmReview.getByRole('textbox')).toHaveCount(0);
   await order.getByRole('button', { name: 'Mark reviewed' }).click();
   await expect(order).toHaveCount(0);
   await page.getByRole('button', { name: /^All/ }).click();
-  await expect(page.locator('.order', { hasText: 'Sam Demo' })).toContainText('License reviewed: Demo license card checked at the desk');
+  await expect(page.locator('.order', { hasText: 'Sam Demo' })).toContainText('License reviewed');
   await findRider();
   await expect(detail.getByRole('status')).toContainText('Ready to race');
   const list: CheckInList = await (await page.request.get(`${eventUrl}/check-in`)).json();

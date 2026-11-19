@@ -629,8 +629,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/order-entries/:id/license-review', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { entryId: id }, { permission: 'entries.manage' });
-    const body = z.object({ note: z.string().trim().min(3, 'Say how the license was checked.').max(300) }).parse(req.body);
-    return orders.reviewLicense(id, body.note);
+    const body = z.object({ note: z.string().trim().max(300).optional() }).parse(req.body ?? {});
+    return orders.reviewLicense(id, body.note || null);
   });
 
   // Race-day check-in. Volunteers see readiness and bib only.

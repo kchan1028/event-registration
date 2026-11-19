@@ -24,7 +24,7 @@ This is a feature summary, not a second requirements document or roadmap. [produ
 | Organizer-managed waitlists | Implemented | Enable per category, give waiting riders priority, and issue 24-hour reservation links; delivery and payment remain simulated/manual |
 | Organizer transfers and withdrawals | Implemented | Change paid entries with a reason and renewed eligibility/capacity checks; preserve the order total and log price differences for settlement outside the app |
 | Draft autosave | Implemented | Save locally with stale-save protection |
-| Registration queue | Implemented | Review simulated orders, outstanding readiness items, and manual license-review notes |
+| Registration queue | Implemented | Review simulated orders, outstanding readiness items, and license reviews confirmed without typing |
 | Registration lookup and corrections | Implemented | Find registrations by rider, guardian, email, team, order, or check-in code; keep the reason, before/after values, and signed-in organizer account for each new correction |
 | Basic coupons | Implemented | Configure event-scoped fixed or percentage codes with windows, category eligibility, atomic total redemption caps, and per-rider limits (same-rider rule); combinability remains Planned |
 | Refund request recovery | Implemented locally; independent verification in its focused PR | Stable creation identity, original-body retry/status lookup after interruptions, preserved original requester and account/order-scoped tab storage. Unresolved provider sends stop before key retention can expire; money remains reserved for finance reconciliation |
