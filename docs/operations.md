@@ -61,25 +61,27 @@ An event moves through these stages in order. The two freezes protect the busies
 | Stage | What happens | Exit check |
 |---|---|---|
 | Setup and publishing checks | Organizer configures categories, limits, prices, bib ranges, and questions; publishing checks run | Preview of every day reviewed by the registration lead |
-| Pre-opening freeze (proposed: 48 hours) | No code or configuration changes except fixes approved by the technical lead | Support owner confirmed; monitoring and alerts tested |
+| Pre-opening rehearsal freeze (starts 48 hours before registration opens) | No code or configuration changes except fixes approved by the technical lead | Support owner confirmed; monitoring and alerts tested |
 | Registration opening | Support owner watches payments, capacity, and email for the first hours | No stuck reservations, failed payment notifications, or bounced confirmations left unexplained |
 | Open registration period | Exception queue worked at least every few days; corrections logged with a reason | Queue has no item older than the agreed limit |
-| Race-week freeze (proposed: from 72 hours before the first start) | Changes limited to rider-level corrections and approved fixes | Start-list snapshot sent to the timer; fallback roster printed |
+| Race-week rehearsal freeze (starts 72 hours before the first start) | Changes limited to rider-level corrections and approved fixes | Start-list snapshot sent to the timer; fallback roster printed |
 | Race morning | Check-in, bib assignment, field changes, timer updates | Every change after the snapshot appears in the change report |
 | Close-out | Refunds settled, ledger reconciled with provider statements, exports archived | Treasurer signs off reconciliation |
 | Handoff and review | Lessons recorded; template cloned for next year; ownership transferred if needed | A successor can open the event and its runbook without the original owner's credentials |
 
-Freeze lengths are proposals for the pilot organizer to confirm.
+The project owner approved both freeze start times for Phase 3 rehearsal on November 19, 2026. Before scheduling the exercise, the pilot organizer and registration lead confirm each end time and record both windows and the event time zone in the event runbook. Include the registration-opening exercise in the first window and the race-morning desk exercise in the second. Live freeze acceptance remains with the pilot organizer.
 
 ## Incident severity
 
 An incident is anything that stops riders registering, stops volunteers checking riders in, or makes money, capacity, or entry records wrong.
 
-| Severity | Examples | Response target (proposed) |
+| Severity | Examples | Initial response |
 |---|---|---|
-| Critical | Oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, private data exposed, checkout down during registration opening, check-in unusable on race morning | Support owner engaged immediately; technical lead paged; registration paused if records are being corrupted |
-| High | Payment notifications delayed, confirmation emails not sending, timer export rejected, a role sees data it should not | Same day, or within the hour on opening day or race morning |
-| Normal | A single rider's record wrong, a confusing message, a slow report | Next working session |
+| Critical | Oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, private data exposed, checkout down during registration opening, check-in unusable on race morning | For the approved rehearsal windows, contact the support owner and technical lead immediately on detection. Pause affected registration if records are being corrupted. Out-of-window targets remain open. |
+| High | Payment notifications delayed, confirmation emails not sending, timer export rejected, a role sees data it should not | Within one hour of detection or report during the approved rehearsal windows. Same-day response outside those windows remains proposed. |
+| Normal | A single rider's record wrong, a confusing message, a slow report | Next working session (proposed) |
+
+The project owner approved the critical and high initial-response targets for the two rehearsal windows on November 19, 2026. Initial response means acknowledging the incident, identifying the accountable role and recording the first action or escalation. It does not end the safe-reopening clock.
 
 The critical examples match the integrity failures that [product.md](../product.md#success-measures) says must be zero, and any unresolved critical defect blocks the pilot ([roadmap.md](../roadmap.md#critical-risks-and-decision-points)).
 
@@ -164,7 +166,7 @@ The [readiness checklist](research/prelaunch-readiness.md#race-day-readiness-che
 ## Open questions
 
 1. Who funds and staffs support after launch? ([product.md](../product.md#open-decisions), question 3)
-2. What freeze lengths and response targets does the pilot organizer accept?
+2. Freeze starts and critical/high initial-response targets are approved for rehearsal. Event-specific window end times, live operating acceptance and actual coverage remain open under [Operating calendar](#operating-calendar-for-an-event) and [Incident severity](#incident-severity).
 3. Recovery targets approved November 19, 2026. Hosted proof and operator acceptance remain open under [Backups and recovery](#backups-and-recovery).
 4. Which monitoring and alerting tools fit a small volunteer team? (hosting ADR)
 5. What retention periods apply to waivers, financial records, and everything else?
@@ -176,7 +178,7 @@ Unresolved operating decisions and validation steps are listed below. The named 
 | Existing question | Owner / why it matters | Provisional assumption, blocked work and revisit |
 |---|---|---|
 | 1, support coverage | Project owner; named primary/deputy needed for independent operation | Assume no committed coverage. Live event support remains blocked; revisit before hosted pilot rehearsal. Includes responsibility for paid-but-not-ready follow-up and measurement review. |
-| 2, freeze/response targets | Product owner with registration lead; race-morning disruption needs an agreed response | Existing proposed values are not approved. Rehearsal design proceeds; accepted incident response remains blocked until organizer review before rehearsal. |
+| 2, freeze/response targets | Product owner with registration lead; race-morning disruption needs an agreed response | Rehearsal freeze starts and critical/high response targets approved November 19, 2026. Rehearse both windows. Confirm event-specific window end times before rehearsal. Live acceptance, named staffing and out-of-window response targets remain open. |
 | 3, recovery measurement | Technical lead and treasurer, unassigned; restore must preserve money, capacity and entries | Targets approved November 19, 2026. Hosted measurement and recovery sign-off remain open. Run the hosted rehearsal once its environment and operators are approved. |
 | 4, monitoring/tools | Technical/support lead, unassigned; failures need an accountable receiver | No monitoring service, alert thresholds or after-hours rota accepted. Synthetic fault cases proceed; hosted operational sign-off blocked pending routing/tool review. |
 | 5, retention | Project owner/privacy responsibility unassigned; waivers, financial records, paper rosters and opaque telemetry keys remain personal data | No retention period or analytics collection approved. Synthetic measurements proceed; real-data collection blocked until access/retention approval before pilot. |
