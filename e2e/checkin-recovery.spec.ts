@@ -24,7 +24,11 @@ for (const mobile of [false, true]) {
         await volunteer.goto(`/#/events/${eventId}/check-in`);
         const search = volunteer.getByRole('searchbox', { name: 'Find a rider' });
         const detail = volunteer.getByRole('region', { name: 'Rider check-in' });
+        const lookupUrl = (url: URL) => url.pathname === `/api/events/${eventId}/check-in` && url.searchParams.get('q') === rider.checkInCode;
+        const searchResults = volunteer.waitForResponse((response) => lookupUrl(new URL(response.url())) && response.ok());
         await search.fill(rider.checkInCode);
+        // Let the debounced search settle before interrupting the action below.
+        await searchResults;
         await search.press('Enter');
         await expect(detail).toContainText('Ready to race');
 
@@ -36,12 +40,12 @@ for (const mobile of [false, true]) {
           await route.abort('connectionfailed');
         });
         await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
-        await expect(detail.getByRole('alert')).toContainText('Cannot reach the CycleReg server');
+        const warning = detail.getByRole('alert');
+        await expect(warning).toContainText('Check-in may have been recorded. Look up this rider again.');
         expect(interrupted).toBe(1);
         if (!committed) await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
         await volunteer.unroute(url);
 
-        // A concurrent lookup can refresh the screen even though the action response was lost.
         const afterFailure: CheckInList = await (await volunteer.request.get(`/api/events/${eventId}/check-in`)).json();
         const recorded = afterFailure.riders.find((r) => r.orderId === rider.orderId)!;
         expect(recorded.bib).toBe(committed ? 100 : null);
@@ -52,11 +56,27 @@ for (const mobile of [false, true]) {
         expect(recorded.result).toEqual(rider.result);
         expect(recorded.readiness).toEqual(rider.readiness);
 
-        // Follow the desk guide: look up the existing rider before another action.
+        // A lookup that also loses its response must leave the original warning in place.
+        await volunteer.route(lookupUrl, (route) => route.abort('connectionfailed'));
+        const failedLookup = volunteer.waitForEvent('requestfailed', (request) => lookupUrl(new URL(request.url())));
         await search.press('Enter');
-        if (!committed) await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
+        await failedLookup;
+        await expect(warning).toContainText('Check-in may have been recorded');
+        await volunteer.unroute(lookupUrl);
+
+        // Follow the desk guide: look up the existing rider before another action.
+        const freshLookup = volunteer.waitForResponse((response) => lookupUrl(new URL(response.url())) && response.ok());
+        await search.press('Enter');
+        await freshLookup;
+        if (!committed) {
+          await expect(warning).toContainText('If they are still ready and unchecked, retry check-in.');
+          await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
+          await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
+        }
         await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
+        await expect(warning).toHaveCount(0);
         await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+        await expect(detail.getByText(/^Checked in at /)).toBeVisible();
         await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
 
         const repeated = await volunteer.request.post(`/api/events/${eventId}/check-in/${rider.orderId}`, { data: { dayId: list.dayId, bib: null } });
