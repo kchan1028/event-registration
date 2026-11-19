@@ -336,6 +336,17 @@ Run `npm run test -- tests/health.test.ts`. The test uses a disposable PostgreSQ
 
 Use the [isolated restore procedure](../runbooks/local-backup-restore.md) with fresh fictional source/target/rejection databases. Verify table hashes/counts and selected schema/sequence metadata before opening the recovered application. Verify health, persisted check-in/bib and start-list lock, paid-but-blocked readiness and repeat-safe operations. Verify the recipient of a recorded ownership handoff retains access, the former owner retains only the separately granted role, and actor-attributed handoff history survives. Then confirm attributed export rows survive and a ledger download by the successor appends one row without rewriting restored audit or business records. Reject a populated source and demonstrate single-transaction rollback on a deliberate target conflict. Confirm cleanup after a partial failure touches only databases whose successful creation was logged; skip uncreated names. A second operator repeats it with a new run ID. Do not touch working/hosted databases or use real rider records. Application suites need not run for procedure-only documentation; execute the specific rehearsal instead. Keep individual results and limits in the PR/rehearsal record. Hosted backups, off-site copies, recovery objectives, provider reconciliation and staff acceptance remain separate gates.
 
+### Measure hosted recovery before the pilot
+
+**Planned.** Use an authorized hosted rehearsal with fictional records and a separate restore target. Follow the [recovery requirements](../operations.md#backups-and-recovery) and keep the source and any working service separate from the test target. Measure registration opening and race morning separately, with the operators and workflows expected for each window.
+
+1. Create timestamped fictional registration and check-in checkpoints at intervals short enough to test the approved recovery gap. Keep their expected order, payment, entry and bib references outside both databases. Then record the simulated disruption time in UTC.
+2. Record the requested recovery point and identify the latest checkpoint fully present after restore. Report the conservative recovery gap from that checkpoint to the disruption, the checkpoint interval and which expected writes are missing. Verify that all earlier checkpoints survived. If the spacing or missing evidence prevents comparison with the agreed data-loss target, record the result as inconclusive.
+3. Record when the recovered application becomes healthy, when reconciliation finishes and when the responsible operator determines the service is safe to reopen. Measure restore time from the disruption to that determination. A healthy endpoint alone is only an intermediate result.
+4. Compare provider test records, payment amounts, entries, capacity and check-in/start-list evidence before sign-off. Resolve discrepancies with an audit reason. Compare the measured time and recovery gap with the approved targets. Report a missed target as a failed rehearsal, record any discrepancies and name their owner. Keep the target isolated if verification fails.
+
+A local logical restore is separate evidence. The targets are approved. The hosted environment and accountable operators still need approval.
+
 ## 6. Release blockers
 
 A release does not go out while any of these is true:

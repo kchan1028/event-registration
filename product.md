@@ -768,7 +768,7 @@ To research before Phase 3:
 - Every account signs in: riders, guardians, and all organizer roles. Sign-in is a passwordless emailed link or code (Phase 2). Riders and guardians keep email sign-in only. Multi-factor authentication (MFA) and sensitive-action re-verification for organizer roles are scheduled as the final pre-launch security gate: no real rider data or live payments until organizer MFA ships. See [Sign-in and account security](#sign-in-and-account-security).
 - No sensitive rider data in public participant lists by default. Define retention and deletion rules before the pilot.
 - Audit money, category, waiver, capacity, and permission changes.
-- Backups with a demonstrated restore; monitoring for registration/payment failures and stuck capacity reservations.
+- Backups with a demonstrated restore against the [approved pilot recovery targets](docs/operations.md#backups-and-recovery). Monitor registration and payment failures and stuck capacity reservations.
 - Publish a support owner and escalation route for each event. Volunteers must know who handles a race-morning failure.
 - Load and recovery checks use twice the expected pilot opening peak, based on the organizer's historical data.
 
