@@ -165,7 +165,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   async function onEvent<P extends { id: string } = { id: string }>(
     req: { account?: Account; params: unknown },
     permission: Permission,
-    schema: z.ZodType<P, z.ZodTypeDef, unknown> = idParam as unknown as z.ZodType<P, z.ZodTypeDef, unknown>,
+    schema: z.ZodType<P> = idParam as unknown as z.ZodType<P>,
   ): Promise<P & { roles: Role[] }> {
     const params = schema.parse(req.params);
     return { ...params, roles: await access.requireEvent(me(req), params.id, permission) };

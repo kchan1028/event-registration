@@ -89,8 +89,8 @@ export type RiderDetails = z.infer<typeof riderDetailsSchema>;
 /** Typed-name signature plus confirmation (fixtures: typed_name_plus_checkbox). */
 export const waiverAcceptanceSchema = z.object({
   version: z.string().max(60),
-  read: z.literal(true, { errorMap: () => ({ message: MESSAGES.waiverRead }) }),
-  agreed: z.literal(true, { errorMap: () => ({ message: MESSAGES.waiverAgree }) }),
+  read: z.literal(true, { error: MESSAGES.waiverRead }),
+  agreed: z.literal(true, { error: MESSAGES.waiverAgree }),
   signatureName: z.string().trim().min(1, MESSAGES.waiverSignature).max(120),
   signerRole: z.enum(['rider', 'guardian']),
 });
