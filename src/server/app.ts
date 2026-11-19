@@ -75,7 +75,7 @@ export interface AppOptions {
   payments?: PaymentProvider;
   /** Where Stripe sends riders back. Defaults to PUBLIC_APP_URL. */
   appUrl?: string;
-  /** Outgoing email (ADR 0006). Defaults to local (recorded, never sent) unless EMAIL_MODE=ses. */
+  /** Outgoing email (ADR 0007). Defaults to local (recorded, never sent) unless EMAIL_MODE=resend. */
   email?: EmailSender;
   /** Disabled unless age18 and explicit support account IDs are configured. */
   profileClaims?: ProfileClaimSettings;
@@ -103,8 +103,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const waitlist = createWaitlist(db, repo, clock);
   const caseStudies = createCaseStudyFixtures(db, repo, orders);
   const emailSender = opts.email ?? emailFromEnv();
-  // The sign-in link in invitation emails. Only SES sends (never in production), so local email needs no URL setting.
-  const access = createAccess(db, provider, clock, createMailer(db, emailSender, clock), appUrl || (emailSender.mode === 'ses' ? publicAppUrl() : ''));
+  // Senders need a public URL for the invitation sign-in link.
+  const access = createAccess(db, provider, clock, createMailer(db, emailSender, clock), appUrl || (emailSender.mode !== 'local' ? publicAppUrl() : ''));
   const automaticBibs = createAutomaticBibs(db, repo, checkIn, access, clock);
   const refunds = createRefunds(db, paymentProvider, clock, repo);
   const cancellationAllocations = createCancellationAllocations(db, repo, clock);

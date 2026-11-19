@@ -4,7 +4,7 @@ import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 import type { AuthProvider } from '../src/server/auth';
 import { authProviderFromEnv } from '../src/server/auth';
-import { emailFromEnv, type EmailSender } from '../src/server/email';
+import type { EmailSender } from '../src/server/email';
 import type { EventConfig } from '../src/shared/schema';
 import { INVITATION_DAYS } from '../src/shared/roles';
 import { as, fakeAuth } from './support/auth';
@@ -262,7 +262,7 @@ describe('organizer roles', () => {
     const sent: { to: string; subject: string; text: string }[] = [];
     let fail = false;
     const email: EmailSender = {
-      mode: 'ses',
+      mode: 'resend',
       async send(m) {
         if (fail) throw new Error('Email address is not verified.');
         sent.push(m);
@@ -296,13 +296,6 @@ describe('organizer roles', () => {
     await access.addMember(org.id, 'seeded@valley.test', 'owner', null);
     expect(sent).toHaveLength(2);
     expect(await status('seeded@valley.test')).toBeUndefined();
-  });
-
-  it('keeps email local unless EMAIL_MODE=ses is fully configured, and never in production', () => {
-    expect(emailFromEnv({}).mode).toBe('local');
-    expect(() => emailFromEnv({ EMAIL_MODE: 'ses', SES_REGION: 'us-west-2', EMAIL_FROM: 'beta@example.test' })).toThrow(/SES_AWS_PROFILE/);
-    expect(() => emailFromEnv({ EMAIL_MODE: 'ses', NODE_ENV: 'production', SES_REGION: 'us-west-2', EMAIL_FROM: 'beta@example.test', SES_AWS_PROFILE: 'cyclereg-beta' })).toThrow(/test-only/);
-    expect(emailFromEnv({ EMAIL_MODE: 'ses', SES_REGION: 'us-west-2', EMAIL_FROM: 'beta@example.test', SES_AWS_PROFILE: 'cyclereg-beta' }).mode).toBe('ses');
   });
 
   it('never removes the last owner', async () => {

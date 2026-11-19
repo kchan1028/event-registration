@@ -31,7 +31,7 @@ November 16 volunteer-guide source review against `cdc9fbc`: Claude Code identif
 | Dependencies | Assessed | `npm audit` on the reviewed commit |
 | Payments (Stripe test mode) | Partly assessed | Open issues and `src/server/payments.ts` for the recorded defect; no provider-level check |
 | Sign-in, roles, guardian access | Partly assessed | Roadmap gates and source search for MFA; no access-control test review |
-| Email (Amazon SES, test-only) | Partly assessed | `src/server/email.ts` and the schema for delivery-event handling |
+| Email (Resend, test-only) | Partly assessed | `src/server/email.ts` and the schema for delivery-event handling |
 | Check-in and bibs | Partly assessed | Open issues only |
 | Registration screens on phones | Partly assessed | Open issue only; no device check |
 | Capacity, eligibility, pricing, refunds | Not Assessed | |

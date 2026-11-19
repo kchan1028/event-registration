@@ -33,8 +33,6 @@
     "check:docs": "node scripts/check-doc-links.mjs"
   },
   "dependencies": {
-    "@aws-sdk/client-sesv2": "3.1159.0",
-    "@aws-sdk/credential-provider-ini": "3.973.30",
     "@clerk/backend": "3.29.0",
     "@clerk/react": "6.18.4",
     "@fastify/static": "10.1.9",

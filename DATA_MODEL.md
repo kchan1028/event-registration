@@ -37,7 +37,7 @@ This describes the database the local build uses today. It covers tables, relati
 | 20 | `organization_invitations.expires_at`; `membership_changes.action` gains `invitation_renewed` and `invitation_expired` (invitations expire after 14 days) |
 | 21 | `automatic_bib_jobs`; `bib_assignments.automatic_job_id` (opt-in post-close allocation and actor/job linkage) |
 | 22 | `coupons.max_per_rider` (how many times one rider may use a code) |
-| 23 | `email_messages` (outgoing email, recorded before any send, [ADR 0006](docs/decisions/0006-transactional-email-amazon-ses.md)) |
+| 23 | `email_messages` (outgoing email, recorded before any send, [ADR 0007](docs/decisions/0007-transactional-email-resend.md)) |
 | 24 | `bib_reassignments`; `bib_assignments.reassignment_id` and `start_list_snapshots.reassignment_id` (approved historical bib changes and linked revisions) |
 | 25 | `junior_profiles`; `orders.junior_profile_id` (guardian access to juniors, one guardian per junior) |
 | 26 | `orders.waiver_evidence_json`: server-recorded acceptance account, declared racing age and timestamp; no historical backfill |
@@ -247,7 +247,7 @@ New junior checkout also checks historical guardian account/profile links and th
 
 ### email_messages
 
-Migration 23. One row per outgoing email, written before any send ([ADR 0006](docs/decisions/0006-transactional-email-amazon-ses.md)). The only kind so far is `organizer_invitation`, sent when a signed-in owner invites or resends an invitation (seed scripts send none). The team panel shows the latest status for each invitation. A failed send changes nothing about the invitation. Application code only inserts a row and then sets its outcome; deleting the organization deletes its rows.
+Migration 23. One row per outgoing email, written before any send ([ADR 0007](docs/decisions/0007-transactional-email-resend.md)). The only kind so far is `organizer_invitation`, sent when a signed-in owner invites or resends an invitation (seed scripts send none). The team panel shows the latest status for each invitation. A failed send changes nothing about the invitation. Application code only inserts a row and then sets its outcome; deleting the organization deletes its rows.
 
 | Column | Notes |
 |---|---|
@@ -257,11 +257,11 @@ Migration 23. One row per outgoing email, written before any send ([ADR 0006](do
 | `ref` | What the message is about. For an invitation: `organization_id:email:role` |
 | `to_email`, `subject`, `body_text` | The message as written. Invitation emails hold no rider data |
 | `status` | `recorded` (local email: kept, never sent), `sent`, or `failed` |
-| `provider_message_id` | SES message ID when sent |
-| `error` | Provider error text when the send failed (first 500 characters) |
+| `provider_message_id` | Provider message ID when the API accepts the send (Resend for new sends, SES for historical rows) |
+| `error` | Send failure reason (first 500 characters) |
 | `created_at`, `sent_at` | |
 
-Not recorded yet: SES delivery, bounce, and complaint events (Planned; they need an SES configuration set with event publishing).
+Not recorded yet: Resend delivery, bounce, and complaint events (Planned via webhooks).
 
 ### events
 
