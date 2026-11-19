@@ -844,7 +844,7 @@ Targets below are hypotheses, not measured results. Establish the baseline with 
 | Standard rider checkout | Median under 3 minutes for a returning signed-in rider, excluding external license purchase |
 | Standard check-in | Median under 30 seconds; 95th percentile under 90 seconds, excluding exceptions |
 | Critical integrity failures | Zero oversold places, duplicate charges, lost confirmed entries, or unexplained ledger differences |
-| Start-list accuracy | Every confirmed entry appears in the correct agreed export |
+| Start-list accuracy | Every confirmed entry appears in the correct sample export |
 | Category setup completeness | Approved road race and criterium schedules can be configured without custom code or spreadsheet-only rules |
 | Handoff | Two organizers and two volunteers complete their assigned tasks without developer intervention |
 

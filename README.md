@@ -142,7 +142,7 @@ Open `http://127.0.0.1:5273/`, sign in with your email, and select **Load Berkel
 
 ## How it is meant to work
 
-The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented with **simulated** payment; real payment confirmation and the race-day scan are planned. In the organizer workflow, the "Before registration opens" steps are implemented except category questions; the exception queue, check-in, start-list snapshots, and sample timer export are implemented; QR scanning, an agreed timer format, and the after-event stages are planned.
+The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented with **simulated** payment; real payment confirmation and the race-day scan are planned. In the organizer workflow, the "Before registration opens" steps are implemented except category questions; the exception queue, check-in, start-list snapshots, and sample timer export are implemented; QR scanning and the after-event stages are planned.
 
 ### 1. Rider registration journey
 
@@ -275,7 +275,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | My registrations and explicit guardian access | Implemented locally: up to two guardians through private invitation APIs and acknowledged acceptance on My registrations; read-only junior viewing. Private guardian removal APIs require a reason and acknowledgement. Guardian invitation creation/cancellation, removal and history controls are available on My registrations. Support-approved age-18 claim API is Implemented locally and disabled by default until explicitly configured; same-name former-guardian junior checkout is blocked for support review. Claim screens, guardian email and disputed restoration remain Planned |
 | Real payments, USA Cycling checks, MFA, hosting | Not built |
 
-**Next milestone: Phase 0 exit gate, plus the rest of Phase 1.** Phase 0 shows whether a recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup; if not, the roadmap says to stop the build. Every Phase 1 deliverable is built. What remains for the Phase 1 exit gate is running the usability tests with the [test kit](docs/usability/README.md) and getting the timer to accept the sample export format. The first actions are in [roadmap.md](roadmap.md#next-actions).
+**Next milestone: Phase 0 exit gate, plus the rest of Phase 1.** Phase 0 shows whether a recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup; if not, the roadmap says to stop the build. Every Phase 1 deliverable is built. What remains for the Phase 1 exit gate is running the usability tests with the [test kit](docs/usability/README.md). The first actions are in [roadmap.md](roadmap.md#next-actions).
 
 ## Documentation
 

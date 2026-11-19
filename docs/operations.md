@@ -32,7 +32,7 @@ These map to the roles in [roadmap.md](../roadmap.md#responsibilities). They are
 | Technical lead | Fixes system faults, restores from backup, rotates secrets, approves changes during a freeze |
 | Registration lead | Works the exception queue; decides rider-level corrections; trains check-in volunteers |
 | Treasurer | Refund approvals, payout checks, reconciliation against provider statements |
-| Timer / officials liaison | Confirms start-list snapshots and exports; reports race-day field changes back |
+| Timer / officials liaison, where applicable | Confirms start-list snapshots and exports; reports race-day field changes back |
 | Event owner (organizer role) | Publishes the event's support contact; transfers ownership to a successor |
 
 Each event must publish, before registration opens:
@@ -78,7 +78,7 @@ An incident is anything that stops riders registering, stops volunteers checking
 | Severity | Examples | Response target (proposed) |
 |---|---|---|
 | Critical | Oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, private data exposed, checkout down during registration opening, check-in unusable on race morning | Support owner engaged immediately; technical lead paged; registration paused if records are being corrupted |
-| High | Payment notifications delayed, confirmation emails not sending, timer export rejected, a role sees data it should not | Same day, or within the hour on opening day or race morning |
+| High | Payment notifications delayed, confirmation emails not sending, required start-list handoff fails, a role sees data it should not | Same day, or within the hour on opening day or race morning |
 | Normal | A single rider's record wrong, a confusing message, a slow report | Next working session |
 
 The critical examples match the integrity failures that [product.md](../product.md#success-measures) says must be zero, and any unresolved critical defect blocks the pilot ([roadmap.md](../roadmap.md#critical-risks-and-decision-points)).

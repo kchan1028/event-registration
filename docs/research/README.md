@@ -24,7 +24,7 @@ These dates describe the research, not a promise that every source or implementa
 | [Organizer event case studies](../case-studies/organizer-templates/README.md) | Dated event-source observations and proposed setup exercises, including Berkeley Omnium. Research is not an approved race schedule or template. |
 | [Payment model questions](../payment-model-questions.md) | Operating-model questions and responses for provider and treasurer review. |
 | [Federation questions](../usac-questions.md) | External requirements awaiting confirmation. |
-| [Timer export review](../timer-export-review.md) | Proposed format and questions awaiting timer agreement. |
+| [Timer export review](../timer-export-review.md) | Sample format and questions retained for possible future development. |
 
 ## Filing rules
 

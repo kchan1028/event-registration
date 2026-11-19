@@ -34,7 +34,7 @@ The roadmap's [Phase 0 exit gate](../../roadmap.md#phase-0--establish-the-case-t
 | Options comparison | Evidence noted, not scored | [options-comparison.md](options-comparison.md#evidence-so-far-not-scored) |
 | USAC questions sent and answered | | [external-requirements.md](external-requirements.md#usa-cycling) |
 | Payment operating model assessed | | [external-requirements.md](external-requirements.md#payment-provider-operating-models) |
-| road-results.com path researched | Public research done 2026-11-15; more research planned by the project owner; the timer's confirmation is still needed | [timer-export-review.md](../timer-export-review.md#what-public-sources-already-say) |
+| road-results.com path researched | Public research done 2026-11-15; further format and upload research deferred 2026-11-19 | [timer-export-review.md](../timer-export-review.md#what-public-sources-already-say) |
 | Pilot event, organizer, and support owner identified | | [pilot-selection.md](pilot-selection.md) |
 
 ## Build versus improve
