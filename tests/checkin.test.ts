@@ -74,41 +74,56 @@ async function setup(databaseUrl?: string) {
 }
 
 describe('check-in API', () => {
-  it('refuses desk check-in for a paid rider with a missing waiver signature', async () => {
+  it.each([
+    {
+      name: 'Alex',
+      waiverPatch: { signatureName: '' },
+      blocker: {
+        key: 'waiver',
+        label: 'Waiver not accepted',
+        action: 'Send the rider to the registration desk to accept the waiver.',
+      },
+    },
+    {
+      name: 'Casey',
+      waiverPatch: { signatureName: 'Casey Demo', signerRole: 'rider' },
+      blocker: {
+        key: 'guardian',
+        label: 'Guardian has not accepted the waiver',
+        action: 'A parent or guardian must accept the waiver at the registration desk.',
+      },
+    },
+  ])('refuses desk check-in for a paid rider when $blocker.label ($name)', async ({ name, waiverPatch, blocker }) => {
     const databaseUrl = await testDatabaseUrl();
     const { rider, list, setBibs, checkIn } = await setup(databaseUrl);
-    const alex = rider('Alex');
-    expect(alex.result.ready).toBe(true);
+    const ready = rider(name);
+    expect(ready.result.ready).toBe(true);
     expect((await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] })).statusCode).toBe(200);
 
-    // Checkout requires a signature. Model an incomplete stored waiver only in the disposable fixture.
+    // Checkout requires the correct signer. Model an incomplete waiver only in the disposable fixture.
     const client = new pg.Client({ connectionString: databaseUrl });
     await client.connect();
     try {
       const changed = await client.query(
-        `UPDATE orders SET waiver_json = waiver_json || '{"signatureName": ""}'::jsonb WHERE id = $1`,
-        [alex.orderId],
+        'UPDATE orders SET waiver_json = waiver_json || $2::jsonb WHERE id = $1',
+        [ready.orderId, JSON.stringify(waiverPatch)],
       );
       expect(changed.rowCount).toBe(1);
     } finally {
       await client.end();
     }
 
-    const blockedCard = async () => (await list(alex.checkInCode!)).riders.find((card) => card.orderId === alex.orderId);
+    const blockedCard = async () => (await list(ready.checkInCode!)).riders.find((card) => card.orderId === ready.orderId);
     const blocked = await blockedCard();
     expect(blocked).toMatchObject({
       payment: 'confirmed',
       bib: null,
       checkedInAt: null,
-      result: { ready: false, blockers: [{
-        key: 'waiver',
-        label: 'Waiver not accepted',
-        action: 'Send the rider to the registration desk to accept the waiver.',
-      }] },
+      result: { ready: false, blockers: [blocker] },
     });
-    const refused = await checkIn(alex.orderId);
+    const refused = await checkIn(ready.orderId);
     expect(refused.statusCode).toBe(409);
-    expect(refused.json()).toMatchObject({ error: expect.stringContaining('waiver not accepted') });
+    expect(refused.json()).toMatchObject({ error: expect.stringContaining(blocker.label.toLowerCase()) });
     expect(await blockedCard()).toEqual(blocked);
   });
 
