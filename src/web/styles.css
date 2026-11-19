@@ -474,6 +474,9 @@ textarea.input {
   gap: var(--s-3);
   align-items: end;
 }
+.refund-fields {
+  align-items: start;
+}
 .form-row--3 {
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
 }

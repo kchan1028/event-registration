@@ -183,7 +183,7 @@ export function RefundPanel({ order, canRefund, onChange }: { order: OrderView; 
           onSubmit={submit}
           onCancel={close}
         >
-          <div className="form-row">
+          <div className="form-row refund-fields">
             {detail.payments.length > 1 && (
               <Field label="Payment">
                 {(id) => (
