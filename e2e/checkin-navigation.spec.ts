@@ -102,7 +102,9 @@ for (const width of [390, 1440]) {
       await desk.keyboard.press('Enter');
       expect((await (await issueRequest).allHeaders()).authorization).toBe(headers.Authorization);
       await expect(detail.getByText('100', { exact: true })).toBeVisible();
-      await expect(detail.getByRole('button', { name: 'Next rider', exact: true })).toBeFocused();
+      const nextRider = detail.getByRole('button', { name: 'Next rider', exact: true });
+      await expect(nextRider).toBeFocused();
+      await expect(nextRider).toHaveAccessibleDescription('Bib 100');
       await desk.keyboard.press('Enter');
       await expect(search).toBeFocused();
       await expect(search).toHaveValue('');
