@@ -366,7 +366,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
   }
 
   /**
-   * An owner hands their owner role to someone who has already signed in, in one step: the
+   * An owner hands their owner role to a signed-in teammate in one step: the
    * successor becomes an owner and the caller stops being one (other roles stay). Recorded as
    * one change so the history shows who handed over to whom.
    */
@@ -379,7 +379,9 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       const target = await db.get<Account>(`SELECT id, email FROM accounts WHERE lower(email) = $1`, [normalized]);
       if (!target) throw new HttpError(422, 'That person has not signed in yet. Ask them to sign in once with this email, then hand over ownership.');
       if (target.id === by.id) throw new HttpError(422, 'Choose someone else to take ownership.');
-      if ((await rolesIn(target.id, organizationId)).includes('owner')) throw new HttpError(409, 'That person is already an owner. Remove your own owner role instead.');
+      const targetRoles = await rolesIn(target.id, organizationId);
+      if (targetRoles.length === 0) throw new HttpError(422, 'Add this person to your team before handing over ownership.');
+      if (targetRoles.includes('owner')) throw new HttpError(409, 'That person is already an owner. Remove your own owner role instead.');
       await db.run(`INSERT INTO organization_members (organization_id, account_id, role, granted_by, created_at) VALUES ($1, $2, 'owner', $3, $4)`, [organizationId, target.id, by.id, nowIso()]);
       await db.run(`DELETE FROM organization_members WHERE organization_id = $1 AND account_id = $2 AND role = 'owner'`, [organizationId, by.id]);
       await record(organizationId, 'ownership_transferred', target.email, 'owner', by.id);

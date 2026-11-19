@@ -10,6 +10,10 @@ Clerk can activate a session in place when its sign-in window returns to the cur
 
 The signed-in recipient reads only their own latest expiry notices through `/api/rider/expired-invitations`. Authenticated account email scopes organization/role history, without revealing the team or granting access. A later grant of the same role supersedes its notice. Real identity-provider acceptance remains open.
 
+## Organization ownership transfer (Implemented locally)
+
+The server checks that the caller is a current owner and the successor is a signed-in account with a current role in the same organization. Both checks run under the organization membership lock. The transfer adds the successor’s Owner role, removes the caller’s Owner role and records one actor-attributed history entry in the same transaction. A refused transfer leaves membership and history intact.
+
 ## Reviewed cancellation plans (Implemented locally)
 
 The owner/finance Registrations screen requests a confirmation-ready preview and records only a reasoned, acknowledged plan. Account identity for recovery comes from the signed-in `/api/me` response. Tab storage keys bind account ID and event ID; unresolved normalized request/review-version data are retained until resolved, then replaced with only a record ID. Refresh retrieves that ID from the server under current authority before showing a positive outcome. Session changes remount the recovery state. These keys are a UI separation mechanism, not encryption or server authorization. No request is automatically resubmitted. A known completed reference that cannot be retrieved may be kept for lookup or cleared locally through an explicit separate review; this never discards an unresolved pending request or replaces server evidence.

@@ -141,7 +141,7 @@ Organizer roles (migration 16). Primary key (`organization_id`, `account_id`, `r
 | `granted_by` | Account that granted the role; null for seed scripts. Whoever loads a demo is recorded as granting their own owner role. Set to null if that account is deleted |
 | `created_at` | |
 
-The person who creates an organization becomes its owner. The last owner cannot be removed. Whoever loads a demonstration organization (fictional data) becomes an owner of it. An owner can hand ownership to someone who has already signed in: in one transaction under the organization's member lock, the successor gains `owner` and the caller loses it (other roles stay). Someone with only an invitation cannot take ownership.
+The person who creates an organization becomes its owner. The last owner cannot be removed. Whoever loads a demonstration organization (fictional data) becomes an owner of it. An owner can hand ownership to a signed-in account that already has a role in the same organization: in one transaction under the organization's member lock, the successor gains `owner` and the caller loses it (other roles stay). Someone with only an invitation cannot take ownership.
 
 ### organization_invitations
 

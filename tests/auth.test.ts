@@ -343,7 +343,19 @@ describe('organizer roles', () => {
     // Someone who has never signed in cannot take ownership.
     expect((await transfer(OWNER, successor)).statusCode).toBe(422);
     await call(successor, 'GET', '/api/me');
-    await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: successor, role: 'finance' });
+    const membersUrl = `/api/organizations/${valley}/members`;
+    const before = (await call(OWNER, 'GET', membersUrl)).json();
+    // A signed-in account needs a current role in this organization.
+    for (const outsider of [successor, OTHER_OWNER]) {
+      const refusal = await transfer(OWNER, outsider);
+      expect(refusal.statusCode).toBe(422);
+      expect(refusal.json()).toMatchObject({ error: 'Add this person to your team before handing over ownership.' });
+    }
+    const afterRefusals = await call(OWNER, 'GET', membersUrl);
+    expect(afterRefusals.statusCode).toBe(200);
+    expect(afterRefusals.json()).toEqual(before);
+
+    expect((await call(OWNER, 'POST', membersUrl, { email: successor, role: 'finance' })).statusCode).toBe(200);
     await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: OWNER, role: 'registration_manager' });
     // Only an owner can hand over, and not to themselves.
     expect((await transfer(successor, successor)).statusCode).toBe(403);
