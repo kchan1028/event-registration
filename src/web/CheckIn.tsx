@@ -84,7 +84,14 @@ export function CheckIn({ eventId }: { eventId: string }) {
     });
   }
 
+  function clearVerification() {
+    if (selectedRecoveryKey && typeof recovery.get(selectedRecoveryKey) === 'object') {
+      updateRecovery(selectedRecoveryKey, undefined);
+    }
+  }
+
   function select(r: CheckInRider) {
+    if (r.orderId !== selectedId) clearVerification();
     setSelectedId(r.orderId);
     requestAnimationFrame(() => {
       if (window.matchMedia('(max-width: 860px)').matches) detailRef.current?.scrollIntoView({ block: 'start' });
@@ -129,12 +136,13 @@ export function CheckIn({ eventId }: { eventId: string }) {
   }
 
   function replace(r: CheckInRider) {
-    if (selectedRecoveryKey && typeof recovery.get(selectedRecoveryKey) === 'object') updateRecovery(selectedRecoveryKey, undefined);
+    clearVerification();
     setData((d) => (d ? { ...d, riders: d.riders.map((x) => (x.orderId === r.orderId ? r : x)) } : d));
     void load(q, dayId);
   }
 
   function nextRider() {
+    clearVerification();
     lookupVersion.current++;
     setLookupError(null);
     setSelectedId(null);
@@ -168,6 +176,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
                   onChange={() => {
                     lookupVersion.current++;
                     setLookupError(null);
+                    clearVerification();
                     setDayId(d.id);
                     setSelectedId(null);
                   }}
@@ -417,8 +426,11 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
     onRecovery(undefined);
     try {
       const result = await api.checkIn(eventId, rider.orderId, dayId, rider.bib !== null ? null : bib.trim() ? Number(bib) : null, takeDuration());
-      if (result) onChange(result);
-      else onRecovery('pending');
+      if (result?.orderId === rider.orderId && typeof result.bib === 'number' && typeof result.checkedInAt === 'string') {
+        onChange(result);
+      } else {
+        onRecovery('pending');
+      }
     } catch (err) {
       if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) onRecovery('pending');
       else setError((err as ApiError).message);
@@ -461,7 +473,7 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
     else if (hasBib) guidance = 'Check them in and hand over a bib.';
     else guidance = 'No preassigned bib. Refer advance entries to the registration lead for allocation.';
   }
-  if (recovery === 'pending') guidance = 'Look up this rider again before handing over a bib or retrying check-in.';
+  if (recovery === 'pending') guidance = 'Search for this rider’s check-in code or narrow the search to one match before handing over a bib or retrying check-in.';
 
   return (
     <div className="ci-detail">

@@ -2,7 +2,7 @@ import { expect, test } from './fixtures';
 import type { CheckInList, CheckInRider } from '../src/shared/checkin';
 
 for (const mobile of [false, true]) {
-  for (const failure of ['unreceived request', 'lost response', 'gateway timeout', 'unreadable response']) {
+  for (const failure of ['unreceived request', 'lost response', 'gateway timeout', 'unreadable response', 'invalid response']) {
     const committed = failure !== 'unreceived request';
     test(`check-in recovery (${failure}, ${mobile ? 'phone' : 'desktop'})`, async ({ page, browser }) => {
       const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
@@ -36,11 +36,12 @@ for (const mobile of [false, true]) {
           if (committed) expect((await route.fetch()).status()).toBe(200);
           if (failure === 'gateway timeout') await route.fulfill({ status: 504 });
           else if (failure === 'unreadable response') await route.fulfill({ status: 200, body: '' });
+          else if (failure === 'invalid response') await route.fulfill({ status: 200, json: {} });
           else await route.abort('connectionfailed');
         });
         await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
         await expect(detail.getByRole('alert')).toHaveText('Check-in could not be confirmed.');
-        await expect(detail.getByRole('status')).toContainText('Look up this rider again before handing over a bib or retrying check-in.');
+        await expect(detail.getByRole('status')).toContainText('Search for this rider’s check-in code or narrow the search to one match before handing over a bib or retrying check-in.');
         await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
         await expect(detail.locator('.ci-bib__number')).toHaveCount(0);
         expect(interrupted).toBe(1);
