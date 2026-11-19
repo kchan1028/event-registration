@@ -14,7 +14,7 @@ Choosing the event now does not commit anyone to it. It tests whether a realisti
 | Date | Proposed: at least 4 months after Phase 3 is expected to finish (adjust with the organizer) | Date that forces the schedule |
 | Organizer | Willing, available, and able to give honest feedback | Organizer who expects the developer to run everything |
 | Fallback | Organizer can switch back to the current provider if the pilot is stopped before opening | No fallback |
-| Timer | Willing to test exports before the event | Timer not reachable before race day |
+| Start-list handoff | Staff can rehearse retrieving the current list and identifying revisions | No one owns the handoff |
 
 ## Shortlist
 
