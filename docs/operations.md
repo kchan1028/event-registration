@@ -125,7 +125,7 @@ The project owner approved these pilot rehearsal targets on November 19, 2026.
 | Registration opening | 5 minutes | 60 minutes |
 | Race morning | 5 minutes | 30 minutes |
 
-The recovery gap is the time between the latest fully recovered checkpoint and the disruption. The reopening clock runs from disruption through detection, restore, application recovery, reconciliation and the operator’s decision. Account for every confirmed payment, entry and affected bib before reopening. Keep the affected desk or registration paused if the time target is exceeded or a discrepancy remains. Hosted measurement and operator acceptance are open.
+The database recovery gap is the time between the latest recovered committed change and the disruption. The reopening clock runs from disruption through detection, restore, application recovery, reconciliation and the operator’s decision. Account for every confirmed payment, entry and affected bib before reopening. Keep the affected desk or registration paused while a discrepancy remains. If the time target is exceeded, record the overrun and escalate to the project owner. Reopen only after reconciliation and authorization to resume. Hosted measurement and operator acceptance are open.
 
 ## Changes and releases
 
