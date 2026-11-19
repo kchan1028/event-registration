@@ -67,6 +67,11 @@ for (const mode of ['full_refund', 'credit', 'rider_choice', null] as const) tes
     for (const width of [360, 390, 1440]) {
       await page.setViewportSize({ width, height: 1000 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      const scopeBox = await page.getByLabel('For', { exact: true }).boundingBox();
+      const amountBox = await page.getByLabel('Amount (USD)').boundingBox();
+      if (!scopeBox || !amountBox) throw new Error('Refund fields must be visible');
+      if (width === 1440) expect(Math.abs(scopeBox.y - amountBox.y)).toBeLessThanOrEqual(1);
+      else expect(amountBox.y).toBeGreaterThan(scopeBox.y);
       await region.screenshot({ path: `test-results/refund-policy-${mode}-${theme}-${width}.png` });
     }
     expect((await new AxeBuilder({ page }).include('[aria-label="Whole-order refund policy"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
