@@ -736,6 +736,7 @@ function CameraScan({ onCode, onClose }: { onCode: (code: string) => void; onClo
           }
         }, 250);
       } catch {
+        if (done) return;
         setError('The camera could not be opened. Allow camera access for this page, or type the code instead.');
       }
     })();
