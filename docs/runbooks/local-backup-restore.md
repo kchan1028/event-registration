@@ -37,7 +37,7 @@ printf 'Created target: %s\n' "$RESTORE_TARGET_DB"
 
 ## 2. Write the rehearsal helper and seed
 
-The helper creates an example weekend with paid/unpaid entries, a paid-but-blocked rider, one issued bib/check-in and a locked start list. It records every public table's row count and hash, plus columns, constraints, indexes and sequence metadata. The source application closes before dumping, so this is a quiescent snapshot exercise, not evidence of backup consistency under concurrent writers.
+The helper creates an example weekend with paid/unpaid entries, a paid-but-blocked rider, one issued bib/check-in, a locked start list and attributed protected CSVs. It records every public table's row count and hash, plus columns, constraints, indexes and sequence metadata. The source application closes before dumping, so this is a quiescent snapshot exercise, not evidence of backup consistency under concurrent writers.
 
 ```bash
 cat > data/restore-rehearsal/rehearse.ts <<'TS'
@@ -80,6 +80,17 @@ async function manifest(name: string) {
   } finally { await client.end(); }
 }
 
+async function exportAudit(name: string, eventId: string) {
+  const client = new pg.Client({ connectionString: url(name) });
+  await client.connect();
+  try {
+    return (await client.query(`
+      SELECT id, actor_account_id, export_kind, race_id, snapshot_version, generated_at
+      FROM protected_export_audit WHERE event_id = $1 ORDER BY id
+    `, [eventId])).rows;
+  } finally { await client.end(); }
+}
+
 if (mode === 'seed') assert.equal((await manifest(source)).data.length, 0, 'Source must be a new empty rehearsal database.');
 const database = mode === 'seed' ? source : target;
 if (mode === 'verify') {
@@ -92,6 +103,13 @@ async function request(method: 'GET' | 'POST' | 'PUT', path: string, status: num
   assert.equal(response.statusCode, status, `${method} ${path}: ${response.body}`);
   return response.json();
 }
+async function download(path: string) {
+  const response = await app.inject({ method: 'GET', url: path });
+  assert.equal(response.statusCode, 200, 'Protected CSV must return 200.');
+  assert.match(String(response.headers['content-disposition']), /^attachment;/);
+  assert.match(String(response.headers['content-type']), /^text\/csv/);
+}
+
 try {
   if (mode === 'seed') {
     const { eventId } = await request('POST', '/api/demo', 201);
@@ -108,7 +126,17 @@ try {
     const lists = await request('GET', `/api/events/${eventId}/start-lists`, 200);
     const raceId = lists.races[0].raceId;
     await request('POST', `/api/events/${eventId}/start-lists/${raceId}/lock`, 201);
-    writeFileSync(`${directory}/fixture.json`, JSON.stringify({ eventId, dayId: list.dayId, readyId: ready.orderId, blockedId: blocked.orderId, raceId, lists: await request('GET', `/api/events/${eventId}/start-lists`, 200) }));
+    const { account } = await request('GET', '/api/me', 200);
+    await download(`/api/events/${eventId}/exports/ledger.csv`);
+    await download(`/api/events/${eventId}/start-lists/${raceId}/csv?snapshot=1`);
+    const audit = await exportAudit(source, eventId);
+    assert.equal(audit.length, 2);
+    const generation = { actor_account_id: account.id, generated_at: new Date('2027-03-01T18:00:00Z') };
+    assert.deepEqual(audit.map(({ id, ...row }) => row).sort((a, b) => a.export_kind.localeCompare(b.export_kind)), [
+      { ...generation, export_kind: 'ledger', race_id: null, snapshot_version: null },
+      { ...generation, export_kind: 'start_list', race_id: raceId, snapshot_version: 1 },
+    ]);
+    writeFileSync(`${directory}/fixture.json`, JSON.stringify({ eventId, actorId: account.id, dayId: list.dayId, readyId: ready.orderId, blockedId: blocked.orderId, raceId, lists: await request('GET', `/api/events/${eventId}/start-lists`, 200) }));
   } else {
     const fixture = JSON.parse(readFileSync(`${directory}/fixture.json`, 'utf8'));
     await request('GET', '/api/health', 200);
@@ -124,11 +152,26 @@ try {
     await request('POST', `/api/events/${fixture.eventId}/check-in/${fixture.blockedId}`, 409, { dayId: fixture.dayId, bib: null });
     assert.deepEqual(await manifest(target), before);
     console.log('Health, paid-but-blocked readiness, existing bib/check-in, repeat safety and locked start list passed.');
+    const restoredAudit = await exportAudit(target, fixture.eventId);
+    assert.equal(restoredAudit.length, 2);
+    await download(`/api/events/${fixture.eventId}/exports/ledger.csv`);
+    const allAudit = await exportAudit(target, fixture.eventId);
+    assert.equal(allAudit.length, 3);
+    assert.deepEqual(allAudit.filter((row) => restoredAudit.some((old) => old.id === row.id)), restoredAudit);
+    const [appended] = allAudit.filter((row) => !restoredAudit.some((old) => old.id === row.id));
+    assert.deepEqual({ ...appended, id: null }, {
+      id: null, actor_account_id: fixture.actorId, export_kind: 'ledger', race_id: null,
+      snapshot_version: null, generated_at: new Date('2027-03-01T18:00:00Z'),
+    });
+    const after = await manifest(target);
+    assert.deepEqual({ ...after, data: after.data.filter((row) => row.table !== 'protected_export_audit') },
+      { ...before, data: before.data.filter((row) => row.table !== 'protected_export_audit') });
+    console.log('Restored audit rows and new attributed ledger generation passed.');
   }
 } finally { await app.close(); }
 if (mode === 'seed') {
   const result = await manifest(source);
-  for (const table of ['orders', 'order_entries', 'payment_attempts', 'bib_assignments', 'check_ins', 'start_list_snapshots', 'start_list_locks', 'organization_members']) {
+  for (const table of ['orders', 'order_entries', 'payment_attempts', 'bib_assignments', 'check_ins', 'start_list_snapshots', 'start_list_locks', 'organization_members', 'protected_export_audit']) {
     assert(result.data.some((row) => row.table === table && row.count > 0), `${table} must be populated`);
   }
   writeFileSync(`${directory}/manifest.json`, JSON.stringify(result));
@@ -153,9 +196,9 @@ cat data/restore-rehearsal/local.dump.sha256
 npx tsx data/restore-rehearsal/rehearse.ts verify
 ```
 
-Do not start the application or run migrations against the empty target before restoring. Verification first compares the recovered public tables and selected schema metadata, then opens the application and checks health, the existing checked-in bib, paid-but-blocked readiness and the locked start list. It retries the existing check-in and the blocked check-in, and verifies neither changes the table manifest. This checks the current sample's records; it does not prove all schema objects, every financial recovery path or real provider reconciliation.
+Do not start the application or run migrations against the empty target before restoring. Verification first compares the recovered public tables and selected schema metadata, then opens the application and checks health, the existing checked-in bib, paid-but-blocked readiness and the locked start list. It retries the existing check-in and the blocked check-in, and verifies neither changes the table manifest. A new protected ledger download must append one attributed row while the two restored audit rows and all other persisted state remain unchanged. This checks the current sample's records; it does not prove all schema objects, every financial recovery path or real provider reconciliation.
 
-Expected: both `Restored table hashes/counts... match` and `Health, paid-but-blocked readiness... passed`. A mismatch is a failed recovery. Keep the archive/source for investigation and do not substitute the target for a working service. Do not import missing records or replay payments merely to make totals match.
+Expected: `Restored table hashes/counts, columns, constraints, indexes and sequences match.` The recovered check-in/start-list assertions pass, followed by `Restored audit rows and new attributed ledger generation passed.` A mismatch is a failed recovery. Keep the archive/source for investigation and do not substitute the target for a working service. Do not import missing records or replay payments merely to make totals match.
 
 ## 4. Rehearse refusal and rollback
 
