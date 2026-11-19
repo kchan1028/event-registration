@@ -199,6 +199,10 @@ Run `tests/orders.test.ts`, `tests/juniors.test.ts` and `tests/migrations.test.t
 
 Run `tests/auth.test.ts` for real expiry at sign-in, no expired-role grant, recipient-only notice access, denial of team access and disappearance after a later grant. `e2e/invitation-recovery.spec.ts` explicitly stubs notice responses for presentation: both themes, 390/1440 widths, panel-scoped axe, load failure and refresh recovery. The browser fixture does not prove real expiry or identity-provider behavior; those remain separate API and external acceptance checks.
 
+### Concurrent bib allocation
+
+Run `tests/automatic-bibs.test.ts` with check-in, bib reassignment and start-list regressions. Queue a pending post-close job, a desk check-in and an overlapping bulk apply behind the same event advisory lock in a disposable database. Verify all three are waiting before releasing the lock. The lock order is not prescribed. If the bulk request applies first, preserve every previewed bib. If another writer assigns a selected rider first, refuse the batch with no partial assignment. The adjacent check-in tests also exercise successful apply and stale fingerprint rejection directly. Verify one active bib per rider, no duplicate bibs in the weekend scope, one desk check-in and a completed automatic job.
+
 ### Organizer handoff rehearsal
 
 `e2e/handoff.spec.ts` rehearses existing team controls with separate fictional accounts: successor first sign-in, preparatory membership, cancel/confirm, one actor-attributed transfer, outgoing retained Registration manager access with owner/team/ledger denial, successor check-in and saved start-list export. Run the existing ownership-transfer case in `tests/auth.test.ts` and the organizer sign-in browser regression. Reload both sessions after membership changes. An automated rehearsal is not actual Clerk delivery, staff independence, provider settlement handoff or timer acceptance. Human acceptance still follows section 5 and the [handoff guide](../runbooks/organizer-handoff.md).
