@@ -324,6 +324,12 @@ Automated tests do not replace these. Record what was observed separately from w
 
 The [prelaunch readiness assessment](../research/prelaunch-readiness.md) maps existing requirements to focused interrupted-reservation, provider/reconciliation and race-day recovery scenarios. Its [measurement specification](../research/prelaunch-readiness.md#proposed-launch-measurement-specification) is Proposed: use synthetic replay and report timing coverage/exclusions; it does not add instrumentation, new sample thresholds or an accepted release gate. Keep execution results in the PR or dated rehearsal report.
 
+### Support coverage rehearsal
+
+Use the existing [desk contact sheet](../runbooks/race-day-check-in.md#before-the-desk-opens-registration-lead) to record a primary, deputy, contact route and coverage window for registration opening and race morning. Use fictional role labels in the shared rehearsal record. Keep actual contact details in the event’s restricted operating materials.
+
+For each window, have a volunteer report a fictional incident using that sheet. In one case the primary answers. In a second case the facilitator tells the volunteer the primary is unavailable, and the volunteer contacts the deputy. Record who acknowledges, who takes ownership and how they reach the registration or technical lead. At shift handoff, the incoming operator uses their own account and can identify the unresolved holds, current owner and next action. The exercise does not establish live availability. Obtain each named operator’s acceptance for their window before operational sign-off.
+
 ### Freeze and incident response rehearsal
 
 Use the [approved rehearsal freeze starts](../operations.md#operating-calendar-for-an-event) and [initial-response targets](../operations.md#incident-severity). Record the event time zone, scheduled registration opening, first scheduled race start, the start and end of each rehearsal window, and the times that bound registration-opening and race-morning recovery scoring. During both windows, present a nonessential code or configuration change and an urgent fix. Verify the routine change waits and that staff identify the approval and notification route for the urgent fix. During the race-week freeze, also verify that an authorized rider-level correction follows the existing preview and audit rules. Exercise these decisions with fictional scenarios and record the outcomes.
