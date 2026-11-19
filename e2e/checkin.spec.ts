@@ -86,6 +86,50 @@ test('stopping the scanner releases a stream returned after the camera request',
   await expect(page.getByRole('searchbox', { name: 'Find a rider' })).toBeEditable();
 });
 
+test('a camera result opens the matching rider and releases the scanner without checking them in', async ({ page }) => {
+  const api = page.request;
+  const { eventId } = await (await api.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await api.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await api.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  const response = await api.get(`${eventUrl}/check-in`);
+  expect(response.ok()).toBe(true);
+  const list: CheckInList = await response.json();
+  const rider = list.riders.find((row) => row.result.ready && row.bib === null);
+  if (!rider?.checkInCode) throw new Error('The demo needs a ready rider with a check-in code and no bib');
+
+  await page.addInitScript((code) => {
+    class TestBarcodeDetector {
+      async detect(video: HTMLVideoElement) {
+        if (!(video.srcObject instanceof MediaStream)) throw new Error('No stream attached to the scanner');
+        return [{ rawValue: `  ${code}  ` }];
+      }
+    }
+    Object.defineProperty(window, 'BarcodeDetector', { configurable: true, value: TestBarcodeDetector });
+    navigator.mediaDevices.getUserMedia = async () => {
+      const stream = document.createElement('canvas').captureStream();
+      Object.defineProperty(window, 'testCameraTrack', { value: stream.getVideoTracks()[0] });
+      return stream;
+    };
+    HTMLMediaElement.prototype.play = async () => {};
+  }, rider.checkInCode);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/#/events/${eventId}/check-in`);
+  await page.getByRole('button', { name: 'Scan with camera', exact: true }).click();
+  const detail = page.getByRole('region', { name: 'Rider check-in' });
+  await expect(detail.getByRole('heading', { name: rider.name, exact: true })).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: 'Find a rider' })).toHaveValue(rider.checkInCode);
+  await expect(page.getByRole('button', { name: 'Scan with camera', exact: true })).toHaveAttribute('aria-expanded', 'false');
+  await expect.poll(() => page.evaluate(
+    () => (window as Window & { testCameraTrack?: MediaStreamTrack }).testCameraTrack?.readyState,
+  )).toBe('ended');
+  await expect(detail.getByRole('button', { name: /Check in and issue/ })).toBeVisible();
+
+  const saved = await api.get(`${eventUrl}/check-in`, { params: { q: rider.checkInCode } });
+  expect(saved.ok()).toBe(true);
+  expect((await saved.json() as CheckInList).riders).toEqual([rider]);
+});
+
 test('a volunteer distinguishes riders with the same name by their details or confirmation code', async ({ page, browser }) => {
   const api = page.request;
   const { eventId, organizationId } = await (await api.post('/api/demo')).json();
