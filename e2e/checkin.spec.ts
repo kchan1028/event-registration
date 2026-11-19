@@ -195,18 +195,18 @@ test('a paid rider can receive a bib only on a day they entered', async ({ page 
   })]);
 });
 
-test('a volunteer can retry check-in after the organizer extends an exhausted bib range', async ({ page, browser }) => {
+test('a volunteer can retry check-in after the organizer resolves missing and exhausted bib ranges', async ({ page, browser }) => {
   const api = page.request;
   const { eventId, organizationId } = await (await api.post('/api/demo')).json();
   const eventUrl = `/api/events/${eventId}`;
   expect((await api.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
   expect((await api.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
-  const setRange = async (last: number) => {
+  const setRange = async (last?: number) => {
     expect((await api.put(`${eventUrl}/bib-settings`, {
-      data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last }] },
+      data: { scope: 'weekend', ranges: last === undefined ? [] : [{ scope: 'weekend', first: 100, last }] },
     })).ok()).toBe(true);
   };
-  await setRange(100);
+  await setRange();
   const readList = async (): Promise<CheckInList> => {
     const response = await api.get(`${eventUrl}/check-in`);
     expect(response.ok()).toBe(true);
@@ -215,11 +215,6 @@ test('a volunteer can retry check-in after the organizer extends an exhausted bi
   const initial = await readList();
   const [first, next] = initial.riders.filter((rider) => rider.result.ready && rider.bib === null);
   if (!first || !next?.checkInCode) throw new Error('The demo needs two ready riders without bibs');
-  const issued = await api.post(`${eventUrl}/check-in/${first.orderId}`, { data: { dayId: initial.dayId, bib: null } });
-  expect(issued.ok()).toBe(true);
-  const recordedFirst = await issued.json();
-  expect(recordedFirst).toMatchObject({ bib: 100, checkedInAt: expect.any(String) });
-
   const email = 'range.volunteer@example.test';
   expect((await api.post(`/api/organizations/${organizationId}/members`, {
     data: { email, role: 'check_in_volunteer' },
@@ -239,12 +234,23 @@ test('a volunteer can retry check-in after the organizer extends an exhausted bi
     await expect(detail).toContainText(next.name);
     await expect(detail).toContainText('Ready to race');
     const issue = detail.getByRole('button', { name: 'Check in and issue next bib' });
-    await issue.click();
-    await expect(detail.getByRole('alert')).toContainText('Every bib from 100 to 100 is in use. Extend the bib range.');
-    const afterFailure = await readList();
-    expect(afterFailure.riders.find((rider) => rider.orderId === next.orderId)).toMatchObject({
-      bib: null, checkedInAt: null, bibHistory: [], entries: next.entries, result: next.result,
-    });
+    const verifyRefusal = async (message: string) => {
+      await issue.click();
+      await expect(detail.getByRole('alert')).toContainText(message);
+      const afterFailure = await readList();
+      expect(afterFailure.riders.find((rider) => rider.orderId === next.orderId)).toMatchObject({
+        bib: null, checkedInAt: null, bibHistory: [], entries: next.entries, result: next.result,
+      });
+    };
+    await verifyRefusal('No bib range covers every applicable entry. Set bib ranges before checking riders in.');
+
+    // Staff issue the only configured bib to the first rider before retrying this one.
+    await setRange(100);
+    const issued = await api.post(`${eventUrl}/check-in/${first.orderId}`, { data: { dayId: initial.dayId, bib: null } });
+    expect(issued.ok()).toBe(true);
+    const recordedFirst = await issued.json();
+    expect(recordedFirst).toMatchObject({ bib: 100, checkedInAt: expect.any(String) });
+    await verifyRefusal('Every bib from 100 to 100 is in use. Extend the bib range.');
 
     await setRange(101);
     await issue.click();
