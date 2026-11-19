@@ -334,7 +334,7 @@ Run `npm run test -- tests/health.test.ts`. The test uses a disposable PostgreSQ
 
 ### Pilot alert routing rehearsal
 
-**Planned.** In the approved hosted rehearsal environment, use the [proposed alert routing](../operations.md#proposed-pilot-alert-routing). Test a fictional service-health failure as a delivered alert. Record signal, delivery, recipient and acknowledgement, then test the deputy route when the primary does not respond. Separately run manual checks for delayed payment delivery, invitation delivery failure and missing recovery coverage. Record signal time, scheduled or report-driven check time, authorized observer and escalation outcome. Score manual observations separately from delivered alerts. Check that alert contents contain no rider details or provider payloads. Local health responses and recorded test email do not establish alert delivery.
+**Planned.** In the approved hosted rehearsal environment, use the [proposed alert routing](../operations.md#proposed-pilot-alert-routing). Test a fictional service-health failure as a delivered alert. Record signal, delivery, recipient and acknowledgement, then test the deputy route when the primary does not acknowledge within the proposed window. Separately run manual checks for delayed payment delivery, invitation delivery failure and missing recovery coverage. Record signal time, scheduled or report-driven check time, authorized observer and escalation outcome. Score manual observations separately from delivered alerts. Check that alert contents contain no rider details, payment references or provider payloads. Local health responses and recorded test email do not establish alert delivery.
 
 ### Local logical restore rehearsal
 
