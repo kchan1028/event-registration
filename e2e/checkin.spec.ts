@@ -627,7 +627,7 @@ for (const mobile of [false, true]) {
   });
 }
 
-test('individual correction previews a preassigned number without checking the rider in', async ({ page }) => {
+test('individual correction requires a fresh preview without checking the rider in', async ({ page }) => {
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
   await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
@@ -653,7 +653,28 @@ test('individual correction previews a preassigned number without checking the r
   await form.getByRole('textbox', { name: 'Reason', exact: true }).fill('Use a fresh demo bib after checking the range');
   await expect(form.getByRole('region', { name: 'Proposed bib changes', exact: true })).toHaveCount(0);
   await form.getByRole('button', { name: 'Preview bib change', exact: true }).click();
-  await form.getByRole('button', { name: 'Apply bib change', exact: true }).click();
+  const apply = form.getByRole('button', { name: 'Apply bib change', exact: true });
+  await expect(apply).toBeVisible();
+
+  // The organizer changes the range while the old preview is open. Both numbers still fit.
+  const before = await api.get(`/api/events/${eventId}/check-in`);
+  expect(before.ok()).toBe(true);
+  const original = (await before.json() as CheckInList).riders.find((rider) => rider.orderId === alex.orderId);
+  expect(original).toMatchObject({ bib: 100, checkedInAt: null });
+  expect((await api.put(`/api/events/${eventId}/bib-settings`, {
+    data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 200 }] },
+  })).ok()).toBe(true);
+  await apply.click();
+  await expect(detail.getByRole('alert')).toContainText('Bib preview changed. Review a new preview before applying.');
+  await expect(apply).toHaveCount(0);
+  await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+  const refused = await api.get(`/api/events/${eventId}/check-in`);
+  expect(refused.ok()).toBe(true);
+  expect((await refused.json() as CheckInList).riders.find((rider) => rider.orderId === alex.orderId)).toEqual(original);
+
+  await form.getByRole('button', { name: 'Preview bib change', exact: true }).click();
+  await expect(form.getByRole('region', { name: 'Proposed bib changes', exact: true })).toContainText('130');
+  await apply.click();
   await expect(detail.locator('.ci-bib__number')).toHaveText('130');
   const after = await (await api.get(`/api/events/${eventId}/check-in`)).json();
   expect(after.riders.find((r: Rider) => r.orderId === alex.orderId)).toMatchObject({ bib: 130, checkedInAt: null });
