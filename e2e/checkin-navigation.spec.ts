@@ -56,7 +56,6 @@ for (const hasTouch of [false, true]) {
   });
 }
 
-
 for (const width of [390, 1440]) {
   test(`volunteer can look up riders and issue a bib with only the keyboard at ${width}px`, async ({ page, browser }) => {
     const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
@@ -71,7 +70,7 @@ for (const width of [390, 1440]) {
       data: { email, role: 'check_in_volunteer' },
     })).ok()).toBe(true);
     const headers = { Authorization: `Bearer test:${email}` };
-    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const context = await browser.newContext({ viewport: { width, height: 900 }, extraHTTPHeaders: {} });
 
     try {
       await context.addInitScript((address) => sessionStorage.setItem('cyclereg.test-session', address), email);
@@ -97,8 +96,12 @@ for (const width of [390, 1440]) {
       await expect(detail.getByRole('textbox', { name: /Bib/ })).toBeFocused();
       await desk.keyboard.press('Tab');
       await expect(issue).toBeFocused();
+      const issueRequest = desk.waitForRequest((request) => (
+        request.method() === 'POST' && new URL(request.url()).pathname === `${checkInUrl}/${ready.orderId}`
+      ));
       await desk.keyboard.press('Enter');
-      await expect(detail.getByText('100', { exact: true })).toHaveText('100');
+      expect((await (await issueRequest).allHeaders()).authorization).toBe(headers.Authorization);
+      await expect(detail.getByText('100', { exact: true })).toBeVisible();
       await desk.keyboard.press('Tab');
       await expect(detail.getByRole('button', { name: 'Next rider', exact: true })).toBeFocused();
       await desk.keyboard.press('Enter');
@@ -117,6 +120,7 @@ for (const width of [390, 1440]) {
         data: { dayId: initial.dayId, bib: null },
       });
       expect(refusal.status()).toBe(409);
+      expect(await refusal.json()).toMatchObject({ error: expect.stringMatching(/^Not ready to race/) });
       const final: CheckInList = await (await desk.request.get(checkInUrl, { headers })).json();
       expect(final.riders.find((rider) => rider.orderId === ready.orderId)).toMatchObject({ bib: 100, checkedInAt: expect.any(String) });
       expect(final.riders.find((rider) => rider.orderId === blocked.orderId)).toMatchObject({ bib: null, checkedInAt: null });
