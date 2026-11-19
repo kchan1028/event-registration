@@ -1,12 +1,15 @@
+import pg from 'pg';
 import { describe, expect, it, vi } from 'vitest';
-import { testApp } from './support/db';
+import { testApp, testDatabaseUrl } from './support/db';
 import { as } from './support/auth';
+import { eventLock } from '../src/server/repo';
 import type { EventConfig } from '../src/shared/schema';
 import type { AutomaticBibJob, CheckInList } from '../src/shared/checkin';
 
 async function setup() {
   let now = new Date('2027-03-01T18:00:00Z'); // 10:00 in the event's Los Angeles time zone.
-  const built = await testApp({ now: () => now });
+  const databaseUrl = await testDatabaseUrl();
+  const built = await testApp({ databaseUrl, now: () => now });
   const { app, automaticBibs } = built;
   const { eventId, organizationId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string; organizationId: string };
   const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
@@ -20,7 +23,7 @@ async function setup() {
   const list = async (day?: string): Promise<CheckInList> => (await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in${day ? `?day=${day}` : ''}` })).json();
   const enable = () => app.inject({ method: 'POST', url: `/api/events/${eventId}/automatic-bibs`, payload: { sort: 'name' } });
   const jobs = async (): Promise<AutomaticBibJob[]> => (await app.inject({ method: 'GET', url: `/api/events/${eventId}/automatic-bibs` })).json();
-  return { ...built, eventId, organizationId, config: event.config, setBibs, list, enable, jobs, advance: (at: string) => { now = new Date(at); }, run: () => automaticBibs.runDue() };
+  return { ...built, databaseUrl, eventId, organizationId, config: event.config, setBibs, list, enable, jobs, advance: (at: string) => { now = new Date(at); }, run: () => automaticBibs.runDue() };
 }
 
 describe('post-close automatic bib allocation', () => {
@@ -76,6 +79,64 @@ describe('post-close automatic bib allocation', () => {
     for (const r of sunday.riders) {
       const saturday = after.riders.find((s) => s.orderId === r.orderId);
       if (saturday?.bib !== null && saturday) expect(r.bib).toBe(saturday.bib);
+    }
+  });
+
+  it('serializes a pending automatic job, desk check-in and bulk apply under the same event lock', async () => {
+    const s = await setup();
+    const before = await s.list();
+    const alex = before.riders.find((rider) => rider.name.startsWith('Alex'))!;
+    const blake = before.riders.find((rider) => rider.name.startsWith('Blake'))!;
+    const batch = { dayId: before.dayId, orderIds: [alex.orderId, blake.orderId] };
+    expect((await s.enable()).statusCode).toBe(200);
+    s.advance('2027-03-01T18:11:00Z');
+    const preview = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/bibs/preview`, payload: batch });
+    expect(preview.statusCode, preview.body).toBe(200);
+    const plan = preview.json() as { fingerprint: string; assignments: { orderId: string; bib: number }[] };
+
+    const blocker = new pg.Client({ connectionString: s.databaseUrl });
+    await blocker.connect();
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [eventLock(s.eventId)]);
+      const operations = Promise.all([
+        s.run(),
+        s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/check-in/${alex.orderId}`, payload: { dayId: before.dayId, bib: 150 } }),
+        s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/bibs/apply`, payload: { ...batch, fingerprint: plan.fingerprint } }),
+      ]);
+      try {
+        await vi.waitFor(async () => {
+          const { rows } = await blocker.query(`SELECT count(*)::int AS n FROM pg_locks
+            WHERE locktype = 'advisory' AND NOT granted
+              AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`);
+          expect(rows[0].n).toBe(3);
+        }, { timeout: 3000 });
+      } finally {
+        await blocker.query('ROLLBACK');
+        await operations;
+      }
+
+      const [, desk, bulk] = await operations;
+      expect(desk.statusCode, desk.body).toBe(200);
+      expect([200, 409]).toContain(bulk.statusCode);
+      const [job] = await s.jobs();
+      expect(job.completedAt).not.toBeNull();
+      const { rows } = await blocker.query(`SELECT order_id, bib, automatic_job_id, released_at FROM bib_assignments WHERE event_id = $1`, [s.eventId]);
+      expect(new Set(rows.map((row) => row.order_id)).size).toBe(rows.length);
+      expect(new Set(rows.map((row) => row.bib)).size).toBe(rows.length);
+      expect(rows.every((row) => row.released_at === null)).toBe(true);
+      const assigned = new Map(rows.map((row) => [row.order_id, row]));
+      expect(assigned.get(alex.orderId)?.bib).toBe(desk.json().bib);
+      if (bulk.statusCode === 200) {
+        for (const pick of plan.assignments) expect(assigned.get(pick.orderId)).toMatchObject({ bib: pick.bib, automatic_job_id: null });
+      } else {
+        expect(assigned.get(blake.orderId)?.automatic_job_id).toBe(job.id);
+        expect(assigned.get(alex.orderId)?.automatic_job_id ?? null).toBe(desk.json().bib === 150 ? null : job.id);
+      }
+      expect((await s.list()).riders.find((rider) => rider.orderId === alex.orderId)).toMatchObject({ bib: desk.json().bib, checkedInAt: desk.json().checkedInAt });
+      expect((await blocker.query('SELECT count(*)::int AS n FROM check_ins WHERE event_id = $1', [s.eventId])).rows[0].n).toBe(1);
+    } finally {
+      await blocker.end();
     }
   });
 
