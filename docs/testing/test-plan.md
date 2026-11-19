@@ -328,6 +328,10 @@ The [prelaunch readiness assessment](../research/prelaunch-readiness.md) maps ex
 
 Use the [Stripe sandbox rehearsal](../runbooks/local-setup.md#phase-2-stripe-sandbox-rehearsal) with the owner's existing sandbox and a disposable fictional local event. Record real signed notification and refund evidence, exact reconciliation by provider reference, and any blocked scenarios separately from local fixture results. Test mode does not establish live settlement or payout acceptance.
 
+### Local database health check
+
+Run `npm run test -- tests/health.test.ts`. The test uses a disposable PostgreSQL database and an unsigned request to the public health endpoint. It disables connections only to that database, closes its existing connections and checks for HTTP 503 with a generic error. It re-enables connections and verifies that the same application returns HTTP 200 without a restart. Hosted monitoring, alert delivery and platform recovery still require operational rehearsal.
+
 ### Local logical restore rehearsal
 
 Use the [isolated restore procedure](../runbooks/local-backup-restore.md) with fresh fictional source/target/rejection databases. Verify table hashes/counts and selected schema/sequence metadata before opening the recovered application. Verify health, persisted check-in/bib and start-list lock, paid-but-blocked readiness and repeat-safe operations. Then confirm attributed export rows survive and a new ledger download appends one row without rewriting restored audit or business records. Reject a populated source and demonstrate single-transaction rollback on a deliberate target conflict. Confirm cleanup after a partial failure touches only databases whose successful creation was logged; skip uncreated names. A second operator repeats it with a new run ID. Do not touch working/hosted databases or use real rider records. Application suites need not run for procedure-only documentation; execute the specific rehearsal instead. Keep individual results and limits in the PR/rehearsal record. Hosted backups, off-site copies, recovery objectives, provider reconciliation and staff acceptance remain separate gates.
