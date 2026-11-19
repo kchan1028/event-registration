@@ -4,7 +4,8 @@ import { canAdmit } from '../src/shared/capacity';
 import { checkSelection, findConflicts, profileOf } from '../src/shared/checkout';
 import { categoryPrice, quote } from '../src/shared/pricing';
 import type { EventConfig } from '../src/shared/schema';
-import { testApp } from './support/db';
+import { openDb } from '../src/server/db';
+import { testApp, testDatabaseUrl } from './support/db';
 
 describe('generated race case studies', () => {
   it('is deterministic, distinct, schema-backed, and explicitly separates draft-only empty data', () => {
@@ -88,8 +89,9 @@ describe('generated race case studies', () => {
     await app.close();
   });
 
-  it('resets an event that has a coupon order, a rider correction, and a refund', async () => {
-    const { app } = await testApp({ now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+  it('resets a generated event with orders, refunds and export history without deleting unrelated audit rows', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
     const eventId = 'evt_demo_case_omnium';
     expect((await app.inject({ method: 'POST', url: '/api/demo/case-studies/omnium' })).statusCode).toBe(201);
     const { config } = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
@@ -110,9 +112,19 @@ describe('generated race case studies', () => {
     await ok(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/rider-corrections`, payload: { changes: { team: 'Corrected Wheel Club' }, reason: 'Team name typed wrong' } }));
     await ok(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/refunds`, payload: { clientRequestId: 'refund-local-case-studies-test-ts', amountCents: 100, reason: 'Goodwill refund' } }));
 
+    const unrelated = (await app.inject({ method: 'POST', url: '/api/demo' })).json().eventId;
+    for (const id of [eventId, unrelated]) {
+      await ok(await app.inject({ method: 'GET', url: `/api/events/${id}/exports/entries.csv` }));
+    }
     const reset = await app.inject({ method: 'DELETE', url: '/api/demo/case-studies' });
     await ok(reset);
     expect((reset.json() as { removedEvents: number }).removedEvents).toBe(1);
+    const db = openDb(databaseUrl);
+    try {
+      expect(await db.all('SELECT event_id FROM protected_export_audit')).toEqual([{ event_id: unrelated }]);
+    } finally {
+      await db.close();
+    }
     // Nothing is left behind: the same scenario loads again from scratch.
     await ok(await app.inject({ method: 'POST', url: '/api/demo/case-studies/omnium' }), 201);
     expect(((await app.inject({ method: 'GET', url: `/api/events/${eventId}/coupons` })).json() as unknown[]).length).toBe(0);

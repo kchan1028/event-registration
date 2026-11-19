@@ -12,7 +12,7 @@ import { teamTimeTrialResearchDemos } from '../shared/teamTimeTrialResearch';
 import { buildBerkeleyOmniumEvent, OMNIUM_ORG_NAME } from '../shared/berkeleyOmnium';
 import { buildDemoEvent } from '../shared/demo';
 import { buildCaseStudyScenarios, CASE_STUDY_ORG_ID, CASE_STUDY_REFERENCE_NOW } from '../shared/caseStudies';
-import { configFromTemplate } from '../shared/factory';
+import { configFromTemplate, newId } from '../shared/factory';
 import { type EventConfig, bibNumberSchema, createEventInputSchema, eventConfigSchema } from '../shared/schema';
 import { entriesCsv, ledgerCsv } from '../shared/exports';
 import { eventSummary } from '../shared/reports';
@@ -750,6 +750,15 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return eventSummary(list, await identity.keyOf(id), await waitlist.statuses(id), can(roles, 'export.ledger'));
   });
 
+  async function recordProtectedExport(req: { account?: Account; method: string }, eventId: string, kind: string, generatedAt: string, raceId: string | null = null, snapshotVersion: number | null = null) {
+    if (req.method !== 'GET') return; // Fastify's implicit HEAD replies do not send a CSV body.
+    await db.run(
+      `INSERT INTO protected_export_audit(id,actor_account_id,event_id,export_kind,race_id,snapshot_version,generated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [newId('export'), me(req).id, eventId, kind, raceId, snapshotVersion, generatedAt],
+    );
+  }
+
   // Protected database exports: entries, ledger and local reconciliation evidence. No contact or emergency details.
   app.get('/api/events/:id/exports/:kind', async (req, reply) => {
     // The permission depends on which file is asked for, so the parameters are parsed before the check.
@@ -770,6 +779,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       const cancellation = await cancellationExportState(db, p.id, record.config);
       return { body, cancellation, generatedAt, filename: cancellationExportFilename(`${slugName}-${p.kind.slice(0, -4)}${p.kind === 'reconciliation.csv' ? '-LOCAL-RECORDS' : ''}${demo}.csv`, cancellation) };
     });
+    await recordProtectedExport(req, p.id, p.kind.slice(0, -4), file.generatedAt);
     if (p.kind === 'reconciliation.csv') reply.header('X-CycleReg-Export-Generated-At', file.generatedAt);
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
@@ -784,6 +794,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const p = await onEvent(req, 'startlists', raceParams);
     const q = z.object({ snapshot: z.coerce.number().int().min(1).optional() }).parse(req.query);
     const file = await startLists.csv(p.id, p.raceId, q.snapshot ?? null);
+    await recordProtectedExport(req, p.id, 'start_list', clock().toISOString(), p.raceId, q.snapshot ?? null);
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
       .header('Content-Disposition', `attachment; filename="${file.filename}"`)

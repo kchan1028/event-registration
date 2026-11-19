@@ -689,6 +689,20 @@ export const MIGRATIONS: string[] = [
     details_json jsonb NOT NULL CHECK(jsonb_typeof(details_json)='object'),
     PRIMARY KEY(event_id,command_kind,client_request_id)
   );`,
+  `CREATE TABLE protected_export_audit (
+    id text PRIMARY KEY,
+    actor_account_id text NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+    event_id text NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
+    export_kind text NOT NULL CHECK (export_kind IN ('entries', 'ledger', 'reconciliation', 'start_list')),
+    race_id text,
+    snapshot_version integer CHECK (snapshot_version > 0),
+    generated_at timestamptz NOT NULL,
+    CHECK (
+      (export_kind = 'start_list' AND race_id IS NOT NULL AND (race_id <> 'all' OR snapshot_version IS NULL))
+      OR (export_kind <> 'start_list' AND race_id IS NULL AND snapshot_version IS NULL)
+    )
+  );
+  CREATE INDEX protected_export_audit_event_idx ON protected_export_audit(event_id, generated_at, id);`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

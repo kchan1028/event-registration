@@ -772,6 +772,8 @@ To research before Phase 3:
 
 Before a live pilot, record the expected opening peak, representative event size, and race-morning staff concurrency. Verify checkout, final-place reservation, sign-in, organizer search, QR check-in, exports, and provider retries at twice that baseline. Set measurable response-time and recovery thresholds from the rehearsal rather than treating a large fixture render as load evidence.
 
+Protected CSV attribution is Implemented locally. After authorization and file preparation, record the account, event, export kind, time and any start-list scope. If recording fails, withhold the file. The record is evidence of server-side generation. Operator access, retention and hosted rehearsal remain open.
+
 Before storing real rider data, approve retention periods and deletion procedures for registrations, waiver evidence, minors, emergency contacts, exports, and audit records. Demonstrate a backup restore, account and organization access revocation, and an access-restricted export audit. Record the incident owner and escalation path. Automated tests with fictional data do not satisfy these operating approvals.
 
 ### Display themes

@@ -49,6 +49,8 @@ Paths verified against `main` at commit `740d0b9` (November 16, 2026). When a ch
 
 - **Local reconciliation evidence.** `src/server/reconciliation.ts` reads linked financial source rows; the existing export route requires ledger permission. `src/shared/lookup.ts` owns `formatOrderNumber` for order views and this CSV. `src/web/registrations/ReconciliationDownload.tsx` exposes the authenticated helper on published Registrations for ledger roles. Coverage: `tests/reconciliation.test.ts`, `e2e/reconciliation-download.spec.ts` plus exports/payments/refunds/auth/orders/lookup regressions. No provider call or settlement calculation.
 
+- **Protected CSV audit.** The export handlers in `src/server/app.ts` append actor and file scope before sending a prepared CSV. `tests/protectedExportAudit.test.ts` covers metadata, denials, HEAD and audit failure. The generated case-study reset removes only its own audit records.
+
 ## Tests and commands
 
 - Unit and API tests: Vitest, `tests/*.test.ts`. `tests/support/db.ts` `testApp()` builds an app on a throwaway database; `tests/support/auth.ts` `fakeAuth()` and `as(email)` fake sign-in. They need the local PostgreSQL server from [local setup](runbooks/local-setup.md).
