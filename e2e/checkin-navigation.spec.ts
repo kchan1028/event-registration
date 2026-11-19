@@ -70,15 +70,13 @@ for (const width of [390, 1440]) {
     expect((await page.request.post(`/api/organizations/${organizationId}/members`, {
       data: { email, role: 'check_in_volunteer' },
     })).ok()).toBe(true);
-    const context = await browser.newContext({
-      viewport: { width, height: 900 },
-      extraHTTPHeaders: { Authorization: `Bearer test:${email}` },
-    });
+    const headers = { Authorization: `Bearer test:${email}` };
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
 
     try {
       await context.addInitScript((address) => sessionStorage.setItem('cyclereg.test-session', address), email);
       const desk = await context.newPage();
-      const initial: CheckInList = await (await desk.request.get(checkInUrl)).json();
+      const initial: CheckInList = await (await desk.request.get(checkInUrl, { headers })).json();
       expect(initial.roles).toEqual(['check_in_volunteer']);
       const ready = initial.riders.find((rider) => rider.result.ready && rider.bib === null);
       const blocked = initial.riders.find((rider) => rider.payment === 'confirmed' && !rider.result.ready);
@@ -100,7 +98,7 @@ for (const width of [390, 1440]) {
       await desk.keyboard.press('Tab');
       await expect(issue).toBeFocused();
       await desk.keyboard.press('Enter');
-      await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+      await expect(detail.getByText('100', { exact: true })).toHaveText('100');
       await desk.keyboard.press('Tab');
       await expect(detail.getByRole('button', { name: 'Next rider', exact: true })).toBeFocused();
       await desk.keyboard.press('Enter');
@@ -114,7 +112,12 @@ for (const width of [390, 1440]) {
       await expect(detail.getByRole('status')).toContainText('Not ready');
       await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
 
-      const final: CheckInList = await (await desk.request.get(checkInUrl)).json();
+      const refusal = await desk.request.post(`${checkInUrl}/${blocked.orderId}`, {
+        headers,
+        data: { dayId: initial.dayId, bib: null },
+      });
+      expect(refusal.status()).toBe(409);
+      const final: CheckInList = await (await desk.request.get(checkInUrl, { headers })).json();
       expect(final.riders.find((rider) => rider.orderId === ready.orderId)).toMatchObject({ bib: 100, checkedInAt: expect.any(String) });
       expect(final.riders.find((rider) => rider.orderId === blocked.orderId)).toMatchObject({ bib: null, checkedInAt: null });
     } finally {

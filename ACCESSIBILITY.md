@@ -38,7 +38,7 @@ Checkout and check-in are checked first because riders and volunteers cannot wor
 | Screen reader | Not done | Checkout and check-in first | | Waitlist offer retry announcement and terminal focus handoff pending. See [issue #213](https://github.com/kchan1028/event-registration/issues/213). |
 | Real phone | Not done | Rider registration | | Blocked: the app listens only on `127.0.0.1`; see [the usability kit](docs/usability/README.md#phone-sized-sessions) |
 
-Automated check-in coverage includes keyboard-only rider lookup, bib issuance and return to search at desktop and phone widths. Full phone-width coverage, 200% zoom and other keyboard-only paths remain open. The usability sessions in [docs/usability/](docs/usability/README.md) should include at least one participant who uses a keyboard or assistive technology.
+Automated check-in coverage includes keyboard-only rider lookup, bib issuance and return to search in Chromium at 390 and 1440 CSS pixels. Focus immediately after issuance has an open [handoff issue](https://github.com/kchan1028/event-registration/issues/283). Full phone-width coverage, 200% zoom and other keyboard-only paths remain open. The usability sessions in [docs/usability/](docs/usability/README.md) should include at least one participant who uses a keyboard or assistive technology.
 
 ## Known limitations
 
