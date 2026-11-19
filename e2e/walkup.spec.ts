@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { seedRegistrationCase } from './support/registration-case';
+import type { EventConfig } from '../src/shared/schema';
 
 test('phone handoff keeps the rider account separate and returns a paid rider to check-in', async ({ page, browser }) => {
   const eventId = await seedRegistrationCase(page.request, 'criterium');
@@ -73,4 +74,64 @@ test('unpublished event does not expose a registration handoff', async ({ page }
   await expect(panel).toContainText('Publish this event before sharing');
   await expect(panel.getByRole('img')).toHaveCount(0);
   await expect(panel.getByRole('link')).toHaveCount(0);
+});
+
+test('a full-field walk-up can join the waitlist without getting an entry or bib', async ({ page, browser }) => {
+  const eventId = await seedRegistrationCase(page.request, 'criterium');
+  const eventUrl = `/api/events/${eventId}`;
+  const { config, revision } = await (await page.request.get(eventUrl)).json() as { config: EventConfig; revision: number };
+  const full = config.categories.find((category) => category.timingCode === 'DVC-M35')!;
+  full.waitlistEnabled = true;
+  expect((await page.request.put(`${eventUrl}/config`, { data: { config, revision } })).ok()).toBe(true);
+  expect((await page.request.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
+
+  const readStartLists = async () => {
+    const response = await page.request.get(`${eventUrl}/start-lists`);
+    expect(response.ok()).toBe(true);
+    return response.json();
+  };
+  const before = await readStartLists();
+  await page.goto(`/#/events/${eventId}/check-in`);
+  await page.getByRole('button', { name: 'Register a walk-up' }).click();
+  const address = await page.getByLabel('Public registration address').inputValue();
+
+  const email = 'waitlisted.walkup@example.test';
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    extraHTTPHeaders: { Authorization: `Bearer test:${email}` },
+  });
+  try {
+    const rider = await context.newPage();
+    await rider.addInitScript((account) => sessionStorage.setItem('cyclereg.test-session', account), email);
+    await rider.goto(address);
+    await rider.getByLabel('Racing age').fill('40');
+    await rider.getByLabel('License category').selectOption('3');
+    await rider.getByLabel('Competition class').selectOption({ label: 'Men' });
+    const option = rider.getByRole('checkbox', { name: /DVC-M35/ });
+    await expect(option).toHaveAttribute('aria-disabled', 'true');
+    await expect(option).toHaveAttribute('aria-checked', 'false');
+    await rider.getByRole('button', { name: 'Join the waitlist', exact: true }).click();
+    const form = rider.getByRole('form', { name: `Join the waitlist for ${full.name}` });
+    await form.getByLabel('First name').fill('Waitlisted');
+    await form.getByLabel('Last name').fill('Fictional');
+    await form.getByLabel('Email', { exact: true }).fill(email);
+    await form.getByRole('button', { name: 'Join the waitlist' }).click();
+    await expect(rider.getByRole('status').filter({ hasText: 'You are number 1 on the waitlist' })).toBeVisible();
+    await expect(option).toHaveAttribute('aria-checked', 'false');
+    await rider.getByRole('button', { name: 'Continue to racer details' }).click();
+    await expect(rider.locator('.error-summary')).toContainText('Choose at least one race');
+    const mine = await rider.request.get('/api/rider/registrations');
+    expect(mine.ok()).toBe(true);
+    expect(await mine.json()).toEqual([]);
+  } finally {
+    await context.close();
+  }
+
+  const waitlist = await page.request.get(`${eventUrl}/waitlist`);
+  expect(waitlist.ok()).toBe(true);
+  expect((await waitlist.json()).entries).toEqual([expect.objectContaining({ categoryId: full.id, email, status: 'waiting' })]);
+  const checkIn = await page.request.get(`${eventUrl}/check-in`, { params: { q: 'Waitlisted Fictional' } });
+  expect(checkIn.ok()).toBe(true);
+  expect((await checkIn.json()).riders).toEqual([]);
+  expect(await readStartLists()).toEqual(before);
 });
