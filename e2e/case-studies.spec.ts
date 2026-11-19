@@ -16,7 +16,7 @@ test('generated omnium supports a complete rider purchase and organizer recovery
   await page.getByRole('checkbox', { name: /DRW-RR-M35/ }).click();
   await expect(page.locator('.error-summary')).toHaveCount(0);
   await page.getByRole('button', { name: 'Continue to racer details' }).click();
-  await expect(page.locator('.error-summary')).toContainText('needs one eligible race on each day');
+  await expect(page.locator('.error-summary')).toContainText('needs an entry in every included race');
   await page.getByRole('checkbox', { name: /DRW-CR-M35/ }).click();
   await expect(page.locator('.tray .quote__total')).toContainText('$80.25');
   await page.getByRole('button', { name: 'Continue to racer details' }).click();
