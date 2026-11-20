@@ -39,20 +39,40 @@ test('Matching races explains class-specific fields hidden when competition clas
     return distinct && (box.compareDocumentPosition(day) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
   })).toBe(true);
 
-  for (const theme of ['light', 'dark']) {
-    await page.locator('html').evaluate((root, value) => root.setAttribute('data-theme', value), theme);
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    for (const width of [1440, 390]) {
-      await page.setViewportSize({ width, height: 1000 });
-      await notice.scrollIntoViewIfNeeded();
-      expect(await schedule.evaluate((node) => node.getBoundingClientRect().right <= window.innerWidth && node.scrollWidth <= node.clientWidth)).toBe(true);
-    }
-    expect((await new AxeBuilder({ page }).include('#schedule').analyze()).violations).toEqual([]);
-  }
-  await page.locator('html').evaluate((root) => root.setAttribute('data-theme', 'light'));
+  const fits = () => schedule.evaluate((node) => node.getBoundingClientRect().right <= window.innerWidth && node.scrollWidth <= node.clientWidth);
+  const show = notice.getByRole('button', { name: 'Show all races', exact: true });
+  const labelContrast = () => show.evaluate((node) => {
+    const style = getComputedStyle(node);
+    const channels = (value: string) => value.match(/\d+/g)!.slice(0, 3).map(Number).map((channel) => {
+      const unit = channel / 255;
+      return unit <= 0.03928 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
+    });
+    const lum = (parts: number[]) => 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2];
+    const lighter = Math.max(lum(channels(style.color)), lum(channels(style.backgroundColor)));
+    const darker = Math.min(lum(channels(style.color)), lum(channels(style.backgroundColor)));
+    return (lighter + 0.05) / (darker + 0.05);
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await notice.scrollIntoViewIfNeeded();
+  expect(await fits()).toBe(true);
+  await page.setViewportSize({ width: 390, height: 1000 });
+  await notice.scrollIntoViewIfNeeded();
+  expect(await fits()).toBe(true);
+  expect(await labelContrast()).toBeGreaterThanOrEqual(4.5);
+  expect((await new AxeBuilder({ page }).include('#schedule').analyze()).violations).toEqual([]);
+
+  await page.getByRole('button', { name: /Switch to dark/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  expect(await labelContrast()).toBeGreaterThanOrEqual(4.5);
+  expect(await fits()).toBe(true);
+  expect((await new AxeBuilder({ page }).include('#schedule').analyze()).violations).toEqual([]);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await notice.scrollIntoViewIfNeeded();
+  expect(await fits()).toBe(true);
+  await page.getByRole('button', { name: /Switch to light/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.setViewportSize({ width: 1280, height: 1000 });
 
-  const show = notice.getByRole('button', { name: 'Show all races', exact: true });
   await show.focus();
   await page.keyboard.press('Enter');
   await expect(schedule).toBeFocused();
