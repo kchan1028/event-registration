@@ -2143,6 +2143,12 @@ button.issue {
   display: grid;
   gap: var(--s-5);
 }
+.walkup-suggestions {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-2);
+}
+.walkup-suggestions ul { padding-inline-start: 1.5rem; }
 .reg__main--narrow {
   max-width: 680px;
 }
@@ -3748,6 +3754,8 @@ fieldset:disabled .field label {
 }
 .ci__bar .btn, .ci-walkup .btn { min-height: 44px; }
 .ci-walkup .btn { white-space: normal; justify-self: start; }
+.ci-walkup .check { min-height: 44px; align-items: center; overflow-wrap: anywhere; }
+.ci-walkup > .field { max-width: 72ch; min-width: 0; }
 .ci-walkup { display: grid; gap: var(--s-3); }
 .ci-walkup > p, .ci-walkup > ol, .ci-walkup > label { max-width: 72ch; }
 .ci-walkup > label { display: grid; gap: var(--s-1); min-width: 0; }

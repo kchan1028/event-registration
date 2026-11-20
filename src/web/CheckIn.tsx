@@ -206,7 +206,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
         </p>
       )}
 
-      {data && showRegistration && <WalkUpRegistration eventId={eventId} published={data.published} />}
+      {data && showRegistration && <WalkUpRegistration eventId={eventId} dayId={data.dayId} published={data.published} />}
 
       {data && batchMode && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId + batchMode} eventId={eventId} dayId={data.dayId} mode={batchMode} onChanged={() => refreshCurrentList.current()} onClose={() => setBatchMode(null)} />}
 

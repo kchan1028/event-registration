@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { href } from './App';
 import { TEST_MODE } from './auth';
 import { QrCodeImage } from './QrCodeImage';
+import { WalkUpChoices } from './WalkUpChoices';
 
 /** Published event handoff. Staff stay signed in on their own device. */
-export function WalkUpRegistration({ eventId, published }: { eventId: string; published: boolean }) {
+export function WalkUpRegistration({ eventId, dayId, published }: { eventId: string; dayId: string; published: boolean }) {
+  const [showChoices, setShowChoices] = useState(false);
   const address = new URL(href({ page: 'register', eventId }), window.location.origin + window.location.pathname);
   const kiosk = new URL(window.location.origin + window.location.pathname);
   kiosk.searchParams.set('kiosk', eventId);
@@ -21,7 +24,14 @@ export function WalkUpRegistration({ eventId, published }: { eventId: string; pu
         <li>Ask for their name or confirmation code, then search again in check-in. Payment alone does not clear readiness.</li>
         <li>Resolve outstanding requirements through authorized review. Issue a bib only when check-in shows Ready to race; existing start-list rules still apply.</li>
       </ol>
-      <p>Connectivity is required. A closed race needs organizer review; this handoff does not reopen registration. Staff-entered orders, cash/check and card terminals are outside this workflow.</p>
+      <p>Connectivity is required. A closed race needs organizer review; this handoff does not reopen registration. Cash/check and card terminals are outside this workflow.</p>
+      <button type="button" className="btn btn--secondary" aria-expanded={showChoices} onClick={() => setShowChoices((open) => !open)}>
+        Prepare race choices
+      </button>
+      {showChoices && <>
+        <p>Staff prepare the race choices. The rider or guardian reviews them and completes checkout on their phone.</p>
+        <WalkUpChoices key={dayId} eventId={eventId} dayId={dayId} address={address.href} />
+      </>}
       {TEST_MODE && <>
         <h3>Shared test kiosk</h3>
         <p>Copy this address to a dedicated rider browser or device with autofill disabled. Use fictional accounts and simulated payments.</p>
