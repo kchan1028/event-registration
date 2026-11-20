@@ -256,7 +256,8 @@ test('shared test kiosk clears the receipt and draft between rider sessions on t
   expect([...address.searchParams]).toEqual([['kiosk', eventId]]);
   expect(address.hash).toBe('');
 
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  // Override the organizer fixture's header so the kiosk's own sign-in authenticates requests.
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, extraHTTPHeaders: {} });
   try {
     const kiosk = await context.newPage();
     await kiosk.goto(address.href);
