@@ -119,7 +119,7 @@ The basic phone registration QR and address contain only the event identifier. T
 
 ### Shared walk-up test kiosk
 
-The kiosk runs only with test sign-in and accepts simulated payment events. Its sign-in, checkout draft and receipt live in the page session and are discarded on session end or reload. Test kiosk sign-in does not use the ordinary browser sign-in or its saved draft. Use a dedicated rider browser with autofill disabled. Order access and registration requirements are enforced by the same server rules as phone checkout. Hosted sign-in, hosted payment, and physical kiosk acceptance remain Planned.
+The kiosk runs only with test sign-in and accepts simulated payment events. Its sign-in, checkout draft and receipt live in the page session and are discarded on session end, reload, or after five idle minutes. The warning in the last minute lets the rider extend the session. An expired kiosk session can no longer display the prior draft or receipt. Riders can check saved orders under their own accounts from a separate device. Test kiosk sign-in does not use the ordinary browser sign-in or its saved draft. Use a dedicated rider browser with autofill disabled. Order access and registration requirements are enforced by the same server rules as phone checkout. Hosted sign-in, hosted payment, and physical kiosk acceptance remain Planned.
 
 ### Staff-assisted race selection
 

@@ -393,3 +393,84 @@ test('staff suggest race choices and the rider confirms them before checkout', a
     await context.close();
   }
 });
+
+test('an unattended test kiosk warns, then signs out while a completed payment response is delayed', async ({ page, browser }) => {
+  const eventId = await seedRegistrationCase(page.request, 'criterium');
+  const email = 'kiosk.idle@example.test';
+  const minute = 60_000;
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, extraHTTPHeaders: {} });
+  const personal = await browser.newContext({ extraHTTPHeaders: {} });
+  let paymentSaved!: () => void;
+  let resumeResponse!: () => void;
+  const committed = new Promise<void>((resolve) => { paymentSaved = resolve; });
+  const delayed = new Promise<void>((resolve) => { resumeResponse = resolve; });
+  try {
+    const kiosk = await context.newPage();
+    await kiosk.clock.install({ time: new Date() });
+    await kiosk.goto(`/?kiosk=${eventId}`);
+    const start = kiosk.getByRole('button', { name: 'Sign in to register' });
+    const signIn = async (address: string) => {
+      await start.click();
+      await kiosk.getByLabel('Test email').fill(address);
+      await kiosk.getByRole('button', { name: 'Sign in', exact: true }).click();
+    };
+    await signIn(email);
+    await kiosk.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+    await kiosk.getByRole('checkbox', { name: /DVC-M45/ }).check();
+    const continueButton = kiosk.getByRole('button', { name: 'Continue to racer details' });
+    await continueButton.focus();
+
+    const warning = kiosk.getByRole('dialog', { name: 'This kiosk session is about to end' });
+    await kiosk.clock.fastForward(3.5 * minute);
+    await expect(warning).toHaveCount(0);
+    await kiosk.clock.fastForward(0.5 * minute + 1_000);
+    const keepWorking = warning.getByRole('button', { name: 'Keep working' });
+    await expect(keepWorking).toBeFocused();
+    expect(await kiosk.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    await keepWorking.press('Enter');
+    await expect(warning).toHaveCount(0);
+    await expect(continueButton).toBeFocused();
+    await kiosk.clock.fastForward(minute);
+    await expect(kiosk.getByRole('checkbox', { name: /DVC-M45/ })).toBeChecked();
+
+    await continueButton.click();
+    await kiosk.getByRole('button', { name: 'Continue to the waiver' }).click();
+    await kiosk.getByLabel('I have read the whole waiver').check();
+    await kiosk.getByLabel(/Type your full name to sign/).fill('Alex Demo');
+    await kiosk.getByLabel('I agree to this waiver', { exact: true }).check();
+    await kiosk.getByRole('button', { name: 'Sign and review the order' }).click();
+    await kiosk.route('**/api/orders/*/payment', async (route) => {
+      const response = await route.fetch();
+      paymentSaved();
+      await delayed;
+      await route.fulfill({ response });
+    });
+    await kiosk.getByRole('button', { name: /Complete simulated payment/ }).click();
+    await committed;
+    await kiosk.clock.fastForward(4 * minute + 1_000);
+    await expect(warning).toBeVisible();
+    await kiosk.clock.fastForward(minute);
+    await expect(start).toBeFocused();
+    await expect(kiosk.getByRole('status')).toContainText('My registrations on your own device');
+    await expect(kiosk.getByRole('heading', { name: 'Review your order' })).toHaveCount(0);
+    expect(await kiosk.evaluate(() => Object.keys(sessionStorage))).toEqual([]);
+    resumeResponse();
+    await kiosk.unrouteAll({ behavior: 'wait' });
+
+    await signIn('kiosk.after-idle@example.test');
+    await expect(kiosk.getByRole('checkbox', { name: /DVC-M45/ })).not.toBeChecked();
+    await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toHaveCount(0);
+
+    const rider = await personal.newPage();
+    await rider.addInitScript((address) => sessionStorage.setItem('cyclereg.test-session', address), email);
+    await rider.goto('/#/my-registrations');
+    const registrations = rider.getByRole('list', { name: 'Your registrations' });
+    await expect(registrations.getByRole('listitem')).toHaveCount(1);
+    await expect(registrations).toContainText('Confirmed');
+    await registrations.getByRole('link').click();
+    await expect(rider.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
+  } finally {
+    resumeResponse();
+    await Promise.all([context.close(), personal.close()]);
+  }
+});
