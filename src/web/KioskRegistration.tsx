@@ -4,13 +4,14 @@ import { OrderPage, Register } from './Register';
 
 const IDLE_MS = 5 * 60_000;
 const WARNING_MS = 60_000;
-const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'click', 'input', 'scroll'];
+const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'click', 'input', 'wheel', 'touchmove'];
 
 export function KioskRegistration({ eventId }: { eventId: string }) {
   const { status, signIn, signOut } = useSession();
   const [orderId, setOrderId] = useState<string | null>(null);
   const [warning, setWarning] = useState(false);
   const [expired, setExpired] = useState(false);
+  const signOutRef = useRef(signOut);
   const entrance = useRef<HTMLButtonElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   const warningDialog = useRef<HTMLDialogElement>(null);
@@ -32,13 +33,15 @@ export function KioskRegistration({ eventId }: { eventId: string }) {
     };
   }, []);
 
+  useEffect(() => { signOutRef.current = signOut; }, [signOut]);
+
   const endSession = useCallback((timedOut = false) => {
     setOrderId(null);
     setWarning(false);
     setExpired(timedOut);
-    signOut();
+    signOutRef.current();
     window.scrollTo(0, 0);
-  }, [signOut]);
+  }, []);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -109,10 +112,16 @@ export function KioskRegistration({ eventId }: { eventId: string }) {
             className="kiosk-expiry panel-form"
             aria-labelledby="kiosk-expiry-title"
             aria-describedby="kiosk-expiry-description"
-            onCancel={(event) => event.preventDefault()}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                extendSession.current?.();
+              }
+            }}
+            onClose={() => { if (warning) extendSession.current?.(); }}
           >
             <h2 id="kiosk-expiry-title">This kiosk session is about to end</h2>
-            <p id="kiosk-expiry-description">This kiosk has been inactive. Your session ends within one minute. Choose Keep working to continue.</p>
+            <p id="kiosk-expiry-description">This kiosk has been inactive. Your session ends within one minute. Choose Keep working or press Escape to continue.</p>
             <div className="form-actions">
               <button className="btn btn--primary" type="button" onClick={() => extendSession.current?.()}>Keep working</button>
               <button className="btn btn--secondary" type="button" onClick={() => endSession()}>End session</button>

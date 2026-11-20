@@ -396,7 +396,7 @@ test('staff suggest race choices and the rider confirms them before checkout', a
 
 test('an unattended test kiosk warns, then signs out while a completed payment response is delayed', async ({ page, browser }) => {
   const eventId = await seedRegistrationCase(page.request, 'criterium');
-  const email = 'kiosk.idle@example.test';
+  const email = `kiosk.idle.${eventId}@example.test`;
   const minute = 60_000;
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, extraHTTPHeaders: {} });
   const personal = await browser.newContext({ extraHTTPHeaders: {} });
@@ -419,6 +419,7 @@ test('an unattended test kiosk warns, then signs out while a completed payment r
     await kiosk.getByRole('checkbox', { name: /DVC-M45/ }).check();
     const continueButton = kiosk.getByRole('button', { name: 'Continue to racer details' });
     await continueButton.focus();
+    await kiosk.keyboard.press('Shift');
 
     const warning = kiosk.getByRole('dialog', { name: 'This kiosk session is about to end' });
     await kiosk.clock.fastForward(3.5 * minute);
@@ -428,6 +429,13 @@ test('an unattended test kiosk warns, then signs out while a completed payment r
     await expect(keepWorking).toBeFocused();
     expect(await kiosk.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     await keepWorking.press('Enter');
+    await expect(warning).toHaveCount(0);
+    await expect(continueButton).toBeFocused();
+    await kiosk.clock.fastForward(minute);
+    await expect(kiosk.getByRole('checkbox', { name: /DVC-M45/ })).toBeChecked();
+    await kiosk.clock.fastForward(3 * minute + 1_000);
+    await expect(warning).toBeVisible();
+    await kiosk.keyboard.press('Escape');
     await expect(warning).toHaveCount(0);
     await expect(continueButton).toBeFocused();
     await kiosk.clock.fastForward(minute);
@@ -460,6 +468,16 @@ test('an unattended test kiosk warns, then signs out while a completed payment r
     await signIn('kiosk.after-idle@example.test');
     await expect(kiosk.getByRole('checkbox', { name: /DVC-M45/ })).not.toBeChecked();
     await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toHaveCount(0);
+
+    // Moving wall time without running timers models the first tap after the browser was suspended.
+    const race = kiosk.getByRole('checkbox', { name: /DVC-M45/ });
+    await race.scrollIntoViewIfNeeded();
+    const box = await race.boundingBox();
+    expect(box).not.toBeNull();
+    const later = await kiosk.evaluate(() => Date.now()) + 5 * minute + 1_000;
+    await kiosk.clock.setSystemTime(later);
+    await kiosk.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await expect(start).toBeFocused();
 
     const rider = await personal.newPage();
     await rider.addInitScript((address) => sessionStorage.setItem('cyclereg.test-session', address), email);
