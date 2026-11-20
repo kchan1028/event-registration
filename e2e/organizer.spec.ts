@@ -86,6 +86,74 @@ test('demonstration weekend enforces a shared cap and publishes a version', asyn
   await expect(page.getByRole('button', { name: 'Version 1 is current' })).toBeDisabled();
 });
 
+test('category editor keeps helper text from shifting the control beside it', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Load Berkeley Omnium' }).click();
+  await expect(page.getByRole('heading', { name: 'Berkeley Hills Road Race', level: 2 })).toBeVisible();
+  await page.getByRole('link', { name: /Berkeley Streets Criterium/ }).click();
+  await expect(page.getByRole('heading', { name: 'Berkeley Streets Criterium', level: 2 })).toBeVisible();
+  await page.locator('.cat-row', { hasText: 'Masters 50+ 3/4' }).click();
+  const editor = page.locator('.editor');
+  await expect(editor.getByText('Short code on start lists')).toBeVisible();
+
+  const bounds = (locator: ReturnType<Page['locator']>) =>
+    locator.evaluate((el) => {
+      const { top, left, bottom, right } = el.getBoundingClientRect();
+      return { top, left, bottom, right };
+    });
+  const labelTop = (control: ReturnType<Page['locator']>) =>
+    control.evaluate((el) => {
+      const label = (el as HTMLInputElement).labels?.[0];
+      if (!label) throw new Error('missing label');
+      return label.getBoundingClientRect().top;
+    });
+  const pair = async (leftLabel: string, rightLabel: string) => {
+    const left = editor.getByLabel(leftLabel, { exact: true });
+    const right = editor.getByLabel(rightLabel, { exact: true });
+    const leftBox = await bounds(left);
+    const rightBox = await bounds(right);
+    expect(Math.abs(leftBox.top - rightBox.top)).toBeLessThan(1);
+    expect(Math.abs((await labelTop(left)) - (await labelTop(right)))).toBeLessThan(1);
+    expect(rightBox.left).toBeGreaterThan(leftBox.right - 1);
+    return { left, leftBox };
+  };
+
+  const timing = await pair('Timing code', 'Status');
+  const hint = await bounds(editor.getByText('Short code on start lists'));
+  expect(hint.top).toBeGreaterThanOrEqual(timing.leftBox.bottom - 1);
+  await expect(timing.left).toHaveAttribute('aria-describedby', /.+/);
+
+  await pair('Entry price', 'Day-of surcharge');
+  await pair('Bib range: first', 'Bib range: last');
+  await pair('Minutes', 'Plus laps');
+
+  const opens = await bounds(editor.getByLabel('Registration opens', { exact: true }));
+  const closes = await bounds(editor.getByLabel('Registration closes', { exact: true }));
+  expect(Math.abs(opens.top - closes.top)).toBeLessThan(1);
+
+  await editor.getByRole('button', { name: 'Add price change' }).click();
+  const priceFrom = await bounds(editor.getByLabel('From', { exact: true }));
+  const remove = await bounds(editor.getByRole('button', { name: 'Remove price change' }));
+  expect(Math.abs(remove.bottom - priceFrom.bottom)).toBeLessThan(4);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(editor.getByText('Short code on start lists')).toBeVisible();
+  const narrowTiming = await bounds(editor.getByLabel('Timing code', { exact: true }));
+  const narrowStatus = await bounds(editor.getByLabel('Status', { exact: true }));
+  const narrowHint = await bounds(editor.getByText('Short code on start lists'));
+  expect(Math.abs(narrowTiming.left - narrowStatus.left)).toBeLessThan(1);
+  expect(narrowStatus.top).toBeGreaterThan(narrowHint.bottom - 1);
+  expect(narrowHint.right).toBeLessThanOrEqual(390);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+  await editor.getByLabel('Timing code', { exact: true }).focus();
+  await expect(editor.getByLabel('Timing code', { exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(editor.getByLabel('Status', { exact: true })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(editor.getByLabel('Timing code', { exact: true })).toBeFocused();
+});
+
 test('on a phone, the category editor opens as a drawer that takes and returns focus', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
