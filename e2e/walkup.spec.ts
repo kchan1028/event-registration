@@ -329,8 +329,9 @@ test('staff suggest race choices and the rider confirms them before checkout', a
   await page.getByRole('button', { name: 'Register a walk-up' }).click();
   const panel = page.getByRole('region', { name: 'Rider phone registration' });
   await panel.getByRole('button', { name: 'Prepare race choices' }).click();
-  await expect(panel.getByRole('checkbox', { name: /DVC-M35/ })).toHaveCount(0);
   const choice = panel.getByRole('checkbox', { name: /DVC-M45/ });
+  await expect(choice).toBeVisible();
+  await expect(panel.getByRole('checkbox', { name: /DVC-M35/ })).toHaveCount(0);
   await choice.check();
   await expect(panel.getByRole('img', { name: 'QR code to review suggested races' })).toBeVisible();
   const address = new URL(await panel.getByLabel('Race choices address').inputValue());
@@ -365,6 +366,9 @@ test('staff suggest race choices and the rider confirms them before checkout', a
     await accept.press('Enter');
     await expect(rider.getByRole('heading', { name: 'About you' })).toBeFocused();
     await expect(category).toBeChecked();
+    await rider.reload();
+    await expect(category).toBeChecked();
+    await expect(suggestedChoices).toHaveCount(0);
     await rider.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
     await rider.getByRole('button', { name: 'Continue to racer details' }).click();
     await rider.getByRole('button', { name: 'Continue to the waiver' }).click();

@@ -74,7 +74,7 @@ The phone handoff verifies that opening the QR/link leaves the entry unmarked, t
 
 ### Staff-assisted race selection
 
-In `e2e/walkup.spec.ts`, verify staff can prepare suggested categories for the selected published race day and that the public address contains only event and category identifiers. Full categories are excluded. On the rider’s phone, a stale suggestion is identified, and valid suggestions stay unselected until the rider applies them. Keyboard confirmation should move focus to **About you**, where riders enter the information used to check eligibility. Verify simulated checkout saves the order under the rider account and staff retain their own account.
+In `e2e/walkup.spec.ts`, verify staff can prepare suggested categories for the selected published race day and that the public address contains only event and category identifiers. Full categories are excluded. On the rider’s phone, a stale suggestion is identified, and valid suggestions stay unselected until the rider applies them. Keyboard confirmation should move focus to **About you**, where riders enter the information used to check eligibility. Reload the shared address after applying a choice and verify the existing rider draft is kept. Verify simulated checkout saves the order under the rider account and staff retain their own account.
 
 ### Shared walk-up test kiosk
 

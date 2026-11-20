@@ -29,7 +29,7 @@ export function WalkUpRegistration({ eventId, dayId, published }: { eventId: str
         Prepare race choices
       </button>
       {showChoices && <>
-        <p>Share these suggestions with the rider or guardian. They review the choices and complete checkout on their phone.</p>
+        <p>Staff prepare the race choices. The rider or guardian reviews them and completes checkout on their phone.</p>
         <WalkUpChoices key={dayId} eventId={eventId} dayId={dayId} address={address.href} />
       </>}
       {TEST_MODE && <>

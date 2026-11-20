@@ -2,7 +2,7 @@ import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/rese
 import { QrCodeImage } from './QrCodeImage';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
-import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, MESSAGES, missingBundleRaces, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
+import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, MESSAGES, missingBundleRaces, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails } from '../shared/checkout';
 import { evaluateCategory, excludedBecauseClassUnspecified, licenseLabel, summarizeEligibility, summarizePath, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories } from '../shared/format';
@@ -17,7 +17,7 @@ import { formatDateTime, refundedCents } from './format';
 import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
 import { AccountMenu, SignInPrompt, useSession } from './auth';
 import { useLoad } from './useLoad';
-import { availableWalkUpCategories, WALK_UP_CATEGORY_PARAM } from './walkUpSelection';
+import { availableWalkUpCategories, categorySelectionStatus, WALK_UP_CATEGORY_PARAM } from './walkUpSelection';
 import { refundPolicyLines } from '../shared/refundPolicy';
 
 /*
@@ -781,15 +781,10 @@ function ChooseRaces({ ev, draft, update, kiosk }: { ev: PublicEvent; draft: Dra
                                 {cats.map((cat) => (
                                   <RaceOption
                                     key={cat.id}
-                                    config={config}
+                                    event={ev}
                                     cat={cat}
-                                    cancelled={ev.cancellation.categoryIds.includes(cat.id)}
-                                    today={ev.today}
                                     profile={draft.profile}
                                     selected={draft.selected.includes(cat.id)}
-                                    remaining={ev.remaining[cat.id] ?? null}
-                                    window={windowState(cat, ev.nowLocal)}
-                                    enforceWindows={ev.enforceWindows}
                                     result={result(cat)}
                                     conflicts={draft.selected.includes(cat.id) ? conflicts.filter((c) => c.a === cat.id || c.b === cat.id) : []}
                                     onToggle={() => toggle(cat.id)}
@@ -870,41 +865,28 @@ function ChooseRaces({ ev, draft, update, kiosk }: { ev: PublicEvent; draft: Dra
 
 function RaceOption({
   profile,
-  config,
   cat,
-  today,
   selected,
-  remaining,
-  window,
-  enforceWindows,
+  event,
   result,
   conflicts,
   onToggle,
   offered,
-  cancelled,
   waitlist,
 }: {
-  config: EventConfig;
   profile: RiderProfile;
   cat: Category;
   offered: boolean;
-  cancelled: boolean;
+  event: PublicEvent;
   waitlist: ReactNode;
-  today: string;
   selected: boolean;
-  remaining: number | null;
-  window: WindowState;
-  enforceWindows: boolean;
   result: EligibilityResult | null;
   conflicts: ReturnType<typeof findConflicts>;
   onToggle: () => void;
 }) {
-  const price = quote(config, [cat.id], today, null, profile).lines[0];
-  // A waitlist offer reserves this rider's place, so the category is open to them even when it reads as full.
-  const full = remaining === 0 && !offered;
-  const outside = enforceWindows && window !== 'open';
-  const closed = cat.status !== 'active';
-  const disabled = !selected && (cancelled || full || closed || outside || result?.status === 'ineligible');
+  const price = quote(event.config, [cat.id], event.today, null, profile).lines[0];
+  const { remaining, cancelled, window, full, outside, closed, unavailable } = categorySelectionStatus(event, cat, offered);
+  const disabled = !selected && (unavailable || result?.status === 'ineligible');
   const status = cancelled
     ? { cls: 'ineligible', text: 'Cancelled by organizer' }
     : closed
