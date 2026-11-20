@@ -18,6 +18,7 @@ export function IssueList({ issues, config, onOpen, limit }: { issues: Issue[]; 
     }
     if (t.kind === 'race') return config.races.find((r) => r.id === t.id)?.name ?? '';
     if (t.kind === 'pool') return 'Shared capacity pools';
+    if (i.key === 'event.refund') return 'Event setup > Bundles, discounts, and rider policies > Refund and credit rules';
     return 'Event setup';
   };
   return (
@@ -28,6 +29,7 @@ export function IssueList({ issues, config, onOpen, limit }: { issues: Issue[]; 
             <Icon name={i.level === 'error' ? 'error' : 'warn'} size={14} />
             <span>
               <span className="issue__where">{where(i)}</span>
+              {i.key === 'event.refund' && <span className="issue__action">Set up refund policy</span>}
               {i.message}
             </span>
           </button>

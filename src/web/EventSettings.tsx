@@ -370,6 +370,8 @@ function CopyDay({ draft, fromDayId }: { draft: Draft; fromDayId: string }) {
   );
 }
 
+export const REFUND_RULES_HEADING_ID = 'refund-and-credit-rules';
+
 const CANCELLATION_OPTIONS: Record<RefundRules['organizerCancellation'], string> = {
   full_refund: 'Full refund',
   credit: 'Credit toward a later event',
@@ -387,7 +389,9 @@ function RefundRulesEditor({ config, update }: { config: EventConfig; update: Dr
   const setTier = (i: number, p: Partial<RefundRules['tiers'][number]>) => rules && patch({ tiers: rules.tiers.map((t, j) => (j === i ? { ...t, ...p } : t)) });
   return (
     <fieldset className="subfields refund-rules">
-      <legend>Refund and credit rules</legend>
+      <legend id={REFUND_RULES_HEADING_ID} tabIndex={-1} className="refund-rules__legend">
+        Refund and credit rules
+      </legend>
       <p className="muted small">Start from a template, then change any number. Fees are never returned. Paid riders keep the rules of the version they bought under.</p>
       <div className="row-actions" role="group" aria-label="Start from a template">
         {(Object.keys(REFUND_TEMPLATES) as RefundTemplate[]).map((key) => (

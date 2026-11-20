@@ -6,7 +6,7 @@ import { api, ApiError, type EventPayload, type TestEntryResult } from './api';
 import { href, navigate, type Route } from './App';
 import { CategoryEditor } from './CategoryEditor';
 import { CategoryTable } from './CategoryTable';
-import { EventSettings } from './EventSettings';
+import { EventSettings, REFUND_RULES_HEADING_ID } from './EventSettings';
 import { FieldBoard } from './FieldBoard';
 import { IssuesPanel } from './IssuesPanel';
 import { Pools } from './Pools';
@@ -186,18 +186,36 @@ function IssueCount({ errors, warnings }: { errors: number; warnings: number }) 
   );
 }
 
+function focusHeading(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.scrollIntoView({ block: 'start' });
+  el.focus({ preventScroll: true });
+}
+
 export function Builder({ route }: { route: Extract<Route, { page: 'event' }> }) {
   const { draft, loadError } = useDraft(route.eventId);
   const [selected, setSelected] = useState<string | null>(null);
   const wide = useWide();
   // A selection requested together with a navigation survives the route-change reset.
   const pendingSelect = useRef<string | null>(null);
+  const pendingSetupFocus = useRef<string | null>(null);
 
   const raceId = route.view === 'race' ? (route.raceId ?? draft?.config.races[0]?.id ?? null) : null;
   useEffect(() => {
     setSelected(pendingSelect.current);
     pendingSelect.current = null;
   }, [raceId, route.view]);
+  useEffect(() => {
+    if (route.view !== 'setup' || !pendingSetupFocus.current) return;
+    const id = pendingSetupFocus.current;
+    const frame = requestAnimationFrame(() => {
+      if (pendingSetupFocus.current !== id) return;
+      pendingSetupFocus.current = null;
+      focusHeading(id);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [route.view]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setSelected(null);
@@ -245,7 +263,13 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
       if (sg) navigate({ page: 'event', eventId: route.eventId, view: 'race', raceId: sg.raceId });
     } else if (t.kind === 'race') navigate({ page: 'event', eventId: route.eventId, view: 'race', raceId: t.id });
     else if (t.kind === 'pool') navigate({ page: 'event', eventId: route.eventId, view: 'pools' });
-    else navigate({ page: 'event', eventId: route.eventId, view: 'setup' });
+    else if (issue.key === 'event.refund') {
+      if (route.view === 'setup') focusHeading(REFUND_RULES_HEADING_ID);
+      else {
+        pendingSetupFocus.current = REFUND_RULES_HEADING_ID;
+        navigate({ page: 'event', eventId: route.eventId, view: 'setup' });
+      }
+    } else navigate({ page: 'event', eventId: route.eventId, view: 'setup' });
   };
 
   return (
