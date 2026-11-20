@@ -534,12 +534,16 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
   const matchStatus = !matching
     ? ''
     : classHiddenCount > 0
-      ? `${matchLead} Selected entries stay visible. ${classNeed} Choose All races to see them. For races that need more details or organizer review, choose All races.`
+      ? `${matchLead} Selected entries stay visible.`
       : `${matchLead} Selected entries stay visible. For races that need more details or organizer review, choose All races.`;
   const findMyRaces = () => {
     setMatchesOnly(true);
     scheduleRef.current?.focus();
     scheduleRef.current?.scrollIntoView({ block: 'start' });
+  };
+  const showAllRaces = () => {
+    setMatchesOnly(false);
+    scheduleRef.current?.focus();
   };
   const unavailableBundleIds = config.registration.bundles.filter((b) => b.raceIds.some((r) => ev.cancellation.scopes.some((s) => s.scope === 'event' || (s.scope === 'race' && s.raceId === r) || (s.scope === 'day' && config.races.find((race) => race.id === r)?.dayId === s.dayId)) || config.categories.some((c) => c.raceId === r && ev.cancellation.categoryIds.includes(c.id)))).map((b) => b.id);
   const intent = config.registration.bundles.find((b) => b.id === draft.bundleIntent) ?? null;
@@ -697,11 +701,18 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           <div className="schedule-tools">
             <h2>{matching ? 'Your matching races' : 'Race schedule'}</h2>
             <div className="schedule-tools__views" role="group" aria-label="Schedule view">
-              <button className={`btn btn--small ${matching ? 'btn--ghost' : 'btn--primary'}`} aria-pressed={!matching} aria-describedby={classHiddenCount > 0 ? 'match-filter-status' : undefined} onClick={() => setMatchesOnly(false)}>All races</button>
+              <button className={`btn btn--small ${matching ? 'btn--ghost' : 'btn--primary'}`} aria-pressed={!matching} aria-describedby={classHiddenCount > 0 ? 'class-hidden-reason' : undefined} onClick={() => setMatchesOnly(false)}>All races</button>
               <button className={`btn btn--small ${matching ? 'btn--primary' : 'btn--ghost'}`} aria-pressed={matching} disabled={!matchesReady} onClick={() => setMatchesOnly(true)}>Matching races</button>
             </div>
           </div>
           <p id="match-filter-status" className={matching ? 'small' : 'sr-only'} role="status">{matchStatus}</p>
+          {classHiddenCount > 0 && (
+            <section id="class-hidden-notice" className="class-hidden-notice" aria-labelledby="class-hidden-title">
+              <h3 id="class-hidden-title">Some races are hidden</h3>
+              <p id="class-hidden-reason">{classNeed}</p>
+              <button className="btn btn--secondary" onClick={showAllRaces}>Show all races</button>
+            </section>
+          )}
           {config.days.map((day, di) => (
             <section key={day.id} className="sched-day" style={{ ['--day' as string]: dayHue(di) }} aria-labelledby={`day-${day.id}`}>
               <h2 className="sched-day__title" id={`day-${day.id}`}>
@@ -722,7 +733,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                       {matching && !config.categories.some((cat) => cat.raceId === race.id && cat.status !== 'archived' && cat.startGroupId !== null && visible(cat)) && (
                         <p className="muted small">
                           {config.categories.some((cat) => cat.raceId === race.id && classHidden(cat))
-                            ? 'Some categories in this race require a competition class to confirm a match. Choose All races to see them.'
+                            ? 'Some categories in this race need a competition class to confirm a match.'
                             : 'No matching categories in this race. Choose All races to review the full schedule.'}
                         </p>
                       )}
