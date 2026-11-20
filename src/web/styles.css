@@ -2567,6 +2567,11 @@ button.issue {
 .reg__panel .form-row {
   align-items: start;
 }
+@media (max-width: 480px) {
+  .reg__panel .form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .reg__panel h2 {
   font-size: 22px;
   font-weight: 500;
