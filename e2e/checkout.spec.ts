@@ -415,6 +415,30 @@ test('validation recovery keeps keyboard focus and typed details', async ({ page
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
   await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
   await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  const fieldBounds = (label: string) => page.getByLabel(label, { exact: true }).evaluate(input => {
+    const { left, top, bottom } = input.getBoundingClientRect();
+    return { left, top, bottom };
+  });
+  for (const [left, right] of [['Email for the receipt (required)', 'Phone (optional)'], ['Team (optional)', 'License number (optional)']]) {
+    expect(Math.abs((await fieldBounds(left)).top - (await fieldBounds(right)).top)).toBeLessThan(1);
+  }
+  const contactPhone = page.getByLabel('Contact phone', { exact: true });
+  const savedPhone = await contactPhone.inputValue();
+  await contactPhone.fill('123');
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await expect(page.locator('.error-summary')).toBeFocused();
+  await expect(page.locator('.error-summary')).toContainText('Enter a phone number with 10 digits.');
+  expect(Math.abs((await fieldBounds('Contact name')).top - (await fieldBounds('Contact phone')).top)).toBeLessThan(1);
+
+  const desktop = page.viewportSize()!;
+  await page.setViewportSize({ width: 360, height: 800 });
+  const email = await fieldBounds('Email for the receipt (required)');
+  const phone = await fieldBounds('Phone (optional)');
+  expect(Math.abs(email.left - phone.left)).toBeLessThan(1);
+  expect(phone.top).toBeGreaterThan(email.bottom);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  await page.setViewportSize(desktop);
+  await contactPhone.fill(savedPhone);
   const first = page.getByLabel('First name (required)');
   await first.fill('');
   await page.getByRole('button', { name: 'Continue to the waiver' }).click();
