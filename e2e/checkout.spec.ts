@@ -205,6 +205,7 @@ test('a paid rider can receive a bib after the organizer reviews the license', a
   expect((await page.request.post(`${eventUrl}/bibs/apply`, { data: { ...batch, fingerprint } })).ok()).toBe(true);
   await findRider();
   await detail.getByRole('button', { name: 'Check in and issue bib 100', exact: true }).click();
+  await expect(detail.getByRole('button', { name: 'Undo check-in' })).toBeVisible();
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
   expect(await readRider()).toMatchObject({
     orderId: before.orderId, entries: before.entries, payment: 'confirmed', bib: 100, checkedInAt: expect.any(String),
