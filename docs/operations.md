@@ -93,9 +93,17 @@ The critical examples match the integrity failures that [product.md](../product.
 4. **Reconcile.** Before reopening, compare entries, capacity counts, and the ledger against the payment provider's records. Correct with an audit reason; never edit history.
 5. **Record it.** Write a short incident note: what happened, who was affected, what was done, and what will prevent it. Link it from the event's review.
 
+## Rehearsal alert routing
+
+The project owner approved this routing for the pilot rehearsal on November 19, 2026. Use fictional role assignments. During registration opening and race morning, send the initial alert to the support primary, who is the initial support owner. For a critical incident, contact the technical lead immediately at detection as well. Do not wait for the primary to acknowledge.
+
+Before the exercise, the facilitator records the delay between each initial alert and its deputy escalation cue. The facilitator tracks acknowledgements in the shared incident timeline. If the primary has not acknowledged at the cue, contact the deputy. The deputy records acknowledgement, and the facilitator records the acceptance time as the handoff time and notifies the primary. The facilitator, primary and deputy can see the acknowledgement and the current owner. An acknowledgement before the cue cancels the deputy escalation. If the primary acknowledges after the cue, continue the escalation and record a single transfer of ownership when the deputy accepts.
+
+This decision covers rehearsal routing. Named coverage, live routing, alert tooling and out-of-window timings remain open under [Open questions](#open-questions). Use the [support coverage rehearsal](testing/test-plan.md#support-coverage-rehearsal) to exercise on-time, missing and late primary acknowledgements.
+
 ## Monitoring and alerts
 
-Proposed signals, from [product.md](../product.md#quality-requirements). Tools are not chosen; see the hosting, backups, and monitoring entry in the [decision backlog](decisions/README.md#decision-backlog).
+Proposed live signals and recipients, from [product.md](../product.md#quality-requirements). For the rehearsal, use the approved routing above. Tools are not chosen; see the hosting, backups, and monitoring entry in the [decision backlog](decisions/README.md#decision-backlog).
 
 | Signal | Why | Alert goes to |
 |---|---|---|
@@ -180,7 +188,7 @@ Unresolved operating decisions and validation steps are listed below. The named 
 | 1, support coverage | Project owner; named primary/deputy needed for independent operation | Assume no committed coverage. Live event support remains blocked; revisit before hosted pilot rehearsal. Includes responsibility for paid-but-not-ready follow-up and measurement review. |
 | 2, freeze/response targets | Product owner with registration lead; race-morning disruption needs an agreed response | Rehearsal freeze starts and critical/high response targets approved November 19, 2026. Rehearse both windows. Confirm event-specific window end times before rehearsal. Live acceptance, named staffing and out-of-window response targets remain open. |
 | 3, recovery measurement | Technical lead and treasurer, unassigned; restore must preserve money, capacity and entries | Targets approved November 19, 2026. Hosted measurement and recovery sign-off remain open. Run the hosted rehearsal once its environment and operators are approved. |
-| 4, monitoring/tools | Technical/support lead, unassigned; failures need an accountable receiver | No monitoring service, alert thresholds or after-hours rota accepted. Synthetic fault cases proceed; hosted operational sign-off blocked pending routing/tool review. |
+| 4, monitoring/tools | Technical/support lead, unassigned; failures need an accountable receiver | [Rehearsal routing](#rehearsal-alert-routing) is approved. Live recipients, monitoring service, alert thresholds and after-hours coverage remain open. Synthetic fault cases can proceed. Revisit live routing and tooling before hosted operational sign-off. |
 | 5, retention | Project owner/privacy responsibility unassigned; waivers, financial records, paper rosters and opaque telemetry keys remain personal data | No retention period or analytics collection approved. Synthetic measurements proceed; real-data collection blocked until access/retention approval before pilot. |
 
 Related decisions remain in [product.md decisions 4–6 and 8–10](../product.md#open-decisions), [ADR 0005](decisions/0005-merchant-and-settlement-model.md), [federation questions](usac-questions.md) and [timer review](timer-export-review.md). The new research does not resolve merchant liability, event-year waiver/licensing approval, timer acknowledgement where applicable or safe device/accessibility arrangements. Revisit those existing records before the corresponding live-money, sanctioned-event or physical rehearsal gate.
