@@ -280,7 +280,7 @@ test('shared test kiosk clears the receipt and draft between rider sessions on t
     await kiosk.getByRole('button', { name: 'Sign and review the order' }).click();
     await kiosk.getByRole('button', { name: /Complete simulated payment/ }).click();
     await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
-    await expect(kiosk.getByText(/Alex Demo/)).toBeVisible();
+    await expect(kiosk.getByText(/Alex Demo · order/)).toBeVisible();
     expect(kiosk.url()).toBe(address.href);
     expect(await kiosk.evaluate(() => Object.keys(sessionStorage))).toEqual([]);
     const orders = await kiosk.request.get('/api/rider/registrations', { headers: { Authorization: 'Bearer test:kiosk.first@example.test' } });
