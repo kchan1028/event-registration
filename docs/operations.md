@@ -97,9 +97,9 @@ The critical examples match the integrity failures that [product.md](../product.
 
 The project owner approved this routing for the pilot rehearsal on November 19, 2026. Use fictional role assignments. During registration opening and race morning, send the initial alert to the support primary, who is the initial support owner. For a critical incident, contact the technical lead immediately at detection as well. Do not wait for the primary to acknowledge.
 
-The facilitator records the deputy escalation cue before the exercise and tracks acknowledgement in the shared incident timeline. If the primary has not acknowledged at the cue, contact the deputy. The deputy records acknowledgement and ownership, and the facilitator notifies the primary of the handoff. The facilitator, primary and deputy can see the acknowledgement and the current owner. An acknowledgement before the cue cancels the deputy escalation. If the primary acknowledges after the cue, continue the escalation and record a single transfer of ownership when the deputy accepts.
+Before the exercise, the facilitator records the delay between each initial alert and its deputy escalation cue. The facilitator tracks acknowledgements in the shared incident timeline. If the primary has not acknowledged at the cue, contact the deputy. The deputy records acknowledgement, and the facilitator records the acceptance time as the handoff time and notifies the primary. The facilitator, primary and deputy can see the acknowledgement and the current owner. An acknowledgement before the cue cancels the deputy escalation. If the primary acknowledges after the cue, continue the escalation and record a single transfer of ownership when the deputy accepts.
 
-This decision covers rehearsal routing. Named coverage, live routing, alert tooling and out-of-window timings remain open under [Open questions](#open-questions). Use the [support coverage rehearsal](testing/test-plan.md#support-coverage-rehearsal) to exercise both acknowledgement paths.
+This decision covers rehearsal routing. Named coverage, live routing, alert tooling and out-of-window timings remain open under [Open questions](#open-questions). Use the [support coverage rehearsal](testing/test-plan.md#support-coverage-rehearsal) to exercise on-time, missing and late primary acknowledgements.
 
 ## Monitoring and alerts
 
