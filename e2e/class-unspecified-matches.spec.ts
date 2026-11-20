@@ -18,9 +18,18 @@ test('Matching races explains class-specific fields hidden when competition clas
   await expect(schedule.getByRole('checkbox', { name: /CR-J1314/ })).toBeVisible();
   await expect(schedule.getByRole('checkbox', { name: /RR-JB1314/ })).toHaveCount(0);
   const status = page.locator('#match-filter-status');
-  await expect(status).toContainText('because competition class is Prefer not to say');
-  await expect(status).toContainText('choose All races');
+  await expect(status).toContainText('categories need a competition class to confirm a match');
+  await expect(status).toContainText('Choose All races to see them');
+  await expect(status).not.toContainText('not a match');
   await expect(page.getByRole('button', { name: 'All races', exact: true })).toHaveAttribute('aria-describedby', 'match-filter-status');
+
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await status.scrollIntoViewIfNeeded();
+    expect(await schedule.evaluate((node) => node.getBoundingClientRect().right <= window.innerWidth && node.scrollWidth <= node.clientWidth)).toBe(true);
+  }
+  expect((await new AxeBuilder({ page }).include('#schedule').analyze()).violations).toEqual([]);
+  await page.setViewportSize({ width: 1280, height: 1000 });
 
   await page.getByRole('button', { name: 'All races', exact: true }).click();
   const boys = schedule.getByRole('checkbox', { name: /RR-JB1314/ });
@@ -34,7 +43,7 @@ test('Matching races explains class-specific fields hidden when competition clas
   await expect(schedule.getByRole('checkbox', { name: /RR-JB1314/ })).toHaveCount(0);
 
   await page.getByLabel('Competition class').selectOption('other');
-  await expect(status).not.toContainText('Prefer not to say');
+  await expect(status).not.toContainText('to confirm a match');
   await expect(schedule.getByRole('checkbox', { name: /RR-JB1314/ })).toHaveCount(0);
   await expect(schedule.getByRole('checkbox', { name: /CR-J1314/ })).toBeVisible();
 
@@ -44,11 +53,4 @@ test('Matching races explains class-specific fields hidden when competition clas
   await schedule.getByRole('checkbox', { name: /RR-JB1314/ }).click();
   await schedule.getByRole('checkbox', { name: /CR-J1314/ }).click();
   await expect(page.locator('.tray .quote__total')).toContainText('$40');
-
-  for (const width of [1440, 390]) {
-    await page.setViewportSize({ width, height: 1000 });
-    await status.scrollIntoViewIfNeeded();
-    expect(await schedule.evaluate((node) => node.getBoundingClientRect().right <= window.innerWidth && node.scrollWidth <= node.clientWidth)).toBe(true);
-  }
-  expect((await new AxeBuilder({ page }).include('#schedule').analyze()).violations).toEqual([]);
 });

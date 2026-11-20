@@ -528,10 +528,13 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
   const classHidden = (cat: Category) => cat.status !== 'archived' && cat.startGroupId !== null && !draft.selected.includes(cat.id) && draft.offerCategoryId !== cat.id && excludedBecauseClassUnspecified(result(cat));
   const classHiddenCount = matching ? config.categories.filter(classHidden).length : 0;
   const matchLead = matchingCount === 0 ? 'No categories match your current answers.' : `${matchingCount} categories match your answers.`;
+  const classNeed = classHiddenCount === 1
+    ? '1 category needs a competition class to confirm a match.'
+    : `${classHiddenCount} categories need a competition class to confirm a match.`;
   const matchStatus = !matching
     ? ''
     : classHiddenCount > 0
-      ? `${matchLead} Selected entries stay visible. ${classHiddenCount === 1 ? '1 category is not listed' : `${classHiddenCount} categories are not listed`} because competition class is Prefer not to say, and that choice is not a match. For those categories, and for races that need more details or organizer review, choose All races.`
+      ? `${matchLead} Selected entries stay visible. ${classNeed} Choose All races to see them. For races that need more details or organizer review, choose All races.`
       : `${matchLead} Selected entries stay visible. For races that need more details or organizer review, choose All races.`;
   const findMyRaces = () => {
     setMatchesOnly(true);
@@ -719,7 +722,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                       {matching && !config.categories.some((cat) => cat.raceId === race.id && cat.status !== 'archived' && cat.startGroupId !== null && visible(cat)) && (
                         <p className="muted small">
                           {config.categories.some((cat) => cat.raceId === race.id && classHidden(cat))
-                            ? 'No categories in this race match while competition class is Prefer not to say. Choose All races to see the full schedule.'
+                            ? 'Some categories in this race require a competition class to confirm a match. Choose All races to see them.'
                             : 'No matching categories in this race. Choose All races to review the full schedule.'}
                         </p>
                       )}
