@@ -23,7 +23,7 @@ A closed/full category or waitlist remains enforced. Refer the participant to th
 ## Run the shared test kiosk
 
 1. In a test sign-in build, publish a fictional event using simulated payment. Copy the **Test kiosk address** from the walk-up panel to a dedicated rider browser with autofill disabled.
-2. Ask the rider or guardian to use their own fictional account and complete checkout. When the receipt appears, follow the desk lookup and bib steps above.
+2. Ask the rider or guardian to use their own fictional account and complete checkout. Stay with the kiosk through handover. When the receipt appears, follow the desk lookup and bib steps above. If a rider walks away, end their session before letting someone else use the device.
 3. Choose **End kiosk session**. Before handing over the device, verify it shows **Sign in to register**. Reloading also ends the session. Both actions discard typed details and the on-screen receipt. Saved orders stay with the account and an unpaid hold can remain until it expires.
 4. For an interrupted reservation or payment, check the existing order in **My registrations** from a separate personal test browser or ask the registration lead to check the record before starting another registration. Use the phone link for events configured for Stripe test payments.
 

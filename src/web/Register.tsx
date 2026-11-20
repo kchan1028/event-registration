@@ -15,7 +15,7 @@ import { api, ApiError, type OrderView, type PaymentMode, type PublicEvent, type
 import { href, navigate } from './App';
 import { formatDateTime, refundedCents } from './format';
 import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
-import { AccountMenu, kioskEventId, SignInPrompt, useSession } from './auth';
+import { AccountMenu, SignInPrompt, useSession } from './auth';
 import { useLoad } from './useLoad';
 import { refundPolicyLines } from '../shared/refundPolicy';
 
@@ -472,7 +472,7 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
         {offerToken && !signedIn && draft.step === 'races' && (
           <SignInPrompt title="Sign in to use your waitlist offer">Sign in with the email you joined the waitlist with to see the place being held for you.</SignInPrompt>
         )}
-        {draft.step === 'races' && <ChooseRaces ev={ev} draft={draft} update={update} />}
+        {draft.step === 'races' && <ChooseRaces ev={ev} draft={draft} update={update} kiosk={kiosk} />}
         {blockedDraft ? (
           <section className="note note--warn cancellation-notice" aria-label="Cancelled race selection">
             <p>A selected race was cancelled. Return to race selection and remove cancelled entries before continuing. Your entered details are saved.</p>
@@ -485,7 +485,7 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
           </SignInPrompt>
         ) : (
           <>
-        {draft.step === 'details' && <DetailsStep config={config} draft={draft} update={update} goTo={goTo} />}
+        {draft.step === 'details' && <DetailsStep config={config} draft={draft} update={update} goTo={goTo} kiosk={kiosk} />}
         {draft.step === 'waiver' && <Waiver ev={ev} draft={draft} update={update} goTo={goTo} setEvent={setEv} />}
         {draft.step === 'review' && draft.orderId && <Review orderId={draft.orderId} eventId={eventId} goTo={goTo} paymentMode={ev.paymentMode} onKioskOrder={onKioskOrder} />}
           </>
@@ -508,7 +508,7 @@ function CancellationNotice({ ev }: { ev: PublicEvent }) {
 
 /* Step 1: choose races ---------------------------------------------------- */
 
-function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; update: Update }) {
+function ChooseRaces({ ev, draft, update, kiosk }: { ev: PublicEvent; draft: Draft; update: Update; kiosk: boolean }) {
   const { config } = ev;
   const [trayOpen, setTrayOpen] = useState(false);
   const [matchesOnly, setMatchesOnly] = useState(false);
@@ -773,7 +773,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                                     conflicts={draft.selected.includes(cat.id) ? conflicts.filter((c) => c.a === cat.id || c.b === cat.id) : []}
                                     onToggle={() => toggle(cat.id)}
                                     offered={!!draft.offerToken && draft.offerCategoryId === cat.id}
-                                    waitlist={ev.waitlist?.[cat.id] ? <JoinWaitlist ev={ev} cat={cat} draft={draft} /> : null}
+                                    waitlist={ev.waitlist?.[cat.id] ? <JoinWaitlist ev={ev} cat={cat} draft={draft} kiosk={kiosk} /> : null}
                                   />
                                 ))}
                               </div>
@@ -1148,7 +1148,7 @@ function riderFrom(draft: Draft, needsGuardian: boolean): Record<string, unknown
   };
 }
 
-function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; draft: Draft; update: Update; goTo: (s: Step) => void }) {
+function DetailsStep({ config, draft, update, goTo, kiosk }: { config: EventConfig; draft: Draft; update: Update; goTo: (s: Step) => void; kiosk: boolean }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const needsGuardian = guardianNeeded(config, draft.selected, draft.profile.racingAge);
   const d = draft.details;
@@ -1184,7 +1184,6 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
 
   const summary = useMemo(() => Object.entries(errors).map(([k, message]) => ({ id: FIELD_IDS[k] ?? (k.startsWith('q-') ? k : 'f-first-name'), message })), [errors]);
 
-  const kiosk = kioskEventId() !== null;
   return (
     <form
       className="reg__panel"
@@ -1765,7 +1764,7 @@ function OfferBanner({ offer }: { offer: WaitlistOffer }) {
 }
 
 /** Join a full category's waitlist with the "About you" answers and a name and email the organizer can use. */
-function JoinWaitlist({ ev, cat, draft }: { ev: PublicEvent; cat: Category; draft: Draft }) {
+function JoinWaitlist({ ev, cat, draft, kiosk }: { ev: PublicEvent; cat: Category; draft: Draft; kiosk: boolean }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ firstName: draft.details.firstName, lastName: draft.details.lastName, email: draft.details.email });
   const [busy, setBusy] = useState(false);
@@ -1775,7 +1774,6 @@ function JoinWaitlist({ ev, cat, draft }: { ev: PublicEvent; cat: Category; draf
   const p = draft.profile;
   const session = useSession();
 
-  const kiosk = kioskEventId() !== null;
   if (joined) {
     return (
       <span className="opt__reason" role="status">

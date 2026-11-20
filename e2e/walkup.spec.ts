@@ -305,6 +305,7 @@ test('shared test kiosk clears the receipt and draft between rider sessions on t
     const firstName = kiosk.getByLabel('First name (required)', { exact: true });
     await expect(firstName).toHaveAttribute('autocomplete', 'off');
     await firstName.fill('Second session draft');
+    expect(await kiosk.evaluate(() => Object.keys(sessionStorage))).toEqual([]);
     await kiosk.reload();
     await expect(start).toBeVisible();
     await expect(firstName).toHaveCount(0);
@@ -312,6 +313,10 @@ test('shared test kiosk clears the receipt and draft between rider sessions on t
     await expect(kiosk.getByLabel('Use a demo rider (fake data)')).toHaveValue('');
     await expect(race).not.toBeChecked();
     await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toHaveCount(0);
+    await kiosk.goto(new URL('/#/register', address).href);
+    await kiosk.goBack();
+    await expect(start).toBeVisible();
+    await expect(race).toHaveCount(0);
     await expect(page.getByLabel('Test kiosk address')).toHaveValue(address.href);
   } finally {
     await context.close();
