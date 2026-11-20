@@ -15,7 +15,7 @@ import { api, ApiError, type OrderView, type PaymentMode, type PublicEvent, type
 import { href, navigate } from './App';
 import { formatDateTime, refundedCents } from './format';
 import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
-import { AccountMenu, SignInPrompt, useSession } from './auth';
+import { AccountMenu, kioskEventId, SignInPrompt, useSession } from './auth';
 import { useLoad } from './useLoad';
 import { refundPolicyLines } from '../shared/refundPolicy';
 
@@ -98,10 +98,11 @@ function clearStoredDraft(eventId: string, orderId?: string): void {
   }
 }
 
-/** Keeps an unfinished registration in this tab only, so a refresh or Back does not lose it. */
-function useStoredDraft(eventId: string): [Draft, Update] {
+/** Personal drafts survive a refresh. Shared kiosk drafts exist only while the rider is signed in. */
+function useDraft(eventId: string, kiosk: boolean): [Draft, Update] {
   const key = draftKey(eventId);
   const [draft, setDraft] = useState<Draft>(() => {
+    if (kiosk) return freshDraft();
     try {
       const raw = sessionStorage.getItem(key);
       if (raw) return { ...freshDraft(), ...(JSON.parse(raw) as Draft) };
@@ -114,7 +115,7 @@ function useStoredDraft(eventId: string): [Draft, Update] {
     setDraft((d) => {
       const next = fn(d);
       try {
-        sessionStorage.setItem(key, JSON.stringify(next));
+        if (!kiosk) sessionStorage.setItem(key, JSON.stringify(next));
       } catch {
         /* storage unavailable */
       }
@@ -124,17 +125,15 @@ function useStoredDraft(eventId: string): [Draft, Update] {
 }
 
 /** Rider page header. The Demo badge shows only for a demo event; the note follows how payment works there. */
-function RegHeader({ demo = false, mode = null }: { demo?: boolean; mode?: PaymentMode | null }) {
+function RegHeader({ demo = false, mode = null, kiosk = false }: { demo?: boolean; mode?: PaymentMode | null; kiosk?: boolean }) {
   return (
     <header className="reg__bar">
-      <a className="brand" href={href({ page: 'events' })} aria-label="CycleReg, all events">
-        CycleReg
-      </a>
+      {kiosk ? <span className="brand">CycleReg</span> : <a className="brand" href={href({ page: 'events' })} aria-label="CycleReg, all events">CycleReg</a>}
       {demo && <span className="demo-badge">Demo</span>}
       <span className="reg__bar-note">{mode === 'simulated' ? 'Rider registration with simulated payment' : mode === 'stripe_test' ? 'Rider registration, Stripe test mode' : 'Rider registration'}</span>
       <span className="reg__bar-end">
         <ThemeToggle />
-        <AccountMenu />
+        {!kiosk && <AccountMenu />}
       </span>
     </header>
   );
@@ -226,12 +225,13 @@ export function RegisterIndex() {
 
 /* The flow ---------------------------------------------------------------- */
 
-export function Register({ eventId }: { eventId: string }) {
+export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOrder?: (orderId: string) => void }) {
+  const kiosk = !!onKioskOrder;
   const [ev, setEv] = useState<PublicEvent | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
-  const [draft, update] = useStoredDraft(eventId);
+  const [draft, update] = useDraft(eventId, kiosk);
 
   const [offer, setOffer] = useState<WaitlistOffer | null>(null);
   const [offerFailure, setOfferFailure] = useState<{ token: string; message: string; retryable: boolean } | null>(null);
@@ -239,7 +239,7 @@ export function Register({ eventId }: { eventId: string }) {
   const [offerAttempt, setOfferAttempt] = useState(0);
   const session = useSession();
   const signedIn = session.status === 'signed-in';
-  const offerToken = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('offer');
+  const offerToken = kiosk ? null : new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('offer');
 
   const currentOfferFailure = offerFailure?.token === offerToken ? offerFailure : null;
   const statusRead = useRef(0);
@@ -324,32 +324,37 @@ export function Register({ eventId }: { eventId: string }) {
   if (error && !ev) {
     return (
       <div className="reg">
-        <RegHeader />
+        <RegHeader kiosk={kiosk} />
         <main className="reg__main reg__main--narrow">
           <p className="alert alert--warn" role="alert">
             {error.message}
           </p>
-          <a className="btn btn--secondary" href={href({ page: 'events' })}>
-            See all events
-          </a>
+          {!kiosk && <a className="btn btn--secondary" href={href({ page: 'events' })}>See all events</a>}
         </main>
       </div>
     );
   }
   if (!ev) return <div className="state-page"><div className="skeleton skeleton--page" aria-label="Loading registration" /></div>;
 
+  if (kiosk && ev.paymentMode !== 'simulated') return (
+    <main className="reg__main reg__main--narrow">
+      <h1>Kiosk registration unavailable</h1>
+      <p>This kiosk uses simulated payments. Ask staff for the public registration address.</p>
+    </main>
+  );
+
   const { config } = ev;
   if (isResearchExample(config)) {
     return (
       <div className="reg">
-        <RegHeader />
+        <RegHeader kiosk={kiosk} />
         <main className="reg__main reg__main--narrow">
           <h1 className="done__title">{config.event.name}</h1>
           <p className="muted">{config.event.venue}</p>
           <h2>Registration unavailable</h2>
           <p>{RESEARCH_REGISTRATION_MESSAGE}</p>
           <Pending>{config.event.demoNotice}</Pending>
-          <a className="btn btn--secondary" href={href({ page: 'events' })}>Back to events</a>
+          {!kiosk && <a className="btn btn--secondary" href={href({ page: 'events' })}>Back to events</a>}
         </main>
       </div>
     );
@@ -386,12 +391,10 @@ export function Register({ eventId }: { eventId: string }) {
 
   return (
     <div className="reg">
-      <RegHeader demo={config.event.isDemo} mode={ev.paymentMode} />
+      <RegHeader demo={config.event.isDemo} mode={ev.paymentMode} kiosk={kiosk} />
       <main className="reg__main">
         <section className="reg__event" aria-labelledby="reg-title">
-          <a className="link small" href={href({ page: 'events' })}>
-            All events
-          </a>
+          {!kiosk && <a className="link small" href={href({ page: 'events' })}>All events</a>}
           <h1 id="reg-title" ref={eventHeading} tabIndex={-1}>{config.event.name}</h1>
           <p className="reg__meta">
             {config.days.map((d) => formatDate(d.date)).join(' and ')}
@@ -484,7 +487,7 @@ export function Register({ eventId }: { eventId: string }) {
           <>
         {draft.step === 'details' && <DetailsStep config={config} draft={draft} update={update} goTo={goTo} />}
         {draft.step === 'waiver' && <Waiver ev={ev} draft={draft} update={update} goTo={goTo} setEvent={setEv} />}
-        {draft.step === 'review' && draft.orderId && <Review orderId={draft.orderId} eventId={eventId} goTo={goTo} paymentMode={ev.paymentMode} />}
+        {draft.step === 'review' && draft.orderId && <Review orderId={draft.orderId} eventId={eventId} goTo={goTo} paymentMode={ev.paymentMode} onKioskOrder={onKioskOrder} />}
           </>
         )}
       </main>
@@ -1181,9 +1184,11 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
 
   const summary = useMemo(() => Object.entries(errors).map(([k, message]) => ({ id: FIELD_IDS[k] ?? (k.startsWith('q-') ? k : 'f-first-name'), message })), [errors]);
 
+  const kiosk = kioskEventId() !== null;
   return (
     <form
       className="reg__panel"
+      autoComplete={kiosk ? 'off' : undefined}
       noValidate
       onSubmit={(e) => {
         e.preventDefault();
@@ -1196,18 +1201,18 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
       {d.demoRiderId && <p className="note">Prefilled from a demo rider. These details are fictional fixtures.</p>}
       <div className="form-row">
         <Field label="First name (required)" id={FIELD_IDS.firstName} error={errors.firstName}>
-          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.firstName || undefined} className="input" autoComplete="given-name" value={d.firstName} onChange={(e) => set({ firstName: e.target.value })} />}
+          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.firstName || undefined} className="input" autoComplete={kiosk ? 'off' : 'given-name'} value={d.firstName} onChange={(e) => set({ firstName: e.target.value })} />}
         </Field>
         <Field label="Last name (required)" id={FIELD_IDS.lastName} error={errors.lastName}>
-          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.lastName || undefined} className="input" autoComplete="family-name" value={d.lastName} onChange={(e) => set({ lastName: e.target.value })} />}
+          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.lastName || undefined} className="input" autoComplete={kiosk ? 'off' : 'family-name'} value={d.lastName} onChange={(e) => set({ lastName: e.target.value })} />}
         </Field>
       </div>
       <div className="form-row">
         <Field label={needsGuardian ? 'Rider email (optional for a minor)' : 'Email for the receipt (required)'} id={FIELD_IDS.email} error={errors.email} hint="No email is sent yet.">
-          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.email || undefined} type="email" className="input" autoComplete="email" value={d.email} onChange={(e) => set({ email: e.target.value })} />}
+          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.email || undefined} type="email" className="input" autoComplete={kiosk ? 'off' : 'email'} value={d.email} onChange={(e) => set({ email: e.target.value })} />}
         </Field>
         <Field label="Phone (optional)" id={FIELD_IDS.phone} error={errors.phone}>
-          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.phone || undefined} type="tel" className="input" autoComplete="tel" value={d.phone} onChange={(e) => set({ phone: e.target.value })} />}
+          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.phone || undefined} type="tel" className="input" autoComplete={kiosk ? 'off' : 'tel'} value={d.phone} onChange={(e) => set({ phone: e.target.value })} />}
         </Field>
       </div>
       <div className="form-row">
@@ -1442,7 +1447,13 @@ function orderRaceName(order: OrderView) {
   return (raceId: string) => order.entries.find((e) => order.quote.lines.find((l) => l.categoryId === e.categoryId)?.raceId === raceId)?.raceName ?? '';
 }
 
-function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; eventId: string; goTo: (s: Step) => void; paymentMode: PublicEvent['paymentMode'] }) {
+function Review({ orderId, eventId, goTo, paymentMode, onKioskOrder }: {
+  orderId: string;
+  eventId: string;
+  goTo: (s: Step) => void;
+  paymentMode: PublicEvent['paymentMode'];
+  onKioskOrder?: (orderId: string) => void;
+}) {
   const [order, setOrder] = useState<OrderView | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1453,10 +1464,13 @@ function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; even
 
   useEffect(() => {
     if (order?.status === 'confirmed' || order?.status === 'needs_attention') {
-      clearStoredDraft(eventId);
-      navigate({ page: 'order', orderId });
+      if (onKioskOrder) onKioskOrder(orderId);
+      else {
+        clearStoredDraft(eventId);
+        navigate({ page: 'order', orderId });
+      }
     }
-  }, [order?.status, orderId, eventId]);
+  }, [order?.status, orderId, eventId, onKioskOrder]);
 
   if (!order) return err ? <p className="note note--error">{err}</p> : <div className="skeleton" aria-label="Loading your order" />;
 
@@ -1559,18 +1573,19 @@ function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; even
 
 /* Confirmation and receipt ------------------------------------------------ */
 
-export function OrderPage({ orderId }: { orderId: string }) {
+export function OrderPage({ orderId, kiosk = false }: { orderId: string; kiosk?: boolean }) {
   const [order, setOrder] = useState<OrderView | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // Back from Stripe: the payment notification can arrive a few seconds after the rider does.
   // Read once for this order, then taken out of the address so an order opened later in this tab does not look like a return.
-  const [returned] = useState(() => new URLSearchParams(window.location.search).get('checkout') === 'returned');
+  const [returned] = useState(() => !kiosk && new URLSearchParams(window.location.search).get('checkout') === 'returned');
   useEffect(() => {
+    if (kiosk) return;
     const url = new URL(window.location.href);
     if (!url.searchParams.has('checkout')) return;
     url.searchParams.delete('checkout');
     window.history.replaceState(window.history.state, '', url);
-  }, []);
+  }, [kiosk]);
   const waiting = returned && (order?.status === 'held' || order?.status === 'payment_failed');
   const [polls, setPolls] = useState(0);
   useEffect(() => {
@@ -1584,8 +1599,8 @@ export function OrderPage({ orderId }: { orderId: string }) {
   // A Stripe payment never passes through the review step again, so the finished registration is forgotten here.
   const confirmedEventId = order?.status === 'confirmed' ? order.eventId : null;
   useEffect(() => {
-    if (confirmedEventId) clearStoredDraft(confirmedEventId, orderId);
-  }, [confirmedEventId, orderId]);
+    if (!kiosk && confirmedEventId) clearStoredDraft(confirmedEventId, orderId);
+  }, [confirmedEventId, orderId, kiosk]);
   if (err) return <div className="state-page"><p className="alert alert--error">{err}</p></div>;
   if (!order) return <div className="state-page"><div className="skeleton skeleton--page" /></div>;
 
@@ -1597,7 +1612,7 @@ export function OrderPage({ orderId }: { orderId: string }) {
   const refunded = confirmed ? refundedCents(order.totalCents, order.refunds) : 0;
   return (
     <div className="reg">
-      <RegHeader demo={order.isDemo} mode={mode} />
+      <RegHeader demo={order.isDemo} mode={mode} kiosk={kiosk} />
       <main className="reg__main reg__main--narrow">
         {confirmed ? (
           <>
@@ -1637,9 +1652,7 @@ export function OrderPage({ orderId }: { orderId: string }) {
           <>
             <h1 className="done__title">Registration not finished</h1>
             <p className="note">This order is {order.status.replace('_', ' ')}.</p>
-            <a className="btn btn--secondary" href={href({ page: 'register', eventId: order.eventId })}>
-              Back to registration
-            </a>
+            {!kiosk && <a className="btn btn--secondary" href={href({ page: 'register', eventId: order.eventId })}>Back to registration</a>}
           </>
         )}
 
@@ -1762,6 +1775,7 @@ function JoinWaitlist({ ev, cat, draft }: { ev: PublicEvent; cat: Category; draf
   const p = draft.profile;
   const session = useSession();
 
+  const kiosk = kioskEventId() !== null;
   if (joined) {
     return (
       <span className="opt__reason" role="status">
@@ -1799,19 +1813,19 @@ function JoinWaitlist({ ev, cat, draft }: { ev: PublicEvent; cat: Category; draf
   };
   const id = (k: string) => `wl-${cat.id}-${k}`;
   return (
-    <form className="waitlist-form" onSubmit={submit} aria-label={`Join the waitlist for ${cat.name}`}>
+    <form className="waitlist-form" autoComplete={kiosk ? 'off' : undefined} onSubmit={submit} aria-label={`Join the waitlist for ${cat.name}`}>
       <div className="waitlist-form__row">
         <label htmlFor={id('first')}>
           First name
-          <input id={id('first')} className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} autoComplete="given-name" />
+          <input id={id('first')} className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} autoComplete={kiosk ? 'off' : 'given-name'} />
         </label>
         <label htmlFor={id('last')}>
           Last name
-          <input id={id('last')} className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} autoComplete="family-name" />
+          <input id={id('last')} className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} autoComplete={kiosk ? 'off' : 'family-name'} />
         </label>
         <label htmlFor={id('email')}>
           Email
-          <input id={id('email')} className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" />
+          <input id={id('email')} className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete={kiosk ? 'off' : 'email'} />
         </label>
       </div>
       {error && (
