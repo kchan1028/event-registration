@@ -490,6 +490,8 @@ Acceptance: filters and exports agree with a timestamped source dataset; transfe
 
 **Owner decision (November 20, 2026).** Build a shared kiosk before staff-entered orders. Riders and guardians sign in with their own accounts, enter their own details, sign their own waivers and complete their own payments. The kiosk uses a dedicated rider browser, separate from the staff desk. Ending a session must remove that rider’s sign-in, draft and receipt from the kiosk. The local increment uses fictional accounts and simulated payments. Reloading ends the local session. Hosted sign-in, payment return and shared-device acceptance remain Planned.
 
+**Kiosk idle-session decision (November 20, 2026).** After four minutes of inactivity, warn the rider that the kiosk session will end within one minute. They can choose **Keep working** to start a fresh five-minute idle period. Ending the session discards its sign-in, draft and receipt from the device. For interrupted checkout, the rider or guardian checks the existing order from **My registrations** on their own device before trying payment again.
+
 Staff-assisted race selection (November 20, 2026). Staff can suggest open categories with places available for the selected race day and share the choices by address or QR. The rider or guardian decides whether to apply the suggestions and can edit their selection. Suggestions contain public category identifiers and do not hold places or change checkout rules.
 
 **Owner decision (November 20, 2026).** Staff prepare race choices only. The rider or guardian signs in to their own account, enters the rider’s details, signs the waiver and pays.

@@ -2149,6 +2149,14 @@ button.issue {
   gap: var(--s-2);
 }
 .walkup-suggestions ul { padding-inline-start: 1.5rem; }
+.kiosk-expiry {
+  color: var(--ink);
+  max-width: min(28rem, calc(100% - 2rem));
+  margin: auto;
+}
+.kiosk-expiry:not([open]) { display: none; }
+.kiosk-expiry::backdrop { background: rgb(0 0 0 / 0.55); }
+.kiosk-expiry .btn { min-height: 44px; }
 .reg__main--narrow {
   max-width: 680px;
 }
