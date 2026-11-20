@@ -295,7 +295,7 @@ test('shared test kiosk clears the receipt and draft between rider sessions on t
     await expect(start).toBeFocused();
     await kiosk.goBack();
     await expect(start).toBeVisible();
-    await expect(kiosk.getByText(/Alex Demo/)).toHaveCount(0);
+    await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toHaveCount(0);
 
     await signIn('kiosk.second@example.test');
     await expect(race).not.toBeChecked();
@@ -309,8 +309,9 @@ test('shared test kiosk clears the receipt and draft between rider sessions on t
     await expect(start).toBeVisible();
     await expect(firstName).toHaveCount(0);
     await signIn('kiosk.third@example.test');
+    await expect(kiosk.getByLabel('Use a demo rider (fake data)')).toHaveValue('');
     await expect(race).not.toBeChecked();
-    await expect(kiosk.getByText(/Alex Demo/)).toHaveCount(0);
+    await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toHaveCount(0);
     await expect(page.getByLabel('Test kiosk address')).toHaveValue(address.href);
   } finally {
     await context.close();
