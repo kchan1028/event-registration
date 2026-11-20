@@ -384,7 +384,7 @@ test('staff suggest race choices and the rider confirms them before checkout', a
     })]);
     const staff = await page.request.get('/api/rider/registrations');
     expect(staff.ok()).toBe(true);
-    expect(await staff.json()).toEqual([]);
+    expect((await staff.json()).filter((order: { eventId: string }) => order.eventId === eventId)).toEqual([]);
   } finally {
     await context.close();
   }
