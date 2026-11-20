@@ -3,7 +3,7 @@ import { QrCodeImage } from './QrCodeImage';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
 import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, MESSAGES, missingBundleRaces, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
-import { evaluateCategory, licenseLabel, summarizeEligibility, summarizePath, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
+import { evaluateCategory, excludedBecauseClassUnspecified, licenseLabel, summarizeEligibility, summarizePath, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories } from '../shared/format';
 import { quote, type Quote } from '../shared/pricing';
@@ -524,6 +524,15 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
   const matching = matchesOnly && matchesReady;
   const matchingCount = config.categories.filter((cat) => cat.status !== 'archived' && result(cat)?.status === 'eligible').length;
   const visible = (cat: Category) => !matching || result(cat)?.status === 'eligible' || draft.selected.includes(cat.id) || draft.offerCategoryId === cat.id;
+  // Selected and offered entries stay on screen, so they are not counted as excluded.
+  const classHidden = (cat: Category) => cat.status !== 'archived' && cat.startGroupId !== null && !draft.selected.includes(cat.id) && draft.offerCategoryId !== cat.id && excludedBecauseClassUnspecified(result(cat));
+  const classHiddenCount = matching ? config.categories.filter(classHidden).length : 0;
+  const matchLead = matchingCount === 0 ? 'No categories match your current answers.' : `${matchingCount} categories match your answers.`;
+  const matchStatus = !matching
+    ? ''
+    : classHiddenCount > 0
+      ? `${matchLead} Selected entries stay visible. ${classHiddenCount === 1 ? '1 category is not listed' : `${classHiddenCount} categories are not listed`} because competition class is Prefer not to say, and that choice is not a match. For those categories, and for races that need more details or organizer review, choose All races.`
+      : `${matchLead} Selected entries stay visible. For races that need more details or organizer review, choose All races.`;
   const findMyRaces = () => {
     setMatchesOnly(true);
     scheduleRef.current?.focus();
@@ -685,11 +694,11 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           <div className="schedule-tools">
             <h2>{matching ? 'Your matching races' : 'Race schedule'}</h2>
             <div className="schedule-tools__views" role="group" aria-label="Schedule view">
-              <button className={`btn btn--small ${matching ? 'btn--ghost' : 'btn--primary'}`} aria-pressed={!matching} onClick={() => setMatchesOnly(false)}>All races</button>
+              <button className={`btn btn--small ${matching ? 'btn--ghost' : 'btn--primary'}`} aria-pressed={!matching} aria-describedby={classHiddenCount > 0 ? 'match-filter-status' : undefined} onClick={() => setMatchesOnly(false)}>All races</button>
               <button className={`btn btn--small ${matching ? 'btn--primary' : 'btn--ghost'}`} aria-pressed={matching} disabled={!matchesReady} onClick={() => setMatchesOnly(true)}>Matching races</button>
             </div>
           </div>
-          <p className={matching ? 'small' : 'sr-only'} role="status">{matching ? `${matchingCount === 0 ? 'No categories match your current answers.' : `${matchingCount} categories match your answers.`} Selected entries stay visible. For races that need more details or organizer review, choose All races.` : ''}</p>
+          <p id="match-filter-status" className={matching ? 'small' : 'sr-only'} role="status">{matchStatus}</p>
           {config.days.map((day, di) => (
             <section key={day.id} className="sched-day" style={{ ['--day' as string]: dayHue(di) }} aria-labelledby={`day-${day.id}`}>
               <h2 className="sched-day__title" id={`day-${day.id}`}>
@@ -707,7 +716,13 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                         {ev.cancellation.scopes.some((s) => s.scope === 'event' || (s.scope === 'day' && s.dayId === race.dayId) || (s.scope === 'race' && s.raceId === race.id)) && <span>Cancelled</span>}
                         {race.course && <span>{race.course}</span>}
                       </h3>
-                      {matching && !config.categories.some((cat) => cat.raceId === race.id && cat.status !== 'archived' && cat.startGroupId !== null && visible(cat)) && <p className="muted small">No matching categories in this race. Choose All races to review the full schedule.</p>}
+                      {matching && !config.categories.some((cat) => cat.raceId === race.id && cat.status !== 'archived' && cat.startGroupId !== null && visible(cat)) && (
+                        <p className="muted small">
+                          {config.categories.some((cat) => cat.raceId === race.id && classHidden(cat))
+                            ? 'No categories in this race match while competition class is Prefer not to say. Choose All races to see the full schedule.'
+                            : 'No matching categories in this race. Choose All races to review the full schedule.'}
+                        </p>
+                      )}
                       <ol className="sched-list">
                         {groups.map((sg) => {
                           const allCats = sortCategories(config.categories.filter((c) => c.startGroupId === sg.id && c.status !== 'archived'));
