@@ -20,7 +20,7 @@ For another device to open the QR, the site must be reachable from that device. 
 
 1. Select the race day in **Check-in**. Under **Register a walk-up**, choose **Prepare race choices** and select the categories the rider wants to review.
 2. Share the suggested-race QR or **Race choices address** with the rider or guardian. The choices use the availability snapshot when the panel opens. Close and reopen the chooser for a fresh list.
-3. Ask them to review the choices and availability on their phone. They can apply the suggestions or choose different categories, then complete checkout using their own account. If the rider already has a draft in that tab, continue the draft and adjust entries in the race list.
+3. Ask them to review the choices and availability on their phone. They can apply the suggestions or choose different categories, then sign in to their own account, enter their details, sign the waiver and pay. If the rider already has a draft in that tab, continue the draft and adjust entries in the race list.
 
 ## Unavailable or interrupted registration
 

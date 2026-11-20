@@ -492,7 +492,7 @@ Acceptance: filters and exports agree with a timestamped source dataset; transfe
 
 Staff-assisted race selection (November 20, 2026). Staff can suggest open categories with places available for the selected race day and share the choices by address or QR. The rider or guardian decides whether to apply the suggestions and can edit their selection. Suggestions contain public category identifiers and do not hold places or change checkout rules.
 
-**Open scope decision (November 20, 2026, owner: project owner).** Can staff also enter personal details for riders before a handoff? The choice affects who can enter personal data, how drafts are protected, and how riders verify the details. Until this is decided, staff-assisted work can proceed with race choices and riders or guardians enter their own details. Staff entry of personal details stays Planned. Revisit before building that capability.
+**Owner decision (November 20, 2026).** Staff prepare race choices only. The rider or guardian signs in to their own account, enters the rider’s details, signs the waiver and pays.
 
 Status: Full race-day workflow remains Planned; the first approved increment is a phone-first handoff from check-in. Owner decision (November 16, 2026): riders/guardians register on their own phones and accounts, then staff check readiness and issue bibs. Staff-entered registrations and shared-kiosk sessions are outside this increment. Existing published category windows and day-of surcharges apply; the handoff never reopens a closed race or creates an exception.
 
