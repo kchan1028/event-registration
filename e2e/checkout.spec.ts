@@ -432,10 +432,10 @@ test('validation recovery keeps keyboard focus and typed details', async ({ page
 
   const desktop = page.viewportSize()!;
   await page.setViewportSize({ width: 360, height: 800 });
-  const contactName = await fieldBounds('Contact name');
-  const phone = await fieldBounds('Contact phone');
-  expect(Math.abs(contactName.left - phone.left)).toBeLessThan(1);
-  expect(phone.top).toBeGreaterThan(contactName.bottom);
+  const email = await fieldBounds('Email for the receipt (required)');
+  const phone = await fieldBounds('Phone (optional)');
+  expect(Math.abs(email.left - phone.left)).toBeLessThan(1);
+  expect(phone.top).toBeGreaterThan(email.bottom);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   await page.setViewportSize(desktop);
   await contactPhone.fill(savedPhone);
