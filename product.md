@@ -488,6 +488,8 @@ Acceptance: filters and exports agree with a timestamped source dataset; transfe
 
 ### Race-day registration
 
+**Owner decision (November 20, 2026).** Build a shared kiosk before staff-entered orders. Riders and guardians sign in with their own accounts, enter their own details, sign their own waivers and complete their own payments. The kiosk uses a dedicated rider browser, separate from the staff desk. Ending a session must remove that rider’s sign-in, draft and receipt from the kiosk. The local increment uses fictional accounts and simulated payments. Reloading ends the local session. Hosted sign-in, payment return and shared-device acceptance remain Planned.
+
 Status: Full race-day workflow remains Planned; the first approved increment is a phone-first handoff from check-in. Owner decision (November 16, 2026): riders/guardians register on their own phones and accounts, then staff check readiness and issue bibs. Staff-entered registrations and shared-kiosk sessions are outside this increment. Existing published category windows and day-of surcharges apply; the handoff never reopens a closed race or creates an exception.
 
 Planned full workflow: authorized staff can add a walk-up rider or direct them to a mobile/kiosk entry flow while enforcing the same eligibility, registration-window, capacity, guardian, waiver, and waitlist rules as advance registration. Configure race-day opening/closing times and surcharges explicitly. Staff need a reason and audit record for an allowed exception and cannot override hard capacity or mandatory requirements.

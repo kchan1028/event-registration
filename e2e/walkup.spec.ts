@@ -247,3 +247,78 @@ test('a junior walk-up reaches check-in after guardian consent and simulated pay
     await context.close();
   }
 });
+
+test('shared test kiosk clears the receipt and draft between rider sessions on the same device', async ({ page, browser }) => {
+  const eventId = await seedRegistrationCase(page.request, 'criterium');
+  await page.goto(`/?staff-context=fictional#/events/${eventId}/check-in`);
+  await page.getByRole('button', { name: 'Register a walk-up' }).click();
+  const address = new URL(await page.getByLabel('Test kiosk address').inputValue());
+  expect([...address.searchParams]).toEqual([['kiosk', eventId]]);
+  expect(address.hash).toBe('');
+
+  // Override the organizer fixture's header so the kiosk's own sign-in authenticates requests.
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, extraHTTPHeaders: {} });
+  try {
+    const kiosk = await context.newPage();
+    await kiosk.goto(address.href);
+    const start = kiosk.getByRole('button', { name: 'Sign in to register' });
+    const signIn = async (email: string) => {
+      await start.click();
+      await expect(kiosk.getByLabel('Test email')).toBeEmpty();
+      await kiosk.getByLabel('Test email').fill(email);
+      await kiosk.getByRole('button', { name: 'Sign in', exact: true }).click();
+    };
+    await signIn('kiosk.first@example.test');
+    await kiosk.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+    const race = kiosk.getByRole('checkbox', { name: /DVC-M45/ });
+    await race.check();
+    const details = kiosk.getByRole('button', { name: 'Continue to racer details' });
+    await details.click();
+    await kiosk.getByRole('button', { name: 'Continue to the waiver' }).click();
+    await kiosk.getByLabel('I have read the whole waiver').check();
+    await kiosk.getByLabel(/Type your full name to sign/).fill('Alex Demo');
+    await kiosk.getByLabel('I agree to this waiver', { exact: true }).check();
+    await kiosk.getByRole('button', { name: 'Sign and review the order' }).click();
+    await kiosk.getByRole('button', { name: /Complete simulated payment/ }).click();
+    await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
+    await expect(kiosk.getByText(/Alex Demo · order/)).toBeVisible();
+    expect(kiosk.url()).toBe(address.href);
+    expect(await kiosk.evaluate(() => Object.keys(sessionStorage))).toEqual([]);
+    const orders = await kiosk.request.get('/api/rider/registrations', { headers: { Authorization: 'Bearer test:kiosk.first@example.test' } });
+    expect(orders.ok()).toBe(true);
+    const [order] = await orders.json();
+    expect(order).toMatchObject({ eventId, placedByYou: true, rider: { firstName: 'Alex' } });
+
+    // A hash navigation cannot open another screen inside the kiosk. Back still shows the signed-out landing page.
+    await kiosk.evaluate((id) => { window.location.hash = `#/orders/${id}`; }, order.id);
+    await kiosk.getByRole('button', { name: 'End kiosk session' }).click();
+    await expect(start).toBeFocused();
+    await kiosk.goBack();
+    await expect(start).toBeVisible();
+    await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toHaveCount(0);
+
+    await signIn('kiosk.second@example.test');
+    await expect(race).not.toBeChecked();
+    await kiosk.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+    await race.check();
+    await details.click();
+    const firstName = kiosk.getByLabel('First name (required)', { exact: true });
+    await expect(firstName).toHaveAttribute('autocomplete', 'off');
+    await firstName.fill('Second session draft');
+    expect(await kiosk.evaluate(() => Object.keys(sessionStorage))).toEqual([]);
+    await kiosk.reload();
+    await expect(start).toBeVisible();
+    await expect(firstName).toHaveCount(0);
+    await signIn('kiosk.third@example.test');
+    await expect(kiosk.getByLabel('Use a demo rider (fake data)')).toHaveValue('');
+    await expect(race).not.toBeChecked();
+    await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toHaveCount(0);
+    await kiosk.goto(new URL('/#/register', address).href);
+    await kiosk.goBack();
+    await expect(start).toBeVisible();
+    await expect(race).toHaveCount(0);
+    await expect(page.getByLabel('Test kiosk address')).toHaveValue(address.href);
+  } finally {
+    await context.close();
+  }
+});

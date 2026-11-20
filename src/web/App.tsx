@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MyRegistrations } from './MyRegistrations';
-import { RequireSignIn } from './auth';
+import { kioskEventId, RequireSignIn, TEST_MODE } from './auth';
+import { KioskRegistration } from './KioskRegistration';
 import { Builder } from './Builder';
 import { CheckIn } from './CheckIn';
 import { Home } from './Home';
@@ -56,6 +57,11 @@ export function App() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
+
+  const kiosk = kioskEventId();
+  if (kiosk !== null) return TEST_MODE && kiosk
+    ? <KioskRegistration key={kiosk} eventId={kiosk} />
+    : <main className="state-page"><h1>Test kiosk unavailable</h1><p>Ask staff for the public registration address.</p></main>;
 
   // The open event list and rider event pages are public; Register asks riders to sign in before checkout.
   if (route.page === 'register') return <Register key={route.eventId} eventId={route.eventId} />;

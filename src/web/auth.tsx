@@ -33,7 +33,7 @@ export function useSession(): Session {
 // Read import.meta.env.* directly: the bundler replaces these exact expressions at build time, which lets a
 // production build drop the test sign-in page. An alias of import.meta.env can defeat that.
 const CLERK_KEY = (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined)?.trim();
-const TEST_MODE = import.meta.env.VITE_AUTH_MODE === 'test' || (import.meta.env.DEV && !CLERK_KEY);
+export const TEST_MODE = import.meta.env.VITE_AUTH_MODE === 'test' || (import.meta.env.DEV && !CLERK_KEY);
 
 export function AuthRoot({ children }: { children: ReactNode }) {
   if (TEST_MODE) return <TestSession>{children}</TestSession>;
@@ -71,6 +71,10 @@ function ClerkSession({ children }: { children: ReactNode }) {
   return <SessionContext.Provider value={session}>{children}</SessionContext.Provider>;
 }
 
+export function kioskEventId(): string | null {
+  return new URLSearchParams(window.location.search).get('kiosk');
+}
+
 const TEST_KEY = 'cyclereg.test-session';
 
 function readTestEmail(): string | null {
@@ -82,7 +86,8 @@ function readTestEmail(): string | null {
 }
 
 function TestSession({ children }: { children: ReactNode }) {
-  const [email, setEmail] = useState<string | null>(readTestEmail);
+  const kiosk = kioskEventId() !== null;
+  const [email, setEmail] = useState<string | null>(() => kiosk ? null : readTestEmail());
   const [asking, setAsking] = useState(false);
   setTokenGetter(async () => (email ? `test:${email}` : null));
   const session: Session = {
@@ -91,7 +96,7 @@ function TestSession({ children }: { children: ReactNode }) {
     signIn: () => setAsking(true),
     signOut: () => {
       try {
-        sessionStorage.removeItem(TEST_KEY);
+        if (!kiosk) sessionStorage.removeItem(TEST_KEY);
       } catch {
         /* storage blocked: the session simply ends with the tab */
       }
@@ -100,7 +105,7 @@ function TestSession({ children }: { children: ReactNode }) {
   };
   const done = (value: string) => {
     try {
-      sessionStorage.setItem(TEST_KEY, value);
+      if (!kiosk) sessionStorage.setItem(TEST_KEY, value);
     } catch {
       /* storage blocked: keep the session in memory */
     }

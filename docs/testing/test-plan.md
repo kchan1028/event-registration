@@ -72,6 +72,10 @@ In `e2e/organizer.spec.ts`, a new draft's missing-refund warning is one control 
 
 The phone handoff verifies that opening the QR/link leaves the entry unmarked, the rider account cannot mark it, and the server refuses its first desk bib until staff explicitly mark the confirmed entry. It also retries the staff mark and verifies the same entry remains marked without a bib or check-in before staff issue the bib. After reloading the desk and looking up the rider again, staff see the saved mark and can issue the bib. The API test in `tests/checkin.test.ts` retries at a later time as a different authorized staff account and checks that storage preserves the first actor and timestamp. Check wrong-day refusal in `e2e/checkin.spec.ts` and advance check-in with a preassigned bib in `e2e/checkout.spec.ts` and `e2e/case-studies.spec.ts`. Existing bib corrections and payment/readiness blockers still apply.
 
+### Shared walk-up test kiosk
+
+Use a published fictional event with simulated payment and a separate rider browser. Verify that the first rider can complete checkout and that their receipt and draft do not carry into the next session, including after browser Back. Reload a second rider’s unfinished registration and verify that the device returns to sign-in and the next draft starts empty. Check that the kiosk stores no rider session or draft in browser session storage and the staff session stays separate. Browser coverage lives in `e2e/walkup.spec.ts`. Verify the device handoff with staff and verify hosted sign-in and payment return before any hosted kiosk pilot.
+
 ### Volunteer runbook rehearsal
 
 The [check-in guide](../runbooks/race-day-check-in.md) is documentation for existing behavior, not a completed staff rehearsal. Have a second organizer and volunteers use their own role-scoped accounts with fictional data and without developer rescue. Record the source commit, environment, device/role, task, expected and actual result, assistance, defects and untested areas in a dated rehearsal report. Test:
