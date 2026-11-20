@@ -2564,6 +2564,9 @@ button.issue {
   gap: var(--s-4);
   max-width: 720px;
 }
+.reg__panel .form-row {
+  align-items: start;
+}
 .reg__panel h2 {
   font-size: 22px;
   font-weight: 500;

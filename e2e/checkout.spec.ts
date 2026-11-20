@@ -415,6 +415,20 @@ test('validation recovery keeps keyboard focus and typed details', async ({ page
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
   await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
   await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  for (const [left, right] of [['Email for the receipt (required)', 'Phone (optional)'], ['Team (optional)', 'License number (optional)']]) {
+    const rowTop = async (label: string) => page.getByLabel(label, { exact: true }).evaluate(input => input.getBoundingClientRect().top);
+    expect(Math.abs(await rowTop(left) - await rowTop(right))).toBeLessThan(1);
+  }
+  const contactPhone = page.getByLabel('Contact phone', { exact: true });
+  const savedPhone = await contactPhone.inputValue();
+  await contactPhone.fill('123');
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await expect(page.locator('.error-summary')).toContainText('Enter a phone number with 10 digits.');
+  const contactName = page.getByLabel('Contact name', { exact: true });
+  const contactNameTop = await contactName.evaluate(input => input.getBoundingClientRect().top);
+  const contactPhoneTop = await contactPhone.evaluate(input => input.getBoundingClientRect().top);
+  expect(Math.abs(contactNameTop - contactPhoneTop)).toBeLessThan(1);
+  await contactPhone.fill(savedPhone);
   const first = page.getByLabel('First name (required)');
   await first.fill('');
   await page.getByRole('button', { name: 'Continue to the waiver' }).click();

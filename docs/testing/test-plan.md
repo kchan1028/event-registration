@@ -248,6 +248,8 @@ The desk shift in `e2e/handoff.spec.ts` uses separate fictional volunteer accoun
 
 Check package intent in `tests/orders.test.ts` and `e2e/checkout.spec.ts`. An explicit package needs an eligible entry in every included race. An incomplete, removed or inapplicable package holds nothing. A valid explicit choice is priced even when another package would save more. Clearing a removed package is an explicit action. Existing recorded reservations recover their original quote after the package is removed.
 
+Racer details should align paired inputs when either field shows helper text or an inline error. The checkout validation recovery test checks this in Chromium.
+
 Focused browser scenarios in `e2e/checkout.spec.ts` cover [#127](https://github.com/kchan1028/event-registration/issues/127) and [#128](https://github.com/kchan1028/event-registration/issues/128):
 
 - Failed-submit summary links focus the field; sequential typing retains focus and full values. A new failed submission focuses the updated summary.
