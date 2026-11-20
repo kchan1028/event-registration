@@ -1660,6 +1660,14 @@ button.issue {
   font-weight: 600;
   color: var(--muted);
 }
+.issue__action {
+  display: block;
+  font-weight: 600;
+  color: var(--link);
+}
+.refund-rules__legend {
+  scroll-margin-top: 16px;
+}
 @media (hover: hover) and (pointer: fine) {
   button.issue:hover {
     background: var(--tyvek-deep);

@@ -175,3 +175,51 @@ test('on a phone, the category editor opens as a drawer that takes and returns f
   await expect(page.locator('.inspector.is-open')).toHaveCount(0);
   await expect(name).toBeFocused();
 });
+
+test('the refund warning opens refund rules and clears once notes are saved', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('Club or organization name').fill('Refund Warning Club');
+  await page.getByRole('button', { name: 'Create organization' }).click();
+  await expect(page.getByRole('heading', { name: 'Refund Warning Club' })).toBeVisible();
+  await page.getByRole('article').filter({ hasText: 'Refund Warning Club' }).getByRole('button', { name: 'New draft event' }).click();
+  await page.getByLabel('Event name').fill('Refund Warning Weekend');
+  await page.getByLabel('First race day').fill('2027-06-12');
+  await page.getByRole('button', { name: 'Create draft' }).click();
+  await expect(page.getByRole('heading', { name: 'Saturday road race', level: 2 })).toBeVisible();
+
+  // A wide race schedule shows start groups. Event setup shows the checks panel, which lists this draft's few warnings.
+  await page.getByRole('link', { name: 'Event setup', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Event setup', level: 2 })).toBeVisible();
+  const refund = page.locator('aside').getByRole('button', { name: 'Set up refund policy' });
+  await expect(refund).toContainText('Event setup > Bundles, discounts, and rider policies > Refund and credit rules');
+  await expect(refund).toContainText('No refund policy is set. Riders should see it before they pay.');
+  const waiver = page.locator('aside').getByRole('button', { name: /No waiver text is set/ });
+  await expect(waiver).not.toContainText('Set up refund policy');
+
+  await refund.focus();
+  await page.keyboard.press('Enter');
+  const rules = page.locator('#refund-and-credit-rules');
+  await expect(rules).toBeFocused();
+  await expect(rules).toBeInViewport();
+
+  await page.getByRole('link', { name: /Saturday road race/ }).click();
+  await expect(page.getByRole('heading', { name: 'Saturday road race', level: 2 })).toBeVisible();
+  await expect(page.locator('.topbar')).toContainText('Draft, not published');
+
+  await page.getByRole('link', { name: 'Review and publish', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Review and publish', level: 2 })).toBeVisible();
+  await page.locator('main').getByRole('button', { name: /No waiver text is set/ }).click();
+  await expect(page.getByRole('heading', { name: 'Event setup', level: 2 })).toBeVisible();
+  await expect(rules).not.toBeFocused();
+
+  await page.getByRole('link', { name: 'Review and publish', exact: true }).click();
+  await page.locator('main').getByRole('button', { name: 'Set up refund policy' }).click();
+  await expect(rules).toBeFocused();
+  await page.getByLabel('Other refund notes shown before payment (optional)').fill('Fictional note: riders may request a refund up to 7 days before the first race day.');
+  await saved(page);
+  await page.getByRole('link', { name: 'Review and publish', exact: true }).click();
+  await expect(page.locator('main').getByRole('button', { name: 'Set up refund policy' })).toHaveCount(0);
+  await expect(page.locator('main').getByRole('button', { name: /No waiver text is set/ })).toBeVisible();
+  await expect(page.locator('.topbar')).toContainText('Draft, not published');
+  await expect(page.getByRole('heading', { name: 'Refund Warning Weekend', level: 1 })).toBeVisible();
+});
