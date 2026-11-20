@@ -88,7 +88,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
 
       <section className="editor__section" aria-labelledby={`${cat.id}-id`}>
         <h3 id={`${cat.id}-id`}>Identity and listing</h3>
-        <div className="form-row">
+        <div className="form-row form-row--start">
           <Field label="Timing code" hint="Short code on start lists">
             {(id, d) => <input id={id} aria-describedby={d} className="input input--code" value={cat.timingCode} onChange={(e) => set((c) => ({ ...c, timingCode: e.target.value.toUpperCase() }))} maxLength={24} />}
           </Field>
@@ -170,7 +170,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
 
       <section className="editor__section" aria-labelledby={`${cat.id}-price`}>
         <h3 id={`${cat.id}-price`}>Price and registration window</h3>
-        <div className="form-row">
+        <div className="form-row form-row--start">
           <Field label="Entry price" hint="0 means free">
             {(id, d) => <MoneyInput id={id} describedBy={d} cents={cat.pricing.baseCents} onCommit={(v) => set((c) => ({ ...c, pricing: { ...c.pricing, baseCents: v } }))} />}
           </Field>
@@ -294,7 +294,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
           </>
         )}
 
-        <div className="form-row form-row--tight">
+        <div className="form-row form-row--tight form-row--start">
           <Field label="Bib range: first" hint="Blank: use the event or day range.">
             {(id, d) => (
               <IntInput id={id} describedBy={d} value={cat.bibRange?.first ?? null} min={1} max={99999} onCommit={(v) => set((c) => ({ ...c, bibRange: v === null ? null : { first: v, last: c.bibRange?.last ?? v + 99 } }))} />
@@ -493,7 +493,7 @@ function LengthEditor({ length, discipline, onChange }: { length: RaceLength; di
         </div>
       )}
       {length.kind === 'duration' && (
-        <div className="form-row">
+        <div className="form-row form-row--start">
           <Field label="Minutes">{(id) => <IntInput id={id} value={length.minutes} min={1} max={600} allowEmpty={false} onCommit={(v) => v !== null && onChange({ ...length, minutes: v })} />}</Field>
           <Field label="Plus laps" hint="For example 45 min + 3 laps">
             {(id, d) => <IntInput id={id} describedBy={d} value={length.plusLaps} min={0} max={50} onCommit={(v) => onChange({ ...length, plusLaps: v })} />}

@@ -474,6 +474,14 @@ textarea.input {
   gap: var(--s-3);
   align-items: end;
 }
+.form-row--start {
+  align-items: start;
+}
+@media (max-width: 480px) {
+  .editor .form-row--start {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .refund-fields {
   align-items: start;
 }
