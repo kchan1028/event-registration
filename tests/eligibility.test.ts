@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildDemoEvent } from '../src/shared/demo';
-import { evaluateCategory, formatLicenseSet, summarizePath, type RiderProfile } from '../src/shared/eligibility';
+import { COMPETITION_CLASS_UNKNOWN, evaluateCategory, excludedBecauseClassUnspecified, formatLicenseSet, summarizePath, type RiderProfile } from '../src/shared/eligibility';
+import { buildBerkeleyOmniumEvent } from '../src/shared/berkeleyOmnium';
 import { blankPath, newCategory } from '../src/shared/factory';
 
 const { config } = buildDemoEvent();
@@ -83,6 +84,23 @@ describe('eligibility: structured rules from the product.md fixtures', () => {
     cat.eligibility.paths = [{ ...blankPath(), licenseTypes: ['annual'] }];
     expect(evaluateCategory(cat, rider({ licenseType: 'one_day' })).status).toBe('ineligible');
     expect(evaluateCategory(cat, rider({ licenseType: null })).status).toBe('needs_review');
+  });
+
+  it('hides a class-specific field from matches only when competition class is unspecified', () => {
+    const { config } = buildBerkeleyOmniumEvent();
+    const byCodeOmnium = (code: string) => config.categories.find((c) => c.timingCode === code)!;
+    const junior = rider({ racingAge: 13, licenseCategory: '5', competitionClass: null });
+    const boys = evaluateCategory(byCodeOmnium('RR-JB1314'), junior);
+    const combined = evaluateCategory(byCodeOmnium('CR-J1314'), junior);
+    expect(boys).toEqual({ status: 'needs_review', reasons: [COMPETITION_CLASS_UNKNOWN] });
+    expect(excludedBecauseClassUnspecified(boys)).toBe(true);
+    expect(combined.status).toBe('eligible');
+    expect(excludedBecauseClassUnspecified(combined)).toBe(false);
+    expect(excludedBecauseClassUnspecified(evaluateCategory(byCodeOmnium('RR-JB1314'), { ...junior, competitionClass: 'men' }))).toBe(false);
+    expect(evaluateCategory(byCodeOmnium('RR-JB1314'), { ...junior, competitionClass: 'women' }).status).toBe('ineligible');
+    expect(excludedBecauseClassUnspecified(evaluateCategory(byCodeOmnium('RR-JB1314'), { ...junior, competitionClass: 'women' }))).toBe(false);
+    expect(excludedBecauseClassUnspecified(evaluateCategory(byCodeOmnium('RR-JB1314'), { ...junior, competitionClass: 'other' }))).toBe(false);
+    expect(excludedBecauseClassUnspecified(evaluateCategory(byCode('RR-M35-34'), rider({ racingAge: 45 })))).toBe(false);
   });
 
   it('summarizes paths in plain organizer language', () => {

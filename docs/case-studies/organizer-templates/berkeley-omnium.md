@@ -44,7 +44,7 @@ This is the clearest small example of separating display header, purchasable cat
 
 ## Rider discovery example
 
-Owner decision, November 15, 2026: keep the full schedule as the initial view and offer Find my races after rider details. Racing age 50 and Cat 4 produces three matching choices per day: Elite 4, Masters 35+ 3/4 and Masters 50+ 3/4. The two criterium masters classifications share one start, not two separate races. The shortcut uses existing eligibility checks, not name matching. Review-required/unknown choices remain in All races; selected entries stay visible if the profile changes. No license verification or eligibility rule is added.
+Owner decision, November 15, 2026: keep the full schedule as the initial view and offer Find my races after rider details. Racing age 50 and Cat 4 produces three matching choices per day: Elite 4, Masters 35+ 3/4 and Masters 50+ 3/4. The two criterium masters classifications share one start, not two separate races. The shortcut uses existing eligibility checks, not name matching. Review-required/unknown choices remain in All races; selected entries stay visible if the profile changes. Matching races says a class-specific category needs a competition class to confirm a match, and All races still shows it. No license verification or eligibility rule is added.
 
 ## Acceptance exercise
 
