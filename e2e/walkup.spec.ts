@@ -322,3 +322,70 @@ test('shared test kiosk clears the receipt and draft between rider sessions on t
     await context.close();
   }
 });
+
+test('staff suggest race choices and the rider confirms them before checkout', async ({ page, browser }) => {
+  const eventId = await seedRegistrationCase(page.request, 'criterium');
+  await page.goto(`/?staff-context=fictional#/events/${eventId}/check-in`);
+  await page.getByRole('button', { name: 'Register a walk-up' }).click();
+  const panel = page.getByRole('region', { name: 'Rider phone registration' });
+  await panel.getByRole('button', { name: 'Prepare race choices' }).click();
+  await expect(panel.getByRole('checkbox', { name: /DVC-M35/ })).toHaveCount(0);
+  const choice = panel.getByRole('checkbox', { name: /DVC-M45/ });
+  await choice.check();
+  await expect(panel.getByRole('img', { name: 'QR code to review suggested races' })).toBeVisible();
+  const address = new URL(await panel.getByLabel('Race choices address').inputValue());
+  expect(address.search).toBe('');
+  const [path, categoryParams] = address.hash.split('?');
+  expect(path).toBe(`#/register/${eventId}`);
+  const params = new URLSearchParams(categoryParams);
+  const publicEvent = await (await page.request.get(`/api/public/events/${eventId}`)).json();
+  const suggested = publicEvent.config.categories.find((category: { timingCode: string }) => category.timingCode === 'DVC-M45');
+  expect([...params]).toEqual([['walkUpCategory', suggested.id]]);
+  await choice.uncheck();
+  await expect(panel.getByLabel('Race choices address')).toHaveCount(0);
+
+  const email = 'walkup.suggestion@example.test';
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, extraHTTPHeaders: {} });
+  try {
+    const rider = await context.newPage();
+    await rider.addInitScript((value) => sessionStorage.setItem('cyclereg.test-session', value), email);
+    // A previously shared category can disappear before the rider opens the URL.
+    params.append('walkUpCategory', 'no-longer-published');
+    address.hash = `${path}?${params}`;
+    await rider.goto(address.href);
+    const suggestedChoices = rider.getByRole('region', { name: 'Suggested race choices' });
+    await expect(suggestedChoices).toContainText('Some suggested choices are unavailable');
+    await expect(suggestedChoices).toContainText('DVC-M45');
+    const category = rider.getByRole('checkbox', { name: /DVC-M45/ });
+    await expect(category).not.toBeChecked();
+    expect(await rider.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+    const accept = suggestedChoices.getByRole('button', { name: 'Use suggested choices' });
+    await accept.focus();
+    await accept.press('Enter');
+    await expect(rider.getByRole('heading', { name: 'About you' })).toBeFocused();
+    await expect(category).toBeChecked();
+    await rider.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+    await rider.getByRole('button', { name: 'Continue to racer details' }).click();
+    await rider.getByRole('button', { name: 'Continue to the waiver' }).click();
+    await rider.getByLabel('I have read the whole waiver').check();
+    await rider.getByLabel(/Type your full name to sign/).fill('Alex Demo');
+    await rider.getByLabel('I agree to this waiver', { exact: true }).check();
+    await rider.getByRole('button', { name: 'Sign and review the order' }).click();
+    await rider.getByRole('button', { name: /Complete simulated payment/ }).click();
+    await expect(rider.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
+
+    const registrations = await rider.request.get('/api/rider/registrations', { headers: { Authorization: `Bearer test:${email}` } });
+    expect(registrations.ok()).toBe(true);
+    expect(await registrations.json()).toEqual([expect.objectContaining({
+      eventId,
+      placedByYou: true,
+      entries: [expect.objectContaining({ code: 'DVC-M45' })],
+    })]);
+    const staff = await page.request.get('/api/rider/registrations');
+    expect(staff.ok()).toBe(true);
+    expect(await staff.json()).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});

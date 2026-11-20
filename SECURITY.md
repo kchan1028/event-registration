@@ -115,11 +115,15 @@ The check-in QR scanner processes camera frames on the device. Stopping the scan
 The walk-up marker requires the event’s check-in permission. Under the event lock, the server verifies the confirmed entry belongs to the selected rider and race day and records the staff account and time. Public checkout and the QR/link cannot mark an entry. The server checks for a same-day marked confirmed entry before first bib assignment at the desk and still enforces payment and readiness. Staff views show the marker without exposing its actor.
 
 
-The public registration QR and address contain only the event identifier. The separate test kiosk address also contains only the event identifier. Registration stays under the participant/guardian account; the staff session is not handed to the rider. No new API route, role, account access, payment method or waiver bypass is added. The published-event guard suppresses handoff for an unpublished event; server registration validation remains authoritative. Staff-entered orders remain Planned. Local loopback addresses cannot serve another device; real-phone use requires reachable staging with the existing security gates.
+The basic phone registration QR and address contain only the event identifier. The separate test kiosk address also contains only the event identifier. Registration stays under the participant/guardian account; the staff session is not handed to the rider. No new API route, role, account access, payment method or waiver bypass is added. The published-event guard suppresses handoff for an unpublished event; server registration validation remains authoritative. Staff-entered orders remain Planned. Local loopback addresses cannot serve another device; real-phone use requires reachable staging with the existing security gates.
 
 ### Shared walk-up test kiosk
 
 The kiosk runs only with test sign-in and accepts simulated payment events. Its sign-in, checkout draft and receipt live in the page session and are discarded on session end or reload. Test kiosk sign-in does not use the ordinary browser sign-in or its saved draft. Use a dedicated rider browser with autofill disabled. Order access and registration requirements are enforced by the same server rules as phone checkout. Hosted sign-in, hosted payment, and physical kiosk acceptance remain Planned.
+
+### Staff-assisted race selection
+
+Check-in staff can generate a handoff address for the selected day. The address contains the public event and suggested category identifiers. It carries no staff session, rider details, invite or waitlist token. The participant applies the suggestions in ordinary checkout. Existing account ownership, waiver, eligibility, registration window and capacity checks apply.
 
 ## Supported versions
 

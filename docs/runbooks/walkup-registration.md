@@ -16,6 +16,12 @@ For another device to open the QR, the site must be reachable from that device. 
 4. Ask for their name or confirmation code and search again in check-in. A pending/failed payment or unresolved requirement is not clearance. Do not start another order to solve an unknown payment outcome; recover the existing order or escalate to the registration lead.
 5. Select **Mark as walk-up** on the confirmed entry. The QR and link open ordinary registration. Resolve permitted exceptions through authorized review. When the result is **Ready to race**, check in and issue the bib. Check the resulting timestamped start list; do not maintain a second hand-entered entrant list.
 
+## Suggest races from the desk
+
+1. Select the race day in **Check-in**. Under **Register a walk-up**, choose **Prepare race choices** and select the categories the rider wants to review.
+2. Share the suggested-race QR or **Race choices address** with the rider or guardian. The choices use the availability snapshot when the panel opens. Close and reopen the chooser for a fresh list.
+3. Ask them to review the choices and availability on their phone. They can apply the suggestions or choose different categories, then complete checkout using their own account. If the rider already has a draft in that tab, continue the draft and adjust entries in the race list.
+
 ## Unavailable or interrupted registration
 
 A closed/full category or waitlist remains enforced. Refer the participant to the registration lead; volunteers cannot reopen it through this panel. A disconnected device cannot create a live entry offline. Use the existing [fallback/incident procedure](../operations.md#handling-an-incident), preserving a record for authorized reconciliation. Cash/check, staff-entered orders and physical terminals remain outside this workflow.

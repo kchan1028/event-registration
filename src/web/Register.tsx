@@ -17,6 +17,7 @@ import { formatDateTime, refundedCents } from './format';
 import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
 import { AccountMenu, SignInPrompt, useSession } from './auth';
 import { useLoad } from './useLoad';
+import { availableWalkUpCategories, WALK_UP_CATEGORY_PARAM } from './walkUpSelection';
 import { refundPolicyLines } from '../shared/refundPolicy';
 
 /*
@@ -239,7 +240,8 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
   const [offerAttempt, setOfferAttempt] = useState(0);
   const session = useSession();
   const signedIn = session.status === 'signed-in';
-  const offerToken = kiosk ? null : new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('offer');
+  const linkParams = new URLSearchParams(kiosk ? '' : window.location.hash.split('?')[1] ?? '');
+  const offerToken = linkParams.get('offer');
 
   const currentOfferFailure = offerFailure?.token === offerToken ? offerFailure : null;
   const statusRead = useRef(0);
@@ -359,6 +361,9 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
       </div>
     );
   }
+  const showWalkUpSuggestions = !offerToken && draft.step === 'races' && draft.reached === 0 && draft.selected.length === 0 && linkParams.has(WALK_UP_CATEGORY_PARAM);
+  const suggestedIds = new Set(linkParams.getAll(WALK_UP_CATEGORY_PARAM));
+  const suggestions = showWalkUpSuggestions ? availableWalkUpCategories(ev).filter((category) => suggestedIds.has(category.id)) : [];
   const selectedCancelled = draft.selected.some((id) => ev.cancellation.categoryIds.includes(id));
   const blockedDraft = selectedCancelled && !draft.pendingReservation && (draft.step === 'details' || draft.step === 'waiver');
   const refreshStatus = async () => {
@@ -471,6 +476,22 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
 
         {offerToken && !signedIn && draft.step === 'races' && (
           <SignInPrompt title="Sign in to use your waitlist offer">Sign in with the email you joined the waitlist with to see the place being held for you.</SignInPrompt>
+        )}
+        {showWalkUpSuggestions && (
+          <section className="note walkup-suggestions" aria-labelledby="walkup-suggestions-title">
+            <h2 id="walkup-suggestions-title">Suggested race choices</h2>
+            {suggestions.length < suggestedIds.size && <p>Some suggested choices are unavailable. You can review the current race list below.</p>}
+            {suggestions.length > 0 && <>
+              <ul>{suggestions.map((category) => <li key={category.id}>{category.timingCode && `${category.timingCode} · `}{category.name}</li>)}</ul>
+              <p>Review eligibility, availability, and the total before continuing.</p>
+              <button type="button" className="btn btn--secondary" onClick={() => {
+                update((current) => ({ ...current, selected: suggestions.map((category) => category.id) }));
+                document.getElementById('about-title')?.focus();
+              }}>
+                Use suggested choices
+              </button>
+            </>}
+          </section>
         )}
         {draft.step === 'races' && <ChooseRaces ev={ev} draft={draft} update={update} kiosk={kiosk} />}
         {blockedDraft ? (
@@ -618,7 +639,7 @@ function ChooseRaces({ ev, draft, update, kiosk }: { ev: PublicEvent; draft: Dra
         <ErrorSummary errors={errors} />
         <WindowBanner ev={ev} />
         <section className="about" aria-labelledby="about-title">
-          <h2 id="about-title">About you</h2>
+          <h2 id="about-title" tabIndex={-1}>About you</h2>
           <p className="muted">Use your details to find matching races, or browse the full schedule.</p>
           <Field label="Use a demo rider (fake data)" id="f-demo-rider" className="about__demo">
             {(id) => (
