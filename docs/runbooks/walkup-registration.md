@@ -24,7 +24,7 @@ For another device to open the QR, the site must be reachable from that device. 
 
 ## Unavailable or interrupted registration
 
-A closed/full category or waitlist remains enforced. Refer the participant to the registration lead; volunteers cannot reopen it through this panel. A disconnected device cannot create a live entry offline. Use the existing [fallback/incident procedure](../operations.md#handling-an-incident), preserving a record for authorized reconciliation. Cash/check, staff-entered orders and physical terminals remain outside this workflow.
+A closed/full category or waitlist remains enforced. Refer the participant to the registration lead; volunteers cannot reopen it through this panel. A disconnected device cannot create a live entry offline. Use the existing [fallback/incident procedure](../operations.md#handling-an-incident), preserving a record for authorized reconciliation. Cash/check and physical terminals remain outside this workflow.
 
 ## Run the shared test kiosk
 
