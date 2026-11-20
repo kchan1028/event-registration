@@ -13,6 +13,7 @@ export function KioskRegistration({ eventId }: { eventId: string }) {
   const [expired, setExpired] = useState(false);
   const signOutRef = useRef(signOut);
   const entrance = useRef<HTMLButtonElement>(null);
+  const entrancePressed = useRef(false);
   const surface = useRef<HTMLDivElement>(null);
   const warningDialog = useRef<HTMLDialogElement>(null);
   const extendSession = useRef<(() => void) | null>(null);
@@ -36,6 +37,7 @@ export function KioskRegistration({ eventId }: { eventId: string }) {
   useEffect(() => { signOutRef.current = signOut; }, [signOut]);
 
   const endSession = useCallback((timedOut = false) => {
+    entrancePressed.current = false;
     setOrderId(null);
     setWarning(false);
     setExpired(timedOut);
@@ -133,7 +135,19 @@ export function KioskRegistration({ eventId }: { eventId: string }) {
           <h1>Walk-up registration kiosk</h1>
           {expired && <p className="note" role="status">The kiosk session ended after inactivity. To check a reservation or payment before trying again, sign in to My registrations on your own device.</p>}
           <p>Fictional riders and simulated payments only. Sign in as the rider or their guardian. End your session before handing the device to someone else.</p>
-          <button ref={entrance} className="btn btn--primary" type="button" onClick={signIn}>Sign in to register</button>
+          <button
+            ref={entrance}
+            className="btn btn--primary"
+            type="button"
+            onPointerDown={() => { entrancePressed.current = true; }}
+            onClick={(event) => {
+              // A pointer release from the expired screen can land on this new button.
+              if (event.detail === 0 || entrancePressed.current) signIn();
+              entrancePressed.current = false;
+            }}
+          >
+            Sign in to register
+          </button>
         </main>
       )}
     </div>

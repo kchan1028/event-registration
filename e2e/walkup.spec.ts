@@ -398,7 +398,7 @@ test('an unattended test kiosk warns, then signs out while a completed payment r
   const eventId = await seedRegistrationCase(page.request, 'criterium');
   const email = `kiosk.idle.${eventId}@example.test`;
   const minute = 60_000;
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, extraHTTPHeaders: {} });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, extraHTTPHeaders: {} });
   const personal = await browser.newContext({ extraHTTPHeaders: {} });
   let paymentSaved!: () => void;
   let resumeResponse!: () => void;
@@ -459,6 +459,8 @@ test('an unattended test kiosk warns, then signs out while a completed payment r
     await expect(warning).toBeVisible();
     await kiosk.clock.fastForward(minute);
     await expect(start).toBeFocused();
+    const startBox = await start.boundingBox();
+    expect(startBox).not.toBeNull();
     await expect(kiosk.getByRole('status')).toContainText('My registrations on your own device');
     await expect(kiosk.getByRole('heading', { name: 'Review your order' })).toHaveCount(0);
     expect(await kiosk.evaluate(() => Object.keys(sessionStorage))).toEqual([]);
@@ -470,14 +472,13 @@ test('an unattended test kiosk warns, then signs out while a completed payment r
     await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toHaveCount(0);
 
     // Moving wall time without running timers models the first tap after the browser was suspended.
-    const race = kiosk.getByRole('checkbox', { name: /DVC-M45/ });
-    await race.scrollIntoViewIfNeeded();
-    const box = await race.boundingBox();
-    expect(box).not.toBeNull();
     const later = await kiosk.evaluate(() => Date.now()) + 5 * minute + 1_000;
     await kiosk.clock.setSystemTime(later);
-    await kiosk.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await kiosk.touchscreen.tap(startBox!.x + startBox!.width / 2, startBox!.y + startBox!.height / 2);
     await expect(start).toBeFocused();
+    await expect(kiosk.getByRole('heading', { name: 'Sign in for testing' })).toHaveCount(0);
+    await start.press('Enter');
+    await expect(kiosk.getByRole('heading', { name: 'Sign in for testing' })).toBeVisible();
 
     const rider = await personal.newPage();
     await rider.addInitScript((address) => sessionStorage.setItem('cyclereg.test-session', address), email);
