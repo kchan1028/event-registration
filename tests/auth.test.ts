@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import type { FastifyRequest } from 'fastify';
 import pg from 'pg';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { AuthProvider } from '../src/server/auth';
 import { authProviderFromEnv } from '../src/server/auth';
-import type { EmailSender } from '../src/server/email';
+import { EmailNotSent, EmailRefusal, RESEND_IDEMPOTENCY_WINDOW_MS, emailFromEnv, type EmailSender } from '../src/server/email';
 import type { EventConfig } from '../src/shared/schema';
 import { INVITATION_DAYS } from '../src/shared/roles';
 import { as, fakeAuth } from './support/auth';
@@ -264,7 +264,7 @@ describe('organizer roles', () => {
     const email: EmailSender = {
       mode: 'resend',
       async send(m) {
-        if (fail) throw new Error('Email address is not verified.');
+        if (fail) throw new EmailRefusal('Resend returned HTTP 403.');
         sent.push(m);
         return `msg-${sent.length}`;
       },
@@ -296,6 +296,252 @@ describe('organizer roles', () => {
     await access.addMember(org.id, 'seeded@valley.test', 'owner', null);
     expect(sent).toHaveLength(2);
     expect(await status('seeded@valley.test')).toBeUndefined();
+  });
+
+  it('keeps a lost Resend acceptance uncertain, recovers the saved message, and does not extend the invitation', async () => {
+    let now = new Date('2027-04-01T12:00:00.000Z');
+    const calls: { key: string | null; body: string }[] = [];
+    let mode: 'drop' | 'accept' | 'raw' = 'drop';
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      const headers = new Headers(init.headers);
+      calls.push({ key: headers.get('Idempotency-Key'), body: String(init.body) });
+      if (mode === 'drop') throw Object.assign(new Error('socket hang up while reading a private provider body'), { name: 'TimeoutError' });
+      if (mode === 'raw') throw new Error('provider body token=secret-value');
+      return Response.json({ id: 'msg_recovered', details: 'provider-only' });
+    }));
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({
+      databaseUrl,
+      auth: fakeAuth(),
+      now: () => now,
+      appUrl: 'https://beta.example.test',
+      email: emailFromEnv({
+        EMAIL_MODE: 'resend',
+        EMAIL_FROM: 'CycleReg <beta@example.test>',
+        RESEND_API_KEY: 'fake-test-key',
+        EMAIL_TEST_RECIPIENTS: 'treasurer@valley.test,timer@valley.test',
+      }),
+    });
+    const call = (method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(OWNER), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const invite = (email: string) => call('POST', `/api/organizations/${org.id}/members`, { email, role: 'finance' });
+    const listed = async () => (await call('GET', `/api/organizations/${org.id}/members`)).json() as {
+      invitations: { email: string; expiresAt: string; lastEmail: { status: string } | null }[];
+      history: { action: string; email: string }[];
+    };
+    const client = new pg.Client({ connectionString: databaseUrl });
+    await client.connect();
+    try {
+      const first = await invite('treasurer@valley.test');
+      expect(first.statusCode).toBe(200);
+      const opened = await listed();
+      const expiresAt = opened.invitations[0].expiresAt;
+      expect(opened.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, lastEmail: { status: 'uncertain', at: now.toISOString() } }]);
+      expect(opened.history.filter((row) => row.email === 'treasurer@valley.test').map((row) => row.action)).toEqual(['invited']);
+      let stored = await client.query<{ status: string; provider_message_id: string | null; error: string | null }>(`SELECT status, provider_message_id, error FROM email_messages ORDER BY created_at, seq`);
+      expect(stored.rows).toEqual([{ status: 'uncertain', provider_message_id: null, error: 'Send outcome unknown after a timeout.' }]);
+      expect(JSON.stringify(stored.rows)).not.toContain('private');
+
+      mode = 'accept';
+      const recovered = await invite('treasurer@valley.test');
+      expect(recovered.statusCode).toBe(200);
+      const retried = await listed();
+      expect(retried.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, lastEmail: { status: 'sent', at: now.toISOString() } }]);
+      expect(retried.history.filter((row) => row.email === 'treasurer@valley.test').map((row) => row.action)).toEqual(['invited']);
+      expect(calls.map((item) => item.key)).toEqual([calls[0].key, calls[0].key]);
+      expect(calls[1].body).toBe(calls[0].body);
+      stored = await client.query(`SELECT status, provider_message_id, error FROM email_messages ORDER BY created_at, seq`);
+      expect(stored.rows).toEqual([{ status: 'sent', provider_message_id: 'msg_recovered', error: null }]);
+      expect(JSON.stringify(stored.rows)).not.toContain('provider-only');
+
+      now = new Date(now.getTime() + 3_600_000);
+      const renewed = await invite('treasurer@valley.test');
+      expect(renewed.statusCode).toBe(200);
+      const extended = await listed();
+      expect(extended.invitations[0].expiresAt).not.toBe(expiresAt);
+      expect(extended.history[0]).toMatchObject({ action: 'invitation_renewed', email: 'treasurer@valley.test' });
+      expect(calls).toHaveLength(3);
+      expect(calls[2].key).not.toBe(calls[0].key);
+
+      mode = 'raw';
+      const hidden = await invite('timer@valley.test');
+      expect(hidden.statusCode).toBe(200);
+      expect((await listed()).invitations.find((row) => row.email === 'timer@valley.test')?.lastEmail?.status).toBe('uncertain');
+      const raw = await client.query<{ error: string }>(`SELECT error FROM email_messages WHERE to_email = 'timer@valley.test'`);
+      expect(raw.rows).toEqual([{ error: 'Send outcome unknown after a network failure.' }]);
+      expect(raw.rows[0].error).not.toContain('secret');
+
+      const timerExpires = (await listed()).invitations.find((row) => row.email === 'timer@valley.test')?.expiresAt;
+      mode = 'drop';
+      now = new Date(now.getTime() + RESEND_IDEMPOTENCY_WINDOW_MS);
+      const late = await invite('timer@valley.test');
+      expect(late.statusCode).toBe(409);
+      expect(late.json()).toEqual({ error: 'The earlier invitation email might have been sent. It was not sent again, and the invitation was not extended.' });
+      expect(calls).toHaveLength(4);
+      const afterLate = await listed();
+      expect(afterLate.invitations.find((row) => row.email === 'timer@valley.test')).toMatchObject({ expiresAt: timerExpires, lastEmail: { status: 'uncertain' } });
+      expect(afterLate.history.filter((row) => row.action === 'invitation_renewed').map(({ action, email }) => ({ action, email }))).toEqual([{ action: 'invitation_renewed', email: 'treasurer@valley.test' }]);
+      expect((await client.query(`SELECT count(*)::int AS n FROM email_messages WHERE to_email = 'timer@valley.test'`)).rows).toEqual([{ n: 1 }]);
+    } finally {
+      await client.end();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('reserves one invitation attempt when two invites overlap', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const calls: string[] = [];
+    let releaseSend: () => void = () => undefined;
+    const sendGate = new Promise<void>((resolve) => {
+      releaseSend = resolve;
+    });
+    let holdSend = true;
+    const email: EmailSender = {
+      mode: 'resend',
+      async send(_message, idempotencyKey) {
+        calls.push(idempotencyKey);
+        if (holdSend) await sendGate;
+        return `msg-${calls.length}`;
+      },
+    };
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth(), email, appUrl: 'https://beta.example.test' });
+    const call = (method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(OWNER), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const members = `/api/organizations/${org.id}/members`;
+    const invite = () => call('POST', members, { email: 'treasurer@valley.test', role: 'finance' });
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    const requests: ReturnType<typeof invite>[] = [];
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`org-members:${org.id}`]);
+      const waiting = async (count: number) => {
+        await expect.poll(async () => {
+          const { rows } = await blocker.query<{ count: number }>(
+            `SELECT count(*)::int AS count
+               FROM pg_locks held JOIN pg_locks waiting USING (database, classid, objid, objsubid)
+              WHERE held.pid = pg_backend_pid() AND held.locktype = 'advisory' AND held.granted
+                AND waiting.locktype = 'advisory' AND NOT waiting.granted`,
+          );
+          return rows[0].count;
+        }, { timeout: 5000 }).toBe(count);
+      };
+      requests.push(invite());
+      await waiting(1);
+      requests.push(invite());
+      await waiting(2);
+      await blocker.query('ROLLBACK');
+      await expect.poll(() => calls.length, { timeout: 5000 }).toBe(2);
+      expect(calls[0]).toBe(calls[1]);
+      expect((await blocker.query(`SELECT status FROM email_messages`)).rows).toEqual([{ status: 'uncertain' }]);
+      holdSend = false;
+      releaseSend();
+      const responses = await Promise.all(requests);
+      expect(responses.map((response) => response.statusCode)).toEqual([200, 200]);
+      const listed = (await call('GET', members)).json() as { history: { action: string }[] };
+      expect(listed.history.filter((row) => row.action === 'invited')).toHaveLength(1);
+      expect(listed.history.some((row) => row.action === 'invitation_renewed')).toBe(false);
+      expect((await blocker.query(`SELECT id, status FROM email_messages`)).rows).toEqual([{ id: calls[0], status: 'sent' }]);
+    } finally {
+      releaseSend();
+      await Promise.allSettled(requests);
+      await blocker.end();
+    }
+  }, 15_000);
+
+  it('starts a new invitation after cancel, and a refused retry stays uncertain', async () => {
+    let now = new Date('2027-04-02T12:00:00.000Z');
+    const calls: { key: string | null; to: string }[] = [];
+    let outcome: 'timeout' | 'refuse' | 'accept' = 'timeout';
+    let blocked = false;
+    let leak = false;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      const headers = new Headers(init.headers);
+      const body = JSON.parse(String(init.body)) as { to: string[] };
+      calls.push({ key: headers.get('Idempotency-Key'), to: body.to[0] });
+      if (outcome === 'timeout') throw Object.assign(new Error('private socket detail'), { name: 'TimeoutError' });
+      if (outcome === 'refuse') return new Response('private refusal', { status: 403 });
+      return Response.json({ id: 'msg_ok' });
+    }));
+    const databaseUrl = await testDatabaseUrl();
+    const sender = emailFromEnv({
+      EMAIL_MODE: 'resend',
+      EMAIL_FROM: 'CycleReg <beta@example.test>',
+      RESEND_API_KEY: 'fake-test-key',
+      EMAIL_TEST_RECIPIENTS: 'treasurer@valley.test,timer@valley.test',
+    });
+    const email: EmailSender = {
+      mode: 'resend',
+      async send(message, idempotencyKey) {
+        if (leak) throw new Error('provider body token=secret-value');
+        if (blocked) throw new EmailNotSent('Recipient is outside the configured email test list.');
+        return sender.send(message, idempotencyKey);
+      },
+    };
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth(), now: () => now, appUrl: 'https://beta.example.test', email });
+    const call = (method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(OWNER), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const members = `/api/organizations/${org.id}/members`;
+    const invite = (emailAddress: string) => call('POST', members, { email: emailAddress, role: 'finance' });
+    const client = new pg.Client({ connectionString: databaseUrl });
+    await client.connect();
+    try {
+      expect((await invite('treasurer@valley.test')).statusCode).toBe(200);
+      const cancelled = await call('POST', `${members}/remove`, { email: 'treasurer@valley.test', role: 'finance' });
+      expect(cancelled.statusCode).toBe(200);
+      expect((cancelled.json() as { invitations: unknown[] }).invitations).toEqual([]);
+      const again = await invite('treasurer@valley.test');
+      expect(again.statusCode).toBe(200);
+      expect(calls.map((item) => item.key)).toEqual([calls[0].key, calls[1].key]);
+      expect(calls[0].key).not.toBe(calls[1].key);
+      const rows = await client.query<{ status: string; error: string }>(`SELECT status, error FROM email_messages ORDER BY seq`);
+      expect(rows.rows).toEqual([
+        { status: 'uncertain', error: 'Send outcome unknown after a timeout.' },
+        { status: 'uncertain', error: 'Send outcome unknown after a timeout.' },
+      ]);
+      expect(JSON.stringify(rows.rows)).not.toContain('private');
+      const created = await client.query<{ invitation_at: string; email_at: string }>(
+        `SELECT i.created_at AS invitation_at, e.created_at AS email_at
+           FROM organization_invitations i JOIN email_messages e ON e.ref = i.organization_id || ':' || i.email || ':' || i.role
+          WHERE e.seq = (SELECT max(seq) FROM email_messages)`,
+      );
+      expect(created.rows).toHaveLength(1);
+
+      outcome = 'refuse';
+      const refused = await invite('treasurer@valley.test');
+      expect(refused.statusCode).toBe(200);
+      expect((refused.json() as { history: { action: string; email: string }[] }).history.filter((row) => row.email === 'treasurer@valley.test').map((row) => row.action)).toEqual(['invited', 'invitation_cancelled', 'invited']);
+      let stored = await client.query<{ status: string; error: string }>(`SELECT status, error FROM email_messages ORDER BY seq`);
+      expect(stored.rows[1]).toEqual({ status: 'uncertain', error: 'Resend returned HTTP 403.' });
+      expect(calls).toHaveLength(3);
+      expect(calls[2].key).toBe(calls[1].key);
+
+      blocked = true;
+      const blockedRetry = await invite('treasurer@valley.test');
+      expect(blockedRetry.statusCode).toBe(200);
+      stored = await client.query(`SELECT status, error FROM email_messages ORDER BY seq`);
+      expect(stored.rows[1]).toEqual({ status: 'uncertain', error: 'Recipient is outside the configured email test list.' });
+      expect(calls).toHaveLength(3);
+
+      blocked = false;
+      outcome = 'accept';
+      now = new Date(now.getTime() + 60_000);
+      const recovered = await invite('treasurer@valley.test');
+      expect(recovered.statusCode).toBe(200);
+      stored = await client.query(`SELECT status, provider_message_id FROM email_messages ORDER BY seq`);
+      expect(stored.rows[1]).toEqual({ status: 'sent', provider_message_id: 'msg_ok' });
+      expect((recovered.json() as { history: { action: string }[] }).history.some((row) => row.action === 'invitation_renewed')).toBe(false);
+
+      leak = true;
+      const hidden = await invite('timer@valley.test');
+      expect(hidden.statusCode).toBe(200);
+      const leaked = await client.query<{ status: string; error: string }>(`SELECT status, error FROM email_messages WHERE to_email = 'timer@valley.test'`);
+      expect(leaked.rows).toEqual([{ status: 'uncertain', error: 'Send outcome unknown.' }]);
+      expect(leaked.rows[0].error).not.toContain('secret');
+    } finally {
+      await client.end();
+      vi.unstubAllGlobals();
+    }
   });
 
   it('never removes the last owner', async () => {

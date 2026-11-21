@@ -4431,6 +4431,16 @@ fieldset:disabled .field label {
   color: var(--error);
   font-weight: 600;
 }
+.team__email-uncertain {
+  /* --warn-icon is 4.4:1 on white, short of 4.5:1 at this size. */
+  color: #9a6600;
+  font-weight: 600;
+}
+@media screen {
+  :root[data-theme='dark'] .team__email-uncertain {
+    color: var(--warn-icon);
+  }
+}
 
 /* My registrations */
 .my-reg {

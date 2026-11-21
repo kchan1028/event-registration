@@ -707,6 +707,12 @@ export const MIGRATIONS: string[] = [
     ADD COLUMN walk_up_marked_at timestamptz,
     ADD COLUMN walk_up_marked_by text REFERENCES accounts(id) ON DELETE RESTRICT,
     ADD CONSTRAINT walk_up_marker_complete CHECK ((walk_up_marked_at IS NULL) = (walk_up_marked_by IS NULL));`,
+  `
+  -- A lost provider response is not a confirmed refusal. Existing rows stay recorded, sent, or failed.
+  ALTER TABLE email_messages DROP CONSTRAINT email_messages_status_check;
+  ALTER TABLE email_messages ADD CONSTRAINT email_messages_status_check
+    CHECK (status IN ('recorded', 'sent', 'failed', 'uncertain'));
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

@@ -218,6 +218,10 @@ Run `tests/orders.test.ts`, `tests/juniors.test.ts` and `tests/migrations.test.t
 
 Run `tests/auth.test.ts` for real expiry at sign-in, no expired-role grant, recipient-only notice access, denial of team access and disappearance after a later grant. `e2e/invitation-recovery.spec.ts` explicitly stubs notice responses for presentation: both themes, 390/1440 widths, panel-scoped axe, load failure and refresh recovery. The browser fixture does not prove real expiry or identity-provider behavior; those remain separate API and external acceptance checks.
 
+### Uncertain invitation email
+
+Run `tests/email.test.ts` for a mocked Resend refusal, timeout, network failure, and missing message ID, and `tests/auth.test.ts` on a disposable database for a lost acceptance, the same saved attempt on retry, no renewal, a withheld retry after 24 hours, one shared attempt when two invites overlap, a new attempt after cancel, and a retry that stays uncertain when the provider refuses or the local allowlist blocks it. `tests/migrations.test.ts` checks that migration 39 accepts `uncertain` and still rejects an unknown status. `e2e/uncertain-invitation.spec.ts` stubs the team list: the uncertain label, a retry name that does not promise more days, an unchanged deadline after the click, both themes, and 390/1440 widths. These checks use fictional addresses and mocked provider calls. They do not prove a live Resend delivery.
+
 ### Fictional weekend close-out
 
 `e2e/case-studies.spec.ts` follows a fictional two-day purchase through organizer license review, weekend bib reuse, repeat check-in and locked per-race CSV downloads. After a second-day withdrawal and simulated partial refund, verify the exact remaining entry with its original bib and checked-in status in the current export, the removal in the lock revision, one refund ledger row and identical saved CSV contents. Compare the local reconciliation CSV with the order and withdrawn entry. Require distinct declined and successful simulated attempts and one successful entry-linked refund. Provider reconciliation and staff rehearsal are separate acceptance gates.
