@@ -121,6 +121,12 @@ export interface CheckInRider {
   undoneCheckIns: { checkedInAt: string; undoneAt: string; bib: number | null; bibReleased: boolean; reason: string }[];
 }
 
+export interface CheckInReadinessConflict {
+  code: 'check_in_not_ready';
+  dayId: string;
+  rider: CheckInRider;
+}
+
 export function canCheckInWithBib(rider: Pick<CheckInRider, 'bib' | 'entries'>): boolean {
   return rider.bib !== null || rider.entries.some((entry) => entry.walkUp);
 }

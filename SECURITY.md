@@ -110,6 +110,10 @@ Concurrent requests use the existing order-scoped provider key and fixed request
 
 The check-in QR scanner processes camera frames on the device. Stopping the scanner or leaving its view releases the camera stream, including a stream returned after the view closes while permission is pending.
 
+## Check-in readiness refusals
+
+When check-in is refused for a readiness blocker, the authorized check-in response includes the current desk card and race day. It uses the same fields as desk lookup, with no private contact details or payment amounts. The server still decides readiness under the event lock before any bib or check-in write.
+
 ## Walk-up phone handoff (Implemented locally)
 
 The walk-up marker requires the event’s check-in permission. Under the event lock, the server verifies the confirmed entry belongs to the selected rider and race day and records the staff account and time. Public checkout and the QR/link cannot mark an entry. The server checks for a same-day marked confirmed entry before first bib assignment at the desk and still enforces payment and readiness. Staff views show the marker without exposing its actor.

@@ -873,3 +873,69 @@ for (const mobile of [false, true]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }
+
+test('a license correction replaces the volunteer’s stale ready card when check-in is refused', async ({ page, browser }) => {
+  const organizer = page.request;
+  const { eventId, organizationId } = await (await organizer.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await organizer.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await organizer.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  expect((await organizer.put(`${eventUrl}/bib-settings`, {
+    data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+  })).ok()).toBe(true);
+
+  const readDesk = async (code?: string): Promise<CheckInList> => {
+    const response = await organizer.get(`${eventUrl}/check-in`, { params: code ? { q: code } : {} });
+    expect(response.ok()).toBe(true);
+    return response.json();
+  };
+  const desk = await readDesk();
+  const ready = desk.riders.find((rider) => rider.result.ready && rider.bib === null && rider.entries.length === 1);
+  if (!ready?.checkInCode) throw new Error('The demo needs one ready walk-up with a check-in code');
+  const code = ready.checkInCode;
+
+  const email = 'stale-license.volunteer@example.test';
+  expect((await organizer.post(`/api/organizations/${organizationId}/members`, {
+    data: { email, role: 'check_in_volunteer' },
+  })).ok()).toBe(true);
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, extraHTTPHeaders: {} });
+  try {
+    await context.addInitScript((user) => sessionStorage.setItem('cyclereg.test-session', user), email);
+    const volunteer = await context.newPage();
+    await volunteer.goto(`/#/events/${eventId}/check-in`);
+    const search = volunteer.getByRole('searchbox', { name: 'Find a rider' });
+    await search.fill(code);
+    await search.press('Enter');
+    const detail = volunteer.getByRole('region', { name: 'Rider check-in' });
+    const result = detail.getByRole('status');
+    const issue = detail.getByRole('button', { name: 'Check in and issue next bib' });
+    await expect(result).toContainText('Ready to race');
+    await expect(issue).toBeVisible();
+
+    const correction = await organizer.post(`/api/orders/${ready.orderId}/rider-corrections`, {
+      data: { changes: { licenseNumber: 'DEMO-NEW-5678' }, reason: 'Correct the fictional license number' },
+    });
+    expect(correction.ok()).toBe(true);
+    const [audit] = (await correction.json()).corrections;
+    expect(audit.licenseReviewsCleared).toBeGreaterThan(0);
+    await expect(result).toContainText('Ready to race');
+
+    const attempt = volunteer.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`${eventUrl}/check-in/${ready.orderId}`));
+    await issue.click();
+    expect((await attempt).status()).toBe(409);
+    await expect(result).toContainText('Not ready');
+    await expect(result).toBeFocused();
+    await expect(detail.getByText('License needs review', { exact: true }).first()).toBeVisible();
+    await expect(issue).toHaveCount(0);
+    expect((await readDesk(code)).riders[0]).toMatchObject({ payment: 'confirmed', bib: null, checkedInAt: null });
+
+    expect((await organizer.post(`/api/order-entries/${ready.entries[0].id}/license-review`, { data: {} })).ok()).toBe(true);
+    await search.press('Enter');
+    await expect(result).toContainText('Ready to race');
+    await issue.click();
+    await expect(detail.getByRole('button', { name: 'Undo check-in', exact: true })).toBeVisible();
+    expect((await readDesk(code)).riders[0]).toMatchObject({ payment: 'confirmed', bib: 100, checkedInAt: expect.any(String) });
+  } finally {
+    await context.close();
+  }
+});

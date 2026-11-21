@@ -1,6 +1,6 @@
 import { cancellationRosterStatus } from './cancellationClosure';
 import { createHash, randomUUID } from 'node:crypto';
-import { bibScopeKey, bibSettingsSchema, bibBatchExclusion, changedBibAssignments, type BibChange, type BibReassignment, type BibReassignmentPlan, type BibReassignmentResult, type BibBatch, type BibPlan, type PaymentState, canCheckInWithBib, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, bibRangeForEntries, type BibSettings } from '../shared/checkin';
+import { bibScopeKey, bibSettingsSchema, bibBatchExclusion, changedBibAssignments, type BibChange, type BibReassignment, type BibReassignmentPlan, type BibReassignmentResult, type BibBatch, type BibPlan, type PaymentState, canCheckInWithBib, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, bibRangeForEntries, type BibSettings, type CheckInReadinessConflict } from '../shared/checkin';
 import { checkSelection, needsGuardian, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { evaluateCategory } from '../shared/eligibility';
 import { newId } from '../shared/factory';
@@ -447,7 +447,10 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         await db.lock(eventLock(eventId));
         const card = await cardFor(eventId, orderId, dayId);
         if (card.checkedInAt && card.bib !== null) return card;
-        if (!card.result.ready) throw new HttpError(409, `Not ready to race: ${card.result.blockers.map((b) => b.label.toLowerCase()).join(', ')}.`);
+        if (!card.result.ready) {
+          const details = { code: 'check_in_not_ready', dayId, rider: card } satisfies CheckInReadinessConflict;
+          throw new HttpError(409, `Not ready to race: ${card.result.blockers.map((b) => b.label.toLowerCase()).join(', ')}.`, details);
+        }
         if (!canCheckInWithBib(card)) throw new HttpError(409, 'No preassigned bib. Refer advance entries to the registration lead for allocation.');
         const s = await settings(eventId);
         if (card.bib === null) await assign(eventId, orderId, dayId, s, requestedBib);

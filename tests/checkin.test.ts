@@ -125,7 +125,10 @@ describe('check-in API', () => {
     });
     const refused = await checkIn(ready.orderId);
     expect(refused.statusCode).toBe(409);
-    expect(refused.json()).toMatchObject({ error: expect.stringContaining(blocker.label.toLowerCase()) });
+    expect(refused.json()).toMatchObject({
+      error: expect.stringContaining(blocker.label.toLowerCase()),
+      details: { code: 'check_in_not_ready', rider: blocked },
+    });
     expect(await blockedCard()).toEqual(blocked);
   });
 
