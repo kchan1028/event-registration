@@ -414,6 +414,8 @@ Early independent build: the local API can preview and atomically assign bibs to
 
 **License review confirmation (November 19, 2026):** Staff confirm the review without typing a note. The confirmation time and previously saved notes remain available.
 
+**License-correction rehearsal (November 21, 2026):** A readiness refusal replaces an old ready card with the current blocked card. The local license-correction rehearsal verifies that no bib or check-in is recorded until an organizer reviews the corrected license and the volunteer looks up the rider again.
+
 These remain within the existing Phase 3 scope; this status clarification adds no requirements or new completion gates.
 
 | Work | What remains | Completion evidence |

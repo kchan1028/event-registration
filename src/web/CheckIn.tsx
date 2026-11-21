@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { BIB_SCOPES, rangeFor, canCheckInWithBib, changedBibAssignments, type BibChange, type BibReassignmentPlan, type BibSettings } from '../shared/checkin';
+import { BIB_SCOPES, rangeFor, canCheckInWithBib, changedBibAssignments, type BibChange, type BibReassignmentPlan, type BibSettings, type CheckInReadinessConflict } from '../shared/checkin';
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
 import { can } from '../shared/roles';
@@ -447,8 +447,19 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
         onRecovery('pending');
       }
     } catch (err) {
-      if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) onRecovery('pending');
-      else setError((err as ApiError).message);
+      if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) {
+        onRecovery('pending');
+      } else {
+        const conflict = err instanceof ApiError && err.status === 409 ? err.details as Partial<CheckInReadinessConflict> | undefined : undefined;
+        if (conflict?.code === 'check_in_not_ready' && conflict.dayId === dayId && conflict.rider?.orderId === rider.orderId && conflict.rider.result?.ready === false) {
+          onChange(conflict.rider);
+          requestAnimationFrame(() => {
+            if (document.activeElement === document.body || form.contains(document.activeElement)) resultRef.current?.focus();
+          });
+        } else {
+          setError((err as ApiError).message);
+        }
+      }
     } finally {
       setBusy(false);
     }
