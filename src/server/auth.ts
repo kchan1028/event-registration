@@ -273,8 +273,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     );
     const invitations = await db.all<{ email: string; role: Role; expires_at: string; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null }>(
       `SELECT i.email, i.role, i.expires_at, m.status AS email_status, m.created_at AS email_at FROM organization_invitations i
-       LEFT JOIN LATERAL (SELECT status, created_at FROM email_messages e WHERE e.organization_id = i.organization_id AND e.ref = i.organization_id || ':' || i.email || ':' || i.role
-         AND e.created_at >= i.created_at ORDER BY e.created_at DESC, e.seq DESC LIMIT 1) m ON true
+       LEFT JOIN email_messages m ON m.id = i.email_attempt_id
        WHERE i.organization_id = $1 ORDER BY i.email, i.role`,
       [organizationId],
     );
@@ -307,17 +306,14 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       const ref = `${organizationId}:${normalized}:${role}`;
       const decision = await db.transaction(async () => {
         await db.lock(`org-members:${organizationId}`);
-        const extant = await db.get<{ created_at: string }>(
-          `SELECT created_at FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3`,
+        const extant = await db.get<{ email_attempt_id: string | null }>(
+          `SELECT email_attempt_id FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3`,
           [organizationId, normalized, role],
         );
-        // Only an uncertain attempt of this invitation counts. A cancelled invitation is gone, so a re-add starts over.
-        if (extant) {
-          const latest = await db.get<{ id: string; status: string }>(
-            `SELECT id, status FROM email_messages WHERE organization_id = $1 AND ref = $2 AND created_at >= $3 ORDER BY created_at DESC, seq DESC LIMIT 1`,
-            [organizationId, ref, extant.created_at],
-          );
-          if (latest?.status === 'uncertain') return by ? { action: 'retry' as const, id: latest.id } : { action: 'none' as const };
+        // Only the attempt stored on this invitation counts. A cancelled row is gone, so a re-add starts over.
+        if (extant?.email_attempt_id) {
+          const attempt = await db.get<{ id: string; status: string }>(`SELECT id, status FROM email_messages WHERE id = $1`, [extant.email_attempt_id]);
+          if (attempt?.status === 'uncertain') return by ? { action: 'retry' as const, id: attempt.id } : { action: 'none' as const };
         }
         const t = clock();
         const expiresAt = new Date(t.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
@@ -341,6 +337,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         if (renewed + invited) await record(organizationId, renewed ? 'invitation_renewed' : 'invited', normalized, role, by?.id ?? null);
         if (!(by && renewed + invited)) return { action: 'none' as const };
         const id = await mailer.reserve('organizer_invitation', ref, organizationId, await invitationMessage(organizationId, normalized, role, by, expiresAt));
+        await db.run(`UPDATE organization_invitations SET email_attempt_id = $1 WHERE organization_id = $2 AND email = $3 AND role = $4`, [id, organizationId, normalized, role]);
         return { action: 'send' as const, id };
       });
       if ((decision.action === 'retry' || decision.action === 'send') && (await mailer.dispatch(decision.id, decision.action === 'send')) === 'withheld') {

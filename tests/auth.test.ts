@@ -4,7 +4,7 @@ import pg from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthProvider } from '../src/server/auth';
 import { authProviderFromEnv } from '../src/server/auth';
-import { EmailNotSent, EmailRefusal, RESEND_IDEMPOTENCY_WINDOW_MS, emailFromEnv, type EmailSender } from '../src/server/email';
+import { EmailNotSent, EmailRefusal, EmailUncertain, RESEND_IDEMPOTENCY_WINDOW_MS, emailFromEnv, type EmailSender } from '../src/server/email';
 import type { EventConfig } from '../src/shared/schema';
 import { INVITATION_DAYS } from '../src/shared/roles';
 import { as, fakeAuth } from './support/auth';
@@ -431,16 +431,26 @@ describe('organizer roles', () => {
       requests.push(invite());
       await waiting(2);
       await blocker.query('ROLLBACK');
-      await expect.poll(() => calls.length, { timeout: 5000 }).toBe(2);
-      expect(calls[0]).toBe(calls[1]);
+      const waitingOnAttempt = async (count: number) => {
+        await expect.poll(async () => {
+          const { rows } = await blocker.query<{ count: number }>(`SELECT count(*)::int AS count FROM pg_locks WHERE locktype = 'advisory' AND NOT granted`);
+          return rows[0].count;
+        }, { timeout: 5000 }).toBe(count);
+      };
+      await expect.poll(() => calls.length, { timeout: 5000 }).toBe(1);
+      await waitingOnAttempt(1);
+      requests.push(invite());
+      await waitingOnAttempt(2);
+      expect(calls).toHaveLength(1);
       expect((await blocker.query(`SELECT status FROM email_messages`)).rows).toEqual([{ status: 'uncertain' }]);
       holdSend = false;
       releaseSend();
       const responses = await Promise.all(requests);
-      expect(responses.map((response) => response.statusCode)).toEqual([200, 200]);
+      expect(responses.map((response) => response.statusCode)).toEqual([200, 200, 200]);
       const listed = (await call('GET', members)).json() as { history: { action: string }[] };
       expect(listed.history.filter((row) => row.action === 'invited')).toHaveLength(1);
       expect(listed.history.some((row) => row.action === 'invitation_renewed')).toBe(false);
+      expect(calls).toHaveLength(1);
       expect((await blocker.query(`SELECT id, status FROM email_messages`)).rows).toEqual([{ id: calls[0], status: 'sent' }]);
     } finally {
       releaseSend();
@@ -448,6 +458,122 @@ describe('organizer roles', () => {
       await blocker.end();
     }
   }, 15_000);
+
+  it('marks a held invitation failed only after its one send finishes, then a later invite can succeed', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const calls: string[] = [];
+    let releaseSend: () => void = () => undefined;
+    const sendGate = new Promise<void>((resolve) => {
+      releaseSend = resolve;
+    });
+    let holdSend = true;
+    let refuse = true;
+    const email: EmailSender = {
+      mode: 'resend',
+      async send(_message, idempotencyKey) {
+        calls.push(idempotencyKey);
+        if (holdSend) await sendGate;
+        if (refuse) throw new EmailRefusal('Resend returned HTTP 403.');
+        return 'msg-accepted';
+      },
+    };
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth(), email, appUrl: 'https://beta.example.test' });
+    const call = (method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(OWNER), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const members = `/api/organizations/${org.id}/members`;
+    const invite = () => call('POST', members, { email: 'treasurer@valley.test', role: 'finance' });
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    const requests: ReturnType<typeof invite>[] = [];
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`org-members:${org.id}`]);
+      const orgWaiters = async (count: number) => {
+        await expect.poll(async () => {
+          const { rows } = await blocker.query<{ count: number }>(
+            `SELECT count(*)::int AS count
+               FROM pg_locks held JOIN pg_locks waiting USING (database, classid, objid, objsubid)
+              WHERE held.pid = pg_backend_pid() AND held.locktype = 'advisory' AND held.granted
+                AND waiting.locktype = 'advisory' AND NOT waiting.granted`,
+          );
+          return rows[0].count;
+        }, { timeout: 5000 }).toBe(count);
+      };
+      requests.push(invite());
+      await orgWaiters(1);
+      requests.push(invite());
+      await orgWaiters(2);
+      await blocker.query('ROLLBACK');
+      const attemptWaiters = async (count: number) => {
+        await expect.poll(async () => (await blocker.query<{ count: number }>(`SELECT count(*)::int AS count FROM pg_locks WHERE locktype = 'advisory' AND NOT granted`)).rows[0].count, { timeout: 5000 }).toBe(count);
+      };
+      await expect.poll(() => calls.length, { timeout: 5000 }).toBe(1);
+      await attemptWaiters(1);
+      requests.push(invite());
+      await attemptWaiters(2);
+      expect((await blocker.query(`SELECT count(*)::int AS n FROM email_messages`)).rows).toEqual([{ n: 1 }]);
+      holdSend = false;
+      releaseSend();
+      const responses = await Promise.all(requests);
+      expect(responses.map((response) => response.statusCode)).toEqual([200, 200, 200]);
+      expect(calls).toHaveLength(1);
+      expect((await blocker.query(`SELECT id, status, provider_message_id FROM email_messages`)).rows).toEqual([{ id: calls[0], status: 'failed', provider_message_id: null }]);
+
+      refuse = false;
+      const again = await invite();
+      expect(again.statusCode).toBe(200);
+      expect(calls).toHaveLength(2);
+      expect(calls[1]).not.toBe(calls[0]);
+      expect((await blocker.query(`SELECT id, status, provider_message_id FROM email_messages ORDER BY seq`)).rows).toEqual([
+        { id: calls[0], status: 'failed', provider_message_id: null },
+        { id: calls[1], status: 'sent', provider_message_id: 'msg-accepted' },
+      ]);
+    } finally {
+      releaseSend();
+      await Promise.allSettled(requests);
+      await blocker.end();
+    }
+  }, 15_000);
+
+  it('does not reuse a canceled attempt when a seed re-adds it at the same timestamp', async () => {
+    const now = new Date('2027-04-03T12:00:00.000Z');
+    const email: EmailSender = {
+      mode: 'resend',
+      async send() {
+        throw new EmailUncertain('Send outcome unknown after a timeout.');
+      },
+    };
+    const databaseUrl = await testDatabaseUrl();
+    const { app, access } = await testApp({ databaseUrl, auth: fakeAuth(), email, now: () => now, appUrl: 'https://beta.example.test' });
+    const call = (method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(OWNER), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const members = `/api/organizations/${org.id}/members`;
+    const invite = () => call('POST', members, { email: 'treasurer@valley.test', role: 'finance' });
+    const client = new pg.Client({ connectionString: databaseUrl });
+    await client.connect();
+    try {
+      expect((await invite()).statusCode).toBe(200);
+      const first = (await client.query<{ id: string }>(`SELECT id FROM email_messages`)).rows[0].id;
+      const cancelled = await call('POST', `${members}/remove`, { email: 'treasurer@valley.test', role: 'finance' });
+      expect(cancelled.statusCode).toBe(200);
+      const seeded = await access.addMember(org.id, 'treasurer@valley.test', 'finance', null);
+      expect(seeded.invitations).toEqual([expect.objectContaining({ email: 'treasurer@valley.test', lastEmail: null })]);
+      expect((await invite()).statusCode).toBe(200);
+      const rows = await client.query<{ id: string; status: string; email_attempt_id: string | null }>(
+        `SELECT e.id, e.status, i.email_attempt_id
+           FROM email_messages e
+           LEFT JOIN organization_invitations i ON i.email_attempt_id = e.id
+          ORDER BY e.seq`,
+      );
+      expect(rows.rows).toEqual([
+        { id: first, status: 'uncertain', email_attempt_id: null },
+        { id: rows.rows[1].id, status: 'uncertain', email_attempt_id: rows.rows[1].id },
+      ]);
+      expect(rows.rows[1].id).not.toBe(first);
+    } finally {
+      await client.end();
+    }
+  });
 
   it('starts a new invitation after cancel, and a refused retry stays uncertain', async () => {
     let now = new Date('2027-04-02T12:00:00.000Z');

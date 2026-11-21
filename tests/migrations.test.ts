@@ -63,6 +63,37 @@ it('lets an uncertain email status through migration 39 and still rejects an unk
   }
 });
 
+it('points an invitation at its current attempt when migration 40 runs', async () => {
+  const url = await testDatabaseUrl({ empty: true });
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+    for (let version = 1; version <= 39; version++) {
+      await client.query(MIGRATIONS[version - 1]);
+      await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
+    }
+    await client.query("INSERT INTO organizations(id, name, created_at) VALUES ('org_attempt', 'Fictional club', '2027-04-01T12:00:00Z')");
+    await client.query(`INSERT INTO organization_invitations (organization_id, email, role, created_at, expires_at)
+      VALUES ('org_attempt', 'finance@example.test', 'finance', '2027-04-01T12:00:00Z', '2027-04-15T12:00:00Z')`);
+    await client.query(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
+      VALUES ('eml_old', 'org_attempt', 'organizer_invitation', 'org_attempt:finance@example.test:finance', 'finance@example.test', 'Subject', 'Body', 'uncertain', '2027-03-01T12:00:00Z')`);
+    await client.query(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
+      VALUES ('eml_current', 'org_attempt', 'organizer_invitation', 'org_attempt:finance@example.test:finance', 'finance@example.test', 'Subject', 'Body', 'uncertain', '2027-04-01T12:00:00Z')`);
+  } finally {
+    await client.end();
+  }
+  const db = openDb(url);
+  try {
+    await db.migrate();
+    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 40')).toEqual({ version: 40 });
+    expect(await db.get(`SELECT email_attempt_id FROM organization_invitations WHERE email = 'finance@example.test'`)).toEqual({ email_attempt_id: 'eml_current' });
+    expect(await db.get("SELECT status FROM email_messages WHERE id = 'eml_old'")).toEqual({ status: 'uncertain' });
+  } finally {
+    await db.close();
+  }
+});
+
 describe('migration 36: terminal cancellation request refusals', () => {
   it('enforces matching request identities and supported terminal refusal statuses', async () => {
     const databaseUrl = await testDatabaseUrl(); const { app } = await testApp({ databaseUrl });

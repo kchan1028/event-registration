@@ -162,20 +162,25 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
 
     /**
      * Sends one reserved attempt after its row has committed.
+     * The attempt lock is held for the provider call, so a second dispatch of the same id waits
+     * and then reads the committed status. A refusal cannot land while another call can still succeed.
      * `withheld` means a retry can no longer prove the 24-hour provider window, so nothing is sent.
      */
     async dispatch(id: string, firstAttempt: boolean): Promise<EmailStatus | 'withheld'> {
-      const row = await db.get<{ created_at: string; to_email: string; subject: string; body_text: string; status: EmailStatus }>(
-        `SELECT created_at, to_email, subject, body_text, status FROM email_messages WHERE id = $1`,
-        [id],
-      );
-      if (!row || row.status === 'recorded') return row?.status ?? 'uncertain';
-      if (row.status !== 'uncertain') return row.status;
-      if (!firstAttempt) {
-        const created = Date.parse(row.created_at);
-        if (!Number.isFinite(created) || clock().getTime() - created >= RESEND_IDEMPOTENCY_WINDOW_MS) return 'withheld';
-      }
-      return finish(id, { to: row.to_email, subject: row.subject, text: row.body_text }, firstAttempt);
+      return db.transaction(async () => {
+        await db.lock(`email-attempt:${id}`);
+        const row = await db.get<{ created_at: string; to_email: string; subject: string; body_text: string; status: EmailStatus }>(
+          `SELECT created_at, to_email, subject, body_text, status FROM email_messages WHERE id = $1`,
+          [id],
+        );
+        if (!row || row.status === 'recorded') return row?.status ?? 'uncertain';
+        if (row.status !== 'uncertain') return row.status;
+        if (!firstAttempt) {
+          const created = Date.parse(row.created_at);
+          if (!Number.isFinite(created) || clock().getTime() - created >= RESEND_IDEMPOTENCY_WINDOW_MS) return 'withheld';
+        }
+        return finish(id, { to: row.to_email, subject: row.subject, text: row.body_text }, firstAttempt);
+      });
     },
   };
 }

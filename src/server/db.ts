@@ -713,6 +713,22 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE email_messages ADD CONSTRAINT email_messages_status_check
     CHECK (status IN ('recorded', 'sent', 'failed', 'uncertain'));
   `,
+  `
+  -- The invitation points at its current email attempt. Deleting the email clears the pointer.
+  -- Existing invitations keep the latest attempt created at or after the invitation.
+  ALTER TABLE organization_invitations
+    ADD COLUMN email_attempt_id text REFERENCES email_messages(id) ON DELETE SET NULL;
+  UPDATE organization_invitations AS i
+  SET email_attempt_id = (
+    SELECT e.id
+    FROM email_messages e
+    WHERE e.organization_id = i.organization_id
+      AND e.ref = i.organization_id || ':' || i.email || ':' || i.role
+      AND e.created_at >= i.created_at
+    ORDER BY e.created_at DESC, e.seq DESC
+    LIMIT 1
+  );
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
