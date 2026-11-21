@@ -26,9 +26,22 @@ export const MESSAGES = {
   waiverSignature: 'Type your full name to sign the waiver.',
   waiverAgree: 'Check the box to confirm you agree to the waiver.',
   signatureMismatch: "The typed name must match the rider's name (or the guardian's, for a minor).",
-  full: 'This category is full. Choose another category or ask the organizer about the waitlist.',
   ineligible: "This category does not match the rider's age or license category.",
 } as const;
+
+/**
+ * What a rider can do when a category has no places left.
+ * `waitlistAvailable` is true only when this category's waitlist is turned on.
+ * A held offer is a reserved place for that rider, handled separately.
+ * Package availability is a different check. The published event has no contact
+ * path, so this does not tell the rider to contact the organizer.
+ */
+export function fullCategoryGuidance(waitlistAvailable: boolean): string {
+  if (waitlistAvailable) {
+    return 'This category is full. Join the waitlist on this category. Joining is not an entry and is not a charge. It does not hold a place or reserve a package.';
+  }
+  return 'This category is full. There is no online waitlist for this category. Choose another category.';
+}
 
 const digits = (s: string) => s.replace(/\D/g, '');
 /** Something before an @, then a domain with a dot. Used wherever a rider types an email. */

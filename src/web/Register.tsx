@@ -2,7 +2,7 @@ import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/rese
 import { QrCodeImage } from './QrCodeImage';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
-import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, MESSAGES, missingBundleRaces, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails } from '../shared/checkout';
+import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, fullCategoryGuidance, MESSAGES, missingBundleRaces, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails } from '../shared/checkout';
 import { evaluateCategory, excludedBecauseClassUnspecified, licenseLabel, summarizeEligibility, summarizePath, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories } from '../shared/format';
@@ -618,7 +618,7 @@ function ChooseRaces({ ev, draft, update, kiosk }: { ev: PublicEvent; draft: Dra
       // A waitlist offer reserves this rider's place, so its category is not full for them.
       const offeredHere = !!draft.offerToken && draft.offerCategoryId === id;
       if (ev.cancellation.categoryIds.includes(id)) errs.push({ id: `opt-${id}`, message: `${cat?.name ?? 'A selected race'} was cancelled. Remove this entry to continue.` });
-      if (cat && !ev.cancellation.categoryIds.includes(id) && ev.remaining[id] === 0 && !offeredHere) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.full}` });
+      if (cat && !ev.cancellation.categoryIds.includes(id) && ev.remaining[id] === 0 && !offeredHere) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${fullCategoryGuidance(!!ev.waitlist[id])}` });
     }
     if (unavailableIntent) errs.push({ id: 'tray-title', message: 'Your selected package is no longer available. Clear the package choice to continue.' });
     if (intent && unavailableBundleIds.includes(intent.id)) errs.push({ id: 'tray-title', message: 'Your selected package includes a cancelled race. Uncheck the package to continue with unaffected races.' });
@@ -929,7 +929,7 @@ function RaceOption({
       </button>
       <div className="opt__status" id={`opt-${cat.id}-why`}>
         {status && <span className={`status status--${status.cls}`}>{status.text}</span>}
-        {!cancelled && full && !waitlist && <span className="opt__reason">{MESSAGES.full}</span>}
+        {!cancelled && full && !waitlist && <span className="opt__reason">{fullCategoryGuidance(false)}</span>}
         {!cancelled && full && waitlist}
         {!cancelled && !outside && cat.registration.closesAt && window === 'open' && <span className="opt__reason">Registration closes {formatLocalDateTime(cat.registration.closesAt)}</span>}
         {cancelled && selected && <span className="opt__reason">Remove this cancelled entry to continue.</span>}

@@ -264,7 +264,7 @@ For check-in, create Morgan's paid simulated road entry through ordinary checkou
 
 **Read aloud:** “You want Emery's weekend package, but the Sunday Masters field has filled. Find out what you can do next without accidentally buying just Saturday.”
 
-**Success:** Recognizes the shared-start limit, no guaranteed Sunday place, and no complete package reservation. Finds a genuinely eligible available alternative or understands waitlist/contact next steps if no alternative is acceptable. A waitlist request is not described as an entry or a charge. Do not require joining a waitlist unless enabled in that variant.
+**Success:** Recognizes the shared-start limit, no guaranteed Sunday place, and no complete package reservation. Finds a genuinely eligible available alternative, or joins the waitlist when that category has one turned on. When the waitlist is off, the category says there is no online waitlist and the next step is to choose another category. Contact the organizer only when the event shows a real contact path. A waitlist request is not described as an entry, a charge, or a held place. A held offer is a reserved place and is not the package. Do not require joining a waitlist unless enabled in that variant.
 
 **Observe/ask:** Does the reason identify the limiting start? Does changing an option lose details? What would a waitlist offer guarantee, and when? Score a mistaken completed single-day purchase as an error, not success.
 
