@@ -1,6 +1,6 @@
 # Phase 1 usability test kit
 
-Status: Implemented (kit written November 14, 2026). The [facilitated owner walkthrough](../../roadmap.md#berkeley-owner-walkthrough-and-participant-round) is complete. Fresh participant sessions and [Phase 1 exit evidence](../../roadmap.md#phase-1--test-the-experience-without-live-money) remain open.
+Status: Implemented (kit written November 14, 2026). The [facilitated owner walkthrough](../../roadmap.md#berkeley-owner-walkthrough-and-participant-round) is complete and included facilitator guidance. Fresh participant sessions and [Phase 1 exit evidence](../../roadmap.md#phase-1--test-the-experience-without-live-money) remain open.
 
 Find desk-research findings and other evidence collections in the [research index](../research/README.md). This folder holds usability protocols and results; research recommendations do not replace participant evidence.
 

@@ -268,7 +268,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | Organizer registration tools: waitlists, transfers and withdrawals, same-rider linking, entries and ledger CSV exports | Implemented November 14, 2026; automated tests in CI. See [checkout](roadmap.md#rider-checkout) and [check-in](roadmap.md#check-in) in roadmap.md |
 | Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; used by the rider demo |
 | Timer export review packet | Implemented November 14, 2026; not yet sent. See [docs/timer-export-review.md](docs/timer-export-review.md) |
-| Phase 1 usability test kit | Implemented November 14, 2026; no sessions run yet. See [docs/usability/](docs/usability/README.md) |
+| Phase 1 usability test kit | Implemented November 14, 2026. The facilitated owner walkthrough is complete. Fresh participant sessions are deferred. See [docs/usability/](docs/usability/README.md) |
 | Phase 0 discovery kit | Implemented November 14, 2026. One interview done ([D01](docs/discovery/interviews/D01.md)); no measurements yet; USAC questions sent November 15, 2026, no answer yet. See [docs/discovery/](docs/discovery/README.md) |
 | Stack | Chosen for the current local build only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
 | Email sign-in, organizations, and organizer roles | Implemented (Phase 2, Clerk free plan), including ownership hand-over, a role history with who made each change, and 14-day invitations an owner can resend by email (test-only: recorded locally, or sent through the Resend to listed test recipients); organizer MFA and sensitive-action re-verification are the final pre-launch security gate |
