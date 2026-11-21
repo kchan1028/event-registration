@@ -29,6 +29,11 @@ export interface Db {
   lock(key: string): Promise<void>;
   /** Applies pending migrations once per process; safe when several instances start together. */
   migrate(): Promise<void>;
+  /**
+   * Holds a session advisory lock for the whole call, including after a commit inside `fn`.
+   * `write` commits on that connection immediately, so a later rollback does not undo it.
+   */
+  hold<T>(key: string, fn: (write: (sql: string, params?: readonly Param[]) => Promise<number>) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
 
@@ -707,6 +712,37 @@ export const MIGRATIONS: string[] = [
     ADD COLUMN walk_up_marked_at timestamptz,
     ADD COLUMN walk_up_marked_by text REFERENCES accounts(id) ON DELETE RESTRICT,
     ADD CONSTRAINT walk_up_marker_complete CHECK ((walk_up_marked_at IS NULL) = (walk_up_marked_by IS NULL));`,
+  `
+  -- A lost provider response is not a confirmed refusal. Existing rows stay recorded, sent, or failed.
+  ALTER TABLE email_messages DROP CONSTRAINT email_messages_status_check;
+  ALTER TABLE email_messages ADD CONSTRAINT email_messages_status_check
+    CHECK (status IN ('recorded', 'sent', 'failed', 'uncertain'));
+  `,
+  `
+  -- The invitation points at its current email attempt. Deleting the email clears the pointer.
+  -- Existing invitations keep the latest attempt created at or after the invitation.
+  ALTER TABLE organization_invitations
+    ADD COLUMN email_attempt_id text REFERENCES email_messages(id) ON DELETE SET NULL;
+  UPDATE organization_invitations AS i
+  SET email_attempt_id = (
+    SELECT e.id
+    FROM email_messages e
+    WHERE e.organization_id = i.organization_id
+      AND e.ref = i.organization_id || ':' || i.email || ':' || i.role
+      AND e.created_at >= i.created_at
+    ORDER BY e.created_at DESC, e.seq DESC
+    LIMIT 1
+  );
+  `,
+  `
+  -- Set when a provider call is about to start, and committed before that call.
+  -- A lost response or a rolled-back outcome leaves it set. Null means no send has begun.
+  ALTER TABLE email_messages ADD COLUMN started_at timestamptz;
+  UPDATE email_messages
+  SET started_at = COALESCE(sent_at, created_at)
+  WHERE status IN ('sent', 'failed')
+     OR (status = 'uncertain' AND error IS NOT NULL);
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
@@ -833,6 +869,33 @@ export function openDb(connectionString: string, onPoolError?: (err: Error) => v
     async lock(key: string) {
       if (!tx.getStore()) throw new Error('db.lock() must be called inside a transaction.');
       await query('SELECT pg_advisory_xact_lock(hashtext($1))', [key]);
+    },
+
+    async hold<T>(key: string, fn: (write: (sql: string, params?: readonly Param[]) => Promise<number>) => Promise<T>): Promise<T> {
+      const client = await pool.connect();
+      let broken = false;
+      const write = async (sql: string, params?: readonly Param[]) => {
+        await client.query('BEGIN');
+        try {
+          const result = await client.query(sql, params as Param[]);
+          await client.query('COMMIT');
+          return result.rowCount ?? 0;
+        } catch (err) {
+          await client.query('ROLLBACK').catch(() => {
+            broken = true;
+          });
+          throw err;
+        }
+      };
+      try {
+        await client.query('SELECT pg_advisory_lock(hashtext($1)::bigint)', [key]);
+        return await fn(write);
+      } finally {
+        await client.query('SELECT pg_advisory_unlock(hashtext($1)::bigint)', [key]).catch(() => {
+          broken = true;
+        });
+        client.release(broken);
+      }
     },
 
     migrate() {

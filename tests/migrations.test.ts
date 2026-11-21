@@ -33,6 +33,103 @@ it('adds protected export auditing on upgrade without backfilling requests', asy
   }
 });
 
+it('lets an uncertain email status through migration 39 and still rejects an unknown status', async () => {
+  const url = await testDatabaseUrl({ empty: true });
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+    for (let version = 1; version <= 38; version++) {
+      await client.query(MIGRATIONS[version - 1]);
+      await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
+    }
+    await client.query("INSERT INTO organizations(id, name, created_at) VALUES ('org_email_status', 'Fictional club', '2027-04-01T12:00:00Z')");
+    await client.query(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
+      VALUES ('eml_recorded', 'org_email_status', 'organizer_invitation', 'org_email_status:kept@example.test:finance', 'kept@example.test', 'Subject', 'Body', 'recorded', '2027-04-01T12:00:00Z')`);
+  } finally {
+    await client.end();
+  }
+  const db = openDb(url);
+  try {
+    await db.migrate();
+    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 39')).toEqual({ version: 39 });
+    expect(await db.get("SELECT status FROM email_messages WHERE id = 'eml_recorded'")).toEqual({ status: 'recorded' });
+    await db.run(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
+      VALUES ('eml_uncertain', 'org_email_status', 'organizer_invitation', 'org_email_status:lost@example.test:finance', 'lost@example.test', 'Subject', 'Body', 'uncertain', '2027-04-01T12:00:00Z')`);
+    await expect(db.run(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
+      VALUES ('eml_bogus', 'org_email_status', 'organizer_invitation', 'org_email_status:bad@example.test:finance', 'bad@example.test', 'Subject', 'Body', 'queued', '2027-04-01T12:00:00Z')`)).rejects.toMatchObject({ code: '23514' });
+  } finally {
+    await db.close();
+  }
+});
+
+it('points an invitation at its current attempt when migration 40 runs', async () => {
+  const url = await testDatabaseUrl({ empty: true });
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+    for (let version = 1; version <= 39; version++) {
+      await client.query(MIGRATIONS[version - 1]);
+      await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
+    }
+    await client.query("INSERT INTO organizations(id, name, created_at) VALUES ('org_attempt', 'Fictional club', '2027-04-01T12:00:00Z')");
+    await client.query(`INSERT INTO organization_invitations (organization_id, email, role, created_at, expires_at)
+      VALUES ('org_attempt', 'finance@example.test', 'finance', '2027-04-01T12:00:00Z', '2027-04-15T12:00:00Z')`);
+    await client.query(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
+      VALUES ('eml_old', 'org_attempt', 'organizer_invitation', 'org_attempt:finance@example.test:finance', 'finance@example.test', 'Subject', 'Body', 'uncertain', '2027-03-01T12:00:00Z')`);
+    await client.query(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
+      VALUES ('eml_current', 'org_attempt', 'organizer_invitation', 'org_attempt:finance@example.test:finance', 'finance@example.test', 'Subject', 'Body', 'uncertain', '2027-04-01T12:00:00Z')`);
+  } finally {
+    await client.end();
+  }
+  const db = openDb(url);
+  try {
+    await db.migrate();
+    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 40')).toEqual({ version: 40 });
+    expect(await db.get(`SELECT email_attempt_id FROM organization_invitations WHERE email = 'finance@example.test'`)).toEqual({ email_attempt_id: 'eml_current' });
+    expect(await db.get("SELECT status FROM email_messages WHERE id = 'eml_old'")).toEqual({ status: 'uncertain' });
+  } finally {
+    await db.close();
+  }
+});
+
+it('keeps started_at for a send that already happened when migration 41 runs', async () => {
+  const url = await testDatabaseUrl({ empty: true });
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+    for (let version = 1; version <= 40; version++) {
+      await client.query(MIGRATIONS[version - 1]);
+      await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
+    }
+    await client.query("INSERT INTO organizations(id, name, created_at) VALUES ('org_started', 'Fictional club', '2027-04-04T12:00:00Z')");
+    const insert = (id: string, status: string, error: string | null) => client.query(
+      `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, error, created_at)
+       VALUES ($1, 'org_started', 'organizer_invitation', $2, 'finance@example.test', 'Subject', 'Body', $3, $4, '2027-04-04T12:00:00Z')`,
+      [id, `org_started:${id}`, status, error],
+    );
+    await insert('eml_fresh', 'uncertain', null);
+    await insert('eml_lost', 'uncertain', 'Send outcome unknown after a timeout.');
+    await insert('eml_refused', 'failed', 'Resend returned HTTP 403.');
+  } finally {
+    await client.end();
+  }
+  const db = openDb(url);
+  try {
+    await db.migrate();
+    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 41')).toEqual({ version: 41 });
+    expect(await db.all(`SELECT id, started_at IS NOT NULL AS started FROM email_messages ORDER BY id`)).toEqual([
+      { id: 'eml_fresh', started: false },
+      { id: 'eml_lost', started: true },
+      { id: 'eml_refused', started: true },
+    ]);
+  } finally {
+    await db.close();
+  }
+});
+
 describe('migration 36: terminal cancellation request refusals', () => {
   it('enforces matching request identities and supported terminal refusal statuses', async () => {
     const databaseUrl = await testDatabaseUrl(); const { app } = await testApp({ databaseUrl });

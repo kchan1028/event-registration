@@ -271,10 +271,9 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       `SELECT m.account_id, a.email, m.role FROM organization_members m JOIN accounts a ON a.id = m.account_id WHERE m.organization_id = $1 ORDER BY a.email, m.role`,
       [organizationId],
     );
-    const invitations = await db.all<{ email: string; role: Role; expires_at: string; email_status: 'recorded' | 'sent' | 'failed' | null; email_at: string | null }>(
+    const invitations = await db.all<{ email: string; role: Role; expires_at: string; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null }>(
       `SELECT i.email, i.role, i.expires_at, m.status AS email_status, m.created_at AS email_at FROM organization_invitations i
-       LEFT JOIN LATERAL (SELECT status, created_at FROM email_messages e WHERE e.organization_id = i.organization_id AND e.ref = i.organization_id || ':' || i.email || ':' || i.role
-         ORDER BY e.created_at DESC, e.seq DESC LIMIT 1) m ON true
+       LEFT JOIN email_messages m ON m.id = i.email_attempt_id
        WHERE i.organization_id = $1 ORDER BY i.email, i.role`,
       [organizationId],
     );
@@ -296,44 +295,62 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
    * Grants a role to an email: straight away when the person has an account, otherwise as an
    * invitation open for INVITATION_DAYS. Adding an invitation that already exists renews it,
    * including one that has expired. A person who invites or renews also sends the invitation email;
-   * a seed script (no person) sends none.
+   * a seed script (no person) sends none. An email the provider may already have accepted is reserved
+   * with the invitation and retried in place. It does not renew the invitation.
    */
   async function addMember(organizationId: string, email: string, role: Role, by: Account | null) {
     const normalized = email.trim().toLowerCase();
     const target = await db.get<Account>(`SELECT id, email FROM accounts WHERE lower(email) = $1`, [normalized]);
     if (target) await grant(organizationId, target, role, by?.id ?? null);
     else {
-      const t = clock();
-      const expiresAt = new Date(t.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
-      const renewed = await db.run(`UPDATE organization_invitations SET expires_at = $4, invited_by = $5 WHERE organization_id = $1 AND email = $2 AND role = $3`, [
-        organizationId,
-        normalized,
-        role,
-        expiresAt,
-        by?.id ?? null,
-      ]);
-      const invited = renewed
-        ? 0
-        : await db.run(`INSERT INTO organization_invitations (organization_id, email, role, invited_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, [
-            organizationId,
-            normalized,
-            role,
-            by?.id ?? null,
-            t.toISOString(),
-            expiresAt,
-          ]);
-      if (renewed + invited) {
-        await record(organizationId, renewed ? 'invitation_renewed' : 'invited', normalized, role, by?.id ?? null);
-        if (by) await sendInvitation(organizationId, normalized, role, by, expiresAt);
+      const ref = `${organizationId}:${normalized}:${role}`;
+      const decision = await db.transaction(async () => {
+        await db.lock(`org-members:${organizationId}`);
+        const extant = await db.get<{ email_attempt_id: string | null }>(
+          `SELECT email_attempt_id FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3`,
+          [organizationId, normalized, role],
+        );
+        // Only the attempt stored on this invitation counts. A cancelled row is gone, so a re-add starts over.
+        if (extant?.email_attempt_id) {
+          const attempt = await db.get<{ id: string; status: string }>(`SELECT id, status FROM email_messages WHERE id = $1`, [extant.email_attempt_id]);
+          if (attempt?.status === 'uncertain') return by ? { action: 'retry' as const, id: attempt.id } : { action: 'none' as const };
+        }
+        const t = clock();
+        const expiresAt = new Date(t.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
+        const renewed = await db.run(`UPDATE organization_invitations SET expires_at = $4, invited_by = $5 WHERE organization_id = $1 AND email = $2 AND role = $3`, [
+          organizationId,
+          normalized,
+          role,
+          expiresAt,
+          by?.id ?? null,
+        ]);
+        const invited = renewed
+          ? 0
+          : await db.run(`INSERT INTO organization_invitations (organization_id, email, role, invited_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, [
+              organizationId,
+              normalized,
+              role,
+              by?.id ?? null,
+              t.toISOString(),
+              expiresAt,
+            ]);
+        if (renewed + invited) await record(organizationId, renewed ? 'invitation_renewed' : 'invited', normalized, role, by?.id ?? null);
+        if (!(by && renewed + invited)) return { action: 'none' as const };
+        const id = await mailer.reserve('organizer_invitation', ref, organizationId, await invitationMessage(organizationId, normalized, role, by, expiresAt));
+        await db.run(`UPDATE organization_invitations SET email_attempt_id = $1 WHERE organization_id = $2 AND email = $3 AND role = $4`, [id, organizationId, normalized, role]);
+        return { action: 'send' as const, id };
+      });
+      if ((decision.action === 'retry' || decision.action === 'send') && (await mailer.dispatch(decision.id, decision.action === 'send')) === 'withheld') {
+        throw new HttpError(409, 'The earlier invitation email might have been sent. It was not sent again, and the invitation was not extended.');
       }
     }
     return listMembers(organizationId);
   }
 
-  async function sendInvitation(organizationId: string, email: string, role: Role, by: Account, expiresAt: string) {
+  async function invitationMessage(organizationId: string, email: string, role: Role, by: Account, expiresAt: string) {
     const org = await db.get<{ name: string }>(`SELECT name FROM organizations WHERE id = $1`, [organizationId]);
     const until = new Date(expiresAt).toLocaleDateString('en-US', { dateStyle: 'long', timeZone: 'UTC' });
-    await mailer.deliver('organizer_invitation', `${organizationId}:${email}:${role}`, organizationId, {
+    return {
       to: email,
       subject: `You are invited to ${org!.name} on CycleReg`,
       text: [
@@ -343,7 +360,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         '',
         'If you did not expect this, you can ignore this email.',
       ].join('\n'),
-    });
+    };
   }
 
   /** Removes one role (or invitation). The last owner cannot be removed, so an organization is never orphaned. */
