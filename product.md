@@ -377,7 +377,7 @@ Acceptance: an authorized organizer finds one rider's multiple race entries with
 Status: check-in search, ready/blocked result, bib ranges, bib history, repeat-safe check-in, undoing a mistaken check-in with a reason, and measured check-in times (median and 95th percentile per day) are Implemented in the local build on fake data (see [roadmap.md](roadmap.md#check-in)). Start-list snapshots with recorded changes, an organizer start-list lock whose later changes show as revisions, and a sample CSV export are Implemented too (see [roadmap.md](roadmap.md#start-lists-and-timer-export)); the CSV format is not yet agreed with a timer. A printable fallback roster with an exception checklist is Implemented (see [roadmap.md](roadmap.md#check-in)). QR check-in codes on the confirmation and camera scanning at check-in (Chrome and Edge) are Implemented.
 
 - Search or scan a check-in code; codes identify entries and contain no sensitive rider details.
-- Show readiness, missing requirements, race/category, and bib assignment clearly. When the server refuses a check-in because readiness changed, show the current blockers and remove the issue-bib action.
+- Show readiness, missing requirements, race/category, and bib assignment clearly. For a rider with an entry or bib in the current check-in scope, a readiness refusal must show the current blockers and remove the issue-bib action.
 - Configure bib ranges per event/day and prevent collisions within the configured scope.
 - Preserve bib history when a rider changes fields. Support repeat check-in without duplicate assignment.
 - Produce a timestamped start-list snapshot per race and record later changes.

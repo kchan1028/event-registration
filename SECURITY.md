@@ -112,7 +112,7 @@ The check-in QR scanner processes camera frames on the device. Stopping the scan
 
 ## Check-in readiness refusals
 
-When check-in is refused for a readiness blocker, the authorized check-in response includes the current desk card and race day. It uses the same fields as desk lookup, with no private contact details or payment amounts. The server still decides readiness under the event lock before any bib or check-in write.
+A readiness refusal includes the current desk card and race day only when the rider has an entry or an active bib in the day’s check-in scope. It uses the same fields as desk lookup, with no private contact details or payment amounts. The server still decides readiness under the event lock before any bib or check-in write.
 
 ## Walk-up phone handoff (Implemented locally)
 

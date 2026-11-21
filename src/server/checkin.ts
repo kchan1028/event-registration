@@ -448,7 +448,9 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         const card = await cardFor(eventId, orderId, dayId);
         if (card.checkedInAt && card.bib !== null) return card;
         if (!card.result.ready) {
-          const details = { code: 'check_in_not_ready', dayId, rider: card } satisfies CheckInReadinessConflict;
+          const details = card.entries.length > 0 || card.bib !== null
+            ? { code: 'check_in_not_ready', dayId, rider: card } satisfies CheckInReadinessConflict
+            : undefined;
           throw new HttpError(409, `Not ready to race: ${card.result.blockers.map((b) => b.label.toLowerCase()).join(', ')}.`, details);
         }
         if (!canCheckInWithBib(card)) throw new HttpError(409, 'No preassigned bib. Refer advance entries to the registration lead for allocation.');

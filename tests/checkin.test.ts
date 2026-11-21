@@ -97,7 +97,7 @@ describe('check-in API', () => {
     },
   ])('refuses desk check-in for a paid rider when $blocker.label ($name)', async ({ name, waiverPatch, blocker }) => {
     const databaseUrl = await testDatabaseUrl();
-    const { rider, list, setBibs, checkIn } = await setup(databaseUrl);
+    const { first, rider, list, setBibs, checkIn } = await setup(databaseUrl);
     const ready = rider(name);
     expect(ready.result.ready).toBe(true);
     expect((await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] })).statusCode).toBe(200);
@@ -125,11 +125,24 @@ describe('check-in API', () => {
     });
     const refused = await checkIn(ready.orderId);
     expect(refused.statusCode).toBe(409);
-    expect(refused.json()).toMatchObject({
+    expect(refused.json()).toEqual({
       error: expect.stringContaining(blocker.label.toLowerCase()),
-      details: { code: 'check_in_not_ready', rider: blocked },
+      details: { code: 'check_in_not_ready', dayId: first.dayId, rider: blocked },
     });
     expect(await blockedCard()).toEqual(blocked);
+  });
+
+  it('returns no desk card in a refusal for an expired hold that lookup hides', async () => {
+    let now = Date.parse('2027-03-01T18:00:00Z');
+    const { rider, list, checkIn } = await setup(undefined, () => new Date(now));
+    const held = rider('Frankie');
+    expect(held).toBeDefined();
+    now += 60 * 60_000;
+    expect((await list('Frankie')).riders).toEqual([]);
+
+    const refused = await checkIn(held.orderId);
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toEqual({ error: expect.stringContaining('Not ready to race') });
   });
 
   it('uses the same weekend overlap for desk and bulk assignment while day-scoped bibs stay independent', async () => {
