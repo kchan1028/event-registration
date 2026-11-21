@@ -128,7 +128,7 @@ function storedError(err: unknown): string {
  * Call `reserve` inside the invitation transaction. Call `dispatch` only after that transaction commits.
  */
 export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
-  async function finish(id: string, message: OutgoingEmail, firstAttempt: boolean): Promise<EmailStatus> {
+  async function finish(id: string, message: OutgoingEmail, mayRecordRefusal: boolean): Promise<EmailStatus> {
     try {
       const providerId = await sender.send(message, id);
       const saved = await db.run(
@@ -138,8 +138,8 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       return saved ? 'sent' : 'uncertain';
     } catch (err) {
       const safe = storedError(err);
-      // A later refusal or local block does not prove the first request failed to complete.
-      if (firstAttempt && (err instanceof EmailRefusal || err instanceof EmailNotSent)) {
+      // Only the call that first committed started_at may record a definite refusal.
+      if (mayRecordRefusal && (err instanceof EmailRefusal || err instanceof EmailNotSent)) {
         await db.run(`UPDATE email_messages SET status = 'failed', error = $1 WHERE id = $2 AND status = 'uncertain'`, [safe, id]);
         return 'failed';
       }
@@ -162,13 +162,12 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
 
     /**
      * Sends one reserved attempt after its row has committed.
-     * The attempt lock is held for the provider call, so a second dispatch of the same id waits
-     * and then reads the committed status. A refusal cannot land while another call can still succeed.
+     * The attempt lock is held for the provider call. `started_at` is committed before that call,
+     * so a lost response cannot make a later refusal look like the first send.
      * `withheld` means a retry can no longer prove the 24-hour provider window, so nothing is sent.
      */
     async dispatch(id: string, firstAttempt: boolean): Promise<EmailStatus | 'withheld'> {
-      return db.transaction(async () => {
-        await db.lock(`email-attempt:${id}`);
+      return db.hold(`email-attempt:${id}`, async (write) => {
         const row = await db.get<{ created_at: string; to_email: string; subject: string; body_text: string; status: EmailStatus }>(
           `SELECT created_at, to_email, subject, body_text, status FROM email_messages WHERE id = $1`,
           [id],
@@ -179,7 +178,8 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
           const created = Date.parse(row.created_at);
           if (!Number.isFinite(created) || clock().getTime() - created >= RESEND_IDEMPOTENCY_WINDOW_MS) return 'withheld';
         }
-        return finish(id, { to: row.to_email, subject: row.subject, text: row.body_text }, firstAttempt);
+        const claimed = await write(`UPDATE email_messages SET started_at = $2 WHERE id = $1 AND started_at IS NULL`, [id, clock().toISOString()]);
+        return finish(id, { to: row.to_email, subject: row.subject, text: row.body_text }, claimed === 1);
       });
     },
   };

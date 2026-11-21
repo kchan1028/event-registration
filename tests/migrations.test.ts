@@ -94,6 +94,42 @@ it('points an invitation at its current attempt when migration 40 runs', async (
   }
 });
 
+it('keeps started_at for a send that already happened when migration 41 runs', async () => {
+  const url = await testDatabaseUrl({ empty: true });
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+    for (let version = 1; version <= 40; version++) {
+      await client.query(MIGRATIONS[version - 1]);
+      await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
+    }
+    await client.query("INSERT INTO organizations(id, name, created_at) VALUES ('org_started', 'Fictional club', '2027-04-04T12:00:00Z')");
+    const insert = (id: string, status: string, error: string | null) => client.query(
+      `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, error, created_at)
+       VALUES ($1, 'org_started', 'organizer_invitation', $2, 'finance@example.test', 'Subject', 'Body', $3, $4, '2027-04-04T12:00:00Z')`,
+      [id, `org_started:${id}`, status, error],
+    );
+    await insert('eml_fresh', 'uncertain', null);
+    await insert('eml_lost', 'uncertain', 'Send outcome unknown after a timeout.');
+    await insert('eml_refused', 'failed', 'Resend returned HTTP 403.');
+  } finally {
+    await client.end();
+  }
+  const db = openDb(url);
+  try {
+    await db.migrate();
+    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 41')).toEqual({ version: 41 });
+    expect(await db.all(`SELECT id, started_at IS NOT NULL AS started FROM email_messages ORDER BY id`)).toEqual([
+      { id: 'eml_fresh', started: false },
+      { id: 'eml_lost', started: true },
+      { id: 'eml_refused', started: true },
+    ]);
+  } finally {
+    await db.close();
+  }
+});
+
 describe('migration 36: terminal cancellation request refusals', () => {
   it('enforces matching request identities and supported terminal refusal statuses', async () => {
     const databaseUrl = await testDatabaseUrl(); const { app } = await testApp({ databaseUrl });

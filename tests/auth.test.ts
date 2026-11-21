@@ -4,7 +4,8 @@ import pg from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthProvider } from '../src/server/auth';
 import { authProviderFromEnv } from '../src/server/auth';
-import { EmailNotSent, EmailRefusal, EmailUncertain, RESEND_IDEMPOTENCY_WINDOW_MS, emailFromEnv, type EmailSender } from '../src/server/email';
+import { openDb } from '../src/server/db';
+import { EmailNotSent, EmailRefusal, EmailUncertain, RESEND_IDEMPOTENCY_WINDOW_MS, createMailer, emailFromEnv, type EmailSender } from '../src/server/email';
 import type { EventConfig } from '../src/shared/schema';
 import { INVITATION_DAYS } from '../src/shared/roles';
 import { as, fakeAuth } from './support/auth';
@@ -534,6 +535,63 @@ describe('organizer roles', () => {
       await blocker.end();
     }
   }, 15_000);
+
+  it('keeps an earlier uncertain send when a later refusal belongs to the original request', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const db = openDb(databaseUrl);
+    const now = new Date('2027-04-04T12:00:00.000Z');
+    let refuse = false;
+    const seenDuringSend: { status: string; started: boolean }[] = [];
+    const email: EmailSender = {
+      mode: 'resend',
+      async send(_message, idempotencyKey) {
+        const visible = await db.get<{ status: string; started: boolean }>(
+          `SELECT status, started_at IS NOT NULL AS started FROM email_messages WHERE id = $1`,
+          [idempotencyKey],
+        );
+        seenDuringSend.push(visible!);
+        if (refuse) throw new EmailRefusal('Resend returned HTTP 403.');
+        throw new EmailUncertain('Send outcome unknown after a timeout.');
+      },
+    };
+    const mailer = createMailer(db, email, () => now);
+    try {
+      await db.migrate();
+      await db.run(`INSERT INTO organizations (id, name, created_at) VALUES ('org_attempt_order', 'Valley Velo', $1)`, [now.toISOString()]);
+      const retryFirst = await mailer.reserve('organizer_invitation', 'org_attempt_order:treasurer@valley.test:finance', 'org_attempt_order', {
+        to: 'treasurer@valley.test',
+        subject: 'Invitation',
+        text: 'Sign in to CycleReg.',
+      });
+      expect(await mailer.dispatch(retryFirst, false)).toBe('uncertain');
+      refuse = true;
+      expect(await mailer.dispatch(retryFirst, true)).toBe('uncertain');
+      expect(seenDuringSend).toEqual([
+        { status: 'uncertain', started: true },
+        { status: 'uncertain', started: true },
+      ]);
+      expect(await db.get(`SELECT status, provider_message_id, error, started_at IS NOT NULL AS started FROM email_messages WHERE id = $1`, [retryFirst])).toEqual({
+        status: 'uncertain',
+        provider_message_id: null,
+        error: 'Resend returned HTTP 403.',
+        started: true,
+      });
+
+      const firstOnly = await mailer.reserve('organizer_invitation', 'org_attempt_order:timer@valley.test:finance', 'org_attempt_order', {
+        to: 'timer@valley.test',
+        subject: 'Invitation',
+        text: 'Sign in to CycleReg.',
+      });
+      expect(await mailer.dispatch(firstOnly, true)).toBe('failed');
+      expect(await db.get(`SELECT status, provider_message_id, started_at IS NOT NULL AS started FROM email_messages WHERE id = $1`, [firstOnly])).toEqual({
+        status: 'failed',
+        provider_message_id: null,
+        started: true,
+      });
+    } finally {
+      await db.close();
+    }
+  });
 
   it('does not reuse a canceled attempt when a seed re-adds it at the same timestamp', async () => {
     const now = new Date('2027-04-03T12:00:00.000Z');
