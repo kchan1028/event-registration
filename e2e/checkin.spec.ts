@@ -939,3 +939,65 @@ test('a license correction replaces the volunteer’s stale ready card when chec
     await context.close();
   }
 });
+
+for (const width of [390, 1440]) {
+  test(`clicking away during check-in leaves focus alone at ${width}px`, async ({ page, browser }) => {
+    const organizer = page.request;
+    const { eventId, organizationId } = await (await organizer.post('/api/demo')).json();
+    const eventUrl = `/api/events/${eventId}`;
+    expect((await organizer.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+    expect((await organizer.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+    expect((await organizer.put(`${eventUrl}/bib-settings`, {
+      data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+    })).ok()).toBe(true);
+    const desk = await organizer.get(`${eventUrl}/check-in`);
+    expect(desk.ok()).toBe(true);
+    const rider = (await desk.json() as CheckInList).riders.find((entry) => entry.result.ready && entry.bib === null);
+    if (!rider?.checkInCode) throw new Error('The fixture needs a ready walk-up with a check-in code');
+
+    const email = 'pointer-focus.volunteer@example.test';
+    expect((await organizer.post(`/api/organizations/${organizationId}/members`, {
+      data: { email, role: 'check_in_volunteer' },
+    })).ok()).toBe(true);
+    const context = await browser.newContext({ viewport: { width, height: 900 }, extraHTTPHeaders: {} });
+    let release!: () => void;
+    let saved!: () => void;
+    const deferred = new Promise<void>((resolve) => { release = resolve; });
+    const committed = new Promise<void>((resolve) => { saved = resolve; });
+    try {
+      await context.addInitScript((user) => sessionStorage.setItem('cyclereg.test-session', user), email);
+      const volunteer = await context.newPage();
+      await volunteer.goto(`/#/events/${eventId}/check-in`);
+      const search = volunteer.getByRole('searchbox', { name: 'Find a rider' });
+      await search.fill(rider.checkInCode);
+      await search.press('Enter');
+      const card = volunteer.getByRole('region', { name: 'Rider check-in' });
+      await expect(card.getByRole('status')).toContainText('Ready to race');
+      await volunteer.route(`**${eventUrl}/check-in/${rider.orderId}`, async (route) => {
+        const response = await route.fetch();
+        saved();
+        await deferred;
+        await route.fulfill({ response });
+      });
+      await card.getByRole('button', { name: 'Check in and issue next bib' }).click();
+      await committed;
+      await volunteer.getByRole('heading', { name: 'Race-day check-in', exact: true }).click();
+      await expect(volunteer.locator('body')).toBeFocused();
+      release();
+
+      const next = card.getByRole('button', { name: 'Next rider' });
+      await expect(next).toBeVisible();
+      await expect(next).toHaveAccessibleDescription('Bib 100');
+      await expect(card.locator('.ci-bib__number')).toHaveText('100');
+      await expect(volunteer.locator('body')).toBeFocused();
+      const persisted = await organizer.get(`${eventUrl}/check-in`, { params: { q: rider.checkInCode } });
+      expect(persisted.ok()).toBe(true);
+      expect((await persisted.json() as CheckInList).riders[0]).toMatchObject({
+        orderId: rider.orderId, bib: 100, checkedInAt: expect.any(String),
+      });
+    } finally {
+      release();
+      await context.close();
+    }
+  });
+}
