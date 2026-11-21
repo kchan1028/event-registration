@@ -1,6 +1,6 @@
 # Phase 1 usability test kit
 
-Status: Implemented (kit written November 14, 2026). No sessions have been run. Results become evidence for the [Phase 1 exit gate](../../roadmap.md#phase-1--test-the-experience-without-live-money) only after they are summarized and linked from `roadmap.md`.
+Status: Implemented (kit written November 14, 2026). The [facilitated owner walkthrough](../../roadmap.md#berkeley-owner-walkthrough-and-participant-round) is complete and included facilitator guidance. Fresh participant sessions and [Phase 1 exit evidence](../../roadmap.md#phase-1--test-the-experience-without-live-money) remain open.
 
 Find desk-research findings and other evidence collections in the [research index](../research/README.md). This folder holds usability protocols and results; research recommendations do not replace participant evidence.
 
@@ -15,7 +15,7 @@ Use this kit to find out whether organizers, check-in volunteers, and riders or 
 
 ## Berkeley weekend initial round
 
-Status: Planned, no participants recruited or sessions run. Start with **3–5 riders/parents and 2–3 organizers or volunteers** using the [Berkeley task module](tasks.md#berkeley-weekend-initial-round). Include a parent, a rider who enters multiple categories, and a beginner or uncertain-license rider; among staff include at least one setup role and one check-in role. Roles may overlap, but count each person's role and task attempts explicitly. Use fictional data and the existing consent/storage rules below. Do not contact anyone under this documentation task.
+Status: Planned. The owner deferred recruitment and fresh participant sessions until the build is ready. When the round resumes, start with **3–5 riders/parents and 2–3 organizers or volunteers** using the [Berkeley task module](tasks.md#berkeley-weekend-initial-round). Include a parent, a rider who enters multiple categories, and a beginner or uncertain-license rider; among staff include at least one setup role and one check-in role. Roles may overlap, but count each person's role and task attempts explicitly. Use fictional data and the existing consent and storage rules below.
 
 This is an initial formative round to discover problems, not proof of the Phase 1 gate. The existing gate panel remains at least five riders/parents, two organizers, and two check-in volunteers. Expand recruitment or run a second round to meet that panel and re-test critical fixes with new participants. Do not use a small sample's percentage to claim statistical reliability.
 
