@@ -61,7 +61,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
 
       {cat.needsReview && (
         <div className="alert alert--warn">
-          <p>{cat.reviewReason}</p>
+          <p>{draft.readOnly ? 'An organizer has not finished reviewing this copied category.' : cat.reviewReason}</p>
           <button className="btn btn--small btn--secondary" onClick={() => set((c) => ({ ...c, needsReview: false, reviewReason: '' }))}>
             <Icon name="check" /> I have reviewed this copy
           </button>

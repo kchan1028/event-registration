@@ -26,7 +26,7 @@ for (const width of [390, 1440]) {
     await asRole(browser, page.request, organizationId, 'check_in_volunteer', async (volunteer) => {
       await volunteer.goto(`/#/events/${eventId}/check-in`);
       await expect(volunteer.getByText('This event is not published yet. A registration manager or owner publishes it.')).toBeVisible();
-      await expect(volunteer.getByText('Ask a registration manager or owner to set one before checking riders in.')).toBeVisible();
+      await expect(volunteer.getByText('Ask a registration manager or owner to set one for riders whose category has no range of its own.')).toBeVisible();
       await volunteer.getByRole('button', { name: 'Register a walk-up' }).click();
       await expect(volunteer.getByText('A registration manager or owner must publish this event before you share rider registration.')).toBeVisible();
 
@@ -54,6 +54,8 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
       questions: [{ id: 'q-role-test', label: '', required: false, options: [] }],
       length: { kind: 'duration', minutes: 45, plusLaps: 3 },
       timingCode: '',
+      needsReview: true,
+      reviewReason: 'Copied from "Example". Check the name, timing code, and price before publishing.',
     });
     expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision, config } })).ok()).toBe(true);
 
@@ -63,7 +65,10 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
       await expect(member.getByRole('heading', { name: 'Checks before publishing' })).toHaveCount(0);
       await expect(member.getByRole('button', { name: /^Move .* (up|down)$/ })).toHaveCount(0);
       await member.locator('.cat-row__name', { hasText: category.name }).first().click();
+      await expect(member.getByText(/^(Review copy|Needs fixing)$/)).toHaveCount(0);
       const details = member.getByRole('complementary', { name: 'Category details' });
+      await expect(details.getByText('An organizer has not finished reviewing this copied category.')).toBeVisible();
+      await expect(details.getByText(/Check the name/)).toHaveCount(0);
       await expect(details.getByLabel('Category name')).toHaveValue(category.name);
       await expect(details.getByLabel('Category name')).toBeDisabled();
       await expect(details.getByRole('button')).toHaveCount(1);

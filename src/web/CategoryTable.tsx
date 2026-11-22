@@ -161,10 +161,10 @@ function Row({ cat, draft, first, last, selected, hasError, entries, onSelect, p
         </button>
         <span className="cat-row__meta">
           {cat.timingCode ? <code className="code">{cat.timingCode}</code> : <span className="text-error">No timing code</span>}
-          {cat.needsReview && <span className="tag tag--warn">Review copy</span>}
+          {!readOnly && cat.needsReview && <span className="tag tag--warn">Review copy</span>}
           {cat.status === 'closed' && <span className="tag">Closed</span>}
           {cat.eligibility.guardianRequired && <span className="tag">Guardian</span>}
-          {hasError && !cat.needsReview && (
+          {!readOnly && hasError && !cat.needsReview && (
             <span className="tag tag--error">
               <Icon name="error" size={12} /> Needs fixing
             </span>

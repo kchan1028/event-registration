@@ -249,7 +249,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
 
           {!rangeFor(data.settings, data.dayId) && (
             <p className="ci__notice" role="status">
-              <Icon name="warn" /> No bib range is set for {data.settings.scope === 'weekend' ? 'this event' : (day?.label ?? 'this day')}. {can(data.roles, 'checkin.settings') ? <>Set one under <strong>Bib ranges</strong></> : 'Ask a registration manager or owner to set one'} before checking riders in.
+              <Icon name="warn" /> No bib range is set for {data.settings.scope === 'weekend' ? 'this event' : (day?.label ?? 'this day')}. {can(data.roles, 'checkin.settings') ? <>Set one under <strong>Bib ranges</strong></> : 'Ask a registration manager or owner to set one'} for riders whose category has no range of its own.
             </p>
           )}
 
