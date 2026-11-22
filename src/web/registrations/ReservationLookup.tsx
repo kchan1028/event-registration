@@ -70,7 +70,7 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
         <input
           id="staff-reservation-reference"
           ref={field}
-          className="input"
+          className="input reference-input"
           aria-invalid={!!invalid || undefined}
           aria-describedby={invalid ? 'staff-reservation-reference-error' : undefined}
           value={reference}
@@ -83,7 +83,7 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
         />
         {invalid && <p className="field__error" id="staff-reservation-reference-error" role="alert">{invalid}</p>}
         <div>
-          <button className="btn btn--secondary" aria-disabled={checking || undefined}>
+          <button className="btn btn--secondary lookup-submit" aria-disabled={checking || undefined}>
             {checking ? 'Checking…' : 'Check reservation'}
           </button>
         </div>

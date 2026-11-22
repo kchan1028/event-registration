@@ -601,6 +601,16 @@ test('organizer checks the rider’s pending reservation by exact reference', as
     await expect(staffReference).toHaveAccessibleDescription(/^This field cannot check a reference with a line break/);
   }
   expect(await lookup.locator('summary').evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  const staffSize = staff.viewportSize()!;
+  const riderSize = page.viewportSize()!;
+  await staff.setViewportSize({ width: 360, height: 800 });
+  for (const control of [staffReference, check]) expect(await control.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  await expect(staffReference).toHaveCSS('font-size', '16px');
+  await staff.setViewportSize(staffSize);
+  await page.setViewportSize({ width: 360, height: 800 });
+  expect(await riderReference.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  await expect(riderReference).toHaveCSS('font-size', '16px');
+  await page.setViewportSize(riderSize);
   await staffReference.fill(reference);
   await expect(staffReference).not.toHaveAttribute('aria-invalid');
   await check.click();

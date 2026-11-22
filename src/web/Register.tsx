@@ -1408,7 +1408,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
       {pending && <>
         <p className="note" role="status">Your reservation request is pending. Retry to recover the same order before changing your entries. Your original details, waiver and signature are saved.</p>
         <Field id="reservation-reference" label="Reservation reference" hint="If retries keep failing, share this reference with the event organizer before starting another registration.">
-          {(id, describedBy) => <input id={id} aria-describedby={describedBy} className="input" readOnly value={pending.request.clientRequestId} />}
+          {(id, describedBy) => <input id={id} aria-describedby={describedBy} className="input reference-input" readOnly value={pending.request.clientRequestId} />}
         </Field>
       </>}
       <p className="muted small">

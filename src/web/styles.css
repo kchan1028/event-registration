@@ -4511,6 +4511,10 @@ fieldset:disabled .field label {
 .cancellation-preview p { margin: 0; }
 .cancellation-preview details { width: 100%; overflow-wrap: anywhere; }
 .lookup-toggle { cursor: pointer; min-height: 44px; line-height: 44px; }
+@media (pointer: coarse), (max-width: 760px) {
+  .input.reference-input { min-height: 44px; font-size: 16px; }
+  .btn.lookup-submit { min-height: 44px; }
+}
 .cancellation-preview summary { cursor: pointer; padding-block: var(--s-2); font-weight: 600; }
 .cancellation-preview .table-wrap { width: 100%; }
 .cancellation-preview table { width: 100%; border-collapse: collapse; }
