@@ -76,7 +76,7 @@ Details: [demo purchase flow](product.md#2a-clickable-demo-purchase-flow--phase-
 | Printable cancellation notices | Implemented locally | Event/day/race closure on each day’s fallback roster, including print; no financial settlement or offline clearance implied |
 | Start lists | Implemented | List confirmed entries by race, with numbered snapshots and changes between versions |
 | Sample timer CSV | Implemented | Export stable entry identifiers and race data with current cancellation filename/header labels; historical snapshot contents remain unchanged. The format is not yet agreed or round-tripped with a timer |
-| Emergency contact lookup | Implemented locally | Any organizer role looks up one registration's emergency contact from check-in, Registrations, or start lists. Each lookup is recorded without the contact. Lists, the fallback roster, and exports omit it. Paper copies and retention remain unresolved |
+| Emergency contact lookup | Implemented locally | Any organizer role looks up one registration's emergency contact from check-in, Registrations, or start lists. Each lookup is recorded without the contact. Lists, organizer order responses, the fallback roster, and exports omit it. A rider or guardian still receives their own registration. Paper copies and retention remain unresolved |
 
 The [check-in volunteer guide](docs/runbooks/race-day-check-in.md) documents the local desk workflow and role boundaries. Independent staff rehearsal and an approved connectivity fallback remain open.
 

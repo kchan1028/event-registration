@@ -3,6 +3,28 @@ import { newId } from '../shared/factory';
 import type { Db } from './db';
 import { HttpError } from './repo';
 
+const EMERGENCY_CHANGE = new Set(['emergencyContactName', 'emergencyContactPhone']);
+
+/** Staff order responses omit the contact and the before/after values of a contact correction. */
+export function omitStaffEmergencyContact<T extends {
+  rider: { emergencyContact?: unknown };
+  corrections?: { changes: { field: string; before: string; after: string }[] }[];
+}>(view: T): T {
+  const rider = { ...view.rider };
+  delete rider.emergencyContact;
+  if (!view.corrections) return { ...view, rider };
+  return {
+    ...view,
+    rider,
+    corrections: view.corrections.map((correction) => ({
+      ...correction,
+      changes: correction.changes.map((change) => (
+        EMERGENCY_CHANGE.has(change.field) ? { ...change, before: '', after: '' } : change
+      )),
+    })),
+  };
+}
+
 const NOT_IN_EVENT = 'No registration with that id in this event.';
 const MISSING = 'This registration has no emergency contact on file.';
 

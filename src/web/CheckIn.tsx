@@ -19,8 +19,9 @@ function recoveryKey(eventId: string, dayId: string, orderId: string) {
 
 /**
  * Race-day check-in. Built for a volunteer at a folding table: find the rider,
- * read one unmistakable ready/blocked result, issue the bib. No payment amounts,
- * emails, or emergency contacts appear here.
+ * read one unmistakable ready/blocked result, issue the bib. No payment amounts
+ * or emails appear here. The card omits the emergency contact. A separate
+ * control, after the bib controls, looks one up and can hide it again.
  */
 export function CheckIn({ eventId }: { eventId: string }) {
   const [dayId, setDayId] = useState<string | null>(null);
@@ -521,7 +522,6 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
       <div className="ci-detail__who">
         <h2>{rider.name}</h2>
         <p className="muted">{[rider.team || 'No team', `racing age ${rider.racingAge}`].join(' · ')}</p>
-        <EmergencyContactLookup key={rider.orderId} eventId={eventId} riderName={rider.name} orderId={rider.orderId} />
       </div>
 
       <div className={`ci-result ${ready ? 'ci-result--ready' : 'ci-result--blocked'}`} role="status" ref={resultRef} tabIndex={-1}>
@@ -690,6 +690,10 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
           </p>
         )}
       </div>}
+
+      {recovery !== 'pending' && (
+        <EmergencyContactLookup key={rider.detailsOrderId} eventId={eventId} riderName={rider.name} orderId={rider.detailsOrderId} />
+      )}
 
       {recovery !== 'pending' && rider.bibHistory.some((h) => h.releasedAt) && (
         <div className="ci-section">

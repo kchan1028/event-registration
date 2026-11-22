@@ -2,7 +2,7 @@
 
 This describes the database the local build uses today. It covers tables, relationships, important fields, constraints, and what happens when data is removed. The intended product data model, including entities that are not built yet, is in [product.md](product.md#data-model) and [product.md](product.md#data-storage).
 
-**Status:** Implemented (local build). Describes schema version 34 on PostgreSQL as of November 18, 2026. The database moved from SQLite to PostgreSQL under [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md); local SQLite data is not carried over (reseed instead).
+**Status:** Implemented (local build). Describes schema version 39 on PostgreSQL as of November 21, 2026. The database moved from SQLite to PostgreSQL under [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md); local SQLite data is not carried over (reseed instead).
 
 **Source of truth:** the migrations in [src/server/db.ts](src/server/db.ts) and the event configuration schema in [src/shared/schema.ts](src/shared/schema.ts). If this file disagrees with them, the code wins; fix this file in the same change.
 
@@ -103,6 +103,9 @@ erDiagram
     events ||--o{ coupons : "coupon codes"
     coupons |o--o{ orders : "redeemed by"
     orders ||--o{ rider_corrections : "corrected details"
+    accounts ||--o{ emergency_contact_views : "looked up"
+    events ||--o{ emergency_contact_views : "lookup in"
+    orders ||--o{ emergency_contact_views : "contact looked up"
 ```
 
 An account is one person who signed in. Organization members tie an account to an organization with one or more roles; invitations hold a role for an email that has not signed in yet. An organization owns events. Each event has one editable draft and any number of immutable published versions. Riders register through orders against one published version; each order holds one entry per category bought. Bibs, check-ins, and start-list snapshots belong to the event, and bibs and check-ins also point at the order (one order is one rider). `order_entries`, `bib_assignments`, and `check_ins` also carry `event_id` directly so they can be queried per event.
@@ -800,7 +803,7 @@ Owner-directed local fixture retirement (November 15, 2026): the two legacy purc
 
 The app does not delete operational records during ordinary organizer or rider workflows. The generated case-study reset is the one development-only exception described above.
 
-- **Few cascades.** Operational foreign keys have no `ON DELETE` clause, so deleting a parent row that still has children fails. The exceptions are the sign-in tables (migration 16): deleting an organization deletes its memberships and invitations, deleting an account deletes its memberships, and `orders.account_id`, `waitlist_entries.account_id`, and organization membership/invitation actor references become null. Junior profile creator provenance also becomes null; guardian/invitation evidence references can restrict account deletion. Ordinary app endpoints do not delete organizations, events, versions, orders, payment attempts, bibs, check-ins, or snapshots.
+- **Few cascades.** Operational foreign keys have no `ON DELETE` clause, so deleting a parent row that still has children fails. `emergency_contact_views` names `ON DELETE RESTRICT` for the account, event, and order, so those rows have to be removed before the parent. The exceptions are the sign-in tables (migration 16): deleting an organization deletes its memberships and invitations, deleting an account deletes its memberships, and `orders.account_id`, `waitlist_entries.account_id`, and organization membership/invitation actor references become null. Junior profile creator provenance also becomes null; guardian/invitation evidence references can restrict account deletion. Ordinary app endpoints do not delete organizations, events, versions, orders, payment attempts, bibs, check-ins, or snapshots.
 - **Test entries** can be cleared for one event. The generated case-study reset explicitly deletes its own related records in dependency order.
 - **Categories** are archived (`status: archived` in the configuration), not removed, so published versions and existing entries still resolve them. If an order's category is missing from its published version, it shows as "Removed category".
 - **Orders** are never deleted. Cancelled and expired orders stay for history and stop counting toward capacity.

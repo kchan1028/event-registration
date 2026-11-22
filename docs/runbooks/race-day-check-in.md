@@ -34,6 +34,8 @@ The [server role table](../../src/shared/roles.ts) is authoritative. Roles are s
 | Finance | Orders, ledger export and refunds | Check-in, entry changes or publishing require another granted role |
 | Owner | All existing organizer permissions; assign access and accountable leads | A role does not create a federation approval or an accepted live-payment/contingency process |
 
+Any of these roles may look up one registration's emergency contact. That lookup is a separate action. It is not part of the default check-in card, roster, or export.
+
 ## At the desk: check-in volunteer
 
 1. Check the event and selected race day before each shift. A rider's races on another day do not establish an entry today.

@@ -24,7 +24,7 @@ import { cancellationExportState, cancellationExportFilename } from './cancellat
 import { openDb } from './db';
 import { createAutomaticBibs, automaticBibError, type AutomaticBibs } from './automaticBibs';
 import { createCheckIn } from './checkin';
-import { createEmergencyContacts } from './emergencyContacts';
+import { createEmergencyContacts, omitStaffEmergencyContact } from './emergencyContacts';
 import { createCaseStudyFixtures } from './caseStudies';
 import { createIdentity } from './identity';
 import { createResolutions } from './resolutions';
@@ -468,8 +468,9 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   // A rider sees their own orders; organizers who may see orders see their events' orders.
   app.get('/api/orders/:id', async (req) => {
     const { id } = idParam.parse(req.params);
-    await access.requireOrderAccess(me(req), { orderId: id }, { rider: true, juniorViewer: true, permission: 'orders.view' });
-    return orders.getOrder(id);
+    const kind = await access.requireOrderAccess(me(req), { orderId: id }, { rider: true, juniorViewer: true, permission: 'orders.view' });
+    const order = await orders.getOrder(id);
+    return kind === 'rider' ? order : omitStaffEmergencyContact(order);
   });
 
   // The signed-in person's own registrations, plus those of juniors who named them as their login.
@@ -576,14 +577,14 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { orderId: id }, { permission: 'payments.refund' });
     const result = await refunds.request(id, req.body, me(req).id);
-    return { ...await orders.getOrder(id), ...result };
+    return { ...omitStaffEmergencyContact(await orders.getOrder(id)), ...result };
   });
   app.post('/api/refunds/:id/retry', async (req) => {
     const { id } = idParam.parse(req.params);
     const orderId = await refunds.orderOf(id);
     await access.requireOrderAccess(me(req), { orderId }, { permission: 'payments.refund' });
     await refunds.retry(id);
-    return orders.getOrder(orderId);
+    return omitStaffEmergencyContact(await orders.getOrder(orderId));
   });
 
   // Stripe notifications. Public, because Stripe calls it; trusted only after the signature on the raw body verifies.
@@ -604,7 +605,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.get('/api/events/:id/orders', async (req) => {
     const { id } = await onEvent(req, 'orders.view');
     const { q } = z.object({ q: z.string().max(120).optional() }).parse(req.query);
-    return orders.listOrders(id, q ?? '');
+    return (await orders.listOrders(id, q ?? '')).map(omitStaffEmergencyContact);
   });
 
   // Organizer corrections to rider details. A reason is required and every correction is kept.
@@ -612,7 +613,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { orderId: id }, { permission: 'entries.manage' });
     const body = z.object({ changes: riderCorrectionSchema, reason: z.string().trim().min(3, 'Write why the details are being corrected.').max(300) }).parse(req.body);
-    return orders.correctRider(id, body.changes, body.reason, me(req).id);
+    return omitStaffEmergencyContact(await orders.correctRider(id, body.changes, body.reason, me(req).id));
   });
 
   // Organizer transfers and withdrawals of paid entries. A reason is required and logged.
@@ -620,20 +621,20 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { entryId: id }, { permission: 'entries.manage' });
     const body = z.object({ toCategoryId: z.string().min(1).max(64), reason: z.string().trim().min(3, 'Write why the entry is moving.').max(300) }).parse(req.body);
-    return orders.transferEntry(id, body.toCategoryId, body.reason);
+    return omitStaffEmergencyContact(await orders.transferEntry(id, body.toCategoryId, body.reason));
   });
   app.post('/api/order-entries/:id/withdraw', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { entryId: id }, { permission: 'entries.manage' });
     const body = z.object({ reason: z.string().trim().min(3, 'Write why the entry is withdrawn.').max(300) }).parse(req.body);
-    return orders.withdrawEntry(id, body.reason);
+    return omitStaffEmergencyContact(await orders.withdrawEntry(id, body.reason));
   });
 
   app.post('/api/order-entries/:id/license-review', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { entryId: id }, { permission: 'entries.manage' });
     const body = z.object({ note: z.string().trim().max(300).optional() }).parse(req.body ?? {});
-    return orders.reviewLicense(id, body.note || null);
+    return omitStaffEmergencyContact(await orders.reviewLicense(id, body.note || null));
   });
 
   // Race-day check-in. Volunteers see readiness and bib only.

@@ -43,6 +43,7 @@ test('staff look up an emergency contact from check-in and can hide it', async (
   await showAndHide(detail, alex.name);
 
   await page.goto(`/#/events/${eventId}/roster`);
+  await expect(page.getByRole('row', { name: /Alex Demo/ }).or(page.getByText('Alex Demo')).first()).toBeVisible();
   await expect(page.getByText(PHONE)).toHaveCount(0);
 });
 

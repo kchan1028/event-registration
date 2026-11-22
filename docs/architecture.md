@@ -157,7 +157,7 @@ This diagram shows logical parts, not services to deploy separately. Public sche
 
 - **Public:** published schedules, category descriptions, prices, start times, and, only if the organizer turns it on, a participant list without sensitive fields.
 - **Rider-private:** profile, guardian relationships, orders, receipts, waiver status. Visible to the rider and to organizer roles that need it.
-- **Restricted:** emergency contacts, license numbers, payment references, audit history. Any organizer role may look up one registration's emergency contact for an event they can access. Each lookup is recorded without the contact. Lists and exports still omit it. License numbers, payment references, and other audit history stay with the roles that need them.
+- **Restricted:** emergency contacts, license numbers, payment references, audit history. Any organizer role may look up one registration's emergency contact for an event they can access. Each lookup is recorded without the contact. Lists, exports, and organizer order responses still omit it. A rider or guardian still receives their own registration. License numbers, payment references, and other audit history stay with the roles that need them.
 - **Never stored:** card numbers and security codes.
 
 Private pages must not be indexable by search engines. See [content-guide.md](content-guide.md#keep-private-data-out-of-public-pages).

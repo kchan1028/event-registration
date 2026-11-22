@@ -210,7 +210,7 @@ The first release has these roles (from [product.md](../product.md#4-organizer-w
 ### Privacy
 
 - Collect only the profile, contact, emergency contact, team, and license data the product requires.
-- Emergency contacts stay off lists, rosters, and exports. Any organizer role may look up one registration's contact. Each lookup is recorded with the account, event, order, and time, and the record does not store the contact.
+- Emergency contacts stay off lists, rosters, exports, and organizer order responses. Any organizer role may look up one registration's contact. Each lookup is recorded with the account, event, order, and time, and the record does not store the contact. A rider or guardian still receives their own registration.
 - Check-in codes identify an entry and contain no personal details.
 - Public participant lists show no sensitive data by default.
 - Keep personal data out of logs, error reports, analytics, and URLs.

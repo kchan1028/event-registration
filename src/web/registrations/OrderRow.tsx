@@ -58,7 +58,7 @@ export function OrderRow({ order, categories, canManage, canRefund, onChange }: 
         Racing age {order.rider.racingAge} · license {order.rider.licenseCategory ? licenseLabel(order.rider.licenseCategory) : 'not known'}
         {order.rider.guardian ? ` · guardian ${order.rider.guardian.name}` : ''} · waiver {order.waiver.version} signed by {order.waiver.signatureName} · order {order.orderNumber}
       </p>
-      <EmergencyContactLookup eventId={order.eventId} riderName={`${order.rider.firstName} ${order.rider.lastName}`} orderId={order.id} />
+      <EmergencyContactLookup key={`${order.id}:${order.corrections.length}:${order.corrections.at(-1)?.at ?? ''}`} eventId={order.eventId} riderName={`${order.rider.firstName} ${order.rider.lastName}`} orderId={order.id} />
       {order.checkInCode && (
         <p className="small order__checkin">
           Check-in code <code className="code">{order.checkInCode}</code> ·{' '}
@@ -148,19 +148,38 @@ function EntryLine({ entry, confirmed, canManage, onChange, children }: { entry:
 type EntryView = OrderView['entries'][number];
 
 const FIELDS = Object.keys(CORRECTABLE_FIELDS) as CorrectableField[];
+const EMERGENCY_FIELDS = new Set<CorrectableField>(['emergencyContactName', 'emergencyContactPhone']);
+
+function contactOnFile(rider: OrderView['rider']): boolean {
+  return Object.prototype.hasOwnProperty.call(rider, 'emergencyContact');
+}
+
+function riderForForm(rider: OrderView['rider']) {
+  return contactOnFile(rider) ? rider : { ...rider, emergencyContact: { name: '', phone: '' } };
+}
 
 /**
  * Correct a rider's contact and identity details with a reason. Prices, entries, eligibility
  * answers, and the waiver signature are not editable here. Every correction is listed below the form.
  */
 function RiderCorrections({ order, canManage, onChange }: { order: OrderView; canManage: boolean; onChange: (o: OrderView) => void }) {
-  const initial = () => Object.fromEntries(FIELDS.map((f) => [f, correctableValue(order.rider, f)])) as Record<CorrectableField, string>;
+  const currentValue = (field: CorrectableField) => (
+    EMERGENCY_FIELDS.has(field) && !contactOnFile(order.rider) ? '' : correctableValue(riderForForm(order.rider), field)
+  );
+  const initial = () => Object.fromEntries(FIELDS.map((f) => [f, currentValue(f)])) as Record<CorrectableField, string>;
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState(initial);
   const name = `${order.rider.firstName} ${order.rider.lastName}`;
   const patch = () => {
     const p: RiderCorrection = {};
-    for (const f of FIELDS) if (values[f].trim() !== correctableValue(order.rider, f)) p[f] = values[f].trim();
+    for (const f of FIELDS) {
+      const next = values[f].trim();
+      if (EMERGENCY_FIELDS.has(f) && !contactOnFile(order.rider)) {
+        if (next) p[f] = next;
+        continue;
+      }
+      if (next !== correctableValue(order.rider, f)) p[f] = next;
+    }
     return p;
   };
   return (
@@ -175,7 +194,7 @@ function RiderCorrections({ order, canManage, onChange }: { order: OrderView; ca
           submitLabel="Save correction"
           busyLabel="Saving…"
           missing="Write why the details are being corrected."
-          validate={() => (applyCorrection(order.rider, patch()).changes.length === 0 ? 'Nothing changed. Edit a field before saving.' : null)}
+          validate={() => (applyCorrection(riderForForm(order.rider), patch()).changes.length === 0 ? 'Nothing changed. Edit a field before saving.' : null)}
           onSubmit={async (reason) => {
             onChange(await api.correctRider(order.id, patch(), reason));
             setOpen(false);
@@ -213,7 +232,8 @@ function RiderCorrections({ order, canManage, onChange }: { order: OrderView; ca
               <span className="small">
                 <strong>Details corrected</strong> · {formatDateTime(c.at)}{c.by && ` · by ${c.by}`} · Reason: {c.reason}
                 <br />
-                {c.changes.map((x) => `${x.label}: “${x.before || 'blank'}” to “${x.after || 'blank'}”`).join('; ')}.
+                {c.changes.filter((x) => !EMERGENCY_FIELDS.has(x.field)).map((x) => `${x.label}: “${x.before || 'blank'}” to “${x.after || 'blank'}”`).join('; ')}
+                {c.changes.some((x) => EMERGENCY_FIELDS.has(x.field)) && ' Emergency contact was updated. Look it up for the current name and phone.'}
                 {c.licenseReviewsCleared > 0 && ' The license number changed, so the earlier license review was cleared and the license needs review again.'}
               </span>
             </li>
