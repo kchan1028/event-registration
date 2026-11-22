@@ -203,6 +203,6 @@ Each rule has one home. The links below point to it; this list is a summary, not
 | Audit | Append-only audit history for money, categories, waivers, capacity, permissions, and exceptions | [docs/coding-guide.md](docs/coding-guide.md#audit-history) |
 | Public pages | Private pages are not indexable | [docs/content-guide.md](docs/content-guide.md#keep-private-data-out-of-public-pages) |
 
-Retention and deletion rules are still an open decision and must be defined before the pilot ([product.md](product.md#open-decisions)).
+The emergency-contact lookup record is to be kept 365 days (not yet enforced). Other retention rules and every deletion procedure are still an open decision and must be defined before the pilot ([product.md](product.md#open-decisions)).
 
 Berkeley rider-rate pricing is recalculated on the server from the accepted configuration and parsed rider facts; client totals are not trusted. Declared age, collegiate division and competition class do not constitute federation verification. Existing paid order quotes are preserved when revised prices are published. No live payment configuration or new access route is introduced.
