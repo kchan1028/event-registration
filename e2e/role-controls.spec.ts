@@ -20,7 +20,7 @@ async function asRole(browser: Browser, organizer: APIRequestContext, organizati
   }
 }
 
-for (const width of [390, 1440]) {
+for (const width of [375, 1440]) {
   test(`check-in hides setup a volunteer cannot do at ${width}px`, async ({ page, browser }) => {
     const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
     await asRole(browser, page.request, organizationId, 'check_in_volunteer', async (volunteer) => {
@@ -67,7 +67,9 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
       await expect(member.getByRole('heading', { name: 'Checks before publishing' })).toHaveCount(0);
       await expect(member.getByRole('button', { name: /^Move .* (up|down)$/ })).toHaveCount(0);
       await expect(member.locator('.cat-table thead th')).toHaveCount(7);
-      await expect(member.locator('.clip--error')).toHaveCount(0);
+      // Problems show to every role, as words and not by color alone. The tasks that fix them stay with editors.
+      await expect(member.locator('.clip--error').first()).toContainText('staging time is after the start time');
+      await expect(member.locator('.cat-row', { hasText: category.name }).first()).toContainText('Not reviewed yet');
       await member.locator('.cat-row__name', { hasText: category.name }).first().click();
       await expect(member.getByText(/^(Review copy|Needs fixing)$/)).toHaveCount(0);
       const details = member.getByRole('complementary', { name: 'Category details' });
@@ -78,7 +80,9 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
       await expect(details.getByRole('button')).toHaveCount(1);
       await expect(details.getByText(/Choose how this race is measured|Set a cap, a start group|list each allowed category|Comma-separated|Leave blank|For example|Cannot go below|you offer freed places/)).toHaveCount(0);
       await expect(details.getByPlaceholder(/For example/)).toHaveCount(0);
-      await expect(details.getByRole('list', { name: 'Problems in this category' })).toHaveCount(0);
+      const problems = details.getByRole('list', { name: 'Problems in this category' });
+      await expect(problems).toContainText('needs a short timing code');
+      await expect(problems).not.toContainText('Copied from');
       await details.getByRole('button', { name: 'Close category details' }).click();
       await expect(details).toHaveCount(0);
 
@@ -91,7 +95,7 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
           expect(await member.locator('#main').evaluate((main) => Math.round(main.getBoundingClientRect().right) === document.documentElement.clientWidth)).toBe(true);
         }
       }
-      await member.setViewportSize({ width: 390, height: 900 });
+      await member.setViewportSize({ width: 375, height: 900 });
       await member.reload();
       await expect(member.getByText('View only', { exact: true })).toBeVisible();
       if (role === 'check_in_volunteer') {

@@ -12,6 +12,7 @@ import { ChangesToResolve } from './registrations/ChangesToResolve';
 import { OrderRow } from './registrations/OrderRow';
 import { SameRider } from './registrations/SameRider';
 import { ReconciliationDownload } from './registrations/ReconciliationDownload';
+import { ReservationLookup } from './registrations/ReservationLookup';
 import { Summary } from './registrations/Summary';
 import { Waitlists } from './registrations/Waitlists';
 import { DownloadLink, Pending } from './ui';
@@ -77,6 +78,17 @@ export function Registrations({ draft }: { draft: Draft }) {
       {published && <Summary eventId={eventId} refreshKey={orders} />}
       {published && orders !== null && can(roles, 'payments.refund') && <CancellationPreview eventId={eventId} revision={draft.data.revision} publishedVersion={draft.data.publishedVersion} orders={orders} onExecutionSaved={reload} />}
 
+      {published && can(roles, 'orders.view') && (
+        <ReservationLookup
+          key={eventId}
+          eventId={eventId}
+          onFound={() => {
+            // The order can commit or change after the list loaded, and staff search that list by its number next.
+            setFilter('all');
+            reload();
+          }}
+        />
+      )}
       <form role="search" className="reg-search" onSubmit={(e) => e.preventDefault()}>
         <label htmlFor="reg-search">Find a registration</label>
         <input

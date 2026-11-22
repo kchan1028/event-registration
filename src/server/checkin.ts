@@ -184,7 +184,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
 
   function riderRange(cfg: EventConfig, entries: Rider['entries'], s: BibSettings, dayId: string) {
     const range = bibRangeForEntries(cfg, entries, s, dayId);
-    if (range && range.first > range.last) throw new HttpError(409, 'The rider’s category bib ranges do not overlap. Adjust the ranges or use separate bibs per day.');
+    if (range && range.first > range.last) throw new HttpError(409, 'The rider’s category bib ranges do not overlap. A registration manager or owner can adjust the ranges or use separate bibs per day.');
     return range;
   }
 
@@ -193,12 +193,12 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     const scope = bibScopeKey(s, dayId);
     const rider = await riderFor(eventId, orderId);
     const range = riderRange(await config(eventId), activeEntries(rider), s, dayId);
-    if (!range) throw new HttpError(409, 'No bib range covers every applicable entry. Set bib ranges before checking riders in.');
+    if (!range) throw new HttpError(409, 'No bib range covers every applicable entry. A registration manager or owner sets bib ranges before this rider can get a bib.');
     const taken = await takenBibs(eventId, scope);
     let bib: number | null = requested;
     if (bib === null) {
       bib = nextFreeBib(range, taken);
-      if (bib === null) throw new HttpError(409, `Every bib from ${range.first} to ${range.last} is in use. Extend the bib range.`);
+      if (bib === null) throw new HttpError(409, `Every bib from ${range.first} to ${range.last} is in use. A registration manager or owner can extend the bib range.`);
     } else {
       requireBibInRange(bib, range);
       if (taken.has(bib)) throw new HttpError(409, `Bib ${bib} is already issued to another rider.`);
@@ -288,7 +288,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
       const active = activeEntries(rider).filter((e) => days.some((d) => d.id === e.dayId));
       const applicable = active.length ? active : rider.entries.filter((e) => e.status === 'withdrawn' || e.status === 'cancelled');
       const range = riderRange(cfg, applicable, s, day.id);
-      if (!range) throw new HttpError(409, 'Set a bib range for every applicable entry before changing numbers.');
+      if (!range) throw new HttpError(409, 'No bib range covers every applicable entry. A registration manager or owner sets one before numbers can change.');
       requireBibInRange(a.bib, range);
       if (outside.has(a.bib)) throw new HttpError(409, `Bib ${a.bib} belongs to a rider outside this batch.`);
       if (a.bib !== card.bib) for (const entry of applicable.filter((e) => !active.length || e.status === 'confirmed')) {

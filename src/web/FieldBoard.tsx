@@ -75,7 +75,7 @@ function Clip({ group, draft, cats, groups, editing, setEditing, onSelect, selec
   const errors = draft.issues.filter((i) => i.target.kind === 'startGroup' && i.target.id === group.id && i.level === 'error');
 
   return (
-    <article className={`clip ${!draft.readOnly && errors.length ? 'clip--error' : ''}`} aria-labelledby={`clip-${group.id}`}>
+    <article className={`clip ${errors.length ? 'clip--error' : ''}`} aria-labelledby={`clip-${group.id}`}>
       <header className="clip__head">
         <span className="clip__time num">{group.startTime ? formatTime(group.startTime).replace(' ', ' ') : '--:--'}</span>
         <h4 className="clip__name" id={`clip-${group.id}`}>
@@ -102,7 +102,7 @@ function Clip({ group, draft, cats, groups, editing, setEditing, onSelect, selec
           </button>
         </div>
       )}
-      {!draft.readOnly && errors.map((e) => (
+      {errors.map((e) => (
         <p key={e.key} className="clip__error">
           <Icon name="error" size={14} /> {e.message}
         </p>

@@ -1,3 +1,4 @@
+import { reservationLookupSchema, reservationReferenceSchema } from '../src/shared/checkout';
 import { describe, expect, it } from 'vitest';
 import { testApp, testDatabaseUrl } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
@@ -64,6 +65,38 @@ describe('rider checkout: holds and simulated payment', () => {
     expect(a.waiverEvidence?.acceptedAt).not.toBe(body.waiverEvidence.acceptedAt);
     expect(b.waiverEvidence).toEqual(a.waiverEvidence);
     expect(await entriesCount()).toBe(before + 1);
+  });
+
+  it('looks up a reservation by exact reference without creating or extending a hold', async () => {
+    const { app, eventId, order, code, clock, entriesCount } = await setup();
+    const reference = 'reservation-reference-0001';
+    const url = `/api/events/${eventId}/reservation-status`;
+    const check = (value: string) => app.inject({ method: 'POST', url, payload: { reference: value } });
+    const before = await entriesCount();
+
+    const unknown = await check(reference);
+    expect(unknown.statusCode).toBe(200);
+    expect(unknown.json()).toEqual({ order: null });
+    expect(unknown.headers['cache-control']).toBe('no-store');
+    expect(await entriesCount()).toBe(before);
+    expect((await check('short')).statusCode).toBe(400);
+
+    const response = await order([code('RR-M35-34')], { clientRequestId: reference });
+    expect(response.statusCode).toBe(201);
+    const saved = response.json<{ orderNumber: string; holdExpiresAt: string }>();
+    expect((await check(reference)).json()).toEqual({
+      order: { orderNumber: saved.orderNumber, status: 'held', holdExpiresAt: saved.holdExpiresAt },
+    });
+    expect((await check(reference.toUpperCase())).json()).toEqual({ order: null });
+    const other = (await app.inject({ method: 'POST', url: '/api/demo' })).json<{ eventId: string }>();
+    expect((await app.inject({ method: 'POST', url: `/api/events/${other.eventId}/reservation-status`, payload: { reference } })).json()).toEqual({ order: null });
+    expect(await entriesCount()).toBe(before + 1);
+    clock.advance(10);
+    expect((await check(reference)).json()).toEqual({
+      order: { orderNumber: saved.orderNumber, status: 'expired', holdExpiresAt: null },
+    });
+    expect(await entriesCount()).toBe(before);
+    expect((await app.inject({ method: 'GET', url: `/api/events/${eventId}/orders` })).json()).toHaveLength(1);
   });
 
   it('refuses ineligible entries, missing guardians, and a stale waiver', async () => {
@@ -385,4 +418,15 @@ describe('order numbers', () => {
     expect(await find(real.orderNumber)).toEqual([real.id]);
     expect(await find(real.orderNumber.slice(3))).toEqual([real.id]);
   });
+});
+
+it('keeps every saved key retryable and refuses a lookup only for what storage cannot hold exactly', () => {
+  for (const key of ['7f6c2a52-0d0b-4d59-9a57-3b7c2d8e1f00', ' spaced-reference ', 'référence-🚲-01', 'exact\nreference', 'exact\treference', 'exact\u007freference']) {
+    expect(reservationReferenceSchema.safeParse(key).success).toBe(true);
+    expect(reservationLookupSchema.safeParse(key).success).toBe(true);
+  }
+  for (const key of ['exact\u0000reference', 'exact\ud800reference', 'exact\udc00reference']) {
+    expect(reservationReferenceSchema.safeParse(key).success).toBe(true);
+    expect(reservationLookupSchema.safeParse(key).success).toBe(false);
+  }
 });

@@ -25,7 +25,8 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
   const groups = config.startGroups.filter((g) => g.raceId === cat.raceId);
   // Every place in use in this category: test entries, confirmed and held order entries, and live waitlist offers.
   const entries = draft.data.entries.filter((e) => e.categoryId === cat.id).length;
-  const issues = draft.issues.filter((i) => i.target.kind === 'category' && i.target.id === cat.id);
+  // View only: the copy alert already says a review is open, and the review's own message is a task for an editor.
+  const issues = draft.issues.filter((i) => i.target.kind === 'category' && i.target.id === cat.id && !(draft.readOnly && i.key === `cat.${cat.id}.review`));
   const set = (fn: (c: Category) => Category) => update((cfg) => updateCategory(cfg, cat.id, fn));
 
   const remove = () => {
@@ -75,7 +76,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
           </button>
         </div>
       )}
-      {!draft.readOnly && issues.length > 0 && (
+      {issues.length > 0 && (
         <ul className="editor__issues" aria-label="Problems in this category">
           {issues.map((i) => (
             <li key={i.key} className={`issue issue--${i.level}`}>
