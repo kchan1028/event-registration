@@ -184,8 +184,9 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
      * `withheld` means the send cannot be repeated safely (local mode, or past the 24-hour provider window).
      * `changed` means no invitation pointed at the attempt at the last check before the call, so nothing is sent.
      * A cancellation after that check cannot recall the send.
+     * `refused` means `mayStillSend` said no just before the call, so nothing is sent.
      */
-    async dispatch(id: string): Promise<EmailStatus | 'withheld' | 'changed'> {
+    async dispatch(id: string, mayStillSend?: () => Promise<boolean>): Promise<EmailStatus | 'withheld' | 'changed' | 'refused'> {
       for (;;) {
         const row = await db.get<{ created_at: string; to_email: string; from_email: string | null; subject: string; body_text: string; status: EmailStatus; current: boolean; sending: boolean }>(
           `SELECT created_at, to_email, from_email, subject, body_text, status,
@@ -215,6 +216,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
           [id, clock().toISOString(), SEND_LEASE_SECONDS],
         );
         if (!lease) continue;
+        const allowed = mayStillSend ? await mayStillSend() : true;
         // The claim took time, so check the lease, the invitation, and the window again with nothing awaited before the call.
         const ready = await db.get(
           `SELECT 1 FROM email_messages m
@@ -223,13 +225,14 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
              AND EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id AND NOT earlier_email)`,
           [id, lease.until, SEND_TIMEOUT_MS / 1000],
         );
-        if (ready && !pastWindow()) return finish(id, { to: row.to_email, from: row.from_email ?? undefined, subject: row.subject, text: row.body_text }, lease);
+        if (allowed && ready && !pastWindow()) return finish(id, { to: row.to_email, from: row.from_email ?? undefined, subject: row.subject, text: row.body_text }, lease);
         // No provider call was made, so give the lease back and let the loop report why.
         await db.run(
           `UPDATE email_messages SET sending_until = NULL, started_at = CASE WHEN $3::boolean THEN NULL ELSE started_at END
            WHERE id = $1 AND status = 'uncertain' AND sending_until = $2::timestamptz`,
           [id, lease.until, lease.first],
         );
+        if (!allowed) return 'refused';
       }
     },
   };

@@ -134,6 +134,7 @@ const HISTORY_LIMIT = 50;
 
 /** Accounts, organization roles, and the checks every organizer route makes. `appUrl`: where invitation emails send people to sign in; empty when email is only recorded. */
 const EARLIER_EMAIL = 'An earlier email for this invitation might have been sent, so it cannot be resent. To send a new email, cancel the invitation and invite again.';
+const NO_LONGER_OWNER = 'You are no longer an owner, so you cannot manage or see this team. Anything saved before that stays saved.';
 const MEMBER_CHANGED = 'This role changed, so nothing was removed.';
 const INVITATION_NOT_CANCELED = 'This invitation changed, so it was not canceled and no role was removed.';
 const INVITATION_CHANGED = 'This invitation changed, so this request sent no email.';
@@ -306,59 +307,62 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
    */
   async function addMember(organizationId: string, email: string, role: Role, by: Account | null, resendRevision?: string) {
     const normalized = email.trim().toLowerCase();
-    // Resend only renews the invitation it was shown. It never invites or grants.
-    const target = resendRevision ? undefined : await db.get<Account>(`SELECT id, email FROM accounts WHERE lower(email) = $1`, [normalized]);
-    if (target) await grant(organizationId, target, role, by?.id ?? null);
-    else {
-      const ref = `${organizationId}:${normalized}:${role}`;
-      const decision = await db.transaction(async () => {
-        await db.lock(`org-members:${organizationId}`);
-        const extant = await db.get<{ revision: string; email_attempt_id: string | null; earlier_email: boolean }>(
-          // The row lock makes this wait for, or hold off, an outgoing server's insert that flags the invitation.
-          `SELECT revision, email_attempt_id, earlier_email FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 FOR UPDATE`,
-          [organizationId, normalized, role],
-        );
-        if (resendRevision && extant?.revision !== resendRevision) throw new HttpError(409, INVITATION_CHANGED);
-        if (by && extant?.earlier_email) throw new HttpError(409, EARLIER_EMAIL);
-        // Only the attempt stored on this invitation counts. A cancelled row is gone, so a re-add starts over.
-        if (extant?.email_attempt_id) {
-          const attempt = await db.get<{ id: string; status: string }>(`SELECT id, status FROM email_messages WHERE id = $1`, [extant.email_attempt_id]);
-          if (attempt?.status === 'uncertain') return by ? { action: 'retry' as const, id: attempt.id } : { action: 'none' as const };
-        }
-        const t = clock();
-        const expiresAt = new Date(t.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
-        const renewed = await db.run(`UPDATE organization_invitations SET expires_at = $4, invited_by = $5 WHERE organization_id = $1 AND email = $2 AND role = $3`, [
-          organizationId,
-          normalized,
-          role,
-          expiresAt,
-          by?.id ?? null,
-        ]);
-        const invited = renewed
-          ? 0
-          : await db.run(`INSERT INTO organization_invitations (organization_id, email, role, invited_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, [
-              organizationId,
-              normalized,
-              role,
-              by?.id ?? null,
-              t.toISOString(),
-              expiresAt,
-            ]);
-        if (renewed + invited) await record(organizationId, renewed ? 'invitation_renewed' : 'invited', normalized, role, by?.id ?? null);
-        if (!(by && renewed + invited)) return { action: 'none' as const };
-        const id = await mailer.reserve('organizer_invitation', ref, organizationId, await invitationMessage(organizationId, normalized, role, by, expiresAt));
-        await db.run(`UPDATE organization_invitations SET email_attempt_id = $1 WHERE organization_id = $2 AND email = $3 AND role = $4`, [id, organizationId, normalized, role]);
-        return { action: 'send' as const, id };
-      });
-      if (decision.action === 'retry') await dispatchInvitation(decision.id);
-      // A committed invite or renewal is never reported as refused: if its email was then held back, the list says why.
-      if (decision.action === 'send') await mailer.dispatch(decision.id);
-    }
-    return listMembers(organizationId);
+    const ref = `${organizationId}:${normalized}:${role}`;
+    const decision = await db.transaction(async () => {
+      await db.lock(`org-members:${organizationId}`);
+      // Checked again under the lock: the caller can lose ownership while this waits. A seed has no caller.
+      if (by) await requireOrg(by, organizationId, 'members.manage');
+      // Resend only renews the invitation it was shown. It never invites or grants.
+      const target = resendRevision ? undefined : await db.get<Account>(`SELECT id, email FROM accounts WHERE lower(email) = $1`, [normalized]);
+      if (target) {
+        await grant(organizationId, target, role, by?.id ?? null);
+        return { action: 'none' as const };
+      }
+      const extant = await db.get<{ revision: string; email_attempt_id: string | null; earlier_email: boolean }>(
+        // The row lock makes this wait for, or hold off, an outgoing server's insert that flags the invitation.
+        `SELECT revision, email_attempt_id, earlier_email FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 FOR UPDATE`,
+        [organizationId, normalized, role],
+      );
+      if (resendRevision && extant?.revision !== resendRevision) throw new HttpError(409, INVITATION_CHANGED);
+      if (by && extant?.earlier_email) throw new HttpError(409, EARLIER_EMAIL);
+      // Only the attempt stored on this invitation counts. A cancelled row is gone, so a re-add starts over.
+      if (extant?.email_attempt_id) {
+        const attempt = await db.get<{ id: string; status: string }>(`SELECT id, status FROM email_messages WHERE id = $1`, [extant.email_attempt_id]);
+        if (attempt?.status === 'uncertain') return by ? { action: 'retry' as const, id: attempt.id } : { action: 'none' as const };
+      }
+      const t = clock();
+      const expiresAt = new Date(t.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
+      const renewed = await db.run(`UPDATE organization_invitations SET expires_at = $4, invited_by = $5 WHERE organization_id = $1 AND email = $2 AND role = $3`, [
+        organizationId,
+        normalized,
+        role,
+        expiresAt,
+        by?.id ?? null,
+      ]);
+      const invited = renewed
+        ? 0
+        : await db.run(`INSERT INTO organization_invitations (organization_id, email, role, invited_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, [
+            organizationId,
+            normalized,
+            role,
+            by?.id ?? null,
+            t.toISOString(),
+            expiresAt,
+          ]);
+      if (renewed + invited) await record(organizationId, renewed ? 'invitation_renewed' : 'invited', normalized, role, by?.id ?? null);
+      if (!(by && renewed + invited)) return { action: 'none' as const };
+      const id = await mailer.reserve('organizer_invitation', ref, organizationId, await invitationMessage(organizationId, normalized, role, by, expiresAt));
+      await db.run(`UPDATE organization_invitations SET email_attempt_id = $1 WHERE organization_id = $2 AND email = $3 AND role = $4`, [id, organizationId, normalized, role]);
+      return { action: 'send' as const, id };
+    });
+    if (decision.action === 'retry') await dispatchInvitation(organizationId, decision.id, by!);
+    // A committed invite or renewal is never reported as refused: if its email was then held back, the list says why.
+    if (decision.action === 'send') await mailer.dispatch(decision.id);
+    return teamFor(organizationId, by);
   }
 
   /** Retries one attempt while it is still the invitation's own. Unlike addMember, it never invites, renews, or grants. */
-  async function retryInvitation(organizationId: string, email: string, role: Role, attemptId: string) {
+  async function retryInvitation(organizationId: string, email: string, role: Role, attemptId: string, by: Account) {
     const current = await db.get(`SELECT 1 FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 AND email_attempt_id = $4 AND NOT earlier_email`, [
       organizationId,
       email.trim().toLowerCase(),
@@ -366,12 +370,24 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       attemptId,
     ]);
     if (!current) throw new HttpError(409, INVITATION_CHANGED);
-    await dispatchInvitation(attemptId);
+    await dispatchInvitation(organizationId, attemptId, by);
+    return teamFor(organizationId, by);
+  }
+
+  async function manages(account: Account, organizationId: string) {
+    return can(await rolesIn(account.id, organizationId), 'members.manage');
+  }
+
+  /** The team after a write. A caller who lost ownership meanwhile does not get to read it. */
+  async function teamFor(organizationId: string, by: Account | null) {
+    if (by && !(await manages(by, organizationId))) throw new HttpError(403, NO_LONGER_OWNER);
     return listMembers(organizationId);
   }
 
-  async function dispatchInvitation(attemptId: string) {
-    const outcome = await mailer.dispatch(attemptId);
+  /** A retry commits nothing first, so the owner check is repeated just before the provider call. */
+  async function dispatchInvitation(organizationId: string, attemptId: string, by: Account) {
+    const outcome = await mailer.dispatch(attemptId, () => manages(by, organizationId));
+    if (outcome === 'refused') throw new HttpError(403, NO_LONGER_OWNER);
     if (outcome === 'withheld') throw new HttpError(409, 'The earlier invitation email might have been sent. It was not sent again, and the invitation was not extended. To send a new email, cancel the invitation and invite again.');
     if (outcome === 'changed') throw new HttpError(409, INVITATION_CHANGED);
   }

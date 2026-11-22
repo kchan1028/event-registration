@@ -151,6 +151,8 @@ Organizer roles (migration 16). Primary key (`organization_id`, `account_id`, `r
 
 Remove (`POST /api/organizations/:id/members/revoke`) must send the row's current `revision`: a missing one gets 400 and one that does not match gets 409, both with nothing written. It takes away only that membership. Cancel (`POST /api/organizations/:id/invitations/cancel`) does the same for one invitation and never touches a membership. Both check ownership again under the membership lock. Cancel also takes the account lock that first sign-in holds (`account:<email>`), so an overlapping Cancel and acceptance have one outcome. On a server with these rules the earlier shared route `members/remove` only refuses, so a screen loaded before revisions removes nothing there. An outgoing server still honors it during a deploy.
 
+Add (an invitation, a renewal or a direct grant) and Resend take the `org-members:<organization>` lock and check the caller's ownership inside it. A retry, which writes no membership row, checks it just before the provider call.
+
 The person who creates an organization becomes its owner. The last owner cannot be removed. Whoever loads a demonstration organization (fictional data) becomes an owner of it. An owner can hand ownership to a signed-in account that already has a role in the same organization: in one transaction under the organization's member lock, the successor gains `owner` and the caller loses it (other roles stay). Someone with only an invitation cannot take ownership.
 
 ### organization_invitations
