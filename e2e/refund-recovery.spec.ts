@@ -1,9 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
+import { publishReviewed } from './support/publish';
 
 for (const committed of [true, false]) test(`recovers an interrupted refund after refresh (committed: ${committed}) without duplicates`, async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const { config } = await (await page.request.get(`/api/events/${eventId}`)).json();
   const rider = { firstName: 'Recovery', lastName: 'Fictional', email: 'recovery@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Example Contact', phone: '555-555-0199' } };
   const order = await (await page.request.post(`/api/rider/events/${eventId}/orders`, { data: { clientRequestId: 'refund-recovery-browser', categoryIds: [config.categories.find((c: { timingCode: string }) => c.timingCode === 'RR-M35-34').id], rider, waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Recovery Fictional', signerRole: 'rider' } } })).json();

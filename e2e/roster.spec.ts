@@ -1,12 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { CheckInList } from '../src/shared/checkin';
 import { expect, test } from './fixtures';
+import { publishReviewed } from './support/publish';
 
 for (const theme of ['light', 'dark']) {
   test(`phone roster keeps snapshot readiness visible and prints tables (${theme})`, async ({ page }) => {
     await page.addInitScript((value) => localStorage.setItem('cyclereg-theme', value), theme);
     const { eventId } = await (await page.request.post('/api/demo')).json();
-    await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+    await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     await page.request.post(`/api/events/${eventId}/check-in-demo-riders`);
     await page.request.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });
     let list: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
@@ -86,7 +87,7 @@ for (const theme of ['light', 'dark']) {
 test('a loaded fallback roster stays a reference during a simulated disconnect', async ({ page, browser, baseURL }) => {
   const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
   const eventUrl = `/api/events/${eventId}`;
-  expect((await page.request.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await page.request.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
   expect((await page.request.put(`${eventUrl}/bib-settings`, {
     data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },

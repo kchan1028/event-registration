@@ -3,6 +3,7 @@ import { expect } from 'vitest';
 import { testApp, testDatabaseUrl } from './db';
 import type { EventConfig } from '../../src/shared/schema';
 import type { CancellationSelection } from '../../src/shared/cancellations';
+import { publishReviewed } from './publish';
 
 export async function cancellationSetup(policy: 'full_refund' | 'credit' | 'rider_choice' | null = 'full_refund') {
   const databaseUrl = await testDatabaseUrl();
@@ -12,7 +13,7 @@ export async function cancellationSetup(policy: 'full_refund' | 'credit' | 'ride
   const config: EventConfig = event.config;
   config.registration.refundRules = policy === null ? null : { tiers: [], returnAs: 'cash', organizerCancellation: policy };
   expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config } })).statusCode).toBe(200);
-  expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+  expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).statusCode).toBe(200);
   const cat = (code: string) => config.categories.find((c) => c.timingCode === code)!;
   const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: {
     clientRequestId: 'execution-readiness-order', categoryIds: [cat('RR-M35-34').id, cat('CR-M35-34').id],

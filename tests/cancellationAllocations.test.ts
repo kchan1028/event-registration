@@ -6,6 +6,7 @@ import type { OrderView } from '../src/web/api';
 import { localEmail } from '../src/server/email';
 import { as } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
+import { publishReviewed } from './support/publish';
 
 const RIDER = 'rider@allocation.test';
 async function setup() {
@@ -16,7 +17,7 @@ async function setup() {
     const record = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json();
     change(record.config);
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: record.revision, config: record.config } })).statusCode).toBe(200);
-    const published = await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } });
+    const published = await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true });
     expect(published.statusCode, published.body).toBe(200);
     return record.config as EventConfig;
   };

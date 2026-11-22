@@ -4,6 +4,7 @@ import type { EventConfig } from '../src/shared/schema';
 import type { BibReassignment, BibReassignmentPlan, BibReassignmentResult, CheckInList } from '../src/shared/checkin';
 import { as } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
+import { publishReviewed } from './support/publish';
 
 const connections: Db[] = [];
 afterEach(async () => { await Promise.all(connections.splice(0).map((db) => db.close())); });
@@ -14,7 +15,7 @@ async function setup() {
   const db = openDb(databaseUrl);
   connections.push(db);
   const { eventId, organizationId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string; organizationId: string };
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in-demo-riders` });
   await app.inject({ method: 'PUT', url: `/api/events/${eventId}/bib-settings`, payload: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });
   const list = async (day?: string): Promise<CheckInList> => (await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in${day ? `?day=${day}` : ''}` })).json();
@@ -42,7 +43,7 @@ describe('protected bib reassignment', () => {
       category.bibRange = dayId === swap.dayId ? { first: 120, last: 180 } : { first: 150, last: 199 };
     }
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { config: event.config, revision: event.revision } })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
     const manual: BibReassignment = { ...swap, mode: 'manual', assignments: [{ orderId: alex, bib: 140 }] };
     expect((await preview(manual)).statusCode).toBe(422);
     const valid = { ...manual, assignments: [{ orderId: alex, bib: 160 }] };
@@ -56,7 +57,7 @@ describe('protected bib reassignment', () => {
     for (const category of event.config.categories) if (event.config.races.find((r) => r.id === category.raceId)!.dayId !== swap.dayId) category.bibRange = { first: 181, last: 199 };
     const current = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { revision: number };
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { config: event.config, revision: current.revision } })).statusCode).toBe(200);
-    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     const count = (await db.all(`SELECT id FROM bib_assignments`)).length;
     expect((await preview(valid)).statusCode).toBe(409);
     expect((await preview(sequence)).statusCode).toBe(409);
@@ -113,7 +114,7 @@ describe('protected bib reassignment', () => {
     const unused = event.config.categories.find((c) => !order.entries.some((e) => e.categoryId === c.id) && event.config.races.find((r) => r.id === c.raceId)!.dayId === sat)!;
     unused.bibRange = { first: 500, last: 599 };
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: event })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
     for (const e of order.entries) expect((await app.inject({ method: 'POST', url: `/api/order-entries/${e.id}/withdraw`, payload: { reason: 'Demo rider withdrew' } })).statusCode).toBe(200);
     await db.run(`INSERT INTO order_entries (id, order_id, event_id, category_id, rider_ref, status) VALUES ('released-demo-hold', $1, $2, $3, $1, 'released')`, [alex, eventId, unused.id]);
     await db.run(`UPDATE orders SET status = 'cancelled' WHERE id = $1`, [alex]);

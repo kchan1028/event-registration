@@ -2,6 +2,7 @@ import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 import { as, DEFAULT_TEST_ORGANIZER, fakeAuth } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
+import { publishReviewed } from './support/publish';
 
 const PHONE = '555-555-0199';
 const NAME = 'Robin Demo';
@@ -15,7 +16,7 @@ describe('emergency contact lookup', () => {
     const demo = await app.inject({ method: 'POST', url: '/api/demo', headers: owner });
     expect(demo.statusCode).toBe(201);
     const { eventId, organizationId } = demo.json() as { eventId: string; organizationId: string };
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, headers: owner, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true }, owner)).statusCode).toBe(200);
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in-demo-riders`, headers: owner })).statusCode).toBe(201);
 
     const list = (await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in`, headers: owner })).json() as {
@@ -119,7 +120,7 @@ describe('emergency contact lookup', () => {
     const owner = as(DEFAULT_TEST_ORGANIZER);
     const demo = await app.inject({ method: 'POST', url: '/api/demo', headers: owner });
     const { eventId } = demo.json() as { eventId: string };
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, headers: owner, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true }, owner)).statusCode).toBe(200);
     const ev = (await app.inject({ method: 'GET', url: `/api/events/${eventId}`, headers: owner })).json() as { config: { categories: { id: string; timingCode: string }[]; registration: { waiverVersion: string }; days: { id: string }[] } };
     const category = (code: string) => ev.config.categories.find((row) => row.timingCode === code)!.id;
     const buy = async (firstName: string, contact: string, code: string) => {
@@ -166,7 +167,7 @@ describe('emergency contact lookup', () => {
     const owner = as(DEFAULT_TEST_ORGANIZER);
     const demo = await app.inject({ method: 'POST', url: '/api/demo', headers: owner });
     const { eventId, organizationId } = demo.json() as { eventId: string; organizationId: string };
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, headers: owner, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true }, owner)).statusCode).toBe(200);
     for (const role of ['registration_manager', 'finance'] as const) {
       expect((await app.inject({ method: 'POST', url: `/api/organizations/${organizationId}/members`, headers: owner, payload: { email: `${role}.desk@example.test`, role } })).statusCode).toBe(200);
     }

@@ -1,6 +1,7 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import { buildCaseStudyScenarios } from '../../src/shared/caseStudies';
 import { E2E_ORGANIZER } from '../fixtures';
+import { publishReviewed } from './publish';
 
 /** Isolate each browser journey so full-field and checkout tests cannot consume each other's places. */
 export async function seedRegistrationCase(api: APIRequestContext, kind: 'criterium' | 'omnium') {
@@ -16,6 +17,6 @@ export async function seedRegistrationCase(api: APIRequestContext, kind: 'criter
   for (const plan of scenario.entryPlan.filter((p) => p.count === config.categories.find((c) => c.id === p.categoryId)?.cap)) {
     expect((await api.post(`/api/events/${event.id}/test-entries`, { headers, data: { categoryId: plan.categoryId, count: plan.count } })).ok()).toBe(true);
   }
-  expect((await api.post(`/api/events/${event.id}/publish`, { headers, data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(api, `/api/events/${event.id}`, { acknowledgeWarnings: true }, headers)).ok()).toBe(true);
   return event.id as string;
 }

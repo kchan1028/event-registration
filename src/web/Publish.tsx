@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { WAIVER_REASON_MAX, WAIVER_REASON_MIN, waiverReasonProblem, type ChangeImpact, type ImpactKind } from '../shared/impact';
 import { countIssues, type Issue } from '../shared/validation';
 import { api, ApiError } from './api';
@@ -14,19 +14,26 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const { data } = draft;
-  const upToDate = data.publishedVersion !== null && data.publishedRevision === data.revision && draft.saveState === 'saved';
   const [impact, setImpact] = useState<ChangeImpact | null>(null);
   const [impactAck, setImpactAck] = useState(false);
   const [impactError, setImpactError] = useState<string | null>(null);
   const [compared, setCompared] = useState<{ revision: number; publishedVersion: number | null; waiverChanged: boolean } | null>(null);
   const [check, setCheck] = useState(0);
+  // The server can only be ahead of this screen, when someone else saved or published.
+  const changedElsewhere = compared !== null && (compared.revision > draft.savedRevision || (compared.publishedVersion ?? 0) > (data.publishedVersion ?? 0));
+  // Never current while the check has found a newer draft or version: that has to be reviewed first.
+  const upToDate = !changedElsewhere && data.publishedVersion !== null && data.publishedRevision === draft.savedRevision && draft.saveState === 'saved';
   const [reason, setReason] = useState('');
-  // A reason is for one draft against one live version.
-  useEffect(() => setReason(''), [data.revision, data.publishedVersion]);
-
-  // Recompute after every saved draft revision; the server compares the saved draft with the latest published version.
+  // Acknowledgements and a reason are for one draft against one live version.
   useEffect(() => {
-    if (data.publishedVersion === null || draft.saveState !== 'saved') return;
+    setAck(false);
+    setImpactAck(false);
+    setReason('');
+  }, [draft.savedRevision, data.publishedVersion]);
+
+  // Recompute after every saved draft revision. Before a first publication this only confirms that nobody saved or published since the screen loaded.
+  useEffect(() => {
+    if (draft.saveState !== 'saved') return;
     let live = true;
     setImpactError(null);
     api
@@ -45,14 +52,12 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
     return () => {
       live = false;
     };
-  }, [data.id, data.revision, data.publishedVersion, draft.saveState, check]);
+  }, [data.id, draft.savedRevision, data.publishedVersion, draft.saveState, check]);
 
-  // Publishing again waits for a comparison of exactly the draft and live version on this screen.
-  const needsComparison = !upToDate && data.publishedVersion !== null;
-  const sameDraft = compared?.revision === data.revision && compared?.publishedVersion === data.publishedVersion;
-  const comparisonReady = !needsComparison || (draft.saveState === 'saved' && sameDraft);
-  // The server can only be ahead of this screen, when someone else saved or published.
-  const changedElsewhere = compared !== null && (compared.revision > data.revision || (compared.publishedVersion ?? 0) > (data.publishedVersion ?? 0));
+  // Every publish waits for a comparison of exactly the draft and live version on this screen.
+  const sameDraft = compared?.revision === draft.savedRevision && compared?.publishedVersion === data.publishedVersion;
+  const unsaved = draft.saveState !== 'saved';
+  const comparisonReady = upToDate || (!unsaved && sameDraft);
   // Ask nothing from, and show nothing of, a comparison of another draft.
   const shownImpact = sameDraft ? impact : null;
   const needsImpactAck = !upToDate && (shownImpact?.categories.length ?? 0) > 0;
@@ -61,12 +66,18 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
   // Too short is what the hint says; show an error only for what typing more cannot fix.
   const reasonError = reasonProblem && [...reason.trim()].length >= WAIVER_REASON_MIN ? reasonProblem : undefined;
 
+  // A recovery button can disappear once it works; keep keyboard focus in the publishing controls.
+  const box = useRef<HTMLDivElement>(null);
+  const recover = (run: () => void) => {
+    run();
+    box.current?.focus();
+  };
+
   const publish = async () => {
     setBusy(true);
     setMsg(null);
     try {
-      const waiverChange = needsReason && data.publishedVersion !== null ? { reason, revision: data.revision, publishedVersion: data.publishedVersion } : undefined;
-      const v = await draft.publish(ack, impactAck, waiverChange);
+      const v = await draft.publish({ revision: draft.savedRevision, publishedVersion: data.publishedVersion }, ack, impactAck, needsReason ? reason : undefined);
       setMsg({ tone: 'ok', text: `Published as version ${v}. The published version is frozen; later edits stay in the draft until you publish again.` });
       setAck(false);
       setImpactAck(false);
@@ -79,6 +90,17 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
       setBusy(false);
     }
   };
+
+  const saveFailed = draft.saveState === 'error' || draft.saveState === 'conflict';
+  const waitingFor = saveFailed
+    ? `The draft was not saved${draft.saveError ? `: ${draft.saveError}` : '.'} Publishing waits until it is.`
+    : unsaved
+    ? 'Publishing waits until the draft is saved.'
+    : impactError || changedElsewhere
+      ? 'Publishing waits until the check above succeeds.'
+      : data.publishedVersion === null
+        ? 'Checking the saved draft…'
+        : 'Checking what changed since the published version…';
 
   return (
     <div className="settings">
@@ -96,7 +118,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
         </div>
         <div>
           <p className="publish-status__label">Draft save number</p>
-          <p className="publish-status__num num">{data.revision}</p>
+          <p className="publish-status__num num">{draft.savedRevision}</p>
         </div>
         <div>
           <p className="publish-status__label">Published</p>
@@ -112,7 +134,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
         </p>
       )}
 
-      {data.publishedVersion !== null && !upToDate && (
+      {!upToDate && (data.publishedVersion !== null || changedElsewhere || impactError) && (
         <ImpactPanel
           impact={shownImpact}
           error={changedElsewhere ? 'This event was changed or published somewhere else. Reload it and review the changes before publishing.' : impactError}
@@ -120,31 +142,32 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
             changedElsewhere
               ? {
                   label: 'Reload event',
-                  run: () => {
-                    setMsg(null);
-                    draft.reload();
-                  },
+                  run: () =>
+                    recover(() => {
+                      setMsg(null);
+                      draft.reload();
+                    }),
                 }
-              : { label: 'Try again', run: () => setCheck((n) => n + 1) }
+              : { label: 'Try again', run: () => recover(() => setCheck((n) => n + 1)) }
           }
           saving={draft.saveState !== 'saved'}
           publishedVersion={data.publishedVersion}
         />
       )}
 
-      <div className="publish-box">
+      <div className="publish-box" ref={box} tabIndex={-1}>
         <div className="pending-stack">
           <Pending>USA Cycling license checks are not connected. Published categories still mark every license for review.</Pending>
           <Pending>{data.pending.payments}</Pending>
         </div>
         {warnings > 0 && (
           <label className="check">
-            <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} disabled={errors > 0} />I have reviewed the {warnings} {warnings === 1 ? 'warning' : 'warnings'} above
+            <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} disabled={errors > 0 || unsaved} />I have reviewed the {warnings} {warnings === 1 ? 'warning' : 'warnings'} above
           </label>
         )}
         {needsImpactAck && (
           <label className="check">
-            <input type="checkbox" checked={impactAck} onChange={(e) => setImpactAck(e.target.checked)} disabled={errors > 0} />I have reviewed who these changes affect
+            <input type="checkbox" checked={impactAck} onChange={(e) => setImpactAck(e.target.checked)} disabled={errors > 0 || unsaved} />I have reviewed who these changes affect
           </label>
         )}
         {needsReason && (
@@ -163,8 +186,13 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
           {busy ? 'Publishing…' : upToDate ? `Version ${data.publishedVersion} is current` : `Publish version ${(data.publishedVersion ?? 0) + 1}`}
         </button>
         {errors > 0 && <p className="muted small">Fix the errors above to publish.</p>}
-        {errors === 0 && !comparisonReady && (
-          <p className="muted small">{impactError || changedElsewhere ? 'Publishing waits until the comparison above succeeds.' : 'Checking what changed since the published version…'}</p>
+        <p className="muted small" aria-live="polite">
+          {errors === 0 && !comparisonReady ? waitingFor : ''}
+        </p>
+        {errors === 0 && saveFailed && (
+          <button type="button" className="btn btn--secondary publish-box__recover" onClick={() => void recover(draft.saveState === 'conflict' ? draft.reload : () => void draft.save())}>
+            {draft.saveState === 'conflict' ? 'Reload event' : 'Save again'}
+          </button>
         )}
         {data.publishedVersion !== null && (
           <a className="btn btn--secondary btn--small" href={href({ page: 'register', eventId: data.id })}>
@@ -227,14 +255,16 @@ interface PanelProps {
   error: string | null;
   recovery: { label: string; run: () => void };
   saving: boolean;
-  publishedVersion: number;
+  publishedVersion: number | null;
 }
 
 function ImpactPanel({ impact, error, recovery, saving, publishedVersion }: PanelProps) {
   return (
     <section className="settings__section impact" aria-labelledby="impact-title">
-      <h3 id="impact-title">Who these changes affect</h3>
-      <p className="muted small">Compared with version {publishedVersion}, for riders who already entered or hold a place. {saving ? 'Updating after the draft saves.' : ''}</p>
+      <h3 id="impact-title">{publishedVersion === null ? 'Check before publishing' : 'Who these changes affect'}</h3>
+      {publishedVersion !== null && (
+        <p className="muted small">Compared with version {publishedVersion}, for riders who already entered or hold a place. {saving ? 'Updating after the draft saves.' : ''}</p>
+      )}
       {error ? (
         <>
           <p className="text-error small" role="alert">

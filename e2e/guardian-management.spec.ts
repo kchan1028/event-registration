@@ -1,12 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 // Management uses the screen; a separate fictional guardian accepts through the existing API.
 for (const recovery of ['refresh', 'retry'] as const) test(`guardians manage invitations and recover an interrupted removal by ${recovery}`, async ({ page, browser }, testInfo) => {
   const recoveryAction = `management-${recovery}`;
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   const { config } = await (await page.request.get(`/api/events/${eventId}`)).json() as { config: EventConfig };
   const categoryId = config.categories.find((c) => c.timingCode === 'RR-J1516')!.id;
   const parent = `parent-${recoveryAction}@guardian-browser.test`;

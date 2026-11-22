@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import type { CheckInList } from '../src/shared/checkin';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 /*
  * Race-day check-in search. A barcode scanner types the check-in code and presses Enter at once,
@@ -13,7 +14,7 @@ type Rider = { orderId: string; name: string; checkInCode: string; result: { rea
 test('typed code and name lookup work after camera permission is denied', async ({ page }) => {
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
-  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await api.post(`/api/events/${eventId}/check-in-demo-riders`);
   await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 299 }] } });
   const list = await (await api.get(`/api/events/${eventId}/check-in?q=`)).json();
@@ -90,7 +91,7 @@ test('a camera result opens the matching rider and releases the scanner without 
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
   const eventUrl = `/api/events/${eventId}`;
-  expect((await api.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(api, eventUrl, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await api.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
   const response = await api.get(`${eventUrl}/check-in`);
   expect(response.ok()).toBe(true);
@@ -134,7 +135,7 @@ test('a volunteer distinguishes riders with the same name by their details or co
   const api = page.request;
   const { eventId, organizationId } = await (await api.post('/api/demo')).json();
   const eventUrl = `/api/events/${eventId}`;
-  expect((await api.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(api, eventUrl, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await api.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
   expect((await api.put(`${eventUrl}/bib-settings`, {
     data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
@@ -216,7 +217,7 @@ test('a paid rider can receive a bib only on a day they entered', async ({ page 
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
   const eventUrl = `/api/events/${eventId}`;
-  expect((await api.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(api, eventUrl, { acknowledgeWarnings: true })).ok()).toBe(true);
   const event = await api.get(eventUrl);
   expect(event.ok()).toBe(true);
   const { config } = await event.json() as { config: EventConfig };
@@ -303,7 +304,7 @@ test('a volunteer can retry check-in after the organizer resolves missing and ex
   const api = page.request;
   const { eventId, organizationId } = await (await api.post('/api/demo')).json();
   const eventUrl = `/api/events/${eventId}`;
-  expect((await api.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(api, eventUrl, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await api.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
   const setRange = async (last?: number) => {
     expect((await api.put(`${eventUrl}/bib-settings`, {
@@ -375,7 +376,7 @@ test('undoing the wrong rider check-in releases the bib for the intended rider',
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
   const eventUrl = `/api/events/${eventId}`;
-  expect((await api.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(api, eventUrl, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await api.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
   expect((await api.put(`${eventUrl}/bib-settings`, {
     data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 100 }] },
@@ -432,7 +433,7 @@ test('undoing the wrong rider check-in releases the bib for the intended rider',
 test('fallback roster lists every rider and puts blocked riders on the exception checklist', async ({ page }) => {
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
-  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await api.post(`/api/events/${eventId}/check-in-demo-riders`);
   const list = await (await api.get(`/api/events/${eventId}/check-in?q=`)).json();
   const riders: Rider[] = list.riders;
@@ -507,7 +508,7 @@ for (const mobile of [false, true]) {
     if (mobile) await page.setViewportSize({ width: 390, height: 844 });
     const api = page.request;
     const { eventId } = await (await api.post('/api/demo')).json();
-    await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+    await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     await api.post(`/api/events/${eventId}/check-in-demo-riders`);
     await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 299 }] } });
     const original = await (await api.get(`/api/events/${eventId}/check-in`)).json();
@@ -551,7 +552,7 @@ for (const mobile of [false, true]) {
 test('a stale batch preview is refused and requires a new preview', async ({ page }) => {
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
-  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await api.post(`/api/events/${eventId}/check-in-demo-riders`);
   await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 299 }] } });
   const list = await (await api.get(`/api/events/${eventId}/check-in`)).json();
@@ -579,7 +580,7 @@ test('a stale batch preview is refused and requires a new preview', async ({ pag
 test('volunteers can check in riders but cannot open or call bulk assignment', async ({ page, browser, baseURL }) => {
   const api = page.request;
   const { eventId, organizationId } = await (await api.post('/api/demo')).json();
-  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const email = 'bib-volunteer@example.test';
   expect((await api.post(`/api/organizations/${organizationId}/members`, { data: { email, role: 'check_in_volunteer' } })).ok()).toBe(true);
   const volunteerContext = await browser.newContext({ extraHTTPHeaders: { Authorization: `Bearer test:${email}` } });
@@ -596,7 +597,7 @@ test('volunteers can check in riders but cannot open or call bulk assignment', a
 test('an assigned bib stays visible when the following list refresh fails', async ({ page }) => {
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
-  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await api.post(`/api/events/${eventId}/check-in-demo-riders`);
   await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 299 }] } });
   await page.goto(`/#/events/${eventId}/check-in`);
@@ -619,7 +620,7 @@ for (const mobile of [false, true]) {
     if (mobile) await page.setViewportSize({ width: 390, height: 844 });
     const api = page.request;
     const { eventId } = await (await api.post('/api/demo')).json();
-    await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+    await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     await page.goto(`/#/events/${eventId}/check-in`);
     await page.getByRole('button', { name: 'Bib ranges', exact: true }).click();
     const ranges = page.getByRole('form', { name: 'Bib ranges', exact: true });
@@ -659,7 +660,7 @@ for (const mobile of [false, true]) {
     if (mobile) await page.setViewportSize({ width: 390, height: 844 });
     const api = page.request;
     const { eventId } = await (await api.post('/api/demo')).json();
-    await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+    await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     await api.post(`/api/events/${eventId}/check-in-demo-riders`);
     await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });
     const initial = await (await api.get(`/api/events/${eventId}/check-in`)).json();
@@ -756,7 +757,7 @@ for (const mobile of [false, true]) {
 test('individual correction recovers from stale and conflicting previews without checking the rider in', async ({ page }) => {
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
-  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await api.post(`/api/events/${eventId}/check-in-demo-riders`);
   await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });
   const initial = await (await api.get(`/api/events/${eventId}/check-in`)).json();
@@ -837,7 +838,7 @@ for (const mobile of [false, true]) {
     if (mobile) await page.setViewportSize({ width: 390, height: 844 });
     const api = page.request;
     const { eventId } = await (await api.post('/api/demo')).json();
-    await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+    await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     await api.post(`/api/events/${eventId}/check-in-demo-riders`);
     await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });
     const initial = await (await api.get(`/api/events/${eventId}/check-in`)).json();
@@ -878,7 +879,7 @@ test('a license correction replaces the volunteer’s stale ready card when chec
   const organizer = page.request;
   const { eventId, organizationId } = await (await organizer.post('/api/demo')).json();
   const eventUrl = `/api/events/${eventId}`;
-  expect((await organizer.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(organizer, eventUrl, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await organizer.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
   expect((await organizer.put(`${eventUrl}/bib-settings`, {
     data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
@@ -954,7 +955,7 @@ for (const width of [390, 1440]) {
     const organizer = page.request;
     const { eventId, organizationId } = await (await organizer.post('/api/demo')).json();
     const eventUrl = `/api/events/${eventId}`;
-    expect((await organizer.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+    expect((await publishReviewed(organizer, eventUrl, { acknowledgeWarnings: true })).ok()).toBe(true);
     expect((await organizer.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
     expect((await organizer.put(`${eventUrl}/bib-settings`, {
       data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },

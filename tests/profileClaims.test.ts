@@ -4,6 +4,7 @@ import { claimCalendarAge, profileClaimApprovalSchema } from '../src/shared/prof
 import { profileClaimSettingsFromEnv, validateProfileClaimSettings } from '../src/server/profileClaims';
 import { as, fakeAuth } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
+import { publishReviewed } from './support/publish';
 
 const ORGANIZER = 'organizer@claim.test';
 const SUPPORT = 'support@claim.test';
@@ -22,7 +23,7 @@ async function setup(minimumAge: number | undefined = 18) {
   const { app } = await testApp({ databaseUrl, auth: fakeAuth(), now: () => now, profileClaims: { minimumAge, supportAccountIds: [SUPPORT_ID] } });
   const call = (who: string, method: 'GET' | 'POST', url: string, payload?: object) => app.inject({ method, url, headers: as(who), payload });
   const { eventId, organizationId } = (await call(ORGANIZER, 'POST', '/api/demo')).json();
-  await call(ORGANIZER, 'POST', `/api/events/${eventId}/publish`, { acknowledgeWarnings: true });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true }, as(ORGANIZER));
   const { config } = (await call(ORGANIZER, 'GET', `/api/events/${eventId}`)).json();
   const body = { clientRequestId: 'fictional-claim-order', categoryIds: [config.categories.find((c: { timingCode: string }) => c.timingCode === 'RR-J1516').id], rider: { firstName: 'Claim', lastName: 'Fictional', email: '', team: '', racingAge: 16, licenseCategory: null, licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: { name: 'Parent Fictional', relationship: 'Parent', email: PARENT, phone: '' }, emergencyContact: { name: 'Fictional Contact', phone: '555-555-0199' } }, waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Parent Fictional', signerRole: 'guardian' } };
   const created = await call(PARENT, 'POST', `/api/rider/events/${eventId}/orders`, body);

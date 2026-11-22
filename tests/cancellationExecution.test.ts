@@ -5,6 +5,7 @@ import { as } from './support/auth';
 import { CANCELLATION_NOT_EXECUTED } from '../src/shared/cancellations';
 import type { PaymentProvider } from '../src/server/payments';
 import { takeOffTeam } from './support/membership';
+import { publishReviewed } from './support/publish';
 
 const input = (confirmationId: string, clientRequestId = 'atomic-cancellation-request') => ({ confirmationId, clientRequestId, acknowledgeSimulatedCancellation: true });
 async function prepared(policy: Parameters<typeof setup>[0] = 'full_refund') {
@@ -46,11 +47,11 @@ describe('atomic simulated cancellation', () => {
     const status = { scopes: [selection], categoryIds: expected };
     expect((await publicRead()).json().cancellation).toEqual(status);
     expect((await publicRead()).json().cancellation).toEqual(status);
-    expect((await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(s.app, `/api/events/${s.eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).statusCode).toBe(200);
     expect((await publicRead()).json().cancellation).toEqual(status);
     const other = (await s.app.inject({ method: 'POST', url: '/api/demo' })).json();
     expect((await s.app.inject({ method: 'GET', url: `/api/public/events/${other.eventId}` })).statusCode).toBe(409);
-    expect((await s.app.inject({ method: 'POST', url: `/api/events/${other.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(s.app, `/api/events/${other.eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).statusCode).toBe(200);
     expect((await s.app.inject({ method: 'GET', url: `/api/public/events/${other.eventId}` })).json().cancellation).toEqual({ scopes: [], categoryIds: [] });
     expect((await s.sql('SELECT count(*)::int AS n FROM cancellation_executions')).rows[0].n).toBe(1);
     expect((await s.sql('SELECT count(*)::int AS n FROM refunds')).rows[0].n).toBe(executed.json().refunds.length);
@@ -163,11 +164,11 @@ describe('atomic simulated cancellation', () => {
     draft.config.event.name = 'Fictional unpublished catalog name';
     expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/config`, payload: { revision: draft.revision, config: draft.config } })).statusCode).toBe(200);
     expect((await catalog()).find((r) => r.id === s.eventId)).toEqual(row);
-    expect((await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(s.app, `/api/events/${s.eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).statusCode).toBe(200);
     expect((await catalog()).find((r) => r.id === s.eventId)).toMatchObject({ name: draft.config.event.name, cancellation: row.cancellation });
     const other = (await s.app.inject({ method: 'POST', url: '/api/demo' })).json();
     expect((await catalog()).some((r) => r.id === other.eventId)).toBe(false);
-    expect((await s.app.inject({ method: 'POST', url: `/api/events/${other.eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(s.app, `/api/events/${other.eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
     expect((await catalog()).find((r) => r.id === other.eventId)?.cancellation).toBe('none');
   });
   it('serializes concurrent replay across separate applications without double refunds', async () => {
@@ -253,7 +254,7 @@ describe('atomic simulated cancellation', () => {
   });
   it('prevents new holds, transfers, test entries and waitlist joins after republishing', async () => {
     const s = await prepared(); expect((await s.execute()).statusCode).toBe(200);
-    expect((await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(s.app, `/api/events/${s.eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).statusCode).toBe(200);
     const order = await s.app.inject({ method: 'POST', url: `/api/rider/events/${s.eventId}/orders`, payload: { clientRequestId: 'after-cancellation-hold', categoryIds: [s.cat('RR-M35-34').id], rider: s.order.rider, waiver: { version: s.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Readiness Fictional', signerRole: 'rider' } } });
     expect(order.statusCode, order.body).toBe(409);
     expect((await s.app.inject({ method: 'POST', url: `/api/order-entries/${s.order.entries[1].id}/transfer`, payload: { toCategoryId: s.cat('RR-M35-34').id, reason: 'Fictional transfer' } })).statusCode).toBe(409);
@@ -302,7 +303,7 @@ describe('atomic simulated cancellation', () => {
     }
     draft.config.categories.push({ ...source, id: 'cat_after_cancellation', raceId: newRaceId, startGroupId: newStartId, displayGroupId: null, timingCode: 'AFTER-CANCEL', classifications: source.classifications.map((c) => ({ ...c, code: 'AFTER-CANCEL' })) });
     expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/config`, payload: { revision: draft.revision, config: draft.config } })).statusCode).toBe(200);
-    const published = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } }); expect(published.statusCode, published.body).toBe(200);
+    const published = await publishReviewed(s.app, `/api/events/${s.eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true }); expect(published.statusCode, published.body).toBe(200);
     const publicStatus = (await s.app.inject({ method: 'GET', url: `/api/public/events/${s.eventId}` })).json().cancellation;
     expect(publicStatus.scopes).toEqual([selection]); expect(publicStatus.categoryIds).toContain('cat_after_cancellation');
     const held = await s.app.inject({ method: 'POST', url: `/api/rider/events/${s.eventId}/orders`, payload: { clientRequestId: 'new-category-after-cancel', categoryIds: ['cat_after_cancellation'], rider: s.order.rider, waiver: { version: s.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Readiness Fictional', signerRole: 'rider' } } });
@@ -316,7 +317,7 @@ describe('atomic simulated cancellation', () => {
     const draft = (await s.app.inject({ method: 'GET', url: `/api/events/${id}` })).json();
     draft.config.days.push({ ...draft.config.days[0], id: 'day_execution_reset', date: '2027-05-01' });
     expect((await s.app.inject({ method: 'PUT', url: `/api/events/${id}/config`, payload: { revision: draft.revision, config: draft.config } })).statusCode).toBe(200);
-    const published = await s.app.inject({ method: 'POST', url: `/api/events/${id}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } }); expect(published.statusCode, published.body).toBe(200);
+    const published = await publishReviewed(s.app, `/api/events/${id}`, { acknowledgeWarnings: true, acknowledgeImpact: true }); expect(published.statusCode, published.body).toBe(200);
     const preview = (await s.app.inject({ method: 'POST', url: `/api/events/${id}/cancellation-confirmation-preview`, payload: { scope: 'day', dayId: 'day_execution_reset' } })).json();
     const plan = await s.app.inject({ method: 'POST', url: `/api/events/${id}/cancellation-confirmations`, payload: { clientRequestId: 'fixture-execution-plan', selection: preview.preview.selection, previewFingerprint: preview.fingerprint, reason: 'Fictional empty-day closure', acknowledgePlanOnly: true } }); expect(plan.statusCode, plan.body).toBe(200);
     const executed = await s.app.inject({ method: 'POST', url: `/api/events/${id}/cancellation-executions`, payload: input(plan.json().id) }); expect(executed.statusCode, executed.body).toBe(200);
@@ -352,7 +353,7 @@ describe('atomic simulated cancellation', () => {
     const draft = (await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}` })).json(); draft.config.registration.demoIgnoreWindows = false;
     for (const c of draft.config.categories) c.registration.closesAt = '2027-03-01T11:00';
     expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/config`, payload: { revision: draft.revision, config: draft.config } })).statusCode).toBe(200);
-    expect((await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(s.app, `/api/events/${s.eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).statusCode).toBe(200);
     expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/bib-settings`, payload: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } })).statusCode).toBe(200);
     expect((await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/automatic-bibs`, payload: { sort: 'name' } })).statusCode).toBe(200);
     const plan = await s.makePlan({ scope: 'event' }); expect((await s.execute(input(plan.id))).statusCode).toBe(200);
@@ -374,7 +375,7 @@ describe('atomic simulated cancellation', () => {
     rr.raceId = cr.raceId; rr.startGroupId = cr.startGroupId; rr.displayGroupId = null;
     expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/config`, payload: { revision: draft.revision, config: draft.config } })).statusCode).toBe(200);
     expect((await s.execute()).statusCode).toBe(200);
-    const response = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } }); expect(response.statusCode, response.body).toBe(409); expect(response.body).toContain('cancelled scope');
+    const response = await publishReviewed(s.app, `/api/events/${s.eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true }); expect(response.statusCode, response.body).toBe(409); expect(response.body).toContain('cancelled scope');
   });
   it('constrains cancellation timestamps and status together', async () => {
     const s = await prepared(); expect((await s.execute()).statusCode).toBe(200);

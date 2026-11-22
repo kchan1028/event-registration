@@ -42,7 +42,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Start groups that keep separate classification codes | Implemented and tested |
 | Category caps, start group field limits, and shared capacity pools, with a rider counted once | Implemented and tested, including two simultaneous requests for the last place |
 | Rider-facing schedule preview with an eligibility checker | Implemented |
-| Validation that blocks publishing on errors; warnings need acknowledgement; immutable published versions | Implemented and tested |
+| Validation that blocks publishing on errors; warnings need acknowledgement; only the reviewed draft publishes; immutable published versions | Implemented and tested |
 | Autosave to a local PostgreSQL database, safe against stale saves | Implemented and tested |
 | Rider demo purchase flow (product.md 2a): browse events, demo rider picker, start-ordered schedule with conflict warnings, bundles, second-race discount, demo fees, emergency contact, typed-name waiver signature, error summaries, all-or-nothing 10-minute holds, "Complete simulated payment" with decline and retry | Implemented and tested in light and dark themes; usability test with people still open |
 | Confirmation with a check-in code and per-entry readiness; organizer Registrations queue with license review | Implemented and tested |

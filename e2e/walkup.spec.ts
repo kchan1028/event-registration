@@ -3,6 +3,7 @@ import { expect, test } from './fixtures';
 import { seedRegistrationCase } from './support/registration-case';
 import type { CheckInList } from '../src/shared/checkin';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 test('phone handoff keeps the rider account separate and returns a paid rider to check-in', async ({ page, browser }) => {
   const eventId = await seedRegistrationCase(page.request, 'criterium');
@@ -124,7 +125,7 @@ test('walk-up distinguishes a closed registration window from an open waitlist',
   closed.registration.opensAt = null;
   closed.registration.closesAt = '2000-01-01T09:00';
   expect((await page.request.put(`${eventUrl}/config`, { data: { config, revision } })).ok()).toBe(true);
-  expect((await page.request.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true, acknowledgeImpact: true })).ok()).toBe(true);
 
   const readStartLists = async () => {
     const response = await page.request.get(`${eventUrl}/start-lists`);

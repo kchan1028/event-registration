@@ -2,9 +2,9 @@ import { reservationLookupSchema, reservationReferenceSchema } from '../src/shar
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../src/server/db';
 import { testApp, testDatabaseUrl } from './support/db';
-import { waiverChangeFor } from './support/waiver';
 import type { EventConfig } from '../src/shared/schema';
 import type { WaiverEvidence } from '../src/shared/checkout';
+import { publishReviewed } from './support/publish';
 
 type Order = {
   id: string;
@@ -23,7 +23,7 @@ async function setup(opts: { publish?: boolean } = {}) {
   const databaseUrl = await testDatabaseUrl();
   const { app } = await testApp({ databaseUrl, now: () => now, holdMinutes: 10 });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-  if (opts.publish !== false) await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  if (opts.publish !== false) await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number; entries: unknown[] };
   const code = (c: string) => event.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
@@ -44,7 +44,7 @@ describe('rider checkout: holds and simulated payment', () => {
       Object.assign(config.registration, { waiverVersion, waiverText });
       const saved = await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } });
       expect(saved.statusCode).toBe(200);
-      return app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChange: waiverChangeFor(saved.json()) } });
+      return publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChangeReason: 'Fictional waiver update' });
     };
     const { waiverVersion: v1, waiverText: original } = event.config.registration;
     const live = async () => (await app.inject({ method: 'GET', url: `/api/public/events/${eventId}` })).json().config.registration;
@@ -87,8 +87,8 @@ describe('rider checkout: holds and simulated payment', () => {
 
     const { config, revision } = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
     config.registration.waiverVersion = 'unambiguous';
-    const saved = await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } });
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChange: waiverChangeFor(saved.json()) } })).statusCode).toBe(200);
+    await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } });
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChangeReason: 'Fictional waiver update' })).statusCode).toBe(200);
     const resumed = await order([code('RR-M35-34')], { rider: { ...RIDER, firstName: 'Second' }, waiver: { version: 'unambiguous', read: true, agreed: true, signatureName: 'Second Rider', signerRole: 'rider' } });
     expect(resumed.statusCode).toBe(201);
   });
@@ -357,7 +357,7 @@ describe('registration windows through the API', () => {
     const config = structuredClone(ev.config);
     config.event.isDemo = false;
     await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: ev.revision, config } });
-    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     const code = (c: string) => config.categories.find((x) => x.timingCode === c)!.id;
     const waiver = { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
     let n = 0;
@@ -379,7 +379,7 @@ describe('registration windows through the API', () => {
     let now = new Date('2027-01-15T20:00:00Z');
     const { app } = await testApp({ now: () => now });
     const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     const pub = (await app.inject({ method: 'GET', url: `/api/public/events/${eventId}` })).json() as { config: EventConfig; enforceWindows: boolean; nowLocal: string };
     expect(pub.enforceWindows).toBe(false);
     expect(pub.nowLocal).toBe('2027-01-15T12:00');
@@ -409,12 +409,12 @@ describe('Berkeley package order snapshot', () => {
       const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json();
       const config = event.config as EventConfig;
       const categoryIds = codes.map((code) => config.categories.find((c) => c.timingCode === code)!.id);
-      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+      expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
       const selectedBundle = config.registration.bundles[0];
       config.registration.bundles.push({ id: 'other-weekend', name: 'Other weekend discount', raceIds: selectedBundle.raceIds, priceCents: 100, discountCents: 0 });
       config.registration.bundles.push({ id: 'no-saving', name: 'No savings at current prices', raceIds: selectedBundle.raceIds, priceCents: null, discountCents: 0 });
       expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config } })).statusCode).toBe(200);
-      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+      expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
       const url = `/api/rider/events/${eventId}/orders`;
       const payload = {
         clientRequestId: 'berkeley-package-order', categoryIds, rider,
@@ -437,7 +437,7 @@ describe('Berkeley package order snapshot', () => {
       const current = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json();
       config.registration.bundles = [];
       expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: current.revision, config } })).statusCode).toBe(200);
-      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+      expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
       const stale = await app.inject({ method: 'POST', url, payload: { ...payload, clientRequestId: 'new-stale-package-order' } });
       expect(stale.statusCode).toBe(409);
       const replay = await app.inject({ method: 'POST', url, payload });
@@ -464,7 +464,7 @@ describe('order numbers', () => {
     // The same event published as a real one: new orders are numbered CR-, the earlier order keeps DEMO-.
     const config = { ...event.config, event: { ...event.config.event, isDemo: false, demoNotice: '' }, registration: { ...event.config.registration, demoIgnoreWindows: false } };
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config } })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).statusCode).toBe(200);
     const res = await order([code('CR-M35-34')]);
     expect(res.statusCode).toBe(201);
     const real = res.json() as Order & { orderNumber: string };

@@ -6,6 +6,7 @@ import { as, fakeAuth } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
 import { openDb } from '../src/server/db';
 import { createJuniors } from '../src/server/juniors';
+import { publishReviewed } from './support/publish';
 
 // Guardian access to juniors (owner decision, November 15, 2026; docs/discovery/guardian-accounts.md):
 // one guardian per junior, and an optional read-only login for the junior. Sessions are faked.
@@ -22,7 +23,7 @@ async function setup(now?: () => Date) {
   const { app } = await testApp({ auth: fakeAuth(), databaseUrl, now });
   const call = (who: string, method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(who), payload });
   const { eventId } = (await call(ORGANIZER, 'POST', '/api/demo')).json() as { eventId: string };
-  await call(ORGANIZER, 'POST', `/api/events/${eventId}/publish`, { acknowledgeWarnings: true });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true }, as(ORGANIZER));
   const { config } = (await call(ORGANIZER, 'GET', `/api/events/${eventId}`)).json() as { config: EventConfig };
   const juniorCat = config.categories.find((c) => c.timingCode === 'RR-J1516')!.id;
   let n = 0;

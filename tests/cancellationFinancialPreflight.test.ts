@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { cancellationSetup as setup } from './support/cancellation';
 import { as } from './support/auth';
 import { takeOffTeam } from './support/membership';
+import { publishReviewed } from './support/publish';
 
 describe('cancellation execution financial preflight', () => {
   it('uses the accepted partial-package allocation without moving entries, payments or evidence', async () => {
@@ -73,7 +74,7 @@ describe('cancellation execution financial preflight', () => {
     const race = draft.config.races.find((r: { id: string }) => r.id === s.cat('RR-M35-34').raceId);
     race.dayId = draft.config.days.find((d: { id: string }) => d.id !== race.dayId).id;
     expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/config`, payload: { revision: draft.revision, config: draft.config } })).statusCode).toBe(200);
-    const published = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } });
+    const published = await publishReviewed(s.app, `/api/events/${s.eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true });
     expect(published.statusCode, published.body).toBe(200);
     const p = await s.plan(); const r = (await s.read(p.id)).json();
     expect(r.blockers).toContainEqual({ code: 'allocation_review', orderId: s.order.id, entryId: s.order.entries[0].id }); expect(r.simulatedCashCents).toBeNull();

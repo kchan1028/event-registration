@@ -1,5 +1,6 @@
 import type { Browser, Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { publishReviewed } from './support/publish';
 
 const PHONE = '555-555-0199';
 
@@ -23,7 +24,7 @@ async function showAndHide(scope: Page | Locator, riderName: string) {
 test('staff look up an emergency contact from check-in and can hide it', async ({ page }) => {
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
-  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await api.post(`/api/events/${eventId}/check-in-demo-riders`);
   const list = await (await api.get(`/api/events/${eventId}/check-in`)).json();
   const alex = list.riders.find((rider: { name: string }) => rider.name.startsWith('Alex'));
@@ -50,7 +51,7 @@ test('staff look up an emergency contact from check-in and can hide it', async (
 test('finance and timer staff use the same lookup on their own screens', async ({ page, browser }) => {
   const api = page.request;
   const { eventId, organizationId } = await (await api.post('/api/demo')).json();
-  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await api.post(`/api/events/${eventId}/check-in-demo-riders`);
   const finance = 'finance.lookup@example.test';
   const timer = 'timer.lookup@example.test';

@@ -1,12 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
+import { publishReviewed } from './support/publish';
 
 for (const mode of ['full_refund', 'credit', 'rider_choice', null] as const) test(`inspects whole-order accepted policy without making a refund (${mode})`, async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
   const event = await (await page.request.get(`/api/events/${eventId}`)).json();
   event.config.registration.refundRules = mode === null ? null : { tiers: [{ daysBefore: 7, percent: 100 }], returnAs: 'cash', organizerCancellation: mode };
   expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision: event.revision, config: event.config } })).status()).toBe(200);
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
   const rider = { firstName: 'Policy', lastName: 'Fictional', email: 'policy@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Example Contact', phone: '555-555-0199' } };
   const ordered = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: { clientRequestId: `policy-preview-browser-${mode}`, categoryIds: [event.config.categories.find((c: { timingCode: string }) => c.timingCode === 'RR-M35-34').id], rider, waiver: { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Policy Fictional', signerRole: 'rider' } } });
   expect(ordered.status()).toBe(201);

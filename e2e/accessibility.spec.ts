@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures';
 import { seedRegistrationCase } from './support/registration-case';
+import { publishReviewed } from './support/publish';
 
 /*
  * Automated accessibility checks (ACCESSIBILITY.md, "How accessibility will be checked").
@@ -23,7 +24,7 @@ type Setup = { eventId: string; readyRider: string; blockedRider: string; fixtur
 async function setUp(page: Page): Promise<Setup> {
   const api = page.request;
   const { eventId } = await (await api.post('/api/demo')).json();
-  await api.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await api.post(`/api/events/${eventId}/check-in-demo-riders`);
   await api.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 299 }] } });
   const list = await (await api.get(`/api/events/${eventId}/check-in?q=`)).json();

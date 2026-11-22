@@ -5,6 +5,7 @@ import { couponInputSchema, couponUnavailableReason, type CouponTerms } from '..
 import { buildDemoEvent } from '../src/shared/demo';
 import { quote } from '../src/shared/pricing';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 /* Basic coupons (product.md: Promotions): pricing precedence, windows, caps, and atomic redemption. */
 
@@ -91,7 +92,7 @@ async function setup() {
   const url = await testDatabaseUrl();
   const { app } = await testApp({ databaseUrl: url, now: () => now, holdMinutes: 10 });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
   const code = (c: string) => event.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };

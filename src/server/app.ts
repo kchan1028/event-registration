@@ -316,21 +316,21 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       .object({
         acknowledgeWarnings: z.boolean().default(false),
         acknowledgeImpact: z.boolean().default(false),
+        // Missing or malformed (an out-of-date page, say) counts as no review, so it gets the same 409 as a stale one.
+        reviewed: z.object({ revision: z.number().int(), publishedVersion: z.number().int().nullable() }).optional().catch(undefined),
         // Only repo.publish knows whether a reason is needed, so it checks one; a malformed one counts as none.
-        waiverChange: z.object({ reason: z.string(), revision: z.number().int(), publishedVersion: z.number().int() }).optional().catch(undefined),
+        waiverChangeReason: z.string().optional().catch(undefined),
       })
       .parse(req.body ?? {});
-    // One transaction under the event lock: the impact that was reviewed is the impact that is published
-    // and recorded, with no entry or draft change in between. repo.publish joins it as a savepoint.
+    // One transaction under the event lock: the reviewed draft is the one published, and the impact is read
+    // and recorded with no entry or draft change in between. repo.publish joins it as a savepoint.
     const version = await db.transaction(async () => {
       await db.lock(eventLock(id));
-      // A waiver review covers one draft and live version, even if a newer draft no longer changes the waiver.
+      // Acknowledgements and a waiver reason cover one draft against one live version.
       // Checked first, so a stale review is not asked to acknowledge a draft it never saw.
-      if (body.waiverChange) {
-        const { revision, publishedVersion } = await repo.getEvent(id);
-        if (body.waiverChange.revision !== revision || body.waiverChange.publishedVersion !== publishedVersion) {
-          throw new HttpError(409, 'The draft or the published version changed after this reason was written. Reload, review the waiver change again, then write the reason.');
-        }
+      const { revision, publishedVersion } = await repo.getEvent(id);
+      if (body.reviewed?.revision !== revision || body.reviewed?.publishedVersion !== publishedVersion) {
+        throw new HttpError(409, 'The draft or the published version changed after your review, or this page is out of date. Reload and review again before publishing.');
       }
       // A change that touches riders who already entered must be reviewed, like warnings.
       const { impact } = await impactFor(id);
@@ -338,7 +338,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
         const n = impact.categories.length;
         throw new HttpError(422, `Review who the ${n} changed ${n === 1 ? 'category' : 'categories'} with entries affect before publishing.`, impact);
       }
-      const result = await repo.publish(id, body.acknowledgeWarnings, { publishedBy: me(req).id, waiverChangeReason: body.waiverChange?.reason });
+      const result = await repo.publish(id, body.acknowledgeWarnings, { publishedBy: me(req).id, waiverChangeReason: body.waiverChangeReason });
       // Paid entries the change touches each get an item in the resolution workflow.
       if (impact && impact.categories.length > 0) await resolutions.record(id, result.version, impact);
       return result.version;
