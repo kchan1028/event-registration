@@ -93,7 +93,7 @@ Built November 14, 2026, on the stack in [ADR 0001](docs/decisions/0001-stack-fo
 
 **Read-only reservation support (November 19, 2026).** Pending checkout shows a reference that authorized event staff can check in Registrations. A miss preserves the existing retry path. Cancellation ownership and escalation remain open under [Uncertain reservation support decision](product.md#uncertain-reservation-support-decision).
 
-**Open question, raised November 21, 2026 (owner: project owner):** may read-only reservation support ([PR #329](https://github.com/kchan1028/event-registration/pull/329)) have a fourth independent review round? The third and last allowed round found two verification-record issues and no code defect. Both were fixed afterwards and not re-reviewed. Provisional assumption: verification is Pending and the change is not merged without that round. Unrelated Phase 2 work can proceed; this merge and the hold-release step that builds on it are blocked. Revisit before the next Phase 2 pull request.
+Review decision, November 22, 2026 (project owner; question raised November 21): [PR #329](https://github.com/kchan1028/event-registration/pull/329) may have a fourth independent review round, and merges only with no blocking findings and passing checks.
 
 Built November 14, 2026, on the same stack. It covers the Phase 1 deliverable "clickable rider checkout for one day, both days, a junior entry, and an uncertain-license case" and the organizer exception queue, with **simulated payment only**.
 
