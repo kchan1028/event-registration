@@ -906,6 +906,31 @@ describe('organizer roles', () => {
     }
   });
 
+  it('reports a committed renewal when the outgoing server flags it just before the send', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const calls: string[] = [];
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth(), email: { mode: 'resend', send: async (_message, key) => (calls.push(key), 'msg-accepted') } });
+    const call = (method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(OWNER), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const url = `/api/organizations/${org.id}/members`;
+    const body = { email: 'treasurer@valley.test', role: 'finance' };
+    await call('POST', url, body);
+    const db = openDb(databaseUrl);
+    try {
+      // Stands in for an outgoing insert that commits after the renewal and before the provider call.
+      await db.run(`CREATE FUNCTION flag_during_claim() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN UPDATE organization_invitations SET earlier_email = true; RETURN NEW; END $$`);
+      await db.run(`CREATE TRIGGER flag_during_claim AFTER UPDATE ON email_messages FOR EACH ROW WHEN (NEW.sending_until IS NOT NULL) EXECUTE FUNCTION flag_during_claim()`);
+      const response = await call('POST', url, body);
+      expect(response.statusCode).toBe(200);
+      expect(response.json().invitations[0]).toMatchObject({ earlierEmail: true });
+      expect(response.json().history[0]).toMatchObject({ action: 'invitation_renewed' });
+      expect(calls).toHaveLength(1);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('does not reuse a canceled attempt when a seed re-adds it at the same timestamp', async () => {
     const now = new Date('2027-04-03T12:00:00.000Z');
     const email: EmailSender = {

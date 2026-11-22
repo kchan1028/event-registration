@@ -319,7 +319,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         // Only the attempt stored on this invitation counts. A cancelled row is gone, so a re-add starts over.
         if (extant?.email_attempt_id) {
           const attempt = await db.get<{ id: string; status: string }>(`SELECT id, status FROM email_messages WHERE id = $1`, [extant.email_attempt_id]);
-          if (attempt?.status === 'uncertain') return by ? { action: 'send' as const, id: attempt.id } : { action: 'none' as const };
+          if (attempt?.status === 'uncertain') return by ? { action: 'retry' as const, id: attempt.id } : { action: 'none' as const };
         }
         const t = clock();
         const expiresAt = new Date(t.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
@@ -346,7 +346,9 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         await db.run(`UPDATE organization_invitations SET email_attempt_id = $1 WHERE organization_id = $2 AND email = $3 AND role = $4`, [id, organizationId, normalized, role]);
         return { action: 'send' as const, id };
       });
-      if (decision.action === 'send') await dispatchInvitation(decision.id);
+      if (decision.action === 'retry') await dispatchInvitation(decision.id);
+      // A committed invite or renewal is never reported as refused: if its email was then held back, the list says why.
+      if (decision.action === 'send') await mailer.dispatch(decision.id);
     }
     return listMembers(organizationId);
   }
