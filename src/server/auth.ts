@@ -352,7 +352,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
 
   /** Retries one attempt while it is still the invitation's own. Unlike addMember, it never invites, renews, or grants. */
   async function retryInvitation(organizationId: string, email: string, role: Role, attemptId: string) {
-    const current = await db.get(`SELECT 1 FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 AND email_attempt_id = $4`, [
+    const current = await db.get(`SELECT 1 FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 AND email_attempt_id = $4 AND NOT earlier_email`, [
       organizationId,
       email.trim().toLowerCase(),
       role,

@@ -161,7 +161,7 @@ A role granted to an email with no account yet (migration 16). Primary key (`org
 | `created_at` | When it was first sent |
 | `expires_at` | Migration 20. Not null. Sign-in after this time gives no role. Invitations that existed before migration 20 got `created_at` plus 14 days |
 | `email_attempt_id` | Migration 40. The current email attempt, or null when none was reserved (a seed). References `email_messages`; deleting that email sets this null |
-| `earlier_email` | Migration 40. True when an email for the same address and role predates that migration. The invitation is never resent: cancel and invite again |
+| `earlier_email` | Migration 40. True when an email for the same address and role predates that migration, or was saved without a key by an older server still running during a deploy. The invitation is never resent: cancel and invite again |
 
 ### membership_changes
 
@@ -271,6 +271,7 @@ The invitation and its email attempt are reserved together under the organizatio
 | `created_at`, `sent_at` | `created_at` starts the 24-hour retry window |
 | `started_at` | Migration 40. Committed before the provider call when a send begins. Null means no send has begun. Not cleared if the outcome is lost |
 | `sending_until` | Migration 40. While in the future, one caller is sending and the others wait. Cleared with the outcome; runs out after 15 seconds if that process stopped |
+| `keyed` | Migration 40. True for attempts this version reserves. An insert without it comes from an older server, and a trigger sets `earlier_email` on the matching invitation, so a rolling deploy cannot leave one open to resend |
 | `from_email` | Migration 40. The sender saved at reservation, which a retry repeats. Null in local mode and on older rows |
 
 Not recorded yet: Resend delivery, bounce, and complaint events (Planned via webhooks).

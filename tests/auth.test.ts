@@ -844,7 +844,7 @@ describe('organizer roles', () => {
     expect((await call('GET', url)).json()).toEqual(before);
   });
 
-  it('refuses to resend where an email from before the upgrade exists, until cancel and invite again', async () => {
+  it('refuses resend and retry where the outgoing server saved an email without a key, until cancel and invite again', async () => {
     const databaseUrl = await testDatabaseUrl();
     const calls: string[] = [];
     const { app } = await testApp({ databaseUrl, auth: fakeAuth(), email: { mode: 'resend', send: async (_message, key) => (calls.push(key), 'msg-accepted') } });
@@ -852,13 +852,19 @@ describe('organizer roles', () => {
     const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
     const url = `/api/organizations/${org.id}/members`;
     const body = { email: 'treasurer@valley.test', role: 'finance' };
-    await call('POST', url, body);
+    const attemptId = (await call('POST', url, body)).json().invitations[0].lastEmail.attemptId as string;
     const db = openDb(databaseUrl);
     try {
-      await db.run('UPDATE organization_invitations SET email_attempt_id = NULL, earlier_email = true');
+      // What the outgoing server writes while a deploy overlaps: an email with no key, after the migration ran.
+      await db.run(
+        `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
+         VALUES ('eml_outgoing', $1, 'organizer_invitation', $2, $3, 'Subject', 'Body', 'recorded', now())`,
+        [org.id, `${org.id}:${body.email}:${body.role}`, body.email],
+      );
       const before = (await call('GET', url)).json();
-      expect(before.invitations[0]).toMatchObject({ earlierEmail: true, lastEmail: null });
+      expect(before.invitations[0]).toMatchObject({ earlierEmail: true });
       expect((await call('POST', url, body)).statusCode).toBe(409);
+      expect((await call('POST', url, { ...body, retryAttempt: attemptId })).statusCode).toBe(409);
       expect((await call('GET', url)).json()).toEqual(before);
       expect(calls).toHaveLength(1);
       await call('POST', `${url}/remove`, body);

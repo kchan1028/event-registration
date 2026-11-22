@@ -723,7 +723,8 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE email_messages
     ADD COLUMN started_at timestamptz,
     ADD COLUMN sending_until timestamptz,
-    ADD COLUMN from_email text;
+    ADD COLUMN from_email text,
+    ADD COLUMN keyed boolean NOT NULL DEFAULT false;
   ALTER TABLE organization_invitations
     ADD COLUMN email_attempt_id text REFERENCES email_messages(id) ON DELETE SET NULL,
     ADD COLUMN earlier_email boolean NOT NULL DEFAULT false;
@@ -734,6 +735,15 @@ export const MIGRATIONS: string[] = [
     SELECT 1 FROM email_messages e
     WHERE e.organization_id = i.organization_id AND e.ref = i.organization_id || ':' || i.email || ':' || i.role
   );
+  -- The outgoing server keeps running during a deploy and can still save an email without a key.
+  CREATE FUNCTION flag_unkeyed_invitation_email() RETURNS trigger LANGUAGE plpgsql AS $$
+  BEGIN
+    UPDATE organization_invitations i SET earlier_email = true
+    WHERE i.organization_id = NEW.organization_id AND NEW.ref = i.organization_id || ':' || i.email || ':' || i.role;
+    RETURN NEW;
+  END $$;
+  CREATE TRIGGER email_messages_flag_unkeyed AFTER INSERT ON email_messages
+    FOR EACH ROW WHEN (NOT NEW.keyed) EXECUTE FUNCTION flag_unkeyed_invitation_email();
   `,
 ];
 

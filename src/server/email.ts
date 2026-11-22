@@ -171,7 +171,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       const id = newId('eml');
       const status = sender.mode === 'local' ? 'recorded' : 'uncertain';
       await db.run(
-        `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at, from_email) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at, from_email, keyed) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)`,
         [id, organizationId, kind, ref, message.to, message.subject, message.text, status, clock().toISOString(), sender.from ?? null],
       );
       return id;
@@ -189,7 +189,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       for (;;) {
         const row = await db.get<{ created_at: string; to_email: string; from_email: string | null; subject: string; body_text: string; status: EmailStatus; current: boolean; sending: boolean }>(
           `SELECT created_at, to_email, from_email, subject, body_text, status,
-             EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = email_messages.id) AS current,
+             EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = email_messages.id AND NOT earlier_email) AS current,
              COALESCE(sending_until > now(), false) AS sending
            FROM email_messages WHERE id = $1`,
           [id],
@@ -210,7 +210,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
            SET started_at = COALESCE(m.started_at, $2), sending_until = now() + make_interval(secs => $3)
            FROM (SELECT id, started_at FROM email_messages WHERE id = $1 FOR UPDATE) was
            WHERE m.id = was.id AND m.status = 'uncertain' AND (m.sending_until IS NULL OR m.sending_until <= now())
-             AND EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id)
+             AND EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id AND NOT earlier_email)
            RETURNING was.started_at IS NULL AS first, m.sending_until::text AS until`,
           [id, clock().toISOString(), SEND_LEASE_SECONDS],
         );
@@ -220,7 +220,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
           `SELECT 1 FROM email_messages m
            WHERE m.id = $1 AND m.status = 'uncertain' AND m.sending_until = $2::timestamptz
              AND m.sending_until > now() + make_interval(secs => $3)
-             AND EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id)`,
+             AND EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id AND NOT earlier_email)`,
           [id, lease.until, SEND_TIMEOUT_MS / 1000],
         );
         if (ready && !pastWindow()) return finish(id, { to: row.to_email, from: row.from_email ?? undefined, subject: row.subject, text: row.body_text }, lease);
