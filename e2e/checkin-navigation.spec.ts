@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import type { CheckInList } from '../src/shared/checkin';
 
 for (const hasTouch of [false, true]) {
   test.describe(hasTouch ? 'coarse pointer' : 'fine pointer', () => {
@@ -52,5 +53,126 @@ for (const hasTouch of [false, true]) {
       await expect(page).toHaveURL(new URL(`/#/events/${eventId}`, page.url()).href);
       await expect(page.locator('.cat-row').first()).toBeVisible();
     });
+  });
+}
+
+for (const { width, delaySave } of [
+  { width: 390, delaySave: false },
+  { width: 1440, delaySave: false },
+  { width: 1440, delaySave: true },
+]) {
+  const scenario = delaySave ? ' during a delayed response' : '';
+  test(`volunteer can look up riders and issue a bib with only the keyboard at ${width}px${scenario}`, async ({ page, browser }) => {
+    const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
+    const checkInUrl = `/api/events/${eventId}/check-in`;
+    expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+    expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
+    expect((await page.request.put(`/api/events/${eventId}/bib-settings`, {
+      data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+    })).ok()).toBe(true);
+    const email = 'keyboard.volunteer@example.test';
+    expect((await page.request.post(`/api/organizations/${organizationId}/members`, {
+      data: { email, role: 'check_in_volunteer' },
+    })).ok()).toBe(true);
+    const headers = { Authorization: `Bearer test:${email}` };
+    const context = await browser.newContext({ viewport: { width, height: 900 }, extraHTTPHeaders: {} });
+
+    let releaseSave: (() => void) | undefined;
+    try {
+      await context.addInitScript((address) => sessionStorage.setItem('cyclereg.test-session', address), email);
+      const desk = await context.newPage();
+      const initial: CheckInList = await (await desk.request.get(checkInUrl, { headers })).json();
+      expect(initial.roles).toEqual(['check_in_volunteer']);
+      const ready = initial.riders.find((rider) => rider.result.ready && rider.bib === null);
+      const blocked = initial.riders.find((rider) => rider.payment === 'confirmed' && !rider.result.ready);
+      if (!ready?.checkInCode || !blocked?.checkInCode) throw new Error('Keyboard check-in needs a ready and a blocked fictional rider');
+
+      await desk.goto(`/#/events/${eventId}/check-in`);
+      const search = desk.getByRole('searchbox', { name: 'Find a rider' });
+      const detail = desk.getByRole('region', { name: 'Rider check-in' });
+      const issue = detail.getByRole('button', { name: 'Check in and issue next bib', exact: true });
+      await expect(search).toBeFocused();
+      await desk.keyboard.type(ready.checkInCode);
+      await desk.keyboard.press('Enter');
+      await expect(detail.getByRole('heading', { name: ready.name, exact: true })).toBeVisible();
+      await expect(detail.getByRole('status')).toContainText('Ready to race');
+      await expect(detail).toBeFocused();
+
+      await desk.keyboard.press('Tab');
+      await expect(detail.getByRole('textbox', { name: /Bib/ })).toBeFocused();
+      await desk.keyboard.press('Tab');
+      await expect(issue).toBeFocused();
+      const issuePath = `${checkInUrl}/${ready.orderId}`;
+      if (delaySave) {
+        const gate = new Promise<void>((resolve) => { releaseSave = resolve; });
+        await desk.route(`**${issuePath}`, async (route) => {
+          const response = await route.fetch();
+          await gate;
+          await route.fulfill({ response });
+        });
+      }
+      const issueRequest = desk.waitForRequest((request) => (
+        request.method() === 'POST' && new URL(request.url()).pathname === issuePath
+      ));
+      await desk.keyboard.down('Enter');
+      expect((await (await issueRequest).allHeaders()).authorization).toBe(headers.Authorization);
+      let newerLookupReplies = 0;
+      if (delaySave) {
+        await desk.keyboard.up('Enter');
+        desk.on('response', (response) => {
+          const url = new URL(response.url());
+          if (url.pathname === checkInUrl && url.searchParams.get('q') === blocked.checkInCode) {
+            newerLookupReplies++;
+          }
+        });
+        await search.fill(blocked.checkInCode);
+      } else {
+        await expect(detail.getByText('100', { exact: true })).toBeVisible();
+        const nextRider = detail.getByRole('button', { name: 'Next rider', exact: true });
+        await expect(nextRider).toBeFocused();
+        await expect(nextRider).toHaveAccessibleDescription('Bib 100');
+        // A second keydown while Enter is held represents keyboard auto-repeat.
+        await desk.keyboard.down('Enter');
+        await desk.keyboard.up('Enter');
+        await expect(nextRider).toBeFocused();
+        await expect(detail.getByText('100', { exact: true })).toBeVisible();
+        await desk.keyboard.press('Enter');
+        await expect(search).toBeFocused();
+        await expect(search).toHaveValue('');
+      }
+
+      if (!delaySave) await desk.keyboard.type(blocked.checkInCode);
+      await desk.keyboard.press('Enter');
+      await expect(detail.getByRole('heading', { name: blocked.name, exact: true })).toBeVisible();
+      await expect(detail).toBeFocused();
+      if (releaseSave) {
+        // Let the explicit and debounced lookups settle before observing the save refresh.
+        await expect.poll(() => newerLookupReplies).toBeGreaterThanOrEqual(2);
+        const refresh = desk.waitForResponse((response) => (
+          response.request().method() === 'GET' && new URL(response.url()).pathname === checkInUrl
+        ));
+        releaseSave();
+        const response = await refresh;
+        expect(response.ok()).toBe(true);
+        expect(new URL(response.url()).searchParams.get('q')).toBe(blocked.checkInCode);
+        await expect(detail.getByRole('heading', { name: blocked.name, exact: true })).toBeVisible();
+        await expect(detail).toBeFocused();
+      }
+      await expect(detail.getByRole('status')).toContainText('Not ready');
+      await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
+
+      const refusal = await desk.request.post(`${checkInUrl}/${blocked.orderId}`, {
+        headers,
+        data: { dayId: initial.dayId, bib: null },
+      });
+      expect(refusal.status()).toBe(409);
+      expect(await refusal.json()).toMatchObject({ error: expect.stringMatching(/^Not ready to race/) });
+      const final: CheckInList = await (await desk.request.get(checkInUrl, { headers })).json();
+      expect(final.riders.find((rider) => rider.orderId === ready.orderId)).toMatchObject({ bib: 100, checkedInAt: expect.any(String) });
+      expect(final.riders.find((rider) => rider.orderId === blocked.orderId)).toMatchObject({ bib: null, checkedInAt: null });
+    } finally {
+      releaseSave?.();
+      await context.close();
+    }
   });
 }

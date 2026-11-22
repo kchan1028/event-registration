@@ -86,6 +86,74 @@ test('demonstration weekend enforces a shared cap and publishes a version', asyn
   await expect(page.getByRole('button', { name: 'Version 1 is current' })).toBeDisabled();
 });
 
+test('category editor keeps helper text from shifting the control beside it', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Load Berkeley Omnium' }).click();
+  await expect(page.getByRole('heading', { name: 'Berkeley Hills Road Race', level: 2 })).toBeVisible();
+  await page.getByRole('link', { name: /Berkeley Streets Criterium/ }).click();
+  await expect(page.getByRole('heading', { name: 'Berkeley Streets Criterium', level: 2 })).toBeVisible();
+  await page.locator('.cat-row', { hasText: 'Masters 50+ 3/4' }).click();
+  const editor = page.locator('.editor');
+  await expect(editor.getByText('Short code on start lists')).toBeVisible();
+
+  const bounds = (locator: ReturnType<Page['locator']>) =>
+    locator.evaluate((el) => {
+      const { top, left, bottom, right } = el.getBoundingClientRect();
+      return { top, left, bottom, right };
+    });
+  const labelTop = (control: ReturnType<Page['locator']>) =>
+    control.evaluate((el) => {
+      const label = (el as HTMLInputElement).labels?.[0];
+      if (!label) throw new Error('missing label');
+      return label.getBoundingClientRect().top;
+    });
+  const pair = async (leftLabel: string, rightLabel: string) => {
+    const left = editor.getByLabel(leftLabel, { exact: true });
+    const right = editor.getByLabel(rightLabel, { exact: true });
+    const leftBox = await bounds(left);
+    const rightBox = await bounds(right);
+    expect(Math.abs(leftBox.top - rightBox.top)).toBeLessThan(1);
+    expect(Math.abs((await labelTop(left)) - (await labelTop(right)))).toBeLessThan(1);
+    expect(rightBox.left).toBeGreaterThan(leftBox.right - 1);
+    return { left, leftBox };
+  };
+
+  const timing = await pair('Timing code', 'Status');
+  const hint = await bounds(editor.getByText('Short code on start lists'));
+  expect(hint.top).toBeGreaterThanOrEqual(timing.leftBox.bottom - 1);
+  await expect(timing.left).toHaveAttribute('aria-describedby', /.+/);
+
+  await pair('Entry price', 'Day-of surcharge');
+  await pair('Bib range: first', 'Bib range: last');
+  await pair('Minutes', 'Plus laps');
+
+  const opens = await bounds(editor.getByLabel('Registration opens', { exact: true }));
+  const closes = await bounds(editor.getByLabel('Registration closes', { exact: true }));
+  expect(Math.abs(opens.top - closes.top)).toBeLessThan(1);
+
+  await editor.getByRole('button', { name: 'Add price change' }).click();
+  const priceFrom = await bounds(editor.getByLabel('From', { exact: true }));
+  const remove = await bounds(editor.getByRole('button', { name: 'Remove price change' }));
+  expect(Math.abs(remove.bottom - priceFrom.bottom)).toBeLessThan(4);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(editor.getByText('Short code on start lists')).toBeVisible();
+  const narrowTiming = await bounds(editor.getByLabel('Timing code', { exact: true }));
+  const narrowStatus = await bounds(editor.getByLabel('Status', { exact: true }));
+  const narrowHint = await bounds(editor.getByText('Short code on start lists'));
+  expect(Math.abs(narrowTiming.left - narrowStatus.left)).toBeLessThan(1);
+  expect(narrowStatus.top).toBeGreaterThan(narrowHint.bottom - 1);
+  expect(narrowHint.right).toBeLessThanOrEqual(390);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+  await editor.getByLabel('Timing code', { exact: true }).focus();
+  await expect(editor.getByLabel('Timing code', { exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(editor.getByLabel('Status', { exact: true })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(editor.getByLabel('Timing code', { exact: true })).toBeFocused();
+});
+
 test('on a phone, the category editor opens as a drawer that takes and returns focus', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
@@ -106,4 +174,52 @@ test('on a phone, the category editor opens as a drawer that takes and returns f
   await page.locator('.scrim').click({ position: { x: 70, y: 400 } });
   await expect(page.locator('.inspector.is-open')).toHaveCount(0);
   await expect(name).toBeFocused();
+});
+
+test('the refund warning opens refund rules and clears once notes are saved', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('Club or organization name').fill('Refund Warning Club');
+  await page.getByRole('button', { name: 'Create organization' }).click();
+  await expect(page.getByRole('heading', { name: 'Refund Warning Club' })).toBeVisible();
+  await page.getByRole('article').filter({ hasText: 'Refund Warning Club' }).getByRole('button', { name: 'New draft event' }).click();
+  await page.getByLabel('Event name').fill('Refund Warning Weekend');
+  await page.getByLabel('First race day').fill('2027-06-12');
+  await page.getByRole('button', { name: 'Create draft' }).click();
+  await expect(page.getByRole('heading', { name: 'Saturday road race', level: 2 })).toBeVisible();
+
+  // A wide race schedule shows start groups. Event setup shows the checks panel, which lists this draft's few warnings.
+  await page.getByRole('link', { name: 'Event setup', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Event setup', level: 2 })).toBeVisible();
+  const refund = page.locator('aside').getByRole('button', { name: 'Set up refund policy' });
+  await expect(refund).toContainText('Event setup > Bundles, discounts, and rider policies > Refund and credit rules');
+  await expect(refund).toContainText('No refund policy is set. Riders should see it before they pay.');
+  const waiver = page.locator('aside').getByRole('button', { name: /No waiver text is set/ });
+  await expect(waiver).not.toContainText('Set up refund policy');
+
+  await refund.focus();
+  await page.keyboard.press('Enter');
+  const rules = page.locator('#refund-and-credit-rules');
+  await expect(rules).toBeFocused();
+  await expect(rules).toBeInViewport();
+
+  await page.getByRole('link', { name: /Saturday road race/ }).click();
+  await expect(page.getByRole('heading', { name: 'Saturday road race', level: 2 })).toBeVisible();
+  await expect(page.locator('.topbar')).toContainText('Draft, not published');
+
+  await page.getByRole('link', { name: 'Review and publish', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Review and publish', level: 2 })).toBeVisible();
+  await page.locator('main').getByRole('button', { name: /No waiver text is set/ }).click();
+  await expect(page.getByRole('heading', { name: 'Event setup', level: 2 })).toBeVisible();
+  await expect(rules).not.toBeFocused();
+
+  await page.getByRole('link', { name: 'Review and publish', exact: true }).click();
+  await page.locator('main').getByRole('button', { name: 'Set up refund policy' }).click();
+  await expect(rules).toBeFocused();
+  await page.getByLabel('Other refund notes shown before payment (optional)').fill('Fictional note: riders may request a refund up to 7 days before the first race day.');
+  await saved(page);
+  await page.getByRole('link', { name: 'Review and publish', exact: true }).click();
+  await expect(page.locator('main').getByRole('button', { name: 'Set up refund policy' })).toHaveCount(0);
+  await expect(page.locator('main').getByRole('button', { name: /No waiver text is set/ })).toBeVisible();
+  await expect(page.locator('.topbar')).toContainText('Draft, not published');
+  await expect(page.getByRole('heading', { name: 'Refund Warning Weekend', level: 1 })).toBeVisible();
 });

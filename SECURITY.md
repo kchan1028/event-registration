@@ -6,6 +6,10 @@ CycleReg will handle rider contact details, emergency contacts, license numbers,
 
 Clerk can activate a session in place when its sign-in window returns to the current CycleReg route. The browser keeps the current page state and the API continues to verify every protected request with Clerk. The [rider sign-in regression check](docs/testing/test-plan.md#rider-check-in-code-retrieval) covers this behavior.
 
+## Clerk session revocation
+
+Revoking a Clerk session prevents it from receiving fresh tokens. CycleReg verifies issued tokens against their validity period on each request. An already-issued token can retain access through its expiration time and the verifier’s five-second clock tolerance. The [Phase 2 development rehearsal](roadmap.md#phase-2--build-the-registration-core) records the observed timing. Organization role removal is separate and applies on the next request.
+
 ## Transactional invitation email (Implemented locally)
 
 The server sends organizer invitation emails through Resend only in test mode with a configured recipient list. Keep the sending key in server-only environment configuration and use controlled test inboxes. The request contains the recipient address and invitation text. The app records API acceptance or send failure and keeps delivery evidence separate from invitation role grants. Production mode refuses Resend sends.
@@ -96,7 +100,7 @@ Under the family lock, one approval row, guardian revocations, pending-invitatio
 
 ## Reservation recovery (Implemented locally)
 
-The existing per-tab registration draft also retains the exact pending reservation payload and displayed waiver text until its outcome is known. Unknown network/server, authentication and rate-limit failures retain that request ID; pending entries and consent cannot be edited. Recovery uses the existing account-protected order endpoint and server idempotency checks. A definitive rejection refreshes published terms and clears agreement if the waiver changed. This adds no route, role, database field, logging or card storage. Browser storage remains best effort; blocked storage or closing the tab cannot guarantee refresh recovery. Use fictional data only.
+The existing per-tab registration draft also retains the exact pending reservation payload, displayed waiver text and public accepted addenda until its outcome is known. The saved text is for review and is separate from the request sent to the server. Older drafts can still retry when this text is unavailable. Unknown network/server, authentication and rate-limit failures retain that request ID; pending entries and consent cannot be edited. Recovery uses the existing account-protected order endpoint and server idempotency checks. A definitive rejection refreshes published terms and clears agreement if the waiver changed. This adds no route, role, database field, logging or card storage. Browser storage remains best effort; blocked storage or closing the tab cannot guarantee refresh recovery. Use fictional data only.
 
 ## Checkout-session retries (Implemented locally)
 
@@ -106,12 +110,24 @@ Concurrent requests use the existing order-scoped provider key and fixed request
 
 The check-in QR scanner processes camera frames on the device. Stopping the scanner or leaving its view releases the camera stream, including a stream returned after the view closes while permission is pending.
 
+## Check-in readiness refusals
+
+A readiness refusal includes the current desk card and race day only when the rider has an entry or an active bib in the day’s check-in scope. It uses the same fields as desk lookup, with no private contact details or payment amounts. The server still decides readiness under the event lock before any bib or check-in write.
+
 ## Walk-up phone handoff (Implemented locally)
 
 The walk-up marker requires the event’s check-in permission. Under the event lock, the server verifies the confirmed entry belongs to the selected rider and race day and records the staff account and time. Public checkout and the QR/link cannot mark an entry. The server checks for a same-day marked confirmed entry before first bib assignment at the desk and still enforces payment and readiness. Staff views show the marker without exposing its actor.
 
 
-Check-in staff can display only the public event registration address and QR. It contains no rider details, offer tokens or staff-page query parameters. Registration stays under the participant/guardian account; the staff session is not handed to the rider. No new API route, role, account access, payment method or waiver bypass is added. The published-event guard suppresses handoff for an unpublished event; server registration validation remains authoritative. Shared kiosks and staff-entered orders remain outside this increment. Local loopback addresses cannot serve another device; real-phone use requires reachable staging with the existing security gates.
+The basic phone registration QR and address contain only the event identifier. The separate test kiosk address also contains only the event identifier. Registration stays under the participant/guardian account; the staff session is not handed to the rider. No new API route, role, account access, payment method or waiver bypass is added. The published-event guard suppresses handoff for an unpublished event; server registration validation remains authoritative. Local loopback addresses cannot serve another device; real-phone use requires reachable staging with the existing security gates.
+
+### Shared walk-up test kiosk
+
+The kiosk runs only with test sign-in and accepts simulated payment events. Its sign-in, checkout draft and receipt live in the page session and are discarded on session end, reload, or after five idle minutes. The warning in the last minute lets the rider extend the session. An expired kiosk session can no longer display the prior draft or receipt. Riders can check saved orders under their own accounts from a separate device. Test kiosk sign-in does not use the ordinary browser sign-in or its saved draft. Use a dedicated rider browser with autofill disabled. Order access and registration requirements are enforced by the same server rules as phone checkout. Hosted sign-in, hosted payment, and physical kiosk acceptance remain Planned.
+
+### Staff-assisted race selection
+
+Check-in staff can generate a handoff address for the selected day. The address contains the public event and suggested category identifiers. It carries no staff session, rider details, invite or waitlist token. The participant applies the suggestions in ordinary checkout. Existing account ownership, waiver, eligibility, registration window and capacity checks apply.
 
 ## Supported versions
 
@@ -182,11 +198,11 @@ Each rule has one home. The links below point to it; this list is a summary, not
 | Sign-in | Phase 2 (Implemented in the local build, November 15, 2026): passwordless email sign-in for every account, one account per person, organizer roles enforced on the server, fictional data only; sign-in attempt rate limits and lockout are Clerk's. Without Clerk keys, local development uses a test sign-in that accepts any fictional `.test` address with no proof of identity; the server allows it only outside production while listening on this computer (`127.0.0.1`, `localhost`, or `::1`), and refuses to start without Clerk anywhere else (November 15, 2026, `authProviderFromEnv` in `src/server/auth.ts`). Final pre-launch security gate (Planned, deferred until after other build work and fictional-data rehearsals): MFA and sensitive-action re-verification required for every organizer role (riders and guardians stay on email sign-in, with a fresh emailed code before money-moving changes); step-up re-verification for sensitive organizer actions; recovery never bypasses MFA | [product.md](product.md#sign-in-and-account-security) |
 | Payments | Hosted provider flow only; card numbers and security codes are never stored | [docs/architecture.md](docs/architecture.md#data-boundaries) |
 | Roles | Server-side permission checks per role and event; least access by default | [docs/coding-guide.md](docs/coding-guide.md#roles) |
-| Privacy | Collect only required data; restrict emergency contacts; keep personal data out of logs, analytics, and URLs | [docs/coding-guide.md](docs/coding-guide.md#privacy) |
+| Privacy | Collect only required data; any organizer role may look up one emergency contact, and that lookup is recorded without the contact; when a correction changed the contact, staff responses leave out the contact fields' values and that correction's whole reason; keep personal data out of logs, analytics, and URLs | [docs/coding-guide.md](docs/coding-guide.md#privacy) |
 | Secrets | Never committed; test and live keys kept separate; rotate on exposure | [docs/coding-guide.md](docs/coding-guide.md#secrets) |
 | Audit | Append-only audit history for money, categories, waivers, capacity, permissions, and exceptions | [docs/coding-guide.md](docs/coding-guide.md#audit-history) |
 | Public pages | Private pages are not indexable | [docs/content-guide.md](docs/content-guide.md#keep-private-data-out-of-public-pages) |
 
-Retention and deletion rules are still an open decision and must be defined before the pilot ([product.md](product.md#open-decisions)).
+The emergency-contact lookup record is to be kept 365 days (not yet enforced). Other retention rules and every deletion procedure are still an open decision and must be defined before the pilot ([product.md](product.md#open-decisions)).
 
 Berkeley rider-rate pricing is recalculated on the server from the accepted configuration and parsed rider facts; client totals are not trusted. Declared age, collegiate division and competition class do not constitute federation verification. Existing paid order quotes are preserved when revised prices are published. No live payment configuration or new access route is introduced.

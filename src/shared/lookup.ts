@@ -115,6 +115,8 @@ export function applyCorrection(rider: RiderDetails, patch: RiderCorrection): { 
   for (const field of Object.keys(CORRECTABLE_FIELDS) as CorrectableField[]) {
     const after = patch[field];
     if (after === undefined) continue;
+    // Staff cannot see the current contact, so a blank emergency field means "leave it", not "clear it".
+    if ((field === 'emergencyContactName' || field === 'emergencyContactPhone') && after === '') continue;
     const before = correctableValue(rider, field);
     if (after === before) continue;
     if (field === 'emergencyContactName') next.emergencyContact.name = after;

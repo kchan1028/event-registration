@@ -217,12 +217,12 @@ Create a fresh session database under the existing [local-only setup](README.md#
 |---|---|
 | Emery Demo | Racing age 52, Cat 4, annual license, men, not collegiate. Weekend: RR-M50-34 + CR-M50-34; extra category CR-E4. |
 | Casey Demo / Jordan Demo | Casey racing age 13, Cat 5, annual license, men, not collegiate; Jordan is parent/guardian. Weekend: RR-JB1314 + CR-J1314. |
-| Taylor Demo | Racing age 16, Cat 4, annual license, men, not collegiate; CR-E4 minor-in-adult-category review probe. Do not describe this path as safe before the guardian gap is fixed. |
+| Taylor Demo | Racing age 16, Cat 4, annual license, men, not collegiate; CR-E4 minor-in-adult-category probe. Checkout requires guardian details and a guardian signature. |
 | Morgan Demo | Adult age 52, Cat 4, annual license, men; manual-entry paid registration, no demo picker/license result, for outstanding-license check-in. |
 
 Use the person's lowercase first name plus `.demo@example.com` for email, “Demo Contact” with `2025550101` for an emergency contact, and “DEMO-STUDY” if a license label is needed. Use no real contact details or license numbers. Choose “None” in the demo rider picker and enter these fictional details manually so guardian and license-review questions are exposed. Racing age is supplied for the task, not calculated from a real birth date. All license results are unverified unless explicitly simulated.
 
-Default pre-race expectations: $130 for the weekend and $150 with the extra criterium category, including zero configured demo fees. On either race day, the configured $15 surcharge can change these totals. The facilitator records the quote date and calculates expected totals before the session; do not change the computer clock or silently disable price rules. Use a separate clean starting state for each rider task so previous holds do not consume test capacity.
+For Emery, expect $130 for the weekend and $150 with the extra criterium category before race day. For Casey, expect $40 for the junior weekend package. The fixture configures zero fees. On either race day, the configured $15 surcharge can change these totals. The facilitator records the quote date and calculates expected totals before the session; do not change the computer clock or silently disable price rules. Use a separate clean starting state for each rider task so previous holds do not consume test capacity.
 
 Prepare the full-category variant separately: in the combined draft set the Sunday Masters 35+/50+ 3/4 shared start limit to its existing synthetic usage (normally 57 = 38 + 19), verify zero remaining, then publish. Do not lower below existing usage or label a display header as the limit. For a live last-place variant instead, set the limit to usage + 1 and prepare two independent fictional orders; any concurrency observation is a technical rehearsal, not two participant completions.
 
@@ -256,15 +256,15 @@ For check-in, create Morgan's paid simulated road entry through ordinary checkou
 
 **Read aloud:** “You are Jordan Demo. Register Casey, age 13, for the junior road race and criterium. Use Casey's details for the rider and your fictional details for the parent. Explain who signs and what is still needed before racing.”
 
-**Success:** RR-JB1314 + CR-J1314, correct guardian details and guardian name/role on sample signature, $130 pre-race quote. Explains simulated payment, sample waiver, and unresolved license separately. Participant can correct a missing guardian or signature error without re-entering other details.
+**Success:** RR-JB1314 + CR-J1314, correct guardian details and guardian name and role on the sample signature, and a $40 pre-race quote ($30 road plus $20 criterium, with $10 package savings). The participant explains simulated payment, the sample waiver, and unresolved license review separately. Participant can correct a missing guardian or signature error without re-entering other details.
 
-**Observe/ask:** Whose email/name belongs where? Does a junior expect different fees? After the main task, ask how Taylor, age 16 in Elite 4, should be handled. Demonstrate the known missing guardian prompt only as an expert-led probe; do not count the unsafe behavior as successful task completion or an official rule.
+**Observe/ask:** Whose email/name belongs where? Does a junior expect different fees? After the main task, ask who signs for Taylor, age 16 in Elite 4. In a separate facilitator-led probe, show that checkout blocks missing guardian details and a signature typed as Taylor. Record that probe separately from the participant’s task. The fictional flow establishes no official waiver acceptance.
 
 ### B5. Full category (rider, core)
 
 **Read aloud:** “You want Emery's weekend package, but the Sunday Masters field has filled. Find out what you can do next without accidentally buying just Saturday.”
 
-**Success:** Recognizes the shared-start limit, no guaranteed Sunday place, and no complete package reservation. Finds a genuinely eligible available alternative or understands waitlist/contact next steps if no alternative is acceptable. A waitlist request is not described as an entry or a charge. Do not require joining a waitlist unless enabled in that variant.
+**Success:** Recognizes the shared-start limit, no guaranteed Sunday place, and no complete package reservation. Finds a genuinely eligible available alternative, or joins the waitlist when that category has one turned on. When the waitlist is off, the category says there is no online waitlist and the next step is to choose another category. Contact the organizer only when the event shows a real contact path. A waitlist request is not described as an entry, a charge, or a held place. A held offer is a reserved place and is not the package. Do not require joining a waitlist unless enabled in that variant.
 
 **Observe/ask:** Does the reason identify the limiting start? Does changing an option lose details? What would a waitlist offer guarantee, and when? Score a mistaken completed single-day purchase as an error, not success.
 

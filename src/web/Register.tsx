@@ -2,8 +2,8 @@ import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/rese
 import { QrCodeImage } from './QrCodeImage';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
-import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, MESSAGES, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails, type WindowState } from '../shared/checkout';
-import { evaluateCategory, licenseLabel, summarizeEligibility, summarizePath, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
+import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, fullCategoryGuidance, MESSAGES, missingBundleRaces, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails } from '../shared/checkout';
+import { evaluateCategory, excludedBecauseClassUnspecified, licenseLabel, summarizeEligibility, summarizePath, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
 import { formatCents, formatDate, formatLength, formatTime, sortCategories } from '../shared/format';
 import { quote, type Quote } from '../shared/pricing';
@@ -17,6 +17,7 @@ import { formatDateTime, refundedCents } from './format';
 import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
 import { AccountMenu, SignInPrompt, useSession } from './auth';
 import { useLoad } from './useLoad';
+import { availableWalkUpCategories, categorySelectionStatus, WALK_UP_CATEGORY_PARAM } from './walkUpSelection';
 import { refundPolicyLines } from '../shared/refundPolicy';
 
 /*
@@ -35,6 +36,13 @@ const STEPS: { key: Step; label: string }[] = [
 
 type Details = Omit<RiderDetails, 'racingAge' | 'licenseCategory' | 'licenseType' | 'competitionClass' | 'collegiateDivision'>;
 
+interface ReservationAddendum {
+  categoryId: string;
+  categoryName: string;
+  title: string;
+  text: string;
+}
+
 interface Draft {
   step: Step;
   reached: number; // furthest step index completed
@@ -45,8 +53,12 @@ interface Draft {
   waiver: { read: boolean; signatureName: string; agreed: boolean };
   orderId: string | null;
   clientRequestId: string;
-  /** Exact submission and waiver text to recover after an uncertain response. */
-  pendingReservation: { request: Parameters<typeof api.createOrder>[1]; waiverText: string } | null;
+  /** Exact submission and displayed terms to recover after an uncertain response. */
+  pendingReservation: {
+    request: Parameters<typeof api.createOrder>[1];
+    waiverText: string;
+    addenda?: ReservationAddendum[];
+  } | null;
   /** Private link token from a waitlist offer; lets this rider take the reserved place. */
   offerToken?: string | null;
   offerCategoryId?: string | null;
@@ -98,10 +110,11 @@ function clearStoredDraft(eventId: string, orderId?: string): void {
   }
 }
 
-/** Keeps an unfinished registration in this tab only, so a refresh or Back does not lose it. */
-function useStoredDraft(eventId: string): [Draft, Update] {
+/** Personal drafts survive a refresh. Shared kiosk drafts exist only while the rider is signed in. */
+function useDraft(eventId: string, kiosk: boolean): [Draft, Update] {
   const key = draftKey(eventId);
   const [draft, setDraft] = useState<Draft>(() => {
+    if (kiosk) return freshDraft();
     try {
       const raw = sessionStorage.getItem(key);
       if (raw) return { ...freshDraft(), ...(JSON.parse(raw) as Draft) };
@@ -114,7 +127,7 @@ function useStoredDraft(eventId: string): [Draft, Update] {
     setDraft((d) => {
       const next = fn(d);
       try {
-        sessionStorage.setItem(key, JSON.stringify(next));
+        if (!kiosk) sessionStorage.setItem(key, JSON.stringify(next));
       } catch {
         /* storage unavailable */
       }
@@ -124,17 +137,15 @@ function useStoredDraft(eventId: string): [Draft, Update] {
 }
 
 /** Rider page header. The Demo badge shows only for a demo event; the note follows how payment works there. */
-function RegHeader({ demo = false, mode = null }: { demo?: boolean; mode?: PaymentMode | null }) {
+function RegHeader({ demo = false, mode = null, kiosk = false }: { demo?: boolean; mode?: PaymentMode | null; kiosk?: boolean }) {
   return (
     <header className="reg__bar">
-      <a className="brand" href={href({ page: 'events' })} aria-label="CycleReg, all events">
-        CycleReg
-      </a>
+      {kiosk ? <span className="brand">CycleReg</span> : <a className="brand" href={href({ page: 'events' })} aria-label="CycleReg, all events">CycleReg</a>}
       {demo && <span className="demo-badge">Demo</span>}
       <span className="reg__bar-note">{mode === 'simulated' ? 'Rider registration with simulated payment' : mode === 'stripe_test' ? 'Rider registration, Stripe test mode' : 'Rider registration'}</span>
       <span className="reg__bar-end">
         <ThemeToggle />
-        <AccountMenu />
+        {!kiosk && <AccountMenu />}
       </span>
     </header>
   );
@@ -226,12 +237,13 @@ export function RegisterIndex() {
 
 /* The flow ---------------------------------------------------------------- */
 
-export function Register({ eventId }: { eventId: string }) {
+export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOrder?: (orderId: string) => void }) {
+  const kiosk = !!onKioskOrder;
   const [ev, setEv] = useState<PublicEvent | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
-  const [draft, update] = useStoredDraft(eventId);
+  const [draft, update] = useDraft(eventId, kiosk);
 
   const [offer, setOffer] = useState<WaitlistOffer | null>(null);
   const [offerFailure, setOfferFailure] = useState<{ token: string; message: string; retryable: boolean } | null>(null);
@@ -239,7 +251,8 @@ export function Register({ eventId }: { eventId: string }) {
   const [offerAttempt, setOfferAttempt] = useState(0);
   const session = useSession();
   const signedIn = session.status === 'signed-in';
-  const offerToken = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('offer');
+  const linkParams = new URLSearchParams(kiosk ? '' : window.location.hash.split('?')[1] ?? '');
+  const offerToken = linkParams.get('offer');
 
   const currentOfferFailure = offerFailure?.token === offerToken ? offerFailure : null;
   const statusRead = useRef(0);
@@ -324,36 +337,44 @@ export function Register({ eventId }: { eventId: string }) {
   if (error && !ev) {
     return (
       <div className="reg">
-        <RegHeader />
+        <RegHeader kiosk={kiosk} />
         <main className="reg__main reg__main--narrow">
           <p className="alert alert--warn" role="alert">
             {error.message}
           </p>
-          <a className="btn btn--secondary" href={href({ page: 'events' })}>
-            See all events
-          </a>
+          {!kiosk && <a className="btn btn--secondary" href={href({ page: 'events' })}>See all events</a>}
         </main>
       </div>
     );
   }
   if (!ev) return <div className="state-page"><div className="skeleton skeleton--page" aria-label="Loading registration" /></div>;
 
+  if (kiosk && ev.paymentMode !== 'simulated') return (
+    <main className="reg__main reg__main--narrow">
+      <h1>Kiosk registration unavailable</h1>
+      <p>This kiosk uses simulated payments. Ask staff for the public registration address.</p>
+    </main>
+  );
+
   const { config } = ev;
   if (isResearchExample(config)) {
     return (
       <div className="reg">
-        <RegHeader />
+        <RegHeader kiosk={kiosk} />
         <main className="reg__main reg__main--narrow">
           <h1 className="done__title">{config.event.name}</h1>
           <p className="muted">{config.event.venue}</p>
           <h2>Registration unavailable</h2>
           <p>{RESEARCH_REGISTRATION_MESSAGE}</p>
           <Pending>{config.event.demoNotice}</Pending>
-          <a className="btn btn--secondary" href={href({ page: 'events' })}>Back to events</a>
+          {!kiosk && <a className="btn btn--secondary" href={href({ page: 'events' })}>Back to events</a>}
         </main>
       </div>
     );
   }
+  const showWalkUpSuggestions = !offerToken && draft.step === 'races' && draft.reached === 0 && draft.selected.length === 0 && linkParams.has(WALK_UP_CATEGORY_PARAM);
+  const suggestedIds = new Set(linkParams.getAll(WALK_UP_CATEGORY_PARAM));
+  const suggestions = showWalkUpSuggestions ? availableWalkUpCategories(ev).filter((category) => suggestedIds.has(category.id)) : [];
   const selectedCancelled = draft.selected.some((id) => ev.cancellation.categoryIds.includes(id));
   const blockedDraft = selectedCancelled && !draft.pendingReservation && (draft.step === 'details' || draft.step === 'waiver');
   const refreshStatus = async () => {
@@ -386,12 +407,10 @@ export function Register({ eventId }: { eventId: string }) {
 
   return (
     <div className="reg">
-      <RegHeader demo={config.event.isDemo} mode={ev.paymentMode} />
+      <RegHeader demo={config.event.isDemo} mode={ev.paymentMode} kiosk={kiosk} />
       <main className="reg__main">
         <section className="reg__event" aria-labelledby="reg-title">
-          <a className="link small" href={href({ page: 'events' })}>
-            All events
-          </a>
+          {!kiosk && <a className="link small" href={href({ page: 'events' })}>All events</a>}
           <h1 id="reg-title" ref={eventHeading} tabIndex={-1}>{config.event.name}</h1>
           <p className="reg__meta">
             {config.days.map((d) => formatDate(d.date)).join(' and ')}
@@ -469,7 +488,23 @@ export function Register({ eventId }: { eventId: string }) {
         {offerToken && !signedIn && draft.step === 'races' && (
           <SignInPrompt title="Sign in to use your waitlist offer">Sign in with the email you joined the waitlist with to see the place being held for you.</SignInPrompt>
         )}
-        {draft.step === 'races' && <ChooseRaces ev={ev} draft={draft} update={update} />}
+        {showWalkUpSuggestions && (
+          <section className="note walkup-suggestions" aria-labelledby="walkup-suggestions-title">
+            <h2 id="walkup-suggestions-title">Suggested race choices</h2>
+            {suggestions.length < suggestedIds.size && <p>Some suggested choices are unavailable. You can review the current race list below.</p>}
+            {suggestions.length > 0 && <>
+              <ul>{suggestions.map((category) => <li key={category.id}>{category.timingCode && `${category.timingCode} · `}{category.name}</li>)}</ul>
+              <p>Review eligibility, availability, and the total before continuing.</p>
+              <button type="button" className="btn btn--secondary" onClick={() => {
+                update((current) => ({ ...current, selected: suggestions.map((category) => category.id) }));
+                document.getElementById('about-title')?.focus();
+              }}>
+                Use suggested choices
+              </button>
+            </>}
+          </section>
+        )}
+        {draft.step === 'races' && <ChooseRaces ev={ev} draft={draft} update={update} kiosk={kiosk} />}
         {blockedDraft ? (
           <section className="note note--warn cancellation-notice" aria-label="Cancelled race selection">
             <p>A selected race was cancelled. Return to race selection and remove cancelled entries before continuing. Your entered details are saved.</p>
@@ -482,9 +517,9 @@ export function Register({ eventId }: { eventId: string }) {
           </SignInPrompt>
         ) : (
           <>
-        {draft.step === 'details' && <DetailsStep config={config} draft={draft} update={update} goTo={goTo} />}
+        {draft.step === 'details' && <DetailsStep config={config} draft={draft} update={update} goTo={goTo} kiosk={kiosk} />}
         {draft.step === 'waiver' && <Waiver ev={ev} draft={draft} update={update} goTo={goTo} setEvent={setEv} />}
-        {draft.step === 'review' && draft.orderId && <Review orderId={draft.orderId} eventId={eventId} goTo={goTo} paymentMode={ev.paymentMode} />}
+        {draft.step === 'review' && draft.orderId && <Review orderId={draft.orderId} eventId={eventId} goTo={goTo} paymentMode={ev.paymentMode} onKioskOrder={onKioskOrder} />}
           </>
         )}
       </main>
@@ -505,14 +540,14 @@ function CancellationNotice({ ev }: { ev: PublicEvent }) {
 
 /* Step 1: choose races ---------------------------------------------------- */
 
-function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; update: Update }) {
+function ChooseRaces({ ev, draft, update, kiosk }: { ev: PublicEvent; draft: Draft; update: Update; kiosk: boolean }) {
   const { config } = ev;
   const [trayOpen, setTrayOpen] = useState(false);
   const [matchesOnly, setMatchesOnly] = useState(false);
   const scheduleRef = useRef<HTMLDivElement>(null);
   const [errors, setErrors] = useState<{ id: string; message: string }[]>([]);
   const checking = Object.values(draft.profile).some((v) => v !== null);
-  const q = useMemo(() => quote(config, draft.selected, ev.today, draft.coupon ?? null, draft.profile), [config, draft.selected, ev.today, draft.coupon, draft.profile]);
+  const q = useMemo(() => quote(config, draft.selected, ev.today, draft.coupon ?? null, draft.profile, draft.bundleIntent), [config, draft.selected, ev.today, draft.coupon, draft.profile, draft.bundleIntent]);
   const conflicts = useMemo(() => findConflicts(config, draft.selected), [config, draft.selected]);
   const setProfile = (p: Partial<RiderProfile>) => {
     if (p.racingAge === null || p.licenseCategory === null) setMatchesOnly(false);
@@ -524,15 +559,31 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
   const matching = matchesOnly && matchesReady;
   const matchingCount = config.categories.filter((cat) => cat.status !== 'archived' && result(cat)?.status === 'eligible').length;
   const visible = (cat: Category) => !matching || result(cat)?.status === 'eligible' || draft.selected.includes(cat.id) || draft.offerCategoryId === cat.id;
+  // Selected and offered entries stay on screen, so they are not counted as excluded.
+  const classHidden = (cat: Category) => cat.status !== 'archived' && cat.startGroupId !== null && !draft.selected.includes(cat.id) && draft.offerCategoryId !== cat.id && excludedBecauseClassUnspecified(result(cat));
+  const classHiddenCount = matching ? config.categories.filter(classHidden).length : 0;
+  const matchLead = matchingCount === 0 ? 'No categories match your current answers.' : `${matchingCount} categories match your answers.`;
+  const classNeed = classHiddenCount === 1
+    ? '1 category needs a competition class to confirm a match.'
+    : `${classHiddenCount} categories need a competition class to confirm a match.`;
+  const matchStatus = !matching
+    ? ''
+    : classHiddenCount > 0
+      ? `${matchLead} Selected entries stay visible.`
+      : `${matchLead} Selected entries stay visible. For races that need more details or organizer review, choose All races.`;
   const findMyRaces = () => {
     setMatchesOnly(true);
     scheduleRef.current?.focus();
     scheduleRef.current?.scrollIntoView({ block: 'start' });
   };
+  const showAllRaces = () => {
+    setMatchesOnly(false);
+    scheduleRef.current?.focus();
+  };
   const unavailableBundleIds = config.registration.bundles.filter((b) => b.raceIds.some((r) => ev.cancellation.scopes.some((s) => s.scope === 'event' || (s.scope === 'race' && s.raceId === r) || (s.scope === 'day' && config.races.find((race) => race.id === r)?.dayId === s.dayId)) || config.categories.some((c) => c.raceId === r && ev.cancellation.categoryIds.includes(c.id)))).map((b) => b.id);
   const intent = config.registration.bundles.find((b) => b.id === draft.bundleIntent) ?? null;
-  const selectedRaces = new Set(draft.selected.map((id) => config.categories.find((c) => c.id === id)?.raceId));
-  const intentMissing = intent ? intent.raceIds.filter((r) => !selectedRaces.has(r)) : [];
+  const unavailableIntent = !!draft.bundleIntent && !intent;
+  const intentMissing = intent ? missingBundleRaces(config, draft.selected, intent) : [];
 
   const applyDemoRider = (id: string) => {
     const r = DEMO_RIDERS.find((x) => x.id === id);
@@ -578,11 +629,15 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
       // A waitlist offer reserves this rider's place, so its category is not full for them.
       const offeredHere = !!draft.offerToken && draft.offerCategoryId === id;
       if (ev.cancellation.categoryIds.includes(id)) errs.push({ id: `opt-${id}`, message: `${cat?.name ?? 'A selected race'} was cancelled. Remove this entry to continue.` });
-      if (cat && !ev.cancellation.categoryIds.includes(id) && ev.remaining[id] === 0 && !offeredHere) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${MESSAGES.full}` });
+      if (cat && !ev.cancellation.categoryIds.includes(id) && ev.remaining[id] === 0 && !offeredHere) errs.push({ id: `opt-${id}`, message: `${cat.name}: ${fullCategoryGuidance(!!ev.waitlist[id])}` });
     }
+    if (unavailableIntent) errs.push({ id: 'tray-title', message: 'Your selected package is no longer available. Clear the package choice to continue.' });
     if (intent && unavailableBundleIds.includes(intent.id)) errs.push({ id: 'tray-title', message: 'Your selected package includes a cancelled race. Uncheck the package to continue with unaffected races.' });
     if (intent && !unavailableBundleIds.includes(intent.id) && intentMissing.length) {
-      errs.push({ id: 'tray-title', message: `The ${intent.name} needs one eligible race on each day. Add a race in ${intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.` });
+      errs.push({ id: 'tray-title', message: `The ${intent.name} needs an entry in every included race. Add an entry in ${intentMissing.map((r) => config.races.find((x) => x.id === r)?.name).join(' and ')}.` });
+    }
+    if (intent && !unavailableBundleIds.includes(intent.id) && !intentMissing.length && q.bundle?.id !== intent.id) {
+      errs.push({ id: 'tray-title', message: 'The selected package does not apply to these entries at their current prices. Change your entries or uncheck the package.' });
     }
     if (q.coupon?.unappliedReason) errs.push({ id: 'f-coupon', message: `${q.coupon.unappliedReason} Remove the code or change your races.` });
     setErrors(errs);
@@ -595,7 +650,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
         <ErrorSummary errors={errors} />
         <WindowBanner ev={ev} />
         <section className="about" aria-labelledby="about-title">
-          <h2 id="about-title">About you</h2>
+          <h2 id="about-title" tabIndex={-1}>About you</h2>
           <p className="muted">Use your details to find matching races, or browse the full schedule.</p>
           <Field label="Use a demo rider (fake data)" id="f-demo-rider" className="about__demo">
             {(id) => (
@@ -681,11 +736,18 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           <div className="schedule-tools">
             <h2>{matching ? 'Your matching races' : 'Race schedule'}</h2>
             <div className="schedule-tools__views" role="group" aria-label="Schedule view">
-              <button className={`btn btn--small ${matching ? 'btn--ghost' : 'btn--primary'}`} aria-pressed={!matching} onClick={() => setMatchesOnly(false)}>All races</button>
+              <button className={`btn btn--small ${matching ? 'btn--ghost' : 'btn--primary'}`} aria-pressed={!matching} aria-describedby={classHiddenCount > 0 ? 'class-hidden-reason' : undefined} onClick={() => setMatchesOnly(false)}>All races</button>
               <button className={`btn btn--small ${matching ? 'btn--primary' : 'btn--ghost'}`} aria-pressed={matching} disabled={!matchesReady} onClick={() => setMatchesOnly(true)}>Matching races</button>
             </div>
           </div>
-          <p className={matching ? 'small' : 'sr-only'} role="status">{matching ? `${matchingCount === 0 ? 'No categories match your current answers.' : `${matchingCount} categories match your answers.`} Selected entries stay visible. For races that need more details or organizer review, choose All races.` : ''}</p>
+          <p id="match-filter-status" className={matching ? 'small' : 'sr-only'} role="status">{matchStatus}</p>
+          {classHiddenCount > 0 && (
+            <section id="class-hidden-notice" className="class-hidden-notice" aria-labelledby="class-hidden-title">
+              <h3 id="class-hidden-title">Some races are hidden</h3>
+              <p id="class-hidden-reason">{classNeed}</p>
+              <button className="btn btn--secondary" onClick={showAllRaces}>Show all races</button>
+            </section>
+          )}
           {config.days.map((day, di) => (
             <section key={day.id} className="sched-day" style={{ ['--day' as string]: dayHue(di) }} aria-labelledby={`day-${day.id}`}>
               <h2 className="sched-day__title" id={`day-${day.id}`}>
@@ -703,7 +765,13 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                         {ev.cancellation.scopes.some((s) => s.scope === 'event' || (s.scope === 'day' && s.dayId === race.dayId) || (s.scope === 'race' && s.raceId === race.id)) && <span>Cancelled</span>}
                         {race.course && <span>{race.course}</span>}
                       </h3>
-                      {matching && !config.categories.some((cat) => cat.raceId === race.id && cat.status !== 'archived' && cat.startGroupId !== null && visible(cat)) && <p className="muted small">No matching categories in this race. Choose All races to review the full schedule.</p>}
+                      {matching && !config.categories.some((cat) => cat.raceId === race.id && cat.status !== 'archived' && cat.startGroupId !== null && visible(cat)) && (
+                        <p className="muted small">
+                          {config.categories.some((cat) => cat.raceId === race.id && classHidden(cat))
+                            ? 'Some categories in this race need a competition class to confirm a match.'
+                            : 'No matching categories in this race. Choose All races to review the full schedule.'}
+                        </p>
+                      )}
                       <ol className="sched-list">
                         {groups.map((sg) => {
                           const allCats = sortCategories(config.categories.filter((c) => c.startGroupId === sg.id && c.status !== 'archived'));
@@ -724,20 +792,15 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
                                 {cats.map((cat) => (
                                   <RaceOption
                                     key={cat.id}
-                                    config={config}
+                                    event={ev}
                                     cat={cat}
-                                    cancelled={ev.cancellation.categoryIds.includes(cat.id)}
-                                    today={ev.today}
                                     profile={draft.profile}
                                     selected={draft.selected.includes(cat.id)}
-                                    remaining={ev.remaining[cat.id] ?? null}
-                                    window={windowState(cat, ev.nowLocal)}
-                                    enforceWindows={ev.enforceWindows}
                                     result={result(cat)}
                                     conflicts={draft.selected.includes(cat.id) ? conflicts.filter((c) => c.a === cat.id || c.b === cat.id) : []}
                                     onToggle={() => toggle(cat.id)}
                                     offered={!!draft.offerToken && draft.offerCategoryId === cat.id}
-                                    waitlist={ev.waitlist?.[cat.id] ? <JoinWaitlist ev={ev} cat={cat} draft={draft} /> : null}
+                                    waitlist={ev.waitlist?.[cat.id] ? <JoinWaitlist ev={ev} cat={cat} draft={draft} kiosk={kiosk} /> : null}
                                   />
                                 ))}
                               </div>
@@ -765,6 +828,16 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           <h2 id="tray-title" className="tray__title" tabIndex={-1}>
             Your entries
           </h2>
+          {unavailableIntent && (
+            <div className="bundle-pick is-on">
+              <p className="small text-warn">Your selected package is no longer available.</p>
+              <button type="button" className="btn btn--secondary" onClick={() => {
+                update((d) => ({ ...d, bundleIntent: null }));
+                setErrors([]);
+                document.getElementById('tray-title')?.focus();
+              }}>Clear package choice</button>
+            </div>
+          )}
           {config.registration.bundles.map((b) => (
             <div key={b.id} className={`bundle-pick ${draft.bundleIntent === b.id ? 'is-on' : ''}`}>
               <label className="check">
@@ -784,7 +857,7 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
           ) : (
             <QuoteTable q={q} raceName={(id) => config.races.find((r) => r.id === id)?.name ?? ''} onRemove={(id) => toggle(id)} />
           )}
-          <BundleHint config={config} selected={draft.selected} q={q} unavailableBundleIds={unavailableBundleIds} />
+          {!draft.bundleIntent && <BundleHint config={config} selected={draft.selected} q={q} unavailableBundleIds={unavailableBundleIds} />}
           {draft.selected.length > 0 && <CouponField eventId={ev.eventId} draft={draft} update={update} q={q} />}
           <button className="btn btn--primary tray__cta" disabled={ev.cancellation.scopes.some((s) => s.scope === 'event')} onClick={next}>
             Continue to racer details
@@ -803,41 +876,28 @@ function ChooseRaces({ ev, draft, update }: { ev: PublicEvent; draft: Draft; upd
 
 function RaceOption({
   profile,
-  config,
   cat,
-  today,
   selected,
-  remaining,
-  window,
-  enforceWindows,
+  event,
   result,
   conflicts,
   onToggle,
   offered,
-  cancelled,
   waitlist,
 }: {
-  config: EventConfig;
   profile: RiderProfile;
   cat: Category;
   offered: boolean;
-  cancelled: boolean;
+  event: PublicEvent;
   waitlist: ReactNode;
-  today: string;
   selected: boolean;
-  remaining: number | null;
-  window: WindowState;
-  enforceWindows: boolean;
   result: EligibilityResult | null;
   conflicts: ReturnType<typeof findConflicts>;
   onToggle: () => void;
 }) {
-  const price = quote(config, [cat.id], today, null, profile).lines[0];
-  // A waitlist offer reserves this rider's place, so the category is open to them even when it reads as full.
-  const full = remaining === 0 && !offered;
-  const outside = enforceWindows && window !== 'open';
-  const closed = cat.status !== 'active';
-  const disabled = !selected && (cancelled || full || closed || outside || result?.status === 'ineligible');
+  const price = quote(event.config, [cat.id], event.today, null, profile).lines[0];
+  const { remaining, cancelled, window, full, outside, closed, unavailable } = categorySelectionStatus(event, cat, offered);
+  const disabled = !selected && (unavailable || result?.status === 'ineligible');
   const status = cancelled
     ? { cls: 'ineligible', text: 'Cancelled by organizer' }
     : closed
@@ -880,7 +940,7 @@ function RaceOption({
       </button>
       <div className="opt__status" id={`opt-${cat.id}-why`}>
         {status && <span className={`status status--${status.cls}`}>{status.text}</span>}
-        {!cancelled && full && !waitlist && <span className="opt__reason">{MESSAGES.full}</span>}
+        {!cancelled && full && !waitlist && <span className="opt__reason">{fullCategoryGuidance(false)}</span>}
         {!cancelled && full && waitlist}
         {!cancelled && !outside && cat.registration.closesAt && window === 'open' && <span className="opt__reason">Registration closes {formatLocalDateTime(cat.registration.closesAt)}</span>}
         {cancelled && selected && <span className="opt__reason">Remove this cancelled entry to continue.</span>}
@@ -1102,7 +1162,7 @@ function riderFrom(draft: Draft, needsGuardian: boolean): Record<string, unknown
   };
 }
 
-function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; draft: Draft; update: Update; goTo: (s: Step) => void }) {
+function DetailsStep({ config, draft, update, goTo, kiosk }: { config: EventConfig; draft: Draft; update: Update; goTo: (s: Step) => void; kiosk: boolean }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const needsGuardian = guardianNeeded(config, draft.selected, draft.profile.racingAge);
   const d = draft.details;
@@ -1141,6 +1201,7 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
   return (
     <form
       className="reg__panel"
+      autoComplete={kiosk ? 'off' : undefined}
       noValidate
       onSubmit={(e) => {
         e.preventDefault();
@@ -1153,18 +1214,18 @@ function DetailsStep({ config, draft, update, goTo }: { config: EventConfig; dra
       {d.demoRiderId && <p className="note">Prefilled from a demo rider. These details are fictional fixtures.</p>}
       <div className="form-row">
         <Field label="First name (required)" id={FIELD_IDS.firstName} error={errors.firstName}>
-          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.firstName || undefined} className="input" autoComplete="given-name" value={d.firstName} onChange={(e) => set({ firstName: e.target.value })} />}
+          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.firstName || undefined} className="input" autoComplete={kiosk ? 'off' : 'given-name'} value={d.firstName} onChange={(e) => set({ firstName: e.target.value })} />}
         </Field>
         <Field label="Last name (required)" id={FIELD_IDS.lastName} error={errors.lastName}>
-          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.lastName || undefined} className="input" autoComplete="family-name" value={d.lastName} onChange={(e) => set({ lastName: e.target.value })} />}
+          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.lastName || undefined} className="input" autoComplete={kiosk ? 'off' : 'family-name'} value={d.lastName} onChange={(e) => set({ lastName: e.target.value })} />}
         </Field>
       </div>
       <div className="form-row">
         <Field label={needsGuardian ? 'Rider email (optional for a minor)' : 'Email for the receipt (required)'} id={FIELD_IDS.email} error={errors.email} hint="No email is sent yet.">
-          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.email || undefined} type="email" className="input" autoComplete="email" value={d.email} onChange={(e) => set({ email: e.target.value })} />}
+          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.email || undefined} type="email" className="input" autoComplete={kiosk ? 'off' : 'email'} value={d.email} onChange={(e) => set({ email: e.target.value })} />}
         </Field>
         <Field label="Phone (optional)" id={FIELD_IDS.phone} error={errors.phone}>
-          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.phone || undefined} type="tel" className="input" autoComplete="tel" value={d.phone} onChange={(e) => set({ phone: e.target.value })} />}
+          {(id, dsc) => <input id={id} aria-describedby={dsc} aria-invalid={!!errors.phone || undefined} type="tel" className="input" autoComplete={kiosk ? 'off' : 'tel'} value={d.phone} onChange={(e) => set({ phone: e.target.value })} />}
         </Field>
       </div>
       <div className="form-row">
@@ -1272,7 +1333,20 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
   }, []);
 
   const extras = draft.extras ?? EMPTY_EXTRAS;
-  const addendumCats = pending ? [] : draft.selected.map((id) => config.categories.find((c) => c.id === id)).filter((c): c is NonNullable<typeof c> => !!c?.addendum);
+  const currentAddenda = pending ? [] : draft.selected.flatMap((id) => {
+    const category = config.categories.find((c) => c.id === id);
+    return category?.addendum ? [{ categoryId: id, categoryName: category.name, ...category.addendum }] : [];
+  });
+  const submittedIds = pending?.request.extras?.addenda;
+  const acceptedIds = pending && Array.isArray(submittedIds)
+    ? pending.request.categoryIds.filter((id) => submittedIds.includes(id))
+    : [];
+  const savedAddenda = pending?.addenda;
+  const submittedAddenda = Array.isArray(savedAddenda)
+    ? savedAddenda.filter((terms) => terms && acceptedIds.includes(terms.categoryId)
+      && typeof terms.categoryName === 'string' && typeof terms.title === 'string' && typeof terms.text === 'string')
+    : [];
+  const originalTermsUnavailable = submittedAddenda.length < acceptedIds.length;
   const toggleAddendum = (catId: string, on: boolean) =>
     update((x) => {
       const ex = x.extras ?? EMPTY_EXTRAS;
@@ -1292,17 +1366,20 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
       setErrors(errs);
       if (errs.length) return;
     } else setErrors([]);
+    const acceptedAddenda = currentAddenda.filter((terms) => extras.addenda.includes(terms.categoryId));
     const submission = pending ?? {
       request: {
         clientRequestId: draft.clientRequestId,
         categoryIds: draft.selected,
+        bundleIntent: draft.bundleIntent,
         rider: riderFrom(draft, needsGuardian) as RiderDetails,
         waiver: { version: config.registration.waiverVersion, read: true as const, agreed: true as const, signatureName: w.signatureName.trim(), signerRole: needsGuardian ? 'guardian' as const : 'rider' as const },
         offerToken: draft.offerToken ?? null,
-        extras,
+        extras: { ...extras, addenda: acceptedAddenda.map(({ categoryId }) => categoryId) },
         couponCode: draft.coupon?.code ?? null,
       },
       waiverText: config.registration.waiverText,
+      addenda: acceptedAddenda,
     };
     setBusy(true);
     update((x) => ({ ...x, pendingReservation: submission }));
@@ -1336,7 +1413,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
         ref={boxRef}
         className="waiver"
         tabIndex={0}
-        aria-label="Waiver text. Scroll to the end to enable signing."
+        aria-label={pending ? 'Original waiver text' : 'Waiver text. Scroll to the end to enable signing.'}
         onScroll={(e) => {
           const el = e.currentTarget;
           if (!draft.pendingReservation && !w.read && el.scrollTop + el.clientHeight >= el.scrollHeight - 8) setW({ read: true });
@@ -1347,14 +1424,26 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
       <label className="check">
         <input id="f-waiver-read" type="checkbox" disabled={busy || !!draft.pendingReservation} checked={w.read} onChange={(e) => setW({ read: e.target.checked })} />I have read the whole waiver
       </label>
-      {addendumCats.map((cat) => (
-        <fieldset className="subfields" key={cat.id}>
-          <legend>
-            {cat.addendum!.title} ({cat.name})
+      {(submittedAddenda.length > 0 || originalTermsUnavailable) && (
+        <section className="subfields reg-race-terms" aria-labelledby="submitted-race-terms">
+          <h3 id="submitted-race-terms">Race terms you accepted</h3>
+          {submittedAddenda.map((terms) => (
+            <div key={terms.categoryId}>
+              <h4 className="small">{terms.title} ({terms.categoryName})</h4>
+              <p className="small addendum-text">{terms.text}</p>
+            </div>
+          ))}
+          {originalTermsUnavailable && <p className="muted small">Original text for one or more race terms isn’t available in this tab.</p>}
+        </section>
+      )}
+      {currentAddenda.map((terms) => (
+        <fieldset className="subfields" key={terms.categoryId}>
+          <legend className="addendum-title">
+            {terms.title} ({terms.categoryName})
           </legend>
-          <p className="small addendum-text">{cat.addendum!.text}</p>
+          <p className="small addendum-text">{terms.text}</p>
           <label className="check">
-            <input id={`addendum-${cat.id}`} type="checkbox" disabled={busy || !!draft.pendingReservation} checked={extras.addenda.includes(cat.id)} onChange={(e) => toggleAddendum(cat.id, e.target.checked)} />
+            <input id={`addendum-${terms.categoryId}`} type="checkbox" disabled={busy} checked={extras.addenda.includes(terms.categoryId)} onChange={(e) => toggleAddendum(terms.categoryId, e.target.checked)} />
             {needsGuardian ? 'As parent or guardian, I accept this for the rider' : 'I accept this'}
           </label>
         </fieldset>
@@ -1398,7 +1487,13 @@ function orderRaceName(order: OrderView) {
   return (raceId: string) => order.entries.find((e) => order.quote.lines.find((l) => l.categoryId === e.categoryId)?.raceId === raceId)?.raceName ?? '';
 }
 
-function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; eventId: string; goTo: (s: Step) => void; paymentMode: PublicEvent['paymentMode'] }) {
+function Review({ orderId, eventId, goTo, paymentMode, onKioskOrder }: {
+  orderId: string;
+  eventId: string;
+  goTo: (s: Step) => void;
+  paymentMode: PublicEvent['paymentMode'];
+  onKioskOrder?: (orderId: string) => void;
+}) {
   const [order, setOrder] = useState<OrderView | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1409,10 +1504,13 @@ function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; even
 
   useEffect(() => {
     if (order?.status === 'confirmed' || order?.status === 'needs_attention') {
-      clearStoredDraft(eventId);
-      navigate({ page: 'order', orderId });
+      if (onKioskOrder) onKioskOrder(orderId);
+      else {
+        clearStoredDraft(eventId);
+        navigate({ page: 'order', orderId });
+      }
     }
-  }, [order?.status, orderId, eventId]);
+  }, [order?.status, orderId, eventId, onKioskOrder]);
 
   if (!order) return err ? <p className="note note--error">{err}</p> : <div className="skeleton" aria-label="Loading your order" />;
 
@@ -1515,18 +1613,19 @@ function Review({ orderId, eventId, goTo, paymentMode }: { orderId: string; even
 
 /* Confirmation and receipt ------------------------------------------------ */
 
-export function OrderPage({ orderId }: { orderId: string }) {
+export function OrderPage({ orderId, kiosk = false }: { orderId: string; kiosk?: boolean }) {
   const [order, setOrder] = useState<OrderView | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // Back from Stripe: the payment notification can arrive a few seconds after the rider does.
   // Read once for this order, then taken out of the address so an order opened later in this tab does not look like a return.
-  const [returned] = useState(() => new URLSearchParams(window.location.search).get('checkout') === 'returned');
+  const [returned] = useState(() => !kiosk && new URLSearchParams(window.location.search).get('checkout') === 'returned');
   useEffect(() => {
+    if (kiosk) return;
     const url = new URL(window.location.href);
     if (!url.searchParams.has('checkout')) return;
     url.searchParams.delete('checkout');
     window.history.replaceState(window.history.state, '', url);
-  }, []);
+  }, [kiosk]);
   const waiting = returned && (order?.status === 'held' || order?.status === 'payment_failed');
   const [polls, setPolls] = useState(0);
   useEffect(() => {
@@ -1540,8 +1639,8 @@ export function OrderPage({ orderId }: { orderId: string }) {
   // A Stripe payment never passes through the review step again, so the finished registration is forgotten here.
   const confirmedEventId = order?.status === 'confirmed' ? order.eventId : null;
   useEffect(() => {
-    if (confirmedEventId) clearStoredDraft(confirmedEventId, orderId);
-  }, [confirmedEventId, orderId]);
+    if (!kiosk && confirmedEventId) clearStoredDraft(confirmedEventId, orderId);
+  }, [confirmedEventId, orderId, kiosk]);
   if (err) return <div className="state-page"><p className="alert alert--error">{err}</p></div>;
   if (!order) return <div className="state-page"><div className="skeleton skeleton--page" /></div>;
 
@@ -1553,7 +1652,7 @@ export function OrderPage({ orderId }: { orderId: string }) {
   const refunded = confirmed ? refundedCents(order.totalCents, order.refunds) : 0;
   return (
     <div className="reg">
-      <RegHeader demo={order.isDemo} mode={mode} />
+      <RegHeader demo={order.isDemo} mode={mode} kiosk={kiosk} />
       <main className="reg__main reg__main--narrow">
         {confirmed ? (
           <>
@@ -1593,9 +1692,7 @@ export function OrderPage({ orderId }: { orderId: string }) {
           <>
             <h1 className="done__title">Registration not finished</h1>
             <p className="note">This order is {order.status.replace('_', ' ')}.</p>
-            <a className="btn btn--secondary" href={href({ page: 'register', eventId: order.eventId })}>
-              Back to registration
-            </a>
+            {!kiosk && <a className="btn btn--secondary" href={href({ page: 'register', eventId: order.eventId })}>Back to registration</a>}
           </>
         )}
 
@@ -1708,7 +1805,7 @@ function OfferBanner({ offer }: { offer: WaitlistOffer }) {
 }
 
 /** Join a full category's waitlist with the "About you" answers and a name and email the organizer can use. */
-function JoinWaitlist({ ev, cat, draft }: { ev: PublicEvent; cat: Category; draft: Draft }) {
+function JoinWaitlist({ ev, cat, draft, kiosk }: { ev: PublicEvent; cat: Category; draft: Draft; kiosk: boolean }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ firstName: draft.details.firstName, lastName: draft.details.lastName, email: draft.details.email });
   const [busy, setBusy] = useState(false);
@@ -1755,19 +1852,19 @@ function JoinWaitlist({ ev, cat, draft }: { ev: PublicEvent; cat: Category; draf
   };
   const id = (k: string) => `wl-${cat.id}-${k}`;
   return (
-    <form className="waitlist-form" onSubmit={submit} aria-label={`Join the waitlist for ${cat.name}`}>
+    <form className="waitlist-form" autoComplete={kiosk ? 'off' : undefined} onSubmit={submit} aria-label={`Join the waitlist for ${cat.name}`}>
       <div className="waitlist-form__row">
         <label htmlFor={id('first')}>
           First name
-          <input id={id('first')} className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} autoComplete="given-name" />
+          <input id={id('first')} className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} autoComplete={kiosk ? 'off' : 'given-name'} />
         </label>
         <label htmlFor={id('last')}>
           Last name
-          <input id={id('last')} className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} autoComplete="family-name" />
+          <input id={id('last')} className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} autoComplete={kiosk ? 'off' : 'family-name'} />
         </label>
         <label htmlFor={id('email')}>
           Email
-          <input id={id('email')} className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" />
+          <input id={id('email')} className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete={kiosk ? 'off' : 'email'} />
         </label>
       </div>
       {error && (

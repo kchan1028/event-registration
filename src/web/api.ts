@@ -359,7 +359,7 @@ export const api = {
   offerWaitlistPlace: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer`),
   removeFromWaitlist: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/remove`),
   publicEvent: (id: string) => request<PublicEvent>('GET', `/api/public/events/${id}`),
-  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null; extras?: OrderExtras; couponCode?: string | null }) =>
+  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; bundleIntent?: string | null; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null; extras?: OrderExtras; couponCode?: string | null }) =>
     request<OrderView>('POST', `/api/rider/events/${eventId}/orders`, body),
   checkCoupon: (eventId: string, code: string) => request<CouponTerms>('POST', `/api/rider/events/${eventId}/coupons/check`, { code }),
   coupons: (eventId: string) => request<CouponView[]>('GET', `/api/events/${eventId}/coupons`),
@@ -396,6 +396,8 @@ export const api = {
   withdrawEntry: (entryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/withdraw`, { reason }),
   correctRider: (orderId: string, changes: RiderCorrection, reason: string) => request<OrderView>('POST', `/api/orders/${orderId}/rider-corrections`, { changes, reason }),
   reviewLicense: (entryId: string, note?: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/license-review`, { note }),
+  viewEmergencyContact: (eventId: string, body: { orderId: string } | { entryId: string }) =>
+    request<{ name: string; phone: string }>('POST', `/api/events/${eventId}/emergency-contact`, body),
   checkInList: (eventId: string, dayId: string | null, q: string) =>
     request<CheckInList>('GET', `/api/events/${eventId}/check-in?${new URLSearchParams({ ...(dayId ? { day: dayId } : {}), q })}`),
   automaticBibs: (eventId: string) => request<AutomaticBibJob[]>('GET', `/api/events/${eventId}/automatic-bibs`),

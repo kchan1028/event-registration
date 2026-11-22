@@ -106,7 +106,10 @@ export function checkInTiming(durationsMs: readonly number[]): { timed: number; 
 }
 
 export interface CheckInRider {
+  /** Rider key. Bibs and check-ins use this id. */
   orderId: string;
+  /** Registration whose name, team, and entries this card shows. */
+  detailsOrderId: string;
   checkInCode: string | null;
   name: string;
   team: string;
@@ -119,6 +122,12 @@ export interface CheckInRider {
   bibHistory: { bib: number; assignedAt: string; releasedAt: string | null; reason: string | null }[];
   checkedInAt: string | null;
   undoneCheckIns: { checkedInAt: string; undoneAt: string; bib: number | null; bibReleased: boolean; reason: string }[];
+}
+
+export interface CheckInReadinessConflict {
+  code: 'check_in_not_ready';
+  dayId: string;
+  rider: CheckInRider;
 }
 
 export function canCheckInWithBib(rider: Pick<CheckInRider, 'bib' | 'entries'>): boolean {

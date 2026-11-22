@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { BIB_SCOPES, rangeFor, canCheckInWithBib, changedBibAssignments, type BibChange, type BibReassignmentPlan, type BibSettings } from '../shared/checkin';
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { BIB_SCOPES, rangeFor, canCheckInWithBib, changedBibAssignments, type BibChange, type BibReassignmentPlan, type BibSettings, type CheckInReadinessConflict } from '../shared/checkin';
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
+import { EmergencyContactLookup } from './EmergencyContact';
 import { can } from '../shared/roles';
 import { WalkUpRegistration } from './WalkUpRegistration';
 import { AutomaticBibs } from './AutomaticBibs';
@@ -18,8 +19,9 @@ function recoveryKey(eventId: string, dayId: string, orderId: string) {
 
 /**
  * Race-day check-in. Built for a volunteer at a folding table: find the rider,
- * read one unmistakable ready/blocked result, issue the bib. No payment amounts,
- * emails, or emergency contacts appear here.
+ * read one unmistakable ready/blocked result, issue the bib. No payment amounts
+ * or emails appear here. The card omits the emergency contact. A separate
+ * control, after the bib controls, looks one up and can hide it again.
  */
 export function CheckIn({ eventId }: { eventId: string }) {
   const [dayId, setDayId] = useState<string | null>(null);
@@ -66,8 +68,8 @@ export function CheckIn({ eventId }: { eventId: string }) {
     return () => clearTimeout(t);
   }, [q, dayId, load]);
 
-  const refreshAfterBatch = useRef(() => {});
-  refreshAfterBatch.current = () => { void load(q, dayId); };
+  const refreshCurrentList = useRef(() => {});
+  refreshCurrentList.current = () => { void load(q, dayId); };
 
   const riders = data?.riders ?? [];
   const selected = riders.find((r) => r.orderId === selectedId) ?? null;
@@ -135,10 +137,13 @@ export function CheckIn({ eventId }: { eventId: string }) {
     }
   }
 
-  function replace(r: CheckInRider) {
+  function replace(r: CheckInRider, savedDayId: string) {
     clearVerification();
-    setData((d) => (d ? { ...d, riders: d.riders.map((x) => (x.orderId === r.orderId ? r : x)) } : d));
-    void load(q, dayId);
+    setData((current) => {
+      if (current?.dayId !== savedDayId) return current;
+      return { ...current, riders: current.riders.map((rider) => (rider.orderId === r.orderId ? r : rider)) };
+    });
+    refreshCurrentList.current();
   }
 
   function nextRider() {
@@ -203,9 +208,9 @@ export function CheckIn({ eventId }: { eventId: string }) {
         </p>
       )}
 
-      {data && showRegistration && <WalkUpRegistration eventId={eventId} published={data.published} />}
+      {data && showRegistration && <WalkUpRegistration eventId={eventId} dayId={data.dayId} published={data.published} />}
 
-      {data && batchMode && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId + batchMode} eventId={eventId} dayId={data.dayId} mode={batchMode} onChanged={() => refreshAfterBatch.current()} onClose={() => setBatchMode(null)} />}
+      {data && batchMode && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId + batchMode} eventId={eventId} dayId={data.dayId} mode={batchMode} onChanged={() => refreshCurrentList.current()} onClose={() => setBatchMode(null)} />}
 
       {data && showBibs && can(data.roles, 'checkin.settings') && <>
         <BibSettingsPanel data={data} onSaved={() => void load(q, dayId)} onClose={() => setShowBibs(false)} />
@@ -318,7 +323,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
               {selected && selectedRecoveryKey ? (
                 <RiderDetail key={selectedRecoveryKey} eventId={eventId} dayId={data.dayId} rider={selected}
                   recovery={recovery.get(selectedRecoveryKey)} onRecovery={(state) => updateRecovery(selectedRecoveryKey, state)}
-                  onChange={replace} onNext={nextRider} takeDuration={takeDuration} />
+                  onChange={(rider) => replace(rider, data.dayId)} onNext={nextRider} takeDuration={takeDuration} />
               ) : (
                 <div className="ci__placeholder">
                   <p>Search for a rider or scan their check-in code.</p>
@@ -389,6 +394,16 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
   const [undoReason, setUndoReason] = useState('');
 
   const resultRef = useRef<HTMLDivElement>(null);
+  const issuedBibId = useId();
+  const focusNextAfterCheckIn = useRef(false);
+  const checkInFocusEvents = useRef<AbortController | null>(null);
+  useEffect(() => () => checkInFocusEvents.current?.abort(), []);
+  const focusNextRider = useCallback((button: HTMLButtonElement | null) => {
+    if (button && focusNextAfterCheckIn.current) {
+      focusNextAfterCheckIn.current = false;
+      button.focus();
+    }
+  }, []);
 
   async function markWalkUp(entryId: string) {
     setBusy(true);
@@ -418,23 +433,50 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
     }
   }
 
-  async function checkIn(e: FormEvent) {
+  async function checkIn(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (recovery === 'pending') return;
+    const form = e.currentTarget;
+    const focusEvents = new AbortController();
+    checkInFocusEvents.current = focusEvents;
+    let pointedAway = false;
+    const markPointerDeparture = (event: PointerEvent) => {
+      if (event.target instanceof Node && !form.contains(event.target)) pointedAway = true;
+    };
+    document.addEventListener('pointerdown', markPointerDeparture, { capture: true, signal: focusEvents.signal });
+    const shouldFollowResult = () => {
+      // Disabling the submit button can move focus to the body without a user gesture.
+      const active = document.activeElement;
+      return !pointedAway && (form.contains(active) || active === document.body);
+    };
     setBusy(true);
     setError(null);
     onRecovery(undefined);
     try {
       const result = await api.checkIn(eventId, rider.orderId, dayId, rider.bib !== null ? null : bib.trim() ? Number(bib) : null, takeDuration());
       if (result?.orderId === rider.orderId && typeof result.bib === 'number' && typeof result.checkedInAt === 'string') {
+        focusNextAfterCheckIn.current = shouldFollowResult();
         onChange(result);
       } else {
         onRecovery('pending');
       }
     } catch (err) {
-      if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) onRecovery('pending');
-      else setError((err as ApiError).message);
+      if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) {
+        onRecovery('pending');
+      } else {
+        const conflict = err instanceof ApiError && err.status === 409 ? err.details as Partial<CheckInReadinessConflict> | undefined : undefined;
+        if (conflict?.code === 'check_in_not_ready' && conflict.dayId === dayId && conflict.rider?.orderId === rider.orderId && conflict.rider.result?.ready === false) {
+          onChange(conflict.rider);
+          requestAnimationFrame(() => {
+            if (shouldFollowResult()) resultRef.current?.focus();
+          });
+        } else {
+          setError((err as ApiError).message);
+        }
+      }
     } finally {
+      focusEvents.abort();
+      if (checkInFocusEvents.current === focusEvents) checkInFocusEvents.current = null;
       setBusy(false);
     }
   }
@@ -562,11 +604,21 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
         </>}
         {done ? (
           <>
-            <p className="ci-bib__label">Bib</p>
-            <p className="ci-bib__number">{rider.bib}</p>
+            <p id={`${issuedBibId}-label`} className="ci-bib__label">Bib</p>
+            <p id={issuedBibId} className="ci-bib__number">{rider.bib}</p>
             <p className="muted small">Checked in at {new Date(rider.checkedInAt!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Checking in again keeps this bib.</p>
             <div className="ci-bib__actions">
-              <button type="button" className="btn btn--primary" onClick={onNext}>
+              <button
+                type="button"
+                className="btn btn--primary"
+                ref={focusNextRider}
+                aria-describedby={`${issuedBibId}-label ${issuedBibId}`}
+                onKeyDown={(event) => {
+                  // The Enter press that submitted check-in can still be held when focus arrives.
+                  if (event.key === 'Enter' && event.repeat) event.preventDefault();
+                }}
+                onClick={onNext}
+              >
                 Next rider
               </button>
               {!changing && !undoing && (
@@ -638,6 +690,8 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
           </p>
         )}
       </div>}
+
+      <EmergencyContactLookup key={rider.detailsOrderId} eventId={eventId} riderName={rider.name} orderId={rider.detailsOrderId} />
 
       {recovery !== 'pending' && rider.bibHistory.some((h) => h.releasedAt) && (
         <div className="ci-section">

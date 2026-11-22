@@ -1,6 +1,6 @@
 import { cancellationRosterStatus } from './cancellationClosure';
 import { createHash, randomUUID } from 'node:crypto';
-import { bibScopeKey, bibSettingsSchema, bibBatchExclusion, changedBibAssignments, type BibChange, type BibReassignment, type BibReassignmentPlan, type BibReassignmentResult, type BibBatch, type BibPlan, type PaymentState, canCheckInWithBib, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, bibRangeForEntries, type BibSettings } from '../shared/checkin';
+import { bibScopeKey, bibSettingsSchema, bibBatchExclusion, changedBibAssignments, type BibChange, type BibReassignment, type BibReassignmentPlan, type BibReassignmentResult, type BibBatch, type BibPlan, type PaymentState, canCheckInWithBib, checkInResult, checkInTiming, MAX_TIMED_CHECK_IN_MS, mergeReadiness, nextFreeBib, bibRangeForEntries, type BibSettings, type CheckInReadinessConflict } from '../shared/checkin';
 import { checkSelection, needsGuardian, profileOf, type RiderDetails, type WaiverAcceptance } from '../shared/checkout';
 import { evaluateCategory } from '../shared/eligibility';
 import { newId } from '../shared/factory';
@@ -15,7 +15,9 @@ import { eventLock, HttpError, type Repo } from './repo';
 /**
  * Race-day check-in. A rider is one order. Volunteers see only what
  * check-in needs: name, team, entries, readiness, and bib. No email, guardian
- * contact, payment amounts, or emergency details leave this module.
+ * contact, payment amounts, or emergency contact leaves this module.
+ * `detailsOrderId` is the registration whose details the card shows, so a
+ * separate lookup reads that registration. Bibs and check-ins stay on the rider key.
  */
 export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => Date, identity: Identity, startLists: StartLists) {
   const nowIso = () => clock().toISOString();
@@ -42,7 +44,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
    * One rider made from linked orders: use live orders when present, otherwise retained historical orders.
    * Keep the persisted rider key, the selected group's entries, and confirmed payment only when the whole group is confirmed.
    */
-  type Rider = OrderView & { checkInCodes: string[] };
+  type Rider = OrderView & { checkInCodes: string[]; detailsOrderId: string };
   function mergeRider(group: OrderView[], riderKey: string): Rider {
     const live = group.filter(isLiveOrder);
     const sorted = [...(live.length ? live : group)].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
@@ -50,6 +52,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     return {
       ...first,
       id: riderKey,
+      detailsOrderId: first.id,
       status: sorted.every((o) => o.status === 'confirmed') ? 'confirmed' : sorted.find((o) => o.status !== 'confirmed')!.status,
       entries: sorted.flatMap((o) => o.entries),
       checkInCodes: sorted.map((o) => o.checkInCode).filter((c): c is string => !!c),
@@ -88,6 +91,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
     const undone = state.undos.get(o.id) ?? [];
     return {
       orderId: o.id,
+      detailsOrderId: o.detailsOrderId,
       checkInCode: o.checkInCode,
       checkInCodes: o.checkInCodes,
       name: `${o.rider.firstName} ${o.rider.lastName}`,
@@ -447,7 +451,12 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
         await db.lock(eventLock(eventId));
         const card = await cardFor(eventId, orderId, dayId);
         if (card.checkedInAt && card.bib !== null) return card;
-        if (!card.result.ready) throw new HttpError(409, `Not ready to race: ${card.result.blockers.map((b) => b.label.toLowerCase()).join(', ')}.`);
+        if (!card.result.ready) {
+          const details = card.entries.length > 0 || card.bib !== null
+            ? { code: 'check_in_not_ready', dayId, rider: card } satisfies CheckInReadinessConflict
+            : undefined;
+          throw new HttpError(409, `Not ready to race: ${card.result.blockers.map((b) => b.label.toLowerCase()).join(', ')}.`, details);
+        }
         if (!canCheckInWithBib(card)) throw new HttpError(409, 'No preassigned bib. Refer advance entries to the registration lead for allocation.');
         const s = await settings(eventId);
         if (card.bib === null) await assign(eventId, orderId, dayId, s, requestedBib);

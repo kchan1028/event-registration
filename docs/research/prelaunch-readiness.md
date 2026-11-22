@@ -1,5 +1,7 @@
 # Prelaunch registration and operational readiness
 
+**Scope update (November 19, 2026):** References below to timing-software format acceptance, import or round trips as launch or phase requirements reflect the earlier scope. Those checks are deferred for possible future development. See [current product scope](../../product.md#out-of-scope-initially).
+
 Research date: November 16, 2026. Author: Codex. Status: **Proposed recommendations**, with implementation and verification evidence identified separately. Reviewed application baseline: `028d7e2` (`main`). This report supports [product requirements](../../product.md), the [roadmap](../../roadmap.md), [audit register](../../AUDIT.md), and [test plan](../testing/test-plan.md); it does not approve requirements, reorder phases, or authorize launch.
 
 ## Executive recommendation
@@ -172,7 +174,7 @@ The following questions remain in existing authoritative homes. Research and syn
 |---|---|---|
 | Merchant, fees, refunds, disputes and cancellation liquidity | [ADR 0005](../decisions/0005-merchant-and-settlement-model.md), [product decisions 5–6](../../product.md#open-decisions); owner/treasurer | Live money and complete financial sign-off. |
 | Accepted waiver, guardian/license path and applicable event-year rules | [USAC questions](../usac-questions.md), product decisions 4/9; owner/federation liaison | Sanctioned real-rider operation; provisional local guardian policy stays explicit. |
-| Named support lead/deputy, alert and freeze thresholds, and hosted recovery evidence | [operations questions 1–4](../operations.md#open-questions); owner/technical lead | Hosted recovery and developer-independent race day. |
+| Named support lead/deputy, alert thresholds, event-specific freeze end times and live acceptance, and hosted recovery evidence | [operations questions 1–4](../operations.md#open-questions); owner/technical lead | Hosted recovery and developer-independent race day. |
 | Timer contract, version acknowledgement and paper reconciliation | [timer review](../timer-export-review.md), product decisions 6/8; timer liaison/registration lead | Accepted export round trip and continuity proof. |
 | Retention, telemetry access and safe device/assistive-technology setup | Operations question 5, product decisions 6/10; owner/privacy and accessibility responsibility unassigned | Real-data instrumentation and verified manual access. |
 

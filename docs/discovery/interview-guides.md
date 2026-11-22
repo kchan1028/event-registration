@@ -79,7 +79,7 @@ Goal: how money is reconciled and what makes it hard.
 
 ## Timer
 
-Goal: the start-list and results handoff. The [timer export review packet](../timer-export-review.md) holds the detailed format questions; send it ahead and record answers there.
+Optional workflow discovery. Use the [timer export review packet](../timer-export-review.md) for format questions only if timing interoperability is selected for future development.
 
 1. What do you receive from registration, when, and in what format?
 2. What do you have to fix or retype before race day? How long does it take?

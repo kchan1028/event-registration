@@ -1,8 +1,8 @@
 # Timer export review packet
 
-Status: Proposed sample format, written November 14, 2026. Not yet reviewed by a timer or official. The Phase 1 exit gate needs the timer to accept the sample format (see [roadmap.md](../roadmap.md#phase-1--test-the-experience-without-live-money)).
+Status: Research packet retained for possible future development. The sample CSV is available today. Format approval and validation in timing software were deferred on November 19, 2026. See [product scope](../product.md#out-of-scope-initially).
 
-Send this page and the sample file to the event's timer and chief official, ask the questions below, and record the answers here. The answers decide the export format before Phase 3 and close the open questions in [product.md](../product.md#results-site-updates-research).
+If the project owner selects timing interoperability for future development, use this packet and the sample file to gather feedback from the timer and chief official.
 
 ## What to send
 
@@ -18,9 +18,9 @@ A short message to go with it:
 The app exports one CSV per race, per saved snapshot, or for all races of an event in one file. Organizers find it under **Start lists and timer export** in the event builder. Implementation details are in [roadmap.md](../roadmap.md#start-lists-and-timer-export).
 
 - **Who is in it.** Confirmed (paid) entries only. Unpaid holds, cancelled orders or entries, withdrawn entries, and the builder's simulated test entries are left out.
-- **Order.** Start time, then category code, then bib (riders without a bib last), then last name.
-- **One row per entry.** A rider in two races appears twice, once per race, with the same `rider_id`.
-- **Stable IDs.** `entry_id` and `rider_id` never change, even when a name, team, category, or bib changes, so a re-sent file can be matched to the first one.
+- **Order.** Within a race, rows sort by start time, category code, bib (unassigned last), last name, then first name. An all-races file groups rows in published race order.
+- **One row per entry.** A rider entered in two races appears once per race. The rows share a `rider_id` when the entries are on the same order or on linked orders.
+- **Match revisions by entry ID.** Use `entry_id` to match the same entry across downloads. Use `rider_id` to group entries for a rider. Linking or unlinking orders can change the rider grouping ID on affected rows, so compare the CSVs directly for that change.
 - **Snapshots.** The organizer saves a numbered, timestamped snapshot when sending a list. Later changes (added, removed, or changed riders) are shown against it, so the organizer can tell the timer exactly what changed.
 - **File format.** UTF-8 text, comma separated, a header row, Windows line endings (CRLF). Fields containing commas or quotes are quoted. A value that starts with `=`, `+`, `-`, or `@` gets a leading apostrophe so a spreadsheet does not run it as a formula.
 - **Not included.** Email, phone, guardian, emergency contact, payment amounts, and order numbers. These stay out unless officials need them and access controls exist.
@@ -38,7 +38,7 @@ Cancellation download labels are Implemented locally: filenames and HTTP headers
 | `category_code` | Timer classification code for scoring and awards | Text | `DVC-M45` |
 | `category` | Registration category name riders see | Text | `Men Cat 4/5` |
 | `race_length` | Length as configured; never an invented distance or finish time | Text | `35 min + 2 laps`, `64 km · 4 laps` |
-| `bib` | Bib from check-in; blank if not issued yet | Whole number | `101` |
+| `bib` | Assigned bib for the applicable day or weekend at export time, or as recorded in a saved snapshot. Includes preassigned numbers. Blank if unassigned. Use `checked_in` to tell whether check-in was recorded for the race day. | Whole number | `101` |
 | `last_name`, `first_name` | Rider name | Text | `Demo`, `Alex` |
 | `team` | Team or club; may be blank | Text | `Demo Wheelers` |
 | `license_number` | License number as the rider entered it (not verified with USA Cycling) | Text | `DEMO-100001` |
@@ -47,7 +47,7 @@ Cancellation download labels are Implemented locally: filenames and HTTP headers
 | `license_status` | Whether an organizer reviewed the license | `reviewed` or `needs_review` | `needs_review` |
 | `checked_in` | Checked in for that race day | `Y` or `N` | `Y` |
 | `entry_id` | Stable ID for this entry | Text | `oe_2ca41be52185` |
-| `rider_id` | Stable ID for this rider: the order ID, or for orders the organizer linked as one rider, the earliest of them. Linking two orders changes the later order's `rider_id`, which shows as a change in the start-list revisions | Text | `ord_343502c91430` |
+| `rider_id` | Rider grouping ID. For linked orders, the earliest order ID is used. A saved snapshot keeps the ID recorded when it was saved. The revision panel does not list a change to this field alone. | Text | `ord_343502c91430` |
 
 ## What the sample shows
 
@@ -98,4 +98,4 @@ What this means for the export: one CSV in USA Cycling's format can feed both up
 
 1. Fill in the answers above and note the date in the status line.
 2. If the format changes, update the export in `src/shared/startlist.ts`, regenerate the sample, and send it back for a round-trip test: the timer imports the file into their software and confirms riders, bibs, and categories arrive correctly.
-3. When the timer accepts the format, record the acceptance in [roadmap.md](../roadmap.md#delivery-status) as evidence for the Phase 1 exit gate, and move the answered questions out of the research list in [product.md](../product.md#results-site-updates-research).
+3. When the timer accepts the format, record the acceptance in [roadmap.md](../roadmap.md#delivery-status) as evidence for the future interoperability work, and move the answered questions out of the research list in [product.md](../product.md#results-site-updates-research).

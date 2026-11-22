@@ -16,7 +16,7 @@ CycleReg proposes a guided cycling workflow: categories modeled the way road and
 | Registration lead | One prioritized exception queue with the reason and next action |
 | Check-in volunteer | Fast lookup and an unmistakable ready or blocked result |
 | Rider or parent | Clear fields, total cost, requirements, receipt, and check-in instructions |
-| Timer or official | Reliable start lists with stable identifiers in an agreed format |
+| Timer or official | Reliable start lists with stable identifiers and clear revisions in the sample export |
 | Club treasurer | Entries, refunds, fees, and payouts that trace to one ledger |
 | Successor organizer | Reusable setup, role access, history, and an operating guide |
 
@@ -57,8 +57,8 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Organizer-managed waitlists: per-category setting, waitlist first, 24-hour offer links | Implemented; automated promotion and email delivery Planned |
 | Organizer transfers and withdrawals of paid entries, with price differences logged | Implemented; automated tests in CI |
 | Event summary on Registrations: riders, entries, unpaid holds, payment exceptions, license reviews to do, waitlist activity, per-category counts, and (for ledger roles) money that adds up to the ledger CSV | Implemented; automated tests in CI |
-| Organizer refunds of an entry or an order, for simulated and Stripe test-mode payments (no real money moves) | Implemented; automated tests in CI. Not yet checked against a real Stripe sandbox account |
-| Refund and credit rules set by the organizer from templates (full refund until a deadline, tiered, credit only), shown to riders before paying and kept with each order | Implemented; whole-order policy preview in the organizer refund form, with refund amounts still entered by the organizer |
+| Organizer refunds of an entry or an order, for simulated and Stripe test-mode payments (no real money moves) | Implemented; automated tests in CI. See [Phase 2](roadmap.md#phase-2--build-the-registration-core) for sandbox reconciliation progress |
+| Refund and credit rules set by the organizer from templates (full refund until a deadline, tiered, credit only), shown to riders before paying and kept with each order | Implemented; a missing policy warning opens those rules in event setup. Whole-order policy preview in the organizer refund form, with refund amounts still entered by the organizer |
 | Local reconciliation evidence CSV | Implemented locally, API and organizer download control; stored provider/payment/refund references and source states, no provider calls or settlement totals. [Requirements](product.md#reporting) |
 | Atomic cancellation of reviewed plans | Implemented locally, simulation-only API and organizer controls; exact recovery, entry/refund/waitlist changes and durable closure; no provider/credit/message delivery |
 | Cancellation execution financial preflight for a saved plan | Implemented locally, API only; simulation eligibility, no execution authority |
@@ -68,12 +68,12 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Category builder: copy a day's races to another day, bulk edit with before/after preview | Implemented; automated tests in CI |
 | Same-rider suggestions across orders, linked only when the organizer confirms | Implemented; automated tests in CI |
 | Organizer CSV exports: entries and a simulated ledger, without contact details | Implemented; automated tests in CI |
-| Registration lookup (name, email, team, order number, check-in code) and audited corrections of rider details with a required reason | Implemented; automated tests in CI. Recording the authenticated actor for each correction remains Planned |
+| Registration lookup (name, email, team, order number, check-in code) and audited corrections of rider details with a required reason | Implemented; automated tests in CI. Each new correction records the signed-in organizer |
 | Coupon codes: percentage or fixed, validity window, eligible categories, total cap held atomically, one per order and never stacked on another discount | Implemented; automated tests in CI. Per-rider limits Implemented (same-rider rule); combinability Planned |
 | Per-category rider questions, waiver addenda, and bib ranges | Implemented; automated tests in CI |
 | QR check-in code on the rider confirmation; camera scanning at check-in in Chrome and Edge | Implemented; live camera scan not yet checked |
 | Change resolution workflow for paid entries affected by a published change | Implemented; automated tests in CI |
-| Live payments and refunds with real money, an agreed timer format | Planned |
+| Live payments and refunds with real money | Planned |
 
 <details>
 <summary>More screens: category editor, rider preview, publishing, rider checkout, registrations, phone layouts</summary>
@@ -142,7 +142,7 @@ Open `http://127.0.0.1:5273/`, sign in with your email, and select **Load Berkel
 
 ## How it is meant to work
 
-The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented with **simulated** payment; real payment confirmation and the race-day scan are planned. In the organizer workflow, the "Before registration opens" steps are implemented except category questions; the exception queue, check-in, start-list snapshots, and sample timer export are implemented; QR scanning, an agreed timer format, and the after-event stages are planned.
+The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented with **simulated** payment; real payment confirmation and the race-day scan are planned. In the organizer workflow, the "Before registration opens" steps are implemented except category questions; the exception queue, check-in, start-list snapshots, and sample timer export are implemented; QR scanning and the after-event stages are planned.
 
 ### 1. Rider registration journey
 
@@ -268,14 +268,14 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | Organizer registration tools: waitlists, transfers and withdrawals, same-rider linking, entries and ledger CSV exports | Implemented November 14, 2026; automated tests in CI. See [checkout](roadmap.md#rider-checkout) and [check-in](roadmap.md#check-in) in roadmap.md |
 | Demo purchase flow fixtures (fake data) | Implemented November 14, 2026; used by the rider demo |
 | Timer export review packet | Implemented November 14, 2026; not yet sent. See [docs/timer-export-review.md](docs/timer-export-review.md) |
-| Phase 1 usability test kit | Implemented November 14, 2026; no sessions run yet. See [docs/usability/](docs/usability/README.md) |
+| Phase 1 usability test kit | Implemented November 14, 2026. The facilitated owner walkthrough is complete. Fresh participant sessions are deferred. See [docs/usability/](docs/usability/README.md) |
 | Phase 0 discovery kit | Implemented November 14, 2026. One interview done ([D01](docs/discovery/interviews/D01.md)); no measurements yet; USAC questions sent November 15, 2026, no answer yet. See [docs/discovery/](docs/discovery/README.md) |
 | Stack | Chosen for the current local build only: [ADR 0001](docs/decisions/0001-stack-for-category-builder-milestone.md) |
 | Email sign-in, organizations, and organizer roles | Implemented (Phase 2, Clerk free plan), including ownership hand-over, a role history with who made each change, and 14-day invitations an owner can resend by email (test-only: recorded locally, or sent through the Resend to listed test recipients); organizer MFA and sensitive-action re-verification are the final pre-launch security gate |
 | My registrations and explicit guardian access | Implemented locally: up to two guardians through private invitation APIs and acknowledged acceptance on My registrations; read-only junior viewing. Private guardian removal APIs require a reason and acknowledgement. Guardian invitation creation/cancellation, removal and history controls are available on My registrations. Support-approved age-18 claim API is Implemented locally and disabled by default until explicitly configured; same-name former-guardian junior checkout is blocked for support review. Claim screens, guardian email and disputed restoration remain Planned |
 | Real payments, USA Cycling checks, MFA, hosting | Not built |
 
-**Next milestone: Phase 0 exit gate, plus the rest of Phase 1.** Phase 0 shows whether a recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup; if not, the roadmap says to stop the build. Every Phase 1 deliverable is built. What remains for the Phase 1 exit gate is running the usability tests with the [test kit](docs/usability/README.md) and getting the timer to accept the sample export format. The first actions are in [roadmap.md](roadmap.md#next-actions).
+**Next milestone: Phase 0 exit gate, plus the rest of Phase 1.** Phase 0 shows whether a recurring volunteer workload problem exists and whether a custom product has a credible advantage over improving the current setup; if not, the roadmap says to stop the build. Every Phase 1 deliverable is built. What remains for the Phase 1 exit gate is running the usability tests with the [test kit](docs/usability/README.md). The first actions are in [roadmap.md](roadmap.md#next-actions).
 
 ## Documentation
 

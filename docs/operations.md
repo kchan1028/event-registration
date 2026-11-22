@@ -32,7 +32,7 @@ These map to the roles in [roadmap.md](../roadmap.md#responsibilities). They are
 | Technical lead | Fixes system faults, restores from backup, rotates secrets, approves changes during a freeze |
 | Registration lead | Works the exception queue; decides rider-level corrections; trains check-in volunteers |
 | Treasurer | Refund approvals, payout checks, reconciliation against provider statements |
-| Timer / officials liaison | Confirms start-list snapshots and exports; reports race-day field changes back |
+| Timer / officials liaison, where applicable | Confirms start-list snapshots and exports; reports race-day field changes back |
 | Event owner (organizer role) | Publishes the event's support contact; transfers ownership to a successor |
 
 Each event must publish, before registration opens:
@@ -41,7 +41,7 @@ Each event must publish, before registration opens:
 - a backup contact if the support owner cannot respond; and
 - where volunteers find the printable fallback and the event runbook.
 
-A volunteer should never have to guess who handles a race-morning failure.
+A volunteer should never have to guess who handles a race-morning failure. The [support coverage rehearsal](testing/test-plan.md#support-coverage-rehearsal) uses fictional assignments by owner decision on November 19, 2026. Named coverage and funding remain open.
 
 ## Operating calendar for an event
 
@@ -61,25 +61,27 @@ An event moves through these stages in order. The two freezes protect the busies
 | Stage | What happens | Exit check |
 |---|---|---|
 | Setup and publishing checks | Organizer configures categories, limits, prices, bib ranges, and questions; publishing checks run | Preview of every day reviewed by the registration lead |
-| Pre-opening freeze (proposed: 48 hours) | No code or configuration changes except fixes approved by the technical lead | Support owner confirmed; monitoring and alerts tested |
+| Pre-opening rehearsal freeze (starts 48 hours before registration opens) | No code or configuration changes except fixes approved by the technical lead | Support owner confirmed; monitoring and alerts tested |
 | Registration opening | Support owner watches payments, capacity, and email for the first hours | No stuck reservations, failed payment notifications, or bounced confirmations left unexplained |
 | Open registration period | Exception queue worked at least every few days; corrections logged with a reason | Queue has no item older than the agreed limit |
-| Race-week freeze (proposed: from 72 hours before the first start) | Changes limited to rider-level corrections and approved fixes | Start-list snapshot sent to the timer; fallback roster printed |
+| Race-week rehearsal freeze (starts 72 hours before the first start) | Changes limited to rider-level corrections and approved fixes | Start-list snapshot sent to the timer; fallback roster printed |
 | Race morning | Check-in, bib assignment, field changes, timer updates | Every change after the snapshot appears in the change report |
 | Close-out | Refunds settled, ledger reconciled with provider statements, exports archived | Treasurer signs off reconciliation |
 | Handoff and review | Lessons recorded; template cloned for next year; ownership transferred if needed | A successor can open the event and its runbook without the original owner's credentials |
 
-Freeze lengths are proposals for the pilot organizer to confirm.
+The project owner approved both freeze start times for Phase 3 rehearsal on November 19, 2026. Before scheduling the exercise, the pilot organizer and registration lead confirm each end time and record both windows and the event time zone in the event runbook. Include the registration-opening exercise in the first window and the race-morning desk exercise in the second. Live freeze acceptance remains with the pilot organizer.
 
 ## Incident severity
 
 An incident is anything that stops riders registering, stops volunteers checking riders in, or makes money, capacity, or entry records wrong.
 
-| Severity | Examples | Response target (proposed) |
+| Severity | Examples | Initial response |
 |---|---|---|
-| Critical | Oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, private data exposed, checkout down during registration opening, check-in unusable on race morning | Support owner engaged immediately; technical lead paged; registration paused if records are being corrupted |
-| High | Payment notifications delayed, confirmation emails not sending, timer export rejected, a role sees data it should not | Same day, or within the hour on opening day or race morning |
-| Normal | A single rider's record wrong, a confusing message, a slow report | Next working session |
+| Critical | Oversold place, duplicate charge, lost confirmed entry, unexplained ledger difference, private data exposed, checkout down during registration opening, check-in unusable on race morning | For the approved rehearsal windows, contact the support owner and technical lead immediately on detection. Pause affected registration if records are being corrupted. Out-of-window targets remain open. |
+| High | Payment notifications delayed, confirmation emails not sending, required start-list handoff fails, a role sees data it should not | Within one hour of detection or report during the approved rehearsal windows. Same-day response outside those windows remains proposed. |
+| Normal | A single rider's record wrong, a confusing message, a slow report | Next working session (proposed) |
+
+The project owner approved the critical and high initial-response targets for the two rehearsal windows on November 19, 2026. Initial response means acknowledging the incident, identifying the accountable role and recording the first action or escalation. It does not end the safe-reopening clock.
 
 The critical examples match the integrity failures that [product.md](../product.md#success-measures) says must be zero, and any unresolved critical defect blocks the pilot ([roadmap.md](../roadmap.md#critical-risks-and-decision-points)).
 
@@ -91,9 +93,17 @@ The critical examples match the integrity failures that [product.md](../product.
 4. **Reconcile.** Before reopening, compare entries, capacity counts, and the ledger against the payment provider's records. Correct with an audit reason; never edit history.
 5. **Record it.** Write a short incident note: what happened, who was affected, what was done, and what will prevent it. Link it from the event's review.
 
+## Rehearsal alert routing
+
+The project owner approved this routing for the pilot rehearsal on November 19, 2026. Use fictional role assignments. During registration opening and race morning, send the initial alert to the support primary, who is the initial support owner. For a critical incident, contact the technical lead immediately at detection as well. Do not wait for the primary to acknowledge.
+
+Before the exercise, the facilitator records the delay between each initial alert and its deputy escalation cue. The facilitator tracks acknowledgements in the shared incident timeline. If the primary has not acknowledged at the cue, contact the deputy. The deputy records acknowledgement, and the facilitator records the acceptance time as the handoff time and notifies the primary. The facilitator, primary and deputy can see the acknowledgement and the current owner. An acknowledgement before the cue cancels the deputy escalation. If the primary acknowledges after the cue, continue the escalation and record a single transfer of ownership when the deputy accepts.
+
+This decision covers rehearsal routing. Named coverage, live routing, alert tooling and out-of-window timings remain open under [Open questions](#open-questions). Use the [support coverage rehearsal](testing/test-plan.md#support-coverage-rehearsal) to exercise on-time, missing and late primary acknowledgements.
+
 ## Monitoring and alerts
 
-Proposed signals, from [product.md](../product.md#quality-requirements). Tools are not chosen; see the hosting, backups, and monitoring entry in the [decision backlog](decisions/README.md#decision-backlog).
+Proposed live signals and recipients, from [product.md](../product.md#quality-requirements). For the rehearsal, use the approved routing above. Tools are not chosen; see the hosting, backups, and monitoring entry in the [decision backlog](decisions/README.md#decision-backlog).
 
 | Signal | Why | Alert goes to |
 |---|---|---|
@@ -109,18 +119,18 @@ Alerts must not include card data, emergency contacts, or other restricted field
 
 Implemented in the local build (November 15, 2026): `GET /api/health` runs a database query and answers 503 when it fails, so a platform health check (Render's health-check path, per [ADR 0004](decisions/0004-hosted-stack-and-database.md)) can take an instance out of service. On `SIGTERM` the server stops taking new requests, finishes the ones in progress, and closes its database connections. The [local database health check](testing/test-plan.md#local-database-health-check) verifies the outage and return to HTTP 200 without restarting the application. No platform is configured yet. The planned Render setup is in [docs/runbooks/deploy-render.md](runbooks/deploy-render.md).
 
-### Proposed pilot alert routing
+### Proposed pilot signal checks
 
-Evaluate one delivered health alert and three manual checks. Platform access, staffing and timing need approval before hosted rehearsal. Assign accountable operators while preserving existing application and provider permissions.
+These checks say how a signal is noticed. Who is contacted, when the deputy is called and who sees the acknowledgement follow the approved [rehearsal alert routing](#rehearsal-alert-routing). Evaluate one delivered health alert and three manual checks. Platform access, staffing and timing need approval before hosted rehearsal. Assign accountable operators while preserving existing application and provider permissions.
 
 | Signal | Proposed observation and timing | Accountable role |
 |---|---|---|
-| Service unhealthy | **Delivered alert candidate.** Evaluate Render failure notifications against the existing health-check path. Choose the channel and prove delivery to the primary. If the primary has not acknowledged within five minutes, the support owner alerts the deputy. This interval is proposed for the pilot organizer to confirm. The endpoint checks database connectivity. Verify checkout, desk and dependencies separately before declaring them available. [Render health checks](https://render.com/docs/health-checks), [Render notifications](https://render.com/docs/notifications) | Technical lead and deputy receive; support owner coordinates the desk |
+| Service unhealthy | **Delivered alert candidate.** Evaluate Render failure notifications against the existing health-check path. Choose the channel and prove delivery to the support primary, plus the technical lead at detection for a critical incident. Escalate at the facilitator’s recorded cue. The endpoint checks database connectivity. Verify checkout, desk and dependencies separately before declaring them available. [Render health checks](https://render.com/docs/health-checks), [Render notifications](https://render.com/docs/notifications) | Support primary receives and owns until a deputy accepts; technical lead also receives a critical incident |
 | Payment notification missing or delayed | **Manual.** On a report and on a proposed schedule of shift start and every five minutes during critical windows, review failed or pending deliveries in Stripe Workbench. Match the provider reference with the CycleReg reconciliation export. Escalate an unmatched record before requesting any provider event resend. [Stripe event deliveries](https://docs.stripe.com/webhooks#view-event-deliveries) | Technical lead with approved Stripe access; treasurer or other authorized owner or finance account runs the export. Support owner coordinates |
 | Organizer invitation delivery failure | **Manual.** On a controlled test send or report, an owner checks Team for the application send status. An authorized provider operator checks the test recipient and timestamp in Resend. A successful API send only means acceptance for delivery. A local rejection, such as an unlisted recipient, may have no provider record. Clerk sign-in email follows its own provider rehearsal. [Resend email event types](https://resend.com/docs/webhooks/event-types#email-events) | Organization owner and approved Resend operator; support owner coordinates |
 | Recovery coverage missing | **Manual.** Before each critical window and during restore, check the available point and retention window against the approved recovery plan. Escalate a missing or unusable point. Wait for a suitable point if needed and count the wait. [Render Postgres recovery and backups](https://render.com/docs/postgresql-backups) | Technical lead with approved database access |
 
-Use fictional records. Limit messages to environment, signal, observation time and accountable role. Keep rider details, payment references and provider payloads in their approved restricted views. For a delivered alert, record receipt and acknowledgement and exercise the deputy route. For a manual check, record who observed it, when, and how they escalated. Native notification routing, automated payment and invitation alerts, rider email, backup job alerts, checkout error rate, expired holds and sign-in spikes remain open.
+Use fictional records. Limit messages to environment, signal, observation time and accountable role. Keep rider details, payment references and provider payloads in their approved restricted views. For a delivered alert, record receipt and acknowledgement in the shared incident timeline and exercise the deputy route at the cue. For a manual check, record who observed it, when, and how they escalated. Native notification routing, automated payment and invitation alerts, rider email, backup job alerts, checkout error rate, expired holds and sign-in spikes remain open.
 
 ## Backups and recovery
 
@@ -152,11 +162,11 @@ The database recovery gap is the time between the latest recovered committed cha
 - Every person uses their own account (organizers with MFA enforced at the final pre-launch security gate, before the live pilot), including on shared check-in tablets ([product.md](../product.md#sign-in-and-account-security)).
 - Give each role the least access its job needs. Remove access when a volunteer's event ends.
 - Secrets live in the hosting platform's secret store, never in the repository or in chat. Rotate them when someone with access leaves, and after any suspected exposure.
-- Access to restricted data (emergency contacts, license numbers, payment references, audit history) is logged.
+- Access to restricted data (emergency contacts, license numbers, payment references, audit history) is logged. Looking up one emergency contact records the signed-in account, event, order, and time, and does not store the contact.
 
 ## Rider data requests
 
-Retention and deletion periods are not set; they are in the [decision backlog](decisions/README.md#decision-backlog) and must be decided before the pilot. Until then:
+The emergency-contact lookup record has an approved retention of 365 days, not yet enforced. Other retention periods and every deletion procedure are not set; they are in the [decision backlog](decisions/README.md#decision-backlog) and must be decided before the pilot. Until then:
 
 - route requests to see, correct, or delete rider data to the event owner and the support owner;
 - keep waiver and financial records that the federation or tax rules may require, even when other data is deleted; and
@@ -177,10 +187,10 @@ The [readiness checklist](research/prelaunch-readiness.md#race-day-readiness-che
 ## Open questions
 
 1. Who funds and staffs support after launch? ([product.md](../product.md#open-decisions), question 3)
-2. What freeze lengths and response targets does the pilot organizer accept?
+2. Freeze starts and critical/high initial-response targets are approved for rehearsal. Event-specific window end times, live operating acceptance and actual coverage remain open under [Operating calendar](#operating-calendar-for-an-event) and [Incident severity](#incident-severity).
 3. Recovery targets approved November 19, 2026. Hosted proof and operator acceptance remain open under [Backups and recovery](#backups-and-recovery).
 4. Which monitoring and alerting tools fit a small volunteer team? (hosting ADR)
-5. What retention periods apply to waivers, financial records, and everything else?
+5. What retention periods apply to waivers, financial records, and everything else except the emergency-contact lookup record (365 days, decided November 22, 2026)?
 
 ### November 16, 2026 research follow-up
 
@@ -189,9 +199,9 @@ Unresolved operating decisions and validation steps are listed below. The named 
 | Existing question | Owner / why it matters | Provisional assumption, blocked work and revisit |
 |---|---|---|
 | 1, support coverage | Project owner; named primary/deputy needed for independent operation | Assume no committed coverage. Live event support remains blocked; revisit before hosted pilot rehearsal. Includes responsibility for paid-but-not-ready follow-up and measurement review. |
-| 2, freeze/response targets | Product owner with registration lead; race-morning disruption needs an agreed response | Existing proposed values are not approved. Rehearsal design proceeds; accepted incident response remains blocked until organizer review before rehearsal. |
+| 2, freeze/response targets | Product owner with registration lead; race-morning disruption needs an agreed response | Rehearsal freeze starts and critical/high response targets approved November 19, 2026. Rehearse both windows. Confirm event-specific window end times before rehearsal. Live acceptance, named staffing and out-of-window response targets remain open. |
 | 3, recovery measurement | Technical lead and treasurer, unassigned; restore must preserve money, capacity and entries | Targets approved November 19, 2026. Hosted measurement and recovery sign-off remain open. Run the hosted rehearsal once its environment and operators are approved. |
-| 4, monitoring/tools | Technical/support lead, unassigned; failures need an accountable receiver | No monitoring service, alert thresholds or after-hours rota accepted. Synthetic fault cases proceed; hosted operational sign-off blocked pending routing/tool review. |
-| 5, retention | Project owner/privacy responsibility unassigned; waivers, financial records, paper rosters and opaque telemetry keys remain personal data | No retention period or analytics collection approved. Synthetic measurements proceed; real-data collection blocked until access/retention approval before pilot. |
+| 4, monitoring/tools | Technical/support lead, unassigned; failures need an accountable receiver | [Rehearsal routing](#rehearsal-alert-routing) is approved. Live recipients, monitoring service, alert thresholds and after-hours coverage remain open. Synthetic fault cases can proceed. Revisit live routing and tooling before hosted operational sign-off. |
+| 5, retention | Project owner/privacy responsibility unassigned; waivers, financial records, paper rosters and opaque telemetry keys remain personal data | Only the emergency-contact lookup record has an approved period (365 days, November 22, 2026; enforcement Planned). No other retention period or analytics collection approved. Synthetic measurements proceed; real-data collection blocked until access/retention approval before pilot. |
 
-Related decisions remain in [product.md decisions 4–6 and 8–10](../product.md#open-decisions), [ADR 0005](decisions/0005-merchant-and-settlement-model.md), [federation questions](usac-questions.md) and [timer review](timer-export-review.md). The new research does not resolve merchant liability, event-year waiver/licensing approval, timer acknowledgement or safe device/accessibility arrangements. Revisit those existing records before the corresponding live-money, sanctioned-event or physical rehearsal gate.
+Related decisions remain in [product.md decisions 4–6 and 8–10](../product.md#open-decisions), [ADR 0005](decisions/0005-merchant-and-settlement-model.md), [federation questions](usac-questions.md) and [timer review](timer-export-review.md). The new research does not resolve merchant liability, event-year waiver/licensing approval, timer acknowledgement where applicable or safe device/accessibility arrangements. Revisit those existing records before the corresponding live-money, sanctioned-event or physical rehearsal gate.

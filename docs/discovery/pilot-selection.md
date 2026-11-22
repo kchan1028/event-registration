@@ -14,7 +14,7 @@ Choosing the event now does not commit anyone to it. It tests whether a realisti
 | Date | Proposed: at least 4 months after Phase 3 is expected to finish (adjust with the organizer) | Date that forces the schedule |
 | Organizer | Willing, available, and able to give honest feedback | Organizer who expects the developer to run everything |
 | Fallback | Organizer can switch back to the current provider if the pilot is stopped before opening | No fallback |
-| Timer | Willing to test exports before the event | Timer not reachable before race day |
+| Start-list handoff | Staff can rehearse retrieving the current list and identifying revisions | No one owns the handoff |
 
 ## Shortlist
 
@@ -30,4 +30,4 @@ These names go in the [decision memo](decision-memo.md#team-and-owners) once agr
 |---|---|---|
 | Accountable organizer | Owns the event's registration decisions and signs off on Phase 3 rehearsal | Not yet agreed |
 | Support owner | Answers registration and check-in failures on opening day and race morning; follows the [operations model](../operations.md) | Not yet agreed |
-| Timer | Accepts the start-list and results exports | Not yet agreed |
+| Staff using start lists | Can retrieve current and locked start lists and identify revisions | Pending staff rehearsal |

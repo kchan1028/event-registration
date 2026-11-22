@@ -25,6 +25,18 @@ export interface EligibilityResult {
 
 const RANK: Record<EligibilityStatus, number> = { eligible: 2, needs_review: 1, ineligible: 0 };
 
+/** Sole review reason when a class-specific field cannot match an unspecified competition class. */
+export const COMPETITION_CLASS_UNKNOWN = 'competition class unknown';
+
+/**
+ * Matching races hides this category only because competition class was left unspecified.
+ * Any other unknown, an ineligible path, or a cleared result is not this case.
+ * Unspecified class is never treated as a match.
+ */
+export function excludedBecauseClassUnspecified(result: Pick<EligibilityResult, 'status' | 'reasons'> | null | undefined): boolean {
+  return result?.status === 'needs_review' && result.reasons.length === 1 && result.reasons[0] === COMPETITION_CLASS_UNKNOWN;
+}
+
 export function licenseLabel(c: LicenseCategory): string {
   return c === 'PRO' ? 'Pro' : `Cat ${c}`;
 }
@@ -52,7 +64,7 @@ export function evaluatePath(path: EligibilityPath, rider: RiderProfile): { stat
     }
   }
   if (path.genderClass !== 'any') {
-    if (rider.competitionClass === null) unknowns.push('competition class unknown');
+    if (rider.competitionClass === null) unknowns.push(COMPETITION_CLASS_UNKNOWN);
     else if (rider.competitionClass === 'other') unknowns.push('competition class needs organizer confirmation');
     else if (rider.competitionClass !== path.genderClass) fails.push(`field is for ${path.genderClass}`);
   }

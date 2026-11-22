@@ -94,7 +94,7 @@ These come from [product.md](../product.md) and apply whatever stack is chosen.
 | Idempotent payment handling with authoritative confirmation | Retries and duplicate notifications must not create duplicate orders, charges, or entries | Money and reporting; acceptance criteria |
 | Versioned configuration and price snapshots | Paid entries keep the rules and price they were sold under | Changes after registration opens |
 | Independent entry, payment, and readiness states | Paying does not clear a rider to race | Data model |
-| Server-enforced roles and least-privilege data access | Volunteers see only what their job needs; emergency contacts stay restricted | Quality requirements |
+| Server-enforced roles and least-privilege data access | Volunteers see only what their job needs. Any organizer role may look up one emergency contact; lists and exports omit it | Quality requirements |
 | Append-only audit history | Money, category, waiver, capacity, and permission changes stay traceable | Quality requirements |
 | Hosted payment flow, no stored card data | Keeps card data out of the system entirely | Money and reporting |
 | Mobile-first, accessible interface | Riders use phones; volunteers use tablets outdoors | Quality requirements |
@@ -157,7 +157,7 @@ This diagram shows logical parts, not services to deploy separately. Public sche
 
 - **Public:** published schedules, category descriptions, prices, start times, and, only if the organizer turns it on, a participant list without sensitive fields.
 - **Rider-private:** profile, guardian relationships, orders, receipts, waiver status. Visible to the rider and to organizer roles that need it.
-- **Restricted:** emergency contacts, license numbers, payment references, audit history. Limited to named roles.
+- **Restricted:** emergency contacts, license numbers, payment references, audit history. Any organizer role may look up one registration's emergency contact for an event they can access. Each lookup is recorded without the contact. Lists, exports, and organizer order responses still omit it. A rider or guardian still receives their own registration. License numbers, payment references, and other audit history stay with the roles that need them.
 - **Never stored:** card numbers and security codes.
 
 Private pages must not be indexable by search engines. See [content-guide.md](content-guide.md#keep-private-data-out-of-public-pages).
@@ -174,7 +174,7 @@ Each of these needs an ADR before implementation depends on it. Options and trad
 6. Authentication for riders, guardians, and organizers: decided in [ADR 0003](decisions/0003-sign-in-and-mfa.md) (Clerk; email sign-in for everyone, MFA for organizer roles before the live pilot, SMS off)
 7. Transactional email provider: decided in [ADR 0007](decisions/0007-transactional-email-resend.md) (Resend; organizer invitation emails implemented, test-only)
 8. Timer export formats
-9. Data retention and deletion periods
+9. Data retention and deletion periods (one decided: 365 days for the emergency-contact lookup record)
 
 ## How this document changes
 

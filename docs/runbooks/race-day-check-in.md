@@ -14,7 +14,7 @@ Status: Implemented documentation for local fictional-data rehearsals, November 
 |---|---|
 | Event link and race day | Unassigned |
 | Registration lead and deputy; how to reach them | Unassigned |
-| Support owner and deputy; how to reach them | Unassigned |
+| Support owner and deputy for registration opening and race morning; coverage times and how to reach them | Unassigned |
 | Timer/officials liaison; how changes reach them | Unassigned |
 | Finance contact for payment/refund questions | Unassigned |
 | Latest printed roster time and storage location | Unassigned |
@@ -34,6 +34,8 @@ The [server role table](../../src/shared/roles.ts) is authoritative. Roles are s
 | Finance | Orders, ledger export and refunds | Check-in, entry changes or publishing require another granted role |
 | Owner | All existing organizer permissions; assign access and accountable leads | A role does not create a federation approval or an accepted live-payment/contingency process |
 
+Any of these roles may look up one registration's emergency contact. That lookup is a separate action. It is not part of the default check-in card, roster, or export.
+
 ## At the desk: check-in volunteer
 
 1. Check the event and selected race day before each shift. A rider's races on another day do not establish an entry today.
@@ -47,6 +49,8 @@ The [server role table](../../src/shared/roles.ts) is authoritative. Roles are s
 For an incorrect individual number, use **Change bib**, enter the new number and reason, and **Preview bib change**. Check the affected days/entries and proposed number. A checked-in correction needs the displayed acknowledgement. Apply only the reviewed change; a stale/conflicting preview needs a new review. Before applying, recover the old physical bib and confirm the replacement is in desk inventory: changing the number can release the old assignment for reuse. If the old bib cannot be recovered, stop and ask the registration lead to control that number before any reuse; do not leave two physical bibs in circulation. Tell the timer/officials liaison about an issued-number change. Saved start-list revisions do not prove that the timer received it.
 
 For a mistaken check-in, use **Undo check-in** and record the reason. Before confirming, recover any physical bib already handed out. Undo normally releases its number back to the available pool; a number used by another checked-in day can remain reserved. If the physical bib is missing, stop and escalate to the registration lead before undo/reuse so the same number cannot be handed to another rider. Recheck the current recorded assignment before any further issue.
+
+If a check-in attempt changes **Ready to race** to **Not ready**, read the current blockers and refer the rider.
 
 If the desk cannot confirm check-in, stop handing out bibs, reconnect and search for the same rider and race day. Use the check-in code to narrow the search to one rider. The warning stays on the current desk page until that lookup succeeds. If the page reloads, the desk clears the warning and search and can reopen on the first race day. Reselect the original day and look up the rider by check-in code before handing over a bib or retrying. If lookup confirms check-in, use the displayed bib and time to verify the record and check that the physical bib has not already been handed out. If lookup confirms no check-in was recorded, retry only when the rider is ready. Escalate any conflict to the registration lead.
 
@@ -85,9 +89,9 @@ The printout identifies its limits as **Reference only**, labels readiness and b
 
 Use the printed roster to identify its snapshot time and the affected riders for the registration lead. A paper note does not update the application. The blank rows and exception checklist are recording aids; they do not authorize new offline entries, capacity exceptions, waiver clearance or payment collection. The lead must use an approved contingency process before authorizing any paper bib issuance. That process and paper reconciliation remain Proposed in [operations](../operations.md#handling-an-incident); no live fallback is approved by this guide. If none is accepted, pause affected issuance and escalate.
 
-When connectivity returns, the registration lead coordinates reconciliation before ordinary issuance resumes: compare paper notes with current entries, readiness, recorded check-ins and bibs; investigate conflicts before replaying an action; have the timer liaison acknowledge changes. Do not silently replace accepted prices, payment records or history. No offline synchronization or dedicated paper-import workflow exists. Rehearse this with fictional data before claiming continuity.
+When connectivity returns, the registration lead coordinates reconciliation before ordinary issuance resumes: compare paper notes with current entries, readiness, recorded check-ins and bibs; investigate conflicts before replaying an action; have the timer liaison acknowledge changes where applicable. Do not silently replace accepted prices, payment records or history. No offline synchronization or dedicated paper-import workflow exists. Rehearse this with fictional data before claiming continuity.
 
-Keep printed sheets controlled at the desk, collect them at shift handoff, and give them to the accountable owner for reconciliation and approved retention. Do not photograph or upload rider sheets into public issues. Real-data retention and restricted emergency-contact access remain unresolved; this guide does not invent either policy.
+Keep printed sheets controlled at the desk, collect them at shift handoff, and give them to the accountable owner for reconciliation and approved retention. Do not photograph or upload rider sheets into public issues. On screen, any organizer role may look up one registration's emergency contact from check-in, Registrations, or start lists. Hide it when finished. Each lookup is recorded with the account, event, order, and time, and that record does not store the name or phone. The printed roster still has no emergency contact. A paper copy of a contact is not a defined process, and real-data retention of the contact remains unresolved. The lookup record is to be kept 365 days, and that period is not yet enforced. This guide does not invent either policy.
 
 ### Reconcile a reference-only outage
 
