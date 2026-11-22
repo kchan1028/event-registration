@@ -226,7 +226,7 @@ describe('emergency contact lookup', () => {
       expect(staff.body).toContain('Blank phone must not clear the contact');
     }
     const after = await app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: riderHeaders });
-    expect(after.body).toContain(mixedReason);
+    for (const reason of ['Blank phone must not clear the contact', 'Rider called with a new contact phone', mixedReason]) expect(after.body).toContain(reason);
     expect(after.body).toContain(nextPhone);
     expect((await staffList(owner)).body).not.toContain(nextPhone);
     expect((await lookupStatus(app, owner, eventId, orderId))).toBe(200);
