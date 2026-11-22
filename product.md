@@ -48,7 +48,7 @@ Compete on measured volunteer time saved. Match the practical flexibility organi
 - Templates cover road race, criterium, and a two-day weekend. Copy a previous event without copying participants, payments, or signatures.
 - Configure category labels, age and license requirements, distances, start times, field limits, opening/closing times, and fees.
 - Offer individual-day entries and a weekend bundle. Show exact contents and one transparent total before payment.
-- Flag conflicting schedules and incomplete configuration for organizer review. Publishing requires a preview and checklist. It publishes only the saved draft and live version that were reviewed: if either changed, or the request does not say which were reviewed, it is refused until the organizer reviews again. Warning and impact acknowledgements never carry over to another draft.
+- Flag conflicting schedules and incomplete configuration for organizer review. Publishing requires a preview and checklist. An organizer's publish goes through only for the saved draft and live version that were reviewed: if either changed, or the request does not say which were reviewed, it is refused until the organizer reviews again. The screen reviews the draft it shows, waits until that draft is saved and checked, and offers to save again or reload when it cannot be. Warning and impact acknowledgements never carry over to another draft.
 - Track the year and source of race requirements so last year's rules are not silently treated as current.
 
 ### 1a. Road race and criterium category builder — P0
@@ -920,7 +920,9 @@ The owner was asked "Keep the wider reason rule? You approved it for changed wai
 
 ### Impact acknowledgement scope
 
-Open, raised November 22, 2026; owner: project owner. Should the publish impact acknowledgement cover the affected categories, or every affected rider? It matters because a rider can enter a changed category during review and be published under an acknowledgement that never showed them ([#370](https://github.com/kchan1028/event-registration/issues/370)). Provisional state, not an owner decision: the acknowledgement covers the reviewed draft and live version only. Binding it to riders would refuse a publish whenever anyone enters a changed category during review. Publishing and every other change can proceed; only the #370 fix waits. Revisit when the owner answers or before Phase 2 is marked complete.
+Answered November 22, 2026 (raised the same day); owner: project owner. The question was whether the publish impact acknowledgement should cover the affected categories or every affected rider. It matters because a rider can enter a changed category during review and be published under an acknowledgement that never showed them ([#370](https://github.com/kchan1028/event-registration/issues/370)).
+
+The owner was asked "Should the impact acknowledgement cover each affected category, or every affected rider? This decides how #370 gets fixed. Covering every rider would refuse your publish whenever anyone enters a changed category during your review, so I recommend covering categories." and answered "leave it alone". Reading, not a broader decision: the acknowledgement stays as it is, covering the reviewed draft and live version only, and #370 stays open and unfixed. Ask the owner again before changing that or closing #370.
 
 ### Waitlist offer status retry
 

@@ -220,7 +220,7 @@ Run the waiver cases in `tests/auth.test.ts` (publisher; required, ignored, malf
 
 ### Publish review binding
 
-Run the reviewed-draft cases in `tests/auth.test.ts`: an older draft, another live version, a missing or malformed review, refusal before any acknowledgement, replay, and two simultaneous publishes. Run `e2e/organizer.spec.ts` for a first and a later publish after a draft was saved elsewhere, with acknowledgements cleared on reload. Publishing is shared test setup, so a change to its request also runs every API file and browser spec that publishes, and the [local restore rehearsal](../runbooks/local-backup-restore.md), whose script publishes.
+Run the reviewed-draft cases in `tests/auth.test.ts`: an older draft, another live version, a missing or malformed review, refusal before any acknowledgement, replay, and two simultaneous publishes. Run `e2e/organizer.spec.ts` for a first and a later publish after a draft was saved elsewhere, with a warning acknowledgement cleared on reload; a reply carrying another client's newer draft; an edit put back before autosave; a failed autosave and Save again; and keyboard focus after each recovery. Publishing is shared test setup, so a change to its request also runs every API file and browser spec that publishes, and the [local restore rehearsal](../runbooks/local-backup-restore.md), whose script publishes.
 
 ### Waiver acceptance evidence
 

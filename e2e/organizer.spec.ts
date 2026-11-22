@@ -266,6 +266,7 @@ test('republishing waits for the comparison, and a reason never moves to another
   const retry = page.getByRole('button', { name: 'Try again' });
   expect((await retry.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await retry.click();
+  await expect(page.locator('.publish-box')).toBeFocused();
 
   const reason = page.getByLabel('Reason for the waiver change', { exact: true });
   await reason.fill('🚲🚲');
@@ -323,18 +324,19 @@ for (const published of [false, true]) {
   test(`a ${published ? 'later' : 'first'} publish never carries a review to a draft saved afterwards`, async ({ page }) => {
     const { eventId } = await (await page.request.post('/api/demo')).json();
     const url = `/api/events/${eventId}`;
-    const edit = async (change: (config: { event: { name: string }; }) => void) => {
+    const edit = async (change: (config: { event: { name: string }; ruleSet: { source: string } }) => void) => {
       const { config, revision } = await (await page.request.get(url)).json();
       change(config);
       expect((await page.request.put(`${url}/config`, { data: { revision, config } })).ok()).toBe(true);
     };
     if (published) expect((await publishReviewed(page.request, url, { acknowledgeWarnings: true })).ok()).toBe(true);
-    await edit((config) => void (config.event.name = 'Reviewed draft A'));
+    // A missing rules source is a warning, so the acknowledgement is always there to check.
+    await edit((config) => Object.assign(config, { event: { ...config.event, name: 'Reviewed draft A' }, ruleSet: { ...config.ruleSet, source: '' } }));
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/#/events/${eventId}/publish`);
     const button = page.getByRole('button', { name: `Publish version ${published ? 2 : 1}` });
-    const ack = page.getByLabel(/I have reviewed the/);
-    if (await ack.count()) await ack.check();
+    const ack = page.getByLabel(/I have reviewed the 1 warning/);
+    await ack.check();
     await expect(button).toBeEnabled();
 
     await edit((config) => void (config.event.name = 'Unseen draft B'));
@@ -344,16 +346,72 @@ for (const published of [false, true]) {
     expect((await (await page.request.get(url)).json()).publishedVersion).toBe(published ? 1 : null);
 
     await page.getByRole('button', { name: 'Reload event' }).click();
+    await expect(page.locator('.publish-box')).toBeFocused();
     await expect(page.locator('.topbar').getByText('Unseen draft B')).toBeVisible();
-    if (await ack.count()) {
-      await expect(ack).not.toBeChecked();
-      await ack.check();
-    }
+    await expect(ack).not.toBeChecked();
+    await ack.check();
     await button.click();
     await expect(page.locator('.publish-box').getByRole('status')).toContainText(`Published as version ${published ? 2 : 1}`);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }
+
+test('a reply showing another client\'s draft never becomes the draft this screen publishes', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  const url = `/api/events/${eventId}`;
+  expect((await publishReviewed(page.request, url, { acknowledgeWarnings: true })).ok()).toBe(true);
+  await page.goto(`/#/events/${eventId}/setup`);
+  await page.getByLabel('Event name', { exact: true }).fill('Draft A on this screen');
+  await saved(page);
+  const clear = page.getByRole('button', { name: 'Remove test entries only' });
+  await expect(clear).toBeEnabled();
+  const { config, revision } = await (await page.request.get(url)).json();
+  config.categories[0].pricing.baseCents += 1000;
+  expect((await page.request.put(`${url}/config`, { data: { revision, config } })).ok()).toBe(true);
+  // Its reply carries the other client's newer revision; the working copy on screen is still the older draft.
+  await clear.click();
+  await expect(page.getByText(/^Removed \d+ test entr/)).toBeVisible();
+  await page.getByRole('link', { name: /Review and publish/ }).first().click();
+  await expect(page.getByRole('button', { name: 'Reload event' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Publish version 2' })).toBeDisabled();
+  expect((await (await page.request.get(url)).json()).publishedVersion).toBe(1);
+});
+
+test('an edit put back before autosave, or a failed save, never strands publishing', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  const url = `/api/events/${eventId}`;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/#/events/${eventId}/setup`);
+  const name = page.getByLabel('Event name', { exact: true });
+  const original = await name.inputValue();
+  await name.fill(original + ' x');
+  await name.fill(original);
+  await page.getByRole('link', { name: /Review and publish/ }).first().click();
+  const button = page.getByRole('button', { name: 'Publish version 1' });
+  await expect(button).toBeEnabled();
+
+  let failed = false;
+  await page.route(`**${url}/config`, async (route) => {
+    if (route.request().method() === 'PUT' && !failed) {
+      failed = true;
+      return route.fulfill({ status: 503, json: { error: 'The server is busy.' } });
+    }
+    return route.continue();
+  });
+  await page.getByRole('link', { name: 'Event setup', exact: true }).click();
+  await name.fill('Saved after a retry');
+  await page.getByRole('link', { name: /Review and publish/ }).first().click();
+  await expect(page.locator('.publish-box')).toContainText('The draft was not saved: The server is busy.');
+  await expect(button).toBeDisabled();
+  const again = page.getByRole('button', { name: 'Save again' });
+  expect((await again.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await again.click();
+  await expect(page.locator('.publish-box')).toBeFocused();
+  await expect(button).toBeEnabled();
+  await button.click();
+  await expect(page.locator('.publish-box').getByRole('status')).toContainText('Published as version 1');
+  expect((await (await page.request.get(url)).json()).config.event.name).toBe('Saved after a retry');
+});
 
 test('the refund warning opens refund rules and clears once notes are saved', async ({ page }) => {
   await page.goto('/');
