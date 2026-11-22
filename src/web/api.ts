@@ -15,7 +15,7 @@ import type { WaitlistJoin, WaitlistStatus } from '../shared/waitlist';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
 import type { ChangeImpact } from '../shared/impact';
 import type { EventSummary } from '../shared/reports';
-import type { Invitation, MembershipChange, Role, ExpiredInvitationNotice, ShownInvitation } from '../shared/roles';
+import type { Invitation, MembershipChange, Role, ExpiredInvitationNotice } from '../shared/roles';
 import type { GuardianAccess, GuardianInvitation, GuardianRelationship, JuniorProfile, ReceivedGuardianInvitation, RegistrationAccess } from '../shared/juniors';
 
 /** simulated: the labeled demo button. stripe_test: Stripe hosted Checkout in test mode. */
@@ -330,7 +330,7 @@ export const api = {
   expiredInvitations: () => request<ExpiredInvitationNotice[]>('GET', '/api/rider/expired-invitations'),
   members: (orgId: string) => request<MemberList>('GET', `/api/organizations/${orgId}/members`),
   addMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role }),
-  resendInvitation: (orgId: string, email: string, role: Role, resend: ShownInvitation) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role, resend }),
+  resendInvitation: (orgId: string, email: string, role: Role, revision: string) => request<MemberList>('POST', `/api/organizations/${orgId}/invitations/resend`, { email, role, revision }),
   retryInvitation: (orgId: string, email: string, role: Role, retryAttempt: string) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role, retryAttempt }),
   removeMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members/remove`, { email, role }),
   transferOwnership: (orgId: string, email: string) => request<MemberList>('POST', `/api/organizations/${orgId}/ownership-transfer`, { email }),

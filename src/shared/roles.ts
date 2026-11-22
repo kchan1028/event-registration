@@ -66,16 +66,12 @@ export const INVITATION_DAYS = 14;
 export type MembershipAction = 'granted' | 'invited' | 'invitation_renewed' | 'invitation_accepted' | 'invitation_expired' | 'removed' | 'invitation_cancelled' | 'ownership_transferred';
 
 /** An invitation still waiting for that person's first sign-in. */
-/** The invitation as the Team screen showed it when Resend was pressed. Resend acts on that invitation only. */
-export interface ShownInvitation {
-  expiresAt: string;
-  attemptId: string | null;
-}
-
 export interface Invitation {
   email: string;
   role: Role;
   expiresAt: string;
+  /** Changes on every renewal or replacement. Resend names it. */
+  revision: string;
   /** An email from before attempts were tracked might have been sent, so there is no resend. */
   earlierEmail: boolean;
   /** The latest invitation email. `uncertain` means the provider may have accepted it. Null when none was made (seed scripts). */

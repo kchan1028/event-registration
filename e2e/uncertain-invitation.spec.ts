@@ -7,8 +7,8 @@ test('an uncertain invitation can be retried without promising extra days', asyn
   await page.route(`**/api/organizations/${organizationId}/members`, (route) => route.fulfill({
     json: {
       members: [{ accountId: 'acct_owner', email: 'organizer@example.test', role: 'owner' }],
-      invitations: [{ email: 'timer@example.test', role: 'finance', expiresAt, earlierEmail: false, lastEmail: { attemptId: 'eml_lost', status: 'uncertain', at: '2027-05-01T12:00:00.000Z' } },
-        { email: 'earlier@example.test', role: 'finance', expiresAt, earlierEmail: true, lastEmail: null }],
+      invitations: [{ email: 'timer@example.test', role: 'finance', expiresAt, revision: 'rev_lost', earlierEmail: false, lastEmail: { attemptId: 'eml_lost', status: 'uncertain', at: '2027-05-01T12:00:00.000Z' } },
+        { email: 'earlier@example.test', role: 'finance', expiresAt, revision: 'rev_earlier', earlierEmail: true, lastEmail: null }],
       history: [],
     },
   }));
@@ -57,9 +57,12 @@ test('Resend names the invitation on screen and refreshes when it has changed', 
   const resend = team.getByRole('button', { name: /^Resend invitation to resend\.stale@example\.test/ });
   await expect(resend).toBeVisible();
 
-  const sent = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/members'));
+  const { revision } = (await (await page.request.get(members)).json()).invitations.find((i: { email: string }) => i.email === invited.email);
+  const sent = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/invitations/resend'));
   await resend.click();
-  expect((await sent).status()).toBe(200);
+  const response = await sent;
+  expect(response.request().postDataJSON()).toEqual({ ...invited, revision });
+  expect(response.status()).toBe(200);
 
   expect((await page.request.post(`${members}/remove`, { data: invited })).ok()).toBe(true);
   await resend.click();

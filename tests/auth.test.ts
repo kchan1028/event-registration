@@ -138,6 +138,7 @@ describe('organizations are isolated from each other', () => {
       ['create coupon', 'POST', `/api/events/${eventId}/coupons`, { code: 'TAKEOVER', kind: 'percent', percent: 100 }],
       ['new event in their org', 'POST', `/api/organizations/${valley}/events`, { name: 'Takeover', template: 'weekend', startDate: '2027-04-24', timeZone: 'America/Los_Angeles' }],
       ['members', 'GET', `/api/organizations/${valley}/members`],
+      ['resend an invitation', 'POST', `/api/organizations/${valley}/invitations/resend`, { email: OTHER_OWNER, role: 'owner', revision: 'guess' }],
       ['grant themselves a role', 'POST', `/api/organizations/${valley}/members`, { email: OTHER_OWNER, role: 'owner' }],
     ];
     for (const [label, method, url, payload] of attempts) {
@@ -226,7 +227,7 @@ describe('organizer roles', () => {
     const invited = (await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: newcomer, role: 'check_in_volunteer' })).json() as {
       invitations: { email: string; role: string; expiresAt: string }[];
     };
-    expect(invited.invitations).toEqual([{ email: newcomer, role: 'check_in_volunteer', expiresAt: expect.any(String), earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'recorded', at: expect.any(String) } }]);
+    expect(invited.invitations).toEqual([{ email: newcomer, role: 'check_in_volunteer', expiresAt: expect.any(String), revision: expect.any(String), earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'recorded', at: expect.any(String) } }]);
     expect((await call(newcomer, 'GET', `/api/events/${eventId}/check-in`)).statusCode).toBe(200);
     const members = (await call(OWNER, 'GET', `/api/organizations/${valley}/members`)).json() as { members: { email: string }[]; invitations: unknown[] };
     expect(members.members.map((m) => m.email)).toContain(newcomer);
@@ -249,8 +250,8 @@ describe('organizer roles', () => {
     now = new Date(now.getTime() + 13 * DAY);
     const list = (await invite(renewed)).json() as { invitations: unknown[] };
     expect(list.invitations).toEqual([
-      { email: late, role: 'finance', expiresAt: new Date(Date.parse('2027-03-01T18:00:00Z') + INVITATION_DAYS * DAY).toISOString(), earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'recorded', at: '2027-03-01T18:00:00.000Z' } },
-      { email: renewed, role: 'finance', expiresAt: new Date(now.getTime() + INVITATION_DAYS * DAY).toISOString(), earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'recorded', at: now.toISOString() } },
+      { email: late, role: 'finance', expiresAt: new Date(Date.parse('2027-03-01T18:00:00Z') + INVITATION_DAYS * DAY).toISOString(), revision: expect.any(String), earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'recorded', at: '2027-03-01T18:00:00.000Z' } },
+      { email: renewed, role: 'finance', expiresAt: new Date(now.getTime() + INVITATION_DAYS * DAY).toISOString(), revision: expect.any(String), earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'recorded', at: now.toISOString() } },
     ]);
     now = new Date(now.getTime() + 2 * DAY);
     // Signing in after the invitation expired gives no role; the renewed one still works.
@@ -354,7 +355,7 @@ describe('organizer roles', () => {
       expect(first.statusCode).toBe(200);
       const opened = await listed();
       const expiresAt = opened.invitations[0].expiresAt;
-      expect(opened.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'uncertain', at: now.toISOString() } }]);
+      expect(opened.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, revision: expect.any(String), earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'uncertain', at: now.toISOString() } }]);
       expect(opened.history.filter((row) => row.email === 'treasurer@valley.test').map((row) => row.action)).toEqual(['invited']);
       let stored = await client.query<{ status: string; provider_message_id: string | null; error: string | null }>(`SELECT status, provider_message_id, error FROM email_messages ORDER BY created_at, seq`);
       expect(stored.rows).toEqual([{ status: 'uncertain', provider_message_id: null, error: 'Send outcome unknown after a timeout.' }]);
@@ -364,7 +365,7 @@ describe('organizer roles', () => {
       const recovered = await invite('treasurer@valley.test');
       expect(recovered.statusCode).toBe(200);
       const retried = await listed();
-      expect(retried.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'sent', at: now.toISOString() } }]);
+      expect(retried.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, revision: expect.any(String), earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'sent', at: now.toISOString() } }]);
       expect(retried.history.filter((row) => row.email === 'treasurer@valley.test').map((row) => row.action)).toEqual(['invited']);
       expect(calls.map((item) => item.key)).toEqual([calls[0].key, calls[0].key]);
       expect(calls[1].body).toBe(calls[0].body);
@@ -941,9 +942,10 @@ describe('organizer roles', () => {
     const url = `/api/organizations/${org.id}/members`;
     const body = { email: invited, role: 'finance' };
     const shown = (await call('POST', url, body)).json().invitations[0];
-    const stale = { ...body, resend: { expiresAt: shown.expiresAt, attemptId: shown.lastEmail.attemptId } };
+    const stale = { ...body, revision: shown.revision };
+    const resendUrl = `/api/organizations/${org.id}/invitations/resend`;
     now = new Date(now.getTime() + 1000);
-    if (change === 'renewed') await call('POST', url, stale);
+    if (change === 'renewed') expect((await call('POST', resendUrl, stale)).statusCode).toBe(200);
     else if (change === 'accepted') await call('GET', '/api/me', undefined, invited);
     else await call('POST', `${url}/remove`, body);
     if (change === 'canceled and invited again') await call('POST', url, body);
@@ -951,7 +953,7 @@ describe('organizer roles', () => {
     const before = (await call('GET', url)).json();
     const sent = calls.length;
 
-    expect((await call('POST', url, stale)).statusCode).toBe(409);
+    expect((await call('POST', resendUrl, stale)).statusCode).toBe(409);
     expect((await call('GET', url)).json()).toEqual(before);
     expect(calls).toHaveLength(sent);
   });
@@ -969,7 +971,19 @@ describe('organizer roles', () => {
         [org.id],
       );
       const shown = (await call('GET', url)).json().invitations[0];
-      const response = await call('POST', url, { email: shown.email, role: shown.role, resend: { expiresAt: shown.expiresAt, attemptId: null } });
+      const resendUrl = `/api/organizations/${org.id}/invitations/resend`;
+      const replace = async () => {
+        await call('POST', `${url}/remove`, { email: shown.email, role: shown.role });
+        await db.run(
+          `INSERT INTO organization_invitations (organization_id, email, role, created_at, expires_at) VALUES ($1, 'seeded@valley.test', 'finance', '2027-04-01T12:00:00Z', '2027-04-15T12:00:00Z')`,
+          [org.id],
+        );
+      };
+      await replace();
+      // Same deadline, no email attempt, and still a different invitation.
+      expect((await call('POST', resendUrl, { email: shown.email, role: shown.role, revision: shown.revision })).statusCode).toBe(409);
+      const current = (await call('GET', url)).json().invitations[0];
+      const response = await call('POST', resendUrl, { email: current.email, role: current.role, revision: current.revision });
       expect(response.statusCode).toBe(200);
       expect(response.json().history[0]).toMatchObject({ action: 'invitation_renewed' });
     } finally {

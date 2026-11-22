@@ -1,7 +1,7 @@
 import { createClerkClient, verifyToken } from '@clerk/backend';
 import type { FastifyRequest } from 'fastify';
 import { newId } from '../shared/factory';
-import { can, INVITATION_DAYS, ROLE_LABELS, type Invitation, type MembershipAction, type MembershipChange, type Permission, type Role, type ExpiredInvitationNotice, type ShownInvitation } from '../shared/roles';
+import { can, INVITATION_DAYS, ROLE_LABELS, type Invitation, type MembershipAction, type MembershipChange, type Permission, type Role, type ExpiredInvitationNotice } from '../shared/roles';
 import type { Db } from './db';
 import type { Mailer } from './email';
 import { listenHost } from './listen';
@@ -275,8 +275,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       `SELECT m.account_id, a.email, m.role FROM organization_members m JOIN accounts a ON a.id = m.account_id WHERE m.organization_id = $1 ORDER BY a.email, m.role`,
       [organizationId],
     );
-    const invitations = await db.all<{ email: string; role: Role; expires_at: string; earlier_email: boolean; email_id: string | null; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null }>(
-      `SELECT i.email, i.role, i.expires_at, i.earlier_email, m.id AS email_id, m.status AS email_status, m.created_at AS email_at FROM organization_invitations i
+    const invitations = await db.all<{ email: string; role: Role; expires_at: string; revision: string; earlier_email: boolean; email_id: string | null; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null }>(
+      `SELECT i.email, i.role, i.expires_at, i.revision, i.earlier_email, m.id AS email_id, m.status AS email_status, m.created_at AS email_at FROM organization_invitations i
        LEFT JOIN email_messages m ON m.id = i.email_attempt_id
        WHERE i.organization_id = $1 ORDER BY i.email, i.role`,
       [organizationId],
@@ -289,7 +289,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     return {
       members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role })),
       invitations: invitations.map(
-        (i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at, earlierEmail: i.earlier_email, lastEmail: i.email_id && i.email_status && i.email_at ? { attemptId: i.email_id, status: i.email_status, at: i.email_at } : null }),
+        (i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at, revision: i.revision, earlierEmail: i.earlier_email, lastEmail: i.email_id && i.email_status && i.email_at ? { attemptId: i.email_id, status: i.email_status, at: i.email_at } : null }),
       ),
       history: history.map((h): MembershipChange => ({ action: h.action, email: h.email, role: h.role, by: h.actor_email, at: h.created_at })),
     };
@@ -302,21 +302,21 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
    * a seed script (no person) sends none. An email the provider may already have accepted is reserved
    * with the invitation and retried in place. It does not renew the invitation.
    */
-  async function addMember(organizationId: string, email: string, role: Role, by: Account | null, resend?: ShownInvitation) {
+  async function addMember(organizationId: string, email: string, role: Role, by: Account | null, resendRevision?: string) {
     const normalized = email.trim().toLowerCase();
     // Resend only renews the invitation it was shown. It never invites or grants.
-    const target = resend ? undefined : await db.get<Account>(`SELECT id, email FROM accounts WHERE lower(email) = $1`, [normalized]);
+    const target = resendRevision ? undefined : await db.get<Account>(`SELECT id, email FROM accounts WHERE lower(email) = $1`, [normalized]);
     if (target) await grant(organizationId, target, role, by?.id ?? null);
     else {
       const ref = `${organizationId}:${normalized}:${role}`;
       const decision = await db.transaction(async () => {
         await db.lock(`org-members:${organizationId}`);
-        const extant = await db.get<{ expires_at: string; email_attempt_id: string | null; earlier_email: boolean }>(
+        const extant = await db.get<{ revision: string; email_attempt_id: string | null; earlier_email: boolean }>(
           // The row lock makes this wait for, or hold off, an outgoing server's insert that flags the invitation.
-          `SELECT expires_at, email_attempt_id, earlier_email FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 FOR UPDATE`,
+          `SELECT revision, email_attempt_id, earlier_email FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 FOR UPDATE`,
           [organizationId, normalized, role],
         );
-        if (resend && (extant?.expires_at !== resend.expiresAt || extant.email_attempt_id !== resend.attemptId)) throw new HttpError(409, INVITATION_CHANGED);
+        if (resendRevision && extant?.revision !== resendRevision) throw new HttpError(409, INVITATION_CHANGED);
         if (by && extant?.earlier_email) throw new HttpError(409, EARLIER_EMAIL);
         // Only the attempt stored on this invitation counts. A cancelled row is gone, so a re-add starts over.
         if (extant?.email_attempt_id) {
@@ -325,7 +325,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         }
         const t = clock();
         const expiresAt = new Date(t.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
-        const renewed = await db.run(`UPDATE organization_invitations SET expires_at = $4, invited_by = $5 WHERE organization_id = $1 AND email = $2 AND role = $3`, [
+        const renewed = await db.run(`UPDATE organization_invitations SET expires_at = $4, invited_by = $5, revision = gen_random_uuid()::text WHERE organization_id = $1 AND email = $2 AND role = $3`, [
           organizationId,
           normalized,
           role,

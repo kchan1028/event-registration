@@ -745,6 +745,10 @@ export const MIGRATIONS: string[] = [
   CREATE TRIGGER email_messages_flag_unkeyed AFTER INSERT ON email_messages
     FOR EACH ROW WHEN (NOT NEW.keyed) EXECUTE FUNCTION flag_unkeyed_invitation_email();
   `,
+  `
+  -- Changes whenever an invitation is replaced or renewed, so Resend can name exactly the one it was shown.
+  ALTER TABLE organization_invitations ADD COLUMN revision text NOT NULL DEFAULT gen_random_uuid()::text;
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
