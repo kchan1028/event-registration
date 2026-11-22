@@ -242,7 +242,7 @@ Check-in staff can use **Change bib** on a rider card, including a number alloca
 
 For protected changes, Select all excludes checked-in riders. Select them individually and acknowledge changing issued bibs before previewing. The server enforces this acknowledgement across every day sharing the number.
 
-Shared bibs must fit the overlap of every applicable entry range across their collision scope. A category without a range uses the event/day range. If ranges do not overlap, adjust them or configure separate bibs per day; no partial allocation is saved. Existing issued numbers are retained until a deliberate correction.
+Shared bibs must fit the overlap of every applicable entry range across their collision scope. A category without a range uses the event/day range. If ranges do not overlap, adjust them, or configure separate bibs per day if the conflict is between days; no partial allocation is saved. Existing issued numbers are retained until a deliberate correction.
 
 To correct an issued bib after refund, withdrawal, or cancellation, search by rider name, bib, or check-in code. Inactive riders appear only if they still hold an active bib in the selected collision scope. Use **Change bib**, enter a reason, acknowledge a checked-in change, preview, and apply. Payment, refund, entry, readiness, and check-in states remain unchanged. These owner decisions resolve the questions in [issues #95 and #97](../../product.md#automatic-and-bulk-bib-assignment).
 

@@ -1020,6 +1020,9 @@ fieldset {
   min-height: 0;
   overflow: auto;
 }
+.workspace--no-side > .main {
+  grid-column: 2 / -1;
+}
 
 .rail {
   background: var(--tyvek);
@@ -3038,6 +3041,9 @@ button.issue {
 .schedule-anchor:focus {
   outline: none;
 }
+.editor__fields:disabled button {
+  display: none;
+}
 fieldset:disabled .check,
 fieldset:disabled .field label {
   color: var(--muted);
@@ -3285,6 +3291,11 @@ fieldset:disabled .field label {
   .cat-row td:nth-child(n + 3) {
     grid-column: 1;
     font-size: 13.5px;
+  }
+  /* View only: no select or order cells to place. */
+  .cat-table--view .cat-row td:nth-child(n) {
+    grid-column: 1 / -1;
+    grid-row: auto;
   }
   .cat-row .col-num {
     text-align: left !important;

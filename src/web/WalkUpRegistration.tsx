@@ -5,7 +5,7 @@ import { QrCodeImage } from './QrCodeImage';
 import { WalkUpChoices } from './WalkUpChoices';
 
 /** Published event handoff. Staff stay signed in on their own device. */
-export function WalkUpRegistration({ eventId, dayId, published }: { eventId: string; dayId: string; published: boolean }) {
+export function WalkUpRegistration({ eventId, dayId, published, canPublish }: { eventId: string; dayId: string; published: boolean; canPublish: boolean }) {
   const [showChoices, setShowChoices] = useState(false);
   const address = new URL(href({ page: 'register', eventId }), window.location.origin + window.location.pathname);
   const kiosk = new URL(window.location.origin + window.location.pathname);
@@ -13,7 +13,7 @@ export function WalkUpRegistration({ eventId, dayId, published }: { eventId: str
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(address.hostname);
   return <section className="ci-walkup" aria-label="Rider phone registration">
     <h2>Register on the rider’s phone</h2>
-    {!published ? <p role="status">Publish this event before sharing rider registration.</p> : <>
+    {!published ? <p role="status">{canPublish ? 'Publish this event before sharing rider registration.' : 'A registration manager or owner must publish this event before you share rider registration.'}</p> : <>
       <p>The rider or guardian opens this public event link on their own phone and signs in with their own account. Keep the staff session on this device.</p>
       <QrCodeImage value={address.href} alt="QR code to open rider registration" />
       <label>Public registration address<input className="input" readOnly value={address.href} onFocus={(e) => e.currentTarget.select()} /></label>

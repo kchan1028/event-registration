@@ -146,6 +146,8 @@ test('category editor keeps helper text from shifting the control beside it', as
   expect(narrowHint.right).toBeLessThanOrEqual(390);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
+  // The narrow drawer takes focus when the width change arrives, which can be after the resize returns.
+  await expect(editor.getByRole('button', { name: 'Close category editor' })).toBeFocused();
   await editor.getByLabel('Timing code', { exact: true }).focus();
   await expect(editor.getByLabel('Timing code', { exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
