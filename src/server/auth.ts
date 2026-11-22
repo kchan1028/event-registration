@@ -219,7 +219,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     account: Account,
     target: { orderId: string } | { entryId: string },
     allow: { rider?: boolean; juniorViewer?: boolean; permission?: Permission },
-  ): Promise<void> {
+  ): Promise<'rider' | 'organizer'> {
     const byEntry = 'entryId' in target;
     const notFound = byEntry ? 'Entry not found.' : 'Order not found.';
     const row = await db.get<{ can_manage: boolean | null; organization_id: string; can_view: boolean | null }>(
@@ -229,14 +229,15 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       [byEntry ? target.entryId : target.orderId, account.id, account.email.toLowerCase()],
     );
     if (!row) throw new HttpError(404, notFound);
-    if (allow.rider && row.can_manage) return;
+    if (allow.rider && row.can_manage) return 'rider';
     // The junior's own login may look, never act.
-    if (allow.juniorViewer && row.can_view) return;
+    if (allow.juniorViewer && row.can_view) return 'rider';
     const roles = await rolesIn(account.id, row.organization_id);
     // A member who may not view orders learns nothing about whether this one exists.
     if (roles.length === 0 || (!allow.permission && !can(roles, 'orders.view'))) throw new HttpError(404, notFound);
     if (!allow.permission) throw new HttpError(403, 'Only the rider or a current authorized guardian can do this.');
     if (!can(roles, allow.permission)) throw new HttpError(403, 'Your role in this organization does not allow this.');
+    return 'organizer';
   }
 
   /** The organizations the account belongs to, with its roles in each. */

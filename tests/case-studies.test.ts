@@ -110,6 +110,7 @@ describe('generated race case studies', () => {
     expect(order.couponCode).toBe('RESET10');
     await ok(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/payment`, payload: { attemptId: 'case-reset-attempt-1', outcome: 'success' } }));
     await ok(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/rider-corrections`, payload: { changes: { team: 'Corrected Wheel Club' }, reason: 'Team name typed wrong' } }));
+    await ok(await app.inject({ method: 'POST', url: `/api/events/${eventId}/emergency-contact`, payload: { orderId: order.id } }));
     await ok(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/refunds`, payload: { clientRequestId: 'refund-local-case-studies-test-ts', amountCents: 100, reason: 'Goodwill refund' } }));
 
     const unrelated = (await app.inject({ method: 'POST', url: '/api/demo' })).json().eventId;
@@ -122,6 +123,7 @@ describe('generated race case studies', () => {
     const db = openDb(databaseUrl);
     try {
       expect(await db.all('SELECT event_id FROM protected_export_audit')).toEqual([{ event_id: unrelated }]);
+      expect(await db.all('SELECT event_id FROM emergency_contact_views')).toEqual([]);
     } finally {
       await db.close();
     }

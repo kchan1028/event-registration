@@ -33,13 +33,13 @@ it('adds protected export auditing on upgrade without backfilling requests', asy
   }
 });
 
-it('lets an uncertain email status through migration 39 and still rejects an unknown status', async () => {
+it('lets an uncertain email status through migration 40 and still rejects an unknown status', async () => {
   const url = await testDatabaseUrl({ empty: true });
   const client = new pg.Client({ connectionString: url });
   await client.connect();
   try {
     await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
-    for (let version = 1; version <= 38; version++) {
+    for (let version = 1; version <= 39; version++) {
       await client.query(MIGRATIONS[version - 1]);
       await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
     }
@@ -52,7 +52,7 @@ it('lets an uncertain email status through migration 39 and still rejects an unk
   const db = openDb(url);
   try {
     await db.migrate();
-    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 39')).toEqual({ version: 39 });
+    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 40')).toEqual({ version: 40 });
     expect(await db.get("SELECT status FROM email_messages WHERE id = 'eml_recorded'")).toEqual({ status: 'recorded' });
     await db.run(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
       VALUES ('eml_uncertain', 'org_email_status', 'organizer_invitation', 'org_email_status:lost@example.test:finance', 'lost@example.test', 'Subject', 'Body', 'uncertain', '2027-04-01T12:00:00Z')`);
@@ -63,13 +63,13 @@ it('lets an uncertain email status through migration 39 and still rejects an unk
   }
 });
 
-it('points an invitation at its current attempt when migration 40 runs', async () => {
+it('points an invitation at its current attempt when migration 41 runs', async () => {
   const url = await testDatabaseUrl({ empty: true });
   const client = new pg.Client({ connectionString: url });
   await client.connect();
   try {
     await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
-    for (let version = 1; version <= 39; version++) {
+    for (let version = 1; version <= 40; version++) {
       await client.query(MIGRATIONS[version - 1]);
       await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
     }
@@ -86,7 +86,7 @@ it('points an invitation at its current attempt when migration 40 runs', async (
   const db = openDb(url);
   try {
     await db.migrate();
-    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 40')).toEqual({ version: 40 });
+    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 41')).toEqual({ version: 41 });
     expect(await db.get(`SELECT email_attempt_id FROM organization_invitations WHERE email = 'finance@example.test'`)).toEqual({ email_attempt_id: 'eml_current' });
     expect(await db.get("SELECT status FROM email_messages WHERE id = 'eml_old'")).toEqual({ status: 'uncertain' });
   } finally {
@@ -94,13 +94,13 @@ it('points an invitation at its current attempt when migration 40 runs', async (
   }
 });
 
-it('keeps started_at for a send that already happened when migration 41 runs', async () => {
+it('keeps started_at for a send that already happened when migration 42 runs', async () => {
   const url = await testDatabaseUrl({ empty: true });
   const client = new pg.Client({ connectionString: url });
   await client.connect();
   try {
     await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
-    for (let version = 1; version <= 40; version++) {
+    for (let version = 1; version <= 41; version++) {
       await client.query(MIGRATIONS[version - 1]);
       await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
     }
@@ -119,7 +119,7 @@ it('keeps started_at for a send that already happened when migration 41 runs', a
   const db = openDb(url);
   try {
     await db.migrate();
-    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 41')).toEqual({ version: 41 });
+    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 42')).toEqual({ version: 42 });
     expect(await db.all(`SELECT id, started_at IS NOT NULL AS started FROM email_messages ORDER BY id`)).toEqual([
       { id: 'eml_fresh', started: false },
       { id: 'eml_lost', started: true },

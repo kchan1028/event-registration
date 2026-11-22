@@ -593,6 +593,76 @@ describe('organizer roles', () => {
     }
   });
 
+  it('keeps the connection pool usable while many sends and repeats wait on a slow provider', async () => {
+    const db = openDb(await testDatabaseUrl());
+    const now = new Date('2027-04-04T12:00:00.000Z');
+    let releaseSend = () => {};
+    const slow = new Promise<void>((resolve) => (releaseSend = resolve));
+    const calls: string[] = [];
+    const email: EmailSender = {
+      mode: 'resend',
+      async send(_message, idempotencyKey) {
+        calls.push(idempotencyKey);
+        await slow;
+        return `msg-${idempotencyKey}`;
+      },
+    };
+    const mailer = createMailer(db, email, () => now);
+    let sends: Promise<unknown>[] = [];
+    try {
+      await db.run(`INSERT INTO organizations (id, name, created_at) VALUES ('org_pool', 'Valley Velo', $1)`, [now.toISOString()]);
+      const ids: string[] = [];
+      for (let i = 0; i < 12; i++) {
+        ids.push(await mailer.reserve('organizer_invitation', `org_pool:${i}`, 'org_pool', { to: `member${i}@valley.test`, subject: 'Invitation', text: 'Sign in to CycleReg.' }));
+      }
+      // More callers than the pool has connections, both across attempts and on one attempt.
+      sends = [...ids, ...Array<string>(12).fill(ids[0])].map((id) => mailer.dispatch(id, true));
+      const settled = Promise.allSettled(sends);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const unrelated = await Promise.race([db.get('SELECT 1 AS ok'), new Promise((resolve) => setTimeout(() => resolve('no connection free'), 2_000))]);
+      expect(unrelated).toEqual({ ok: 1 });
+      releaseSend();
+      expect(await settled).toEqual(sends.map(() => ({ status: 'fulfilled', value: 'sent' })));
+      expect([...calls].sort()).toEqual([...ids].sort());
+    } finally {
+      releaseSend();
+      await Promise.allSettled(sends);
+      await db.close();
+    }
+  }, 30_000);
+
+  it('survives losing the locked connection during a send and retries the same attempt', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const db = openDb(databaseUrl);
+    const other = new pg.Client({ connectionString: databaseUrl });
+    const now = new Date('2027-04-04T12:00:00.000Z');
+    const calls: string[] = [];
+    const email: EmailSender = {
+      mode: 'resend',
+      async send(_message, idempotencyKey) {
+        calls.push(idempotencyKey);
+        if (calls.length === 1) {
+          await other.query(`SELECT pg_terminate_backend(pid) FROM pg_locks WHERE locktype = 'advisory' AND granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`);
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        return 'msg-accepted';
+      },
+    };
+    const mailer = createMailer(db, email, () => now);
+    try {
+      await other.connect();
+      await db.run(`INSERT INTO organizations (id, name, created_at) VALUES ('org_drop', 'Valley Velo', $1)`, [now.toISOString()]);
+      const id = await mailer.reserve('organizer_invitation', 'org_drop:timer', 'org_drop', { to: 'timer@valley.test', subject: 'Invitation', text: 'Sign in to CycleReg.' });
+      await expect(mailer.dispatch(id, true)).rejects.toThrow();
+      expect(await db.get(`SELECT status, started_at IS NOT NULL AS started FROM email_messages WHERE id = $1`, [id])).toEqual({ status: 'uncertain', started: true });
+      expect(await mailer.dispatch(id, false)).toBe('sent');
+      expect(calls).toEqual([id, id]);
+    } finally {
+      await other.end();
+      await db.close();
+    }
+  });
+
   it('does not reuse a canceled attempt when a seed re-adds it at the same timestamp', async () => {
     const now = new Date('2027-04-03T12:00:00.000Z');
     const email: EmailSender = {

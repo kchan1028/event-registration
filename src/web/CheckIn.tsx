@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type R
 import { BIB_SCOPES, rangeFor, canCheckInWithBib, changedBibAssignments, type BibChange, type BibReassignmentPlan, type BibSettings, type CheckInReadinessConflict } from '../shared/checkin';
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
+import { EmergencyContactLookup } from './EmergencyContact';
 import { can } from '../shared/roles';
 import { WalkUpRegistration } from './WalkUpRegistration';
 import { AutomaticBibs } from './AutomaticBibs';
@@ -18,8 +19,9 @@ function recoveryKey(eventId: string, dayId: string, orderId: string) {
 
 /**
  * Race-day check-in. Built for a volunteer at a folding table: find the rider,
- * read one unmistakable ready/blocked result, issue the bib. No payment amounts,
- * emails, or emergency contacts appear here.
+ * read one unmistakable ready/blocked result, issue the bib. No payment amounts
+ * or emails appear here. The card omits the emergency contact. A separate
+ * control, after the bib controls, looks one up and can hide it again.
  */
 export function CheckIn({ eventId }: { eventId: string }) {
   const [dayId, setDayId] = useState<string | null>(null);
@@ -394,6 +396,8 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
   const resultRef = useRef<HTMLDivElement>(null);
   const issuedBibId = useId();
   const focusNextAfterCheckIn = useRef(false);
+  const checkInFocusEvents = useRef<AbortController | null>(null);
+  useEffect(() => () => checkInFocusEvents.current?.abort(), []);
   const focusNextRider = useCallback((button: HTMLButtonElement | null) => {
     if (button && focusNextAfterCheckIn.current) {
       focusNextAfterCheckIn.current = false;
@@ -433,15 +437,25 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
     e.preventDefault();
     if (recovery === 'pending') return;
     const form = e.currentTarget;
+    const focusEvents = new AbortController();
+    checkInFocusEvents.current = focusEvents;
+    let pointedAway = false;
+    const markPointerDeparture = (event: PointerEvent) => {
+      if (event.target instanceof Node && !form.contains(event.target)) pointedAway = true;
+    };
+    document.addEventListener('pointerdown', markPointerDeparture, { capture: true, signal: focusEvents.signal });
+    const shouldFollowResult = () => {
+      // Disabling the submit button can move focus to the body without a user gesture.
+      const active = document.activeElement;
+      return !pointedAway && (form.contains(active) || active === document.body);
+    };
     setBusy(true);
     setError(null);
     onRecovery(undefined);
     try {
       const result = await api.checkIn(eventId, rider.orderId, dayId, rider.bib !== null ? null : bib.trim() ? Number(bib) : null, takeDuration());
       if (result?.orderId === rider.orderId && typeof result.bib === 'number' && typeof result.checkedInAt === 'string') {
-        // Disabling the submit button can move focus to the body during the request.
-        const active = document.activeElement;
-        focusNextAfterCheckIn.current = form.contains(active) || active === document.body;
+        focusNextAfterCheckIn.current = shouldFollowResult();
         onChange(result);
       } else {
         onRecovery('pending');
@@ -454,13 +468,15 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
         if (conflict?.code === 'check_in_not_ready' && conflict.dayId === dayId && conflict.rider?.orderId === rider.orderId && conflict.rider.result?.ready === false) {
           onChange(conflict.rider);
           requestAnimationFrame(() => {
-            if (document.activeElement === document.body || form.contains(document.activeElement)) resultRef.current?.focus();
+            if (shouldFollowResult()) resultRef.current?.focus();
           });
         } else {
           setError((err as ApiError).message);
         }
       }
     } finally {
+      focusEvents.abort();
+      if (checkInFocusEvents.current === focusEvents) checkInFocusEvents.current = null;
       setBusy(false);
     }
   }
@@ -674,6 +690,8 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
           </p>
         )}
       </div>}
+
+      <EmergencyContactLookup key={rider.detailsOrderId} eventId={eventId} riderName={rider.name} orderId={rider.detailsOrderId} />
 
       {recovery !== 'pending' && rider.bibHistory.some((h) => h.releasedAt) && (
         <div className="ci-section">

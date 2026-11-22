@@ -167,7 +167,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
      * `withheld` means a retry can no longer prove the 24-hour provider window, so nothing is sent.
      */
     async dispatch(id: string, firstAttempt: boolean): Promise<EmailStatus | 'withheld'> {
-      return db.hold(`email-attempt:${id}`, async (write) => {
+      return db.hold(`email-attempt:${id}`, async () => {
         const row = await db.get<{ created_at: string; to_email: string; subject: string; body_text: string; status: EmailStatus }>(
           `SELECT created_at, to_email, subject, body_text, status FROM email_messages WHERE id = $1`,
           [id],
@@ -178,7 +178,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
           const created = Date.parse(row.created_at);
           if (!Number.isFinite(created) || clock().getTime() - created >= RESEND_IDEMPOTENCY_WINDOW_MS) return 'withheld';
         }
-        const claimed = await write(`UPDATE email_messages SET started_at = $2 WHERE id = $1 AND started_at IS NULL`, [id, clock().toISOString()]);
+        const claimed = await db.run(`UPDATE email_messages SET started_at = $2 WHERE id = $1 AND started_at IS NULL`, [id, clock().toISOString()]);
         return finish(id, { to: row.to_email, subject: row.subject, text: row.body_text }, claimed === 1);
       });
     },
