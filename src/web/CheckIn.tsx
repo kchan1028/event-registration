@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type R
 import { BIB_SCOPES, rangeFor, canCheckInWithBib, changedBibAssignments, type BibChange, type BibReassignmentPlan, type BibSettings, type CheckInReadinessConflict } from '../shared/checkin';
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
+import { EmergencyContactLookup } from './EmergencyContact';
 import { can } from '../shared/roles';
 import { WalkUpRegistration } from './WalkUpRegistration';
 import { AutomaticBibs } from './AutomaticBibs';
@@ -520,6 +521,7 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
       <div className="ci-detail__who">
         <h2>{rider.name}</h2>
         <p className="muted">{[rider.team || 'No team', `racing age ${rider.racingAge}`].join(' · ')}</p>
+        <EmergencyContactLookup key={rider.orderId} eventId={eventId} riderName={rider.name} orderId={rider.orderId} />
       </div>
 
       <div className={`ci-result ${ready ? 'ci-result--ready' : 'ci-result--blocked'}`} role="status" ref={resultRef} tabIndex={-1}>

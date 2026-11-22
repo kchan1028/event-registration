@@ -9,6 +9,7 @@ import { href } from '../App';
 import { useSession } from '../auth';
 import { formatDateTime, refundedCents } from '../format';
 import { Field, Icon, ReasonForm } from '../ui';
+import { EmergencyContactLookup } from '../EmergencyContact';
 import { RefundPanel } from './RefundPanel';
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -55,8 +56,9 @@ export function OrderRow({ order, categories, canManage, canRefund, onChange }: 
       )}
       <p className="muted small">
         Racing age {order.rider.racingAge} · license {order.rider.licenseCategory ? licenseLabel(order.rider.licenseCategory) : 'not known'}
-        {order.rider.guardian ? ` · guardian ${order.rider.guardian.name}` : ''} · waiver {order.waiver.version} signed by {order.waiver.signatureName} · emergency contact on file · order {order.orderNumber}
+        {order.rider.guardian ? ` · guardian ${order.rider.guardian.name}` : ''} · waiver {order.waiver.version} signed by {order.waiver.signatureName} · order {order.orderNumber}
       </p>
+      <EmergencyContactLookup eventId={order.eventId} riderName={`${order.rider.firstName} ${order.rider.lastName}`} orderId={order.id} />
       {order.checkInCode && (
         <p className="small order__checkin">
           Check-in code <code className="code">{order.checkInCode}</code> ·{' '}

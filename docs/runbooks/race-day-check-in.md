@@ -89,7 +89,7 @@ Use the printed roster to identify its snapshot time and the affected riders for
 
 When connectivity returns, the registration lead coordinates reconciliation before ordinary issuance resumes: compare paper notes with current entries, readiness, recorded check-ins and bibs; investigate conflicts before replaying an action; have the timer liaison acknowledge changes where applicable. Do not silently replace accepted prices, payment records or history. No offline synchronization or dedicated paper-import workflow exists. Rehearse this with fictional data before claiming continuity.
 
-Keep printed sheets controlled at the desk, collect them at shift handoff, and give them to the accountable owner for reconciliation and approved retention. Do not photograph or upload rider sheets into public issues. Real-data retention and restricted emergency-contact access remain unresolved; this guide does not invent either policy.
+Keep printed sheets controlled at the desk, collect them at shift handoff, and give them to the accountable owner for reconciliation and approved retention. Do not photograph or upload rider sheets into public issues. On screen, any organizer role may look up one registration's emergency contact from check-in, Registrations, or start lists. Hide it when finished. Each lookup is recorded with the account, event, order, and time, and that record does not store the name or phone. The printed roster still has no emergency contact. A paper copy of a contact is not a defined process, and real-data retention of the contact and the lookup record remains unresolved. This guide does not invent either policy.
 
 ### Reconcile a reference-only outage
 

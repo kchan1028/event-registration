@@ -24,6 +24,7 @@ import { cancellationExportState, cancellationExportFilename } from './cancellat
 import { openDb } from './db';
 import { createAutomaticBibs, automaticBibError, type AutomaticBibs } from './automaticBibs';
 import { createCheckIn } from './checkin';
+import { createEmergencyContacts } from './emergencyContacts';
 import { createCaseStudyFixtures } from './caseStudies';
 import { createIdentity } from './identity';
 import { createResolutions } from './resolutions';
@@ -100,6 +101,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const resolutions = createResolutions(db, orders, clock);
   const startLists = createStartLists(db, repo, orders, clock, identity);
   const checkIn = createCheckIn(db, repo, orders, clock, identity, startLists);
+  const emergencyContacts = createEmergencyContacts(db, clock);
   const waitlist = createWaitlist(db, repo, clock);
   const caseStudies = createCaseStudyFixtures(db, repo, orders);
   const emailSender = opts.email ?? emailFromEnv();
@@ -733,6 +735,21 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/events/:id/check-in-demo-riders', async (req, reply) => {
     const { id } = await onEvent(req, 'event.edit');
     return reply.status(201).send(await checkIn.addDemoRiders(id, me(req).id));
+  });
+
+  // A deliberate lookup. The response is only the contact; the audit row stores none of it.
+  app.post('/api/events/:id/emergency-contact', async (req) => {
+    const { id } = await onEvent(req, 'emergency.view');
+    const body = z.object({
+      orderId: idStr.optional(),
+      entryId: idStr.optional(),
+    }).strict().superRefine((value, ctx) => {
+      if (Number(!!value.orderId) + Number(!!value.entryId) !== 1) {
+        ctx.addIssue({ code: 'custom', message: 'Send either an order id or an entry id.', path: ['orderId'] });
+      }
+    }).parse(req.body);
+    const target = body.orderId ? { orderId: body.orderId } : { entryId: body.entryId! };
+    return emergencyContacts.view(id, me(req).id, target);
   });
 
   // Start lists and the sample timer export. No contact or payment data.
