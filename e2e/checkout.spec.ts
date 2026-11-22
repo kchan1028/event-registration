@@ -508,7 +508,7 @@ test('lost hold response retries the same reservation across refresh', async ({ 
   await expect(page.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
 });
 
-test('organizer checks the rider’s pending reservation by exact reference', async ({ page }) => {
+test('organizer checks the rider’s pending reservation by exact reference', async ({ page, browser }) => {
   const eventId = await openEvent(page, 'criterium');
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
   await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
@@ -539,10 +539,15 @@ test('organizer checks the rider’s pending reservation by exact reference', as
   await page.reload();
   await expect(riderReference).toHaveValue(reference);
 
-  const staff = await page.context().newPage();
-  await staff.addInitScript((email) => sessionStorage.setItem('cyclereg.test-session', email), E2E_ORGANIZER);
-  await staff.setViewportSize({ width: 390, height: 844 });
+  const organizations: { id: string; events: { id: string }[] }[] = await (await page.request.get('/api/organizations')).json();
+  const organizationId = organizations.find((org) => org.events.some((event) => event.id === eventId))!.id;
+  const staffEmail = 'reservation.finance@example.test';
+  expect((await page.request.post(`/api/organizations/${organizationId}/members`, { data: { email: staffEmail, role: 'finance' } })).ok()).toBe(true);
+  const staffContext = await browser.newContext({ viewport: { width: 390, height: 844 }, extraHTTPHeaders: {} });
+  await staffContext.addInitScript((email) => sessionStorage.setItem('cyclereg.test-session', email), staffEmail);
+  const staff = await staffContext.newPage();
   await staff.goto(`/#/events/${eventId}/registrations`);
+  await staff.getByRole('button', { name: /^Refunded/ }).click();
   await staff.getByText('Check a pending reservation', { exact: true }).click();
   const lookup = staff.locator('details').filter({ hasText: 'Check a pending reservation' });
   const check = lookup.getByRole('button', { name: 'Check reservation' });
@@ -568,10 +573,12 @@ test('organizer checks the rider’s pending reservation by exact reference', as
   await expect(staff.getByText(`1 registration matches “${orderNumber}”.`)).toBeVisible();
 
   const staffReference = lookup.getByRole('textbox', { name: 'Reservation reference' });
+  await expect(staff.getByRole('list', { name: 'Registrations', exact: true }).getByRole('listitem').first()).toContainText(orderNumber!);
   await staffReference.fill(`  ${reference} `);
   await check.click();
-  await expect(status).toContainText(orderNumber!);
-  for (const bad of ['short', '        ', 'x'.repeat(65)]) {
+  await expect(status).toContainText('It starts or ends with a space');
+  await expect(status).not.toContainText(orderNumber!);
+  for (const bad of ['short', 'x'.repeat(65)]) {
     await staffReference.fill(bad);
     await check.click();
     await expect(staffReference).toBeFocused();
@@ -584,14 +591,16 @@ test('organizer checks the rider’s pending reservation by exact reference', as
   await expect(status).toContainText(orderNumber!);
 
   // Keys the checkout API accepts as sent: surrounding spaces are part of the key.
-  const spaced = ` spaced-reference-0001 `;
-  const saved = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: { ...(attempts[0] as object), clientRequestId: spaced, rider: { ...(attempts[0] as { rider: object }).rider, firstName: 'Avery' }, waiver: { ...(attempts[0] as { waiver: object }).waiver, signatureName: 'Avery Demo' } } });
-  expect(saved.status()).toBe(201);
-  await staffReference.fill(spaced);
-  await check.click();
-  await expect(status).toContainText((await saved.json()).orderNumber);
+  for (const [spaced, firstName] of [[' spaced-reference-0001 ', 'Avery'], ['        ', 'Blair']] as const) {
+    const saved = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: { ...(attempts[0] as object), clientRequestId: spaced, rider: { ...(attempts[0] as { rider: object }).rider, firstName }, waiver: { ...(attempts[0] as { waiver: object }).waiver, signatureName: `${firstName} Demo` } } });
+    expect(saved.status()).toBe(201);
+    await staffReference.fill(spaced);
+    await check.click();
+    await expect(status).toContainText((await saved.json()).orderNumber);
+  }
   await staffReference.fill(reference);
   await check.click();
+  await expect(status).toContainText(orderNumber!);
   await lookup.screenshot({ path: 'test-results/reservation-lookup-phone.png' });
 
   await page.getByRole('button', { name: 'Retry reservation' }).click();
@@ -599,7 +608,7 @@ test('organizer checks the rider’s pending reservation by exact reference', as
   expect(attempts).toHaveLength(3);
   expect(attempts[1]).toStrictEqual(attempts[0]);
   expect(attempts[2]).toStrictEqual(attempts[0]);
-  await staff.close();
+  await staffContext.close();
 });
 
 test('a rejected reservation keeps details editable and rapid submission creates one hold', async ({ page }) => {

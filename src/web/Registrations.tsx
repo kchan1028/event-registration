@@ -82,9 +82,10 @@ export function Registrations({ draft }: { draft: Draft }) {
         <ReservationLookup
           key={eventId}
           eventId={eventId}
-          onFound={(saved) => {
+          onFound={() => {
             // The order can commit or change after the list loaded, and staff search that list by its number next.
-            if (!orders?.some((o) => o.orderNumber === saved.orderNumber && o.status === saved.status)) reload();
+            setFilter('all');
+            reload();
           }}
         />
       )}

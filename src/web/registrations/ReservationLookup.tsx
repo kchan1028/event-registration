@@ -2,7 +2,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { api, type ReservationStatus } from '../api';
 import { formatDateTime, ORDER_STATUS_LABEL } from '../format';
 
-export function ReservationLookup({ eventId, onFound }: { eventId: string; onFound: (order: ReservationStatus) => void }) {
+export function ReservationLookup({ eventId, onFound }: { eventId: string; onFound: () => void }) {
   const inFlight = useRef(false);
   const field = useRef<HTMLInputElement>(null);
   const [invalid, setInvalid] = useState<string>();
@@ -14,9 +14,8 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
   const lookup = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (inFlight.current) return;
-    // References match exactly, so try the text as typed before dropping the spaces a paste can add.
-    const candidates = [...new Set([reference, reference.trim()])].filter((value) => value.trim() && value.length >= 8 && value.length <= 64);
-    if (candidates.length === 0) {
+    // References match exactly: send the text as typed, with checkout's own length rule.
+    if (reference.length < 8 || reference.length > 64) {
       setInvalid('Enter the reservation reference shown in the rider’s pending checkout.');
       setResult(undefined);
       setError(undefined);
@@ -29,13 +28,9 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
     setError(undefined);
     setInvalid(undefined);
     try {
-      let order: ReservationStatus | null = null;
-      for (const value of candidates) {
-        order = (await api.reservationStatus(eventId, value)).order;
-        if (order) break;
-      }
+      const { order } = await api.reservationStatus(eventId, reference);
       setResult({ order });
-      if (order) onFound(order);
+      if (order) onFound();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not check the reservation. Try again.');
     } finally {
@@ -75,7 +70,7 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
               {result.order.holdExpiresAt && <> · Hold expires {formatDateTime(result.order.holdExpiresAt)}</>}
             </p>
           )}
-          {result?.order === null && <p>No order is visible for this reference yet. Check the reference against the rider’s checkout. Ask the rider to keep the pending checkout and retry the same reservation.</p>}
+          {result?.order === null && <p>No order is visible for this reference yet. {reference !== reference.trim() && 'It starts or ends with a space, which counts as part of the reference. '}Check the reference against the rider’s checkout. Ask the rider to keep the pending checkout and retry the same reservation.</p>}
         </div>
         {error && <p className="field__error" role="alert">{error}</p>}
       </form>
