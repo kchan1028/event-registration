@@ -26,7 +26,7 @@ for (const width of [390, 1440]) {
     await asRole(browser, page.request, organizationId, 'check_in_volunteer', async (volunteer) => {
       await volunteer.goto(`/#/events/${eventId}/check-in`);
       await expect(volunteer.getByText('This event is not published yet. A registration manager or owner publishes it.')).toBeVisible();
-      await expect(volunteer.getByText('Ask a registration manager or owner to set one for riders whose category has no range of its own.')).toBeVisible();
+      await expect(volunteer.getByText('Ask a registration manager or owner to set one for riders who still need a bib and whose category has no range of its own.')).toBeVisible();
       await volunteer.getByRole('button', { name: 'Register a walk-up' }).click();
       await expect(volunteer.getByText('A registration manager or owner must publish this event before you share rider registration.')).toBeVisible();
 
@@ -49,6 +49,8 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
     const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
     const { revision, config } = await (await page.request.get(`/api/events/${eventId}`)).json();
     const category = config.categories.find((c: { raceId: string }) => c.raceId === config.races[0].id);
+    // A start group with a problem to fix.
+    Object.assign(config.startGroups.find((g: { id: string }) => g.id === category.startGroupId), { startTime: '08:00', stagingTime: '09:00' });
     // Every optional part of the editor that carries a hint: a question, a timed length, and no timing code (a problem to fix).
     Object.assign(category, {
       questions: [{ id: 'q-role-test', label: '', required: false, options: [] }],
@@ -64,6 +66,8 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
       await expect(member.getByText('View only', { exact: true })).toBeVisible();
       await expect(member.getByRole('heading', { name: 'Checks before publishing' })).toHaveCount(0);
       await expect(member.getByRole('button', { name: /^Move .* (up|down)$/ })).toHaveCount(0);
+      await expect(member.locator('.cat-table thead th')).toHaveCount(7);
+      await expect(member.locator('.clip--error')).toHaveCount(0);
       await member.locator('.cat-row__name', { hasText: category.name }).first().click();
       await expect(member.getByText(/^(Review copy|Needs fixing)$/)).toHaveCount(0);
       const details = member.getByRole('complementary', { name: 'Category details' });
@@ -90,10 +94,15 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
       await member.setViewportSize({ width: 390, height: 900 });
       await member.reload();
       await expect(member.getByText('View only', { exact: true })).toBeVisible();
+      if (role === 'check_in_volunteer') {
+        expect(await member.locator('.cat-row').first().evaluate((row) => [...row.children].every((cell) => cell.getBoundingClientRect().left === row.children[0].getBoundingClientRect().left))).toBe(true);
+      }
       await expect(member.getByRole('heading', { name: 'Checks before publishing', includeHidden: true })).toHaveCount(0);
     });
 
     await page.goto(`/#/events/${eventId}/race/${category.raceId}`);
+    await expect(page.locator('.cat-table thead th')).toHaveCount(10);
+    await expect(page.locator('.clip--error').first()).toBeVisible();
     await page.locator('.cat-row__name', { hasText: category.name }).first().click();
     await expect(page.getByRole('complementary', { name: 'Category editor' }).getByRole('button', { name: 'Add price change' })).toBeVisible();
   });

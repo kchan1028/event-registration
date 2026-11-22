@@ -3292,6 +3292,11 @@ fieldset:disabled .field label {
     grid-column: 1;
     font-size: 13.5px;
   }
+  /* View only: no select or order cells to place. */
+  .cat-table--view .cat-row td:nth-child(n) {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
   .cat-row .col-num {
     text-align: left !important;
   }

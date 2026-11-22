@@ -63,15 +63,19 @@ export function CategoryTable({ draft, raceId, selectedId, onSelect }: { draft: 
         </div>
       ) : (
         <div className="table-wrap" role="region" aria-label="Category schedule" tabIndex={0}>
-          <table className="cat-table">
+          <table className={`cat-table ${readOnly ? 'cat-table--view' : ''}`}>
             <thead>
               <tr>
-                <th scope="col" className="col-pick">
-                  {readOnly ? <span className="sr-only">Select</span> : <input type="checkbox" aria-label="Select every category in this race for bulk edit" checked={allPicked} onChange={() => setPicked(allPicked ? [] : cats.map((c) => c.id))} />}
-                </th>
-                <th scope="col" className="col-order">
-                  <span className="sr-only">Order</span>
-                </th>
+                {!readOnly && (
+                  <>
+                    <th scope="col" className="col-pick">
+                      <input type="checkbox" aria-label="Select every category in this race for bulk edit" checked={allPicked} onChange={() => setPicked(allPicked ? [] : cats.map((c) => c.id))} />
+                    </th>
+                    <th scope="col" className="col-order">
+                      <span className="sr-only">Order</span>
+                    </th>
+                  </>
+                )}
                 <th scope="col">Category</th>
                 <th scope="col">Who can enter</th>
                 <th scope="col">Start</th>
@@ -85,15 +89,17 @@ export function CategoryTable({ draft, raceId, selectedId, onSelect }: { draft: 
                 <th scope="col" className="col-num">
                   Places taken
                 </th>
-                <th scope="col">
-                  <span className="sr-only">Actions</span>
-                </th>
+                {!readOnly && (
+                  <th scope="col">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                )}
               </tr>
             </thead>
             {groups.map((g) => (
               <tbody key={g.id ?? 'none'}>
                 <tr className="cat-table__group">
-                  <th scope="rowgroup" colSpan={10}>
+                  <th scope="rowgroup" colSpan={readOnly ? 7 : 10}>
                     {g.name}
                   </th>
                 </tr>
@@ -140,21 +146,23 @@ function Row({ cat, draft, first, last, selected, hasError, entries, onSelect, p
   const name = cat.name || 'Unnamed category';
   return (
     <tr className={`cat-row ${selected ? 'is-selected' : ''} ${cat.status === 'closed' ? 'is-closed' : ''}`} onClick={() => onSelect(cat.id)}>
-      <td className="col-pick" onClick={(e) => e.stopPropagation()}>
-        {!readOnly && <input type="checkbox" aria-label={`Select ${name} for bulk edit`} checked={picked} onChange={onPick} />}
-      </td>
-      <td className="col-order">
-        {!readOnly && (
-          <div className="order-btns">
-            <button className="icon-btn" disabled={first} aria-label={`Move ${name} up`} onClick={(e) => (e.stopPropagation(), update((c) => moveCategory(c, cat.id, -1)))}>
-              <Icon name="up" size={14} />
-            </button>
-            <button className="icon-btn" disabled={last} aria-label={`Move ${name} down`} onClick={(e) => (e.stopPropagation(), update((c) => moveCategory(c, cat.id, 1)))}>
-              <Icon name="down" size={14} />
-            </button>
-          </div>
-        )}
-      </td>
+      {!readOnly && (
+        <>
+          <td className="col-pick" onClick={(e) => e.stopPropagation()}>
+            <input type="checkbox" aria-label={`Select ${name} for bulk edit`} checked={picked} onChange={onPick} />
+          </td>
+          <td className="col-order">
+            <div className="order-btns">
+              <button className="icon-btn" disabled={first} aria-label={`Move ${name} up`} onClick={(e) => (e.stopPropagation(), update((c) => moveCategory(c, cat.id, -1)))}>
+                <Icon name="up" size={14} />
+              </button>
+              <button className="icon-btn" disabled={last} aria-label={`Move ${name} down`} onClick={(e) => (e.stopPropagation(), update((c) => moveCategory(c, cat.id, 1)))}>
+                <Icon name="down" size={14} />
+              </button>
+            </div>
+          </td>
+        </>
+      )}
       <td>
         <button className="cat-row__name" onClick={(e) => (e.stopPropagation(), onSelect(cat.id))} aria-pressed={selected}>
           {name}
@@ -191,13 +199,13 @@ function Row({ cat, draft, first, last, selected, hasError, entries, onSelect, p
         <span className="num">{entries}</span>
         <span className="cat-row__sub">{remaining === null ? 'no limit' : remaining === 0 ? 'full' : `${remaining} left`}</span>
       </td>
-      <td>
-        {!readOnly && (
+      {!readOnly && (
+        <td>
           <button className="icon-btn" aria-label={`Duplicate ${name}`} title="Duplicate" onClick={(e) => (e.stopPropagation(), duplicateAndSelect(draft, cat.id, onSelect))}>
             <Icon name="copy" size={14} />
           </button>
-        )}
-      </td>
+        </td>
+      )}
     </tr>
   );
 }
