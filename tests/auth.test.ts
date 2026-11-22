@@ -1256,6 +1256,39 @@ describe('organizer roles', () => {
     }
   }, 15_000);
 
+  it.each(['sign-in', 'Resend'])('gives Resend of an expired invitation and a first sign-in one history when %s is first', async (first) => {
+    const databaseUrl = await testDatabaseUrl();
+    let now = new Date('2027-04-04T12:00:00.000Z');
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth(), now: () => now });
+    const call = (method: Method, url: string, payload?: object, who = OWNER) => app.inject({ method, url, headers: as(who), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const base = `/api/organizations/${org.id}`;
+    const body = { email: 'treasurer@valley.test', role: 'finance' };
+    const { revision } = (await call('POST', `${base}/members`, body)).json().invitations[0];
+    now = new Date(now.getTime() + (INVITATION_DAYS + 1) * 86_400_000);
+    const signIn = () => call('GET', '/api/me', undefined, body.email).then((r) => r.statusCode);
+    const resend = () => call('POST', `${base}/invitations/resend`, { ...body, revision }).then((r) => r.statusCode);
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT 1 FROM organizations WHERE id = $1 FOR UPDATE', [org.id]);
+      const leading = first === 'sign-in' ? signIn() : resend();
+      await untilWaiting(blocker, 1);
+      const following = first === 'sign-in' ? resend() : signIn();
+      await untilWaiting(blocker, 2);
+      await blocker.query('ROLLBACK');
+      expect([await leading, await following]).toEqual(first === 'sign-in' ? [200, 409] : [200, 200]);
+      const team = (await call('GET', `${base}/members`)).json();
+      expect(team.invitations).toEqual([]);
+      expect(team.members.some((m: { email: string }) => m.email === body.email)).toBe(first === 'Resend');
+      const actions = team.history.filter((h: { email: string }) => h.email === body.email).map((h: { action: string }) => h.action);
+      expect(actions.sort()).toEqual(first === 'sign-in' ? ['invitation_expired', 'invited'] : ['invitation_accepted', 'invitation_renewed', 'invited']);
+    } finally {
+      await blocker.end();
+    }
+  }, 15_000);
+
   it('grants nothing when Cancel reaches the account lock before a first sign-in', async () => {
     const databaseUrl = await testDatabaseUrl();
     const { app } = await testApp({ databaseUrl, auth: fakeAuth() });
