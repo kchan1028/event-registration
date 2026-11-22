@@ -51,6 +51,9 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
     const category = config.categories.find((c: { raceId: string }) => c.raceId === config.races[0].id);
     // A start group with a problem to fix.
     Object.assign(config.startGroups.find((g: { id: string }) => g.id === category.startGroupId), { startTime: '08:00', stagingTime: '09:00' });
+    // Two groups at one time: a warning on the race itself.
+    const others = config.startGroups.filter((g: { raceId: string; id: string }) => g.raceId === category.raceId && g.id !== category.startGroupId);
+    Object.assign(others[0], { startTime: '08:00', stagingTime: null });
     // Every optional part of the editor that carries a hint: a question, a timed length, and no timing code (a problem to fix).
     Object.assign(category, {
       questions: [{ id: 'q-role-test', label: '', required: false, options: [] }],
@@ -70,6 +73,7 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
       // Problems show to every role, as words and not by color alone. The tasks that fix them stay with editors.
       await expect(member.locator('.clip--error').first()).toContainText('staging time is after the start time');
       await expect(member.locator('.cat-row', { hasText: category.name }).first()).toContainText('Not reviewed yet');
+      await expect(member.getByRole('list', { name: 'Problems in this race' })).toContainText('start at the same time');
       await member.locator('.cat-row__name', { hasText: category.name }).first().click();
       await expect(member.getByText(/^(Review copy|Needs fixing)$/)).toHaveCount(0);
       const details = member.getByRole('complementary', { name: 'Category details' });

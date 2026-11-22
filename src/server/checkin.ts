@@ -184,7 +184,7 @@ export function createCheckIn(db: Db, repo: Repo, orders: Orders, clock: () => D
 
   function riderRange(cfg: EventConfig, entries: Rider['entries'], s: BibSettings, dayId: string) {
     const range = bibRangeForEntries(cfg, entries, s, dayId);
-    if (range && range.first > range.last) throw new HttpError(409, 'The rider’s category bib ranges do not overlap. A registration manager or owner can adjust the ranges or use separate bibs per day.');
+    if (range && range.first > range.last) throw new HttpError(409, 'The rider’s category bib ranges do not overlap. A registration manager or owner can adjust the ranges, or use separate bibs per day if the conflict is between days.');
     return range;
   }
 

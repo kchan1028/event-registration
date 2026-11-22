@@ -18,6 +18,8 @@ export function FieldBoard({ draft, raceId, onSelect, selectedId }: { draft: Dra
   const cats = sortCategories(config.categories.filter((c) => c.raceId === raceId && c.status !== 'archived'));
   const unassigned = cats.filter((c) => !c.startGroupId || !groups.some((g) => g.id === c.startGroupId));
   const [editing, setEditing] = useState<string | null>(null);
+  // Editors read race problems in the publishing checks, which view-only roles do not have.
+  const raceIssues = readOnly ? draft.issues.filter((i) => i.target.kind === 'race' && i.target.id === raceId) : [];
 
   const addGroup = () => {
     const g: StartGroup = { id: newId('sg'), raceId, name: `Start group ${groups.length + 1}`, startTime: null, stagingTime: null, fieldLimit: null };
@@ -39,6 +41,16 @@ export function FieldBoard({ draft, raceId, onSelect, selectedId }: { draft: Dra
         )}
       </div>
 
+      {raceIssues.length > 0 && (
+        <ul className="editor__issues" aria-label="Problems in this race">
+          {raceIssues.map((i) => (
+            <li key={i.key} className={`issue issue--${i.level}`}>
+              <Icon name={i.level === 'error' ? 'error' : 'warn'} size={14} />
+              {i.message}
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="board__grid">
         {groups.map((g) => (
           <Clip key={g.id} group={g} draft={draft} cats={cats.filter((c) => c.startGroupId === g.id)} groups={groups} editing={editing === g.id} setEditing={setEditing} onSelect={onSelect} selectedId={selectedId} />
