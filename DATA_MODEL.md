@@ -795,7 +795,7 @@ Account and event foreign keys restrict deletion while evidence remains. The sco
 
 ## Emergency contact lookups
 
-`emergency_contact_views` records one row each time an organizer looks up one registration's emergency contact. Its fields are an opaque `ecv` id, the signed-in account, the event, the order, and the time. It does not store the contact name or phone. Account, event, and order foreign keys use `ON DELETE RESTRICT`. The index is `(event_id, viewed_at, id)`. There is no application read endpoint. The generated case-study reset deletes these rows for its fictional events before it deletes those events. How long the rows are kept is still the open retention decision in [product.md](product.md#data-storage).
+`emergency_contact_views` records one row each time an organizer looks up one registration's emergency contact. Its fields are an opaque `ecv` id, the signed-in account, the event, the order, and the time. It does not store the contact name or phone. Account, event, and order foreign keys use `ON DELETE RESTRICT`. The index is `(event_id, viewed_at, id)`. There is no application read endpoint. The generated case-study reset deletes these rows for its fictional events before it deletes those events. The approved retention is 365 days from `viewed_at` ([product.md](product.md#open-decisions), decision 6). Nothing enforces it yet: enforcement is Planned, and the deletion procedure is still open.
 
 ## Deletion behavior
 

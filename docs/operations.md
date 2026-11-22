@@ -153,7 +153,7 @@ The database recovery gap is the time between the latest recovered committed cha
 
 ## Rider data requests
 
-Retention and deletion periods are not set; they are in the [decision backlog](decisions/README.md#decision-backlog) and must be decided before the pilot. Until then:
+The emergency-contact lookup record has an approved retention of 365 days, not yet enforced. Other retention periods and every deletion procedure are not set; they are in the [decision backlog](decisions/README.md#decision-backlog) and must be decided before the pilot. Until then:
 
 - route requests to see, correct, or delete rider data to the event owner and the support owner;
 - keep waiver and financial records that the federation or tax rules may require, even when other data is deleted; and
@@ -177,7 +177,7 @@ The [readiness checklist](research/prelaunch-readiness.md#race-day-readiness-che
 2. Freeze starts and critical/high initial-response targets are approved for rehearsal. Event-specific window end times, live operating acceptance and actual coverage remain open under [Operating calendar](#operating-calendar-for-an-event) and [Incident severity](#incident-severity).
 3. Recovery targets approved November 19, 2026. Hosted proof and operator acceptance remain open under [Backups and recovery](#backups-and-recovery).
 4. Which monitoring and alerting tools fit a small volunteer team? (hosting ADR)
-5. What retention periods apply to waivers, financial records, and everything else?
+5. What retention periods apply to waivers, financial records, and everything else except the emergency-contact lookup record (365 days, decided November 22, 2026)?
 
 ### November 16, 2026 research follow-up
 
@@ -189,6 +189,6 @@ Unresolved operating decisions and validation steps are listed below. The named 
 | 2, freeze/response targets | Product owner with registration lead; race-morning disruption needs an agreed response | Rehearsal freeze starts and critical/high response targets approved November 19, 2026. Rehearse both windows. Confirm event-specific window end times before rehearsal. Live acceptance, named staffing and out-of-window response targets remain open. |
 | 3, recovery measurement | Technical lead and treasurer, unassigned; restore must preserve money, capacity and entries | Targets approved November 19, 2026. Hosted measurement and recovery sign-off remain open. Run the hosted rehearsal once its environment and operators are approved. |
 | 4, monitoring/tools | Technical/support lead, unassigned; failures need an accountable receiver | [Rehearsal routing](#rehearsal-alert-routing) is approved. Live recipients, monitoring service, alert thresholds and after-hours coverage remain open. Synthetic fault cases can proceed. Revisit live routing and tooling before hosted operational sign-off. |
-| 5, retention | Project owner/privacy responsibility unassigned; waivers, financial records, paper rosters and opaque telemetry keys remain personal data | No retention period or analytics collection approved. Synthetic measurements proceed; real-data collection blocked until access/retention approval before pilot. |
+| 5, retention | Project owner/privacy responsibility unassigned; waivers, financial records, paper rosters and opaque telemetry keys remain personal data | Only the emergency-contact lookup record has an approved period (365 days, November 22, 2026; enforcement Planned). No other retention period or analytics collection approved. Synthetic measurements proceed; real-data collection blocked until access/retention approval before pilot. |
 
 Related decisions remain in [product.md decisions 4–6 and 8–10](../product.md#open-decisions), [ADR 0005](decisions/0005-merchant-and-settlement-model.md), [federation questions](usac-questions.md) and [timer review](timer-export-review.md). The new research does not resolve merchant liability, event-year waiver/licensing approval, timer acknowledgement where applicable or safe device/accessibility arrangements. Revisit those existing records before the corresponding live-money, sanctioned-event or physical rehearsal gate.
