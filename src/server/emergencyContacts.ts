@@ -5,10 +5,10 @@ import { HttpError } from './repo';
 
 const EMERGENCY_CHANGE = new Set(['emergencyContactName', 'emergencyContactPhone']);
 
-/** Staff order responses omit the contact and the before/after values of a contact correction. */
+/** Staff order responses omit the contact and, for a contact correction, its before/after values and its free-text reason. */
 export function omitStaffEmergencyContact<T extends {
   rider: { emergencyContact?: unknown };
-  corrections?: { changes: { field: string; before: string; after: string }[] }[];
+  corrections?: { reason: string; changes: { field: string; before: string; after: string }[] }[];
 }>(view: T): T {
   const rider = { ...view.rider };
   delete rider.emergencyContact;
@@ -18,6 +18,8 @@ export function omitStaffEmergencyContact<T extends {
     rider,
     corrections: view.corrections.map((correction) => ({
       ...correction,
+      // The reason is typed freely, so it can repeat the contact.
+      reason: correction.changes.some((change) => EMERGENCY_CHANGE.has(change.field)) ? '' : correction.reason,
       changes: correction.changes.map((change) => (
         EMERGENCY_CHANGE.has(change.field) ? { ...change, before: '', after: '' } : change
       )),

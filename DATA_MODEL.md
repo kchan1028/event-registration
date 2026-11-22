@@ -447,7 +447,7 @@ Migration 15. Append-only audit of organizer corrections to rider details (produ
 | `order_id` | References `orders`. Indexed with `created_at` |
 | `changes_json` | Array of `{ field, label, before, after }`, only fields that changed. Correctable fields: first and last name, email, phone, team, license number, emergency contact name and phone. Eligibility fields (racing age, license category and type, competition class, collegiate division) and the waiver signature cannot be corrected |
 | `cleared_reviews_json` | Set when a corrected license number cleared earlier license reviews on the order: each cleared entry's category ID, review note, and review time. Null otherwise |
-| `reason` | Required, 3 to 300 characters |
+| `reason` | Required, 3 to 300 characters, stored without leading or trailing spaces. Staff responses blank it when the correction changed an emergency-contact field; rider and guardian order responses include it |
 | `corrected_by` | Account that made the correction (migration 19); null for corrections made before migration 19. Set to null if that account is deleted |
 | `created_at` | |
 
