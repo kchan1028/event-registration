@@ -356,13 +356,16 @@ for (const published of [false, true]) {
   });
 }
 
-test('a reply showing another client\'s draft never becomes the draft this screen publishes', async ({ page }) => {
+for (const ownEdit of [true, false]) {
+test(`a reply showing another client's draft never becomes the draft this screen publishes${ownEdit ? '' : ', even when this screen matches the live version'}`, async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
   const url = `/api/events/${eventId}`;
   expect((await publishReviewed(page.request, url, { acknowledgeWarnings: true })).ok()).toBe(true);
   await page.goto(`/#/events/${eventId}/setup`);
-  await page.getByLabel('Event name', { exact: true }).fill('Draft A on this screen');
-  await saved(page);
+  if (ownEdit) {
+    await page.getByLabel('Event name', { exact: true }).fill('Draft A on this screen');
+    await saved(page);
+  }
   const clear = page.getByRole('button', { name: 'Remove test entries only' });
   await expect(clear).toBeEnabled();
   const { config, revision } = await (await page.request.get(url)).json();
@@ -376,6 +379,7 @@ test('a reply showing another client\'s draft never becomes the draft this scree
   await expect(page.getByRole('button', { name: 'Publish version 2' })).toBeDisabled();
   expect((await (await page.request.get(url)).json()).publishedVersion).toBe(1);
 });
+}
 
 test('an edit put back before autosave, or a failed save, never strands publishing', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();

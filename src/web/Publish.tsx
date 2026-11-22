@@ -14,12 +14,15 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const { data } = draft;
-  const upToDate = data.publishedVersion !== null && data.publishedRevision === draft.savedRevision && draft.saveState === 'saved';
   const [impact, setImpact] = useState<ChangeImpact | null>(null);
   const [impactAck, setImpactAck] = useState(false);
   const [impactError, setImpactError] = useState<string | null>(null);
   const [compared, setCompared] = useState<{ revision: number; publishedVersion: number | null; waiverChanged: boolean } | null>(null);
   const [check, setCheck] = useState(0);
+  // The server can only be ahead of this screen, when someone else saved or published.
+  const changedElsewhere = compared !== null && (compared.revision > draft.savedRevision || (compared.publishedVersion ?? 0) > (data.publishedVersion ?? 0));
+  // Never current while the check has found a newer draft or version: that has to be reviewed first.
+  const upToDate = !changedElsewhere && data.publishedVersion !== null && data.publishedRevision === draft.savedRevision && draft.saveState === 'saved';
   const [reason, setReason] = useState('');
   // Acknowledgements and a reason are for one draft against one live version.
   useEffect(() => {
@@ -55,8 +58,6 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
   const sameDraft = compared?.revision === draft.savedRevision && compared?.publishedVersion === data.publishedVersion;
   const unsaved = draft.saveState !== 'saved';
   const comparisonReady = upToDate || (!unsaved && sameDraft);
-  // The server can only be ahead of this screen, when someone else saved or published.
-  const changedElsewhere = compared !== null && (compared.revision > draft.savedRevision || (compared.publishedVersion ?? 0) > (data.publishedVersion ?? 0));
   // Ask nothing from, and show nothing of, a comparison of another draft.
   const shownImpact = sameDraft ? impact : null;
   const needsImpactAck = !upToDate && (shownImpact?.categories.length ?? 0) > 0;
