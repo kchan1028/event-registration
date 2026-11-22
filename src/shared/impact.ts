@@ -41,6 +41,24 @@ const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringif
 const limitText = (n: number | null) => (n === null ? 'no limit' : String(n));
 const STATUS: Record<Category['status'], string> = { active: 'open', closed: 'closed', archived: 'archived' };
 
+/** The shortest reason accepted for a waiver change, after trimming. */
+export const WAIVER_REASON_MIN = 3;
+export const WAIVER_REASON_MAX = 300;
+
+/**
+ * True when publishing the draft changes what riders agree to: the waiver's version or text, or a
+ * category's addendum. Deleting a whole category is not a waiver change. An archived category still
+ * counts, so its terms cannot be changed while archived and come back without a reason.
+ */
+export function waiverChanged(published: EventConfig, draft: EventConfig): boolean {
+  if (published.registration.waiverVersion !== draft.registration.waiverVersion || published.registration.waiverText !== draft.registration.waiverText) return true;
+  const before = new Map(published.categories.map((c) => [c.id, c.addendum]));
+  return draft.categories.some((c) => {
+    const was = before.get(c.id);
+    return was?.title !== c.addendum?.title || was?.text !== c.addendum?.text;
+  });
+}
+
 function categoryChanges(before: EventConfig, after: EventConfig, b: Category, a: Category): { kinds: ImpactKind[]; details: string[] } {
   const kinds = new Set<ImpactKind>();
   const details: string[] = [];

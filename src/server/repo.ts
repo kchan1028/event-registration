@@ -3,6 +3,7 @@ import { requireCancellationOpen, requireCancellationPlacementUnchanged } from '
 import { canAdmit, entryCountsByCategory, type LimitUsage } from '../shared/capacity';
 import { bibSettingsSchema, DEFAULT_BIB_SETTINGS, type BibSettings } from '../shared/checkin';
 import { newId } from '../shared/factory';
+import { WAIVER_REASON_MIN, waiverChanged } from '../shared/impact';
 import { eventConfigSchema, type EventConfig, type CapacityEntry, type PublicEventSummary } from '../shared/schema';
 import { countIssues, validateConfig, type Issue } from '../shared/validation';
 import type { Db } from './db';
@@ -104,6 +105,12 @@ export function createRepo(db: Db, clock: () => Date) {
       [id, waiverVersion, waiverText],
     );
     return !!other;
+  }
+
+  async function getVersion(id: string, version: number): Promise<EventConfig> {
+    const row = await db.get<{ config_json: unknown }>(`SELECT config_json FROM event_versions WHERE event_id = $1 AND version = $2`, [id, version]);
+    if (!row) throw new HttpError(404, 'Version not found.');
+    return eventConfigSchema.parse(row.config_json);
   }
 
   async function requireWaiverVersionKeepsItsText(id: string, config: EventConfig) {
@@ -253,7 +260,7 @@ export function createRepo(db: Db, clock: () => Date) {
       });
     },
 
-    async publish(id: string, acknowledgeWarnings: boolean): Promise<{ version: number; issues: Issue[] }> {
+    async publish(id: string, acknowledgeWarnings: boolean, audit: { publishedBy?: string; waiverChangeReason?: string } = {}): Promise<{ version: number; issues: Issue[] }> {
       return db.transaction(async () => {
         await db.lock(eventLock(id));
         const current = await requireEvent(id);
@@ -263,10 +270,15 @@ export function createRepo(db: Db, clock: () => Date) {
         if (errors > 0) throw new HttpError(422, `Fix ${errors} ${errors === 1 ? 'error' : 'errors'} before publishing.`, issues);
         if (warnings > 0 && !acknowledgeWarnings) throw new HttpError(422, `Review and acknowledge ${warnings} ${warnings === 1 ? 'warning' : 'warnings'} before publishing.`, issues);
         await requireWaiverVersionKeepsItsText(id, current.config);
+        let reason: string | null = null;
+        if (current.publishedVersion !== null && waiverChanged(await getVersion(id, current.publishedVersion), current.config)) {
+          reason = audit.waiverChangeReason?.trim() ?? '';
+          if (reason.length < WAIVER_REASON_MIN) throw new HttpError(422, `Write why the waiver changed (at least ${WAIVER_REASON_MIN} characters) before publishing.`);
+        }
         const version = (current.publishedVersion ?? 0) + 1;
         await db.run(
-          `INSERT INTO event_versions (event_id, version, config_json, draft_revision, warnings_acknowledged, published_at) VALUES ($1, $2, $3, $4, $5, $6)`,
-          [id, version, JSON.stringify(current.config), current.revision, warnings, now()],
+          `INSERT INTO event_versions (event_id, version, config_json, draft_revision, warnings_acknowledged, published_at, published_by, waiver_change_reason) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [id, version, JSON.stringify(current.config), current.revision, warnings, now(), audit.publishedBy ?? null, reason],
         );
         await db.run(`UPDATE events SET published_version = $1, published_revision = $2 WHERE id = $3`, [version, current.revision, id]);
         return { version, issues };
@@ -275,18 +287,22 @@ export function createRepo(db: Db, clock: () => Date) {
 
     async listVersions(id: string) {
       await requireEvent(id);
-      const rows = await db.all<{ version: number; published_at: string; draft_revision: number; warnings_acknowledged: number }>(
-        `SELECT version, published_at, draft_revision, warnings_acknowledged FROM event_versions WHERE event_id = $1 ORDER BY version DESC`,
+      const rows = await db.all<{ version: number; published_at: string; draft_revision: number; warnings_acknowledged: number; published_by_email: string | null; waiver_change_reason: string | null }>(
+        `SELECT v.version, v.published_at, v.draft_revision, v.warnings_acknowledged, a.email AS published_by_email, v.waiver_change_reason
+         FROM event_versions v LEFT JOIN accounts a ON a.id = v.published_by WHERE v.event_id = $1 ORDER BY v.version DESC`,
         [id],
       );
-      return rows.map((v) => ({ version: v.version, publishedAt: v.published_at, draftRevision: v.draft_revision, warningsAcknowledged: v.warnings_acknowledged }));
+      return rows.map((v) => ({
+        version: v.version,
+        publishedAt: v.published_at,
+        draftRevision: v.draft_revision,
+        warningsAcknowledged: v.warnings_acknowledged,
+        publishedBy: v.published_by_email,
+        waiverChangeReason: v.waiver_change_reason,
+      }));
     },
 
-    async getVersion(id: string, version: number): Promise<EventConfig> {
-      const row = await db.get<{ config_json: unknown }>(`SELECT config_json FROM event_versions WHERE event_id = $1 AND version = $2`, [id, version]);
-      if (!row) throw new HttpError(404, 'Version not found.');
-      return eventConfigSchema.parse(row.config_json);
-    },
+    getVersion,
 
     /** Several published versions of one event in one query. Throws like getVersion if any is missing. */
     async getVersions(id: string, versions: readonly number[]): Promise<Map<number, EventConfig>> {

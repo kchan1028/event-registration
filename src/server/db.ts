@@ -761,6 +761,11 @@ export const MIGRATIONS: string[] = [
   -- Identifies one grant, so Remove cannot take a role that was granted after the screen loaded.
   ALTER TABLE organization_members ADD COLUMN revision text NOT NULL DEFAULT gen_random_uuid()::text;
   `,
+  `
+  -- Who published each version, and why when it changed the waiver. Earlier versions and seed scripts have neither.
+  ALTER TABLE event_versions ADD COLUMN published_by text REFERENCES accounts(id) ON DELETE RESTRICT;
+  ALTER TABLE event_versions ADD COLUMN waiver_change_reason text CHECK (btrim(waiver_change_reason) <> '');
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

@@ -46,7 +46,7 @@ When a change touches one of these areas, run that row's tests in addition to th
 | Payments and refunds | `tests/payments.test.ts`, `tests/refunds.test.ts`, `tests/refundPolicy.test.ts`, `tests/orders.test.ts`, `tests/pricing.test.ts`, `tests/coupons.test.ts` | `e2e/checkout.spec.ts` |
 | Concurrent capacity reservations | `tests/capacity.test.ts`, `tests/api.test.ts` (last place across two connections), `tests/orders.test.ts`, `tests/waitlist.test.ts`, `tests/transfers.test.ts` | `e2e/organizer.spec.ts` (shared cap) |
 | Eligibility | `tests/eligibility.test.ts`, `tests/validation.test.ts`, `tests/impact.test.ts` | `e2e/checkout.spec.ts` (uncertain license) |
-| Guardian consent and waivers | `tests/juniors.test.ts`, `tests/categoryExtras.test.ts` (waiver addenda), `tests/orders.test.ts` | `e2e/checkout.spec.ts` (junior with guardian) |
+| Guardian consent and waivers | `tests/juniors.test.ts`, `tests/categoryExtras.test.ts` (waiver addenda), `tests/orders.test.ts`, `tests/auth.test.ts` (who changed a waiver and why) | `e2e/checkout.spec.ts` (junior with guardian), `e2e/organizer.spec.ts` (waiver change reason) |
 | Permissions | `tests/auth.test.ts`, `tests/lookup.test.ts`, `tests/juniors.test.ts` | `e2e/sign-in.spec.ts`, `e2e/checkin.spec.ts` (volunteer limits), `e2e/role-controls.spec.ts` (setup controls and instructions by role, with problems still shown read-only, phone and desktop) |
 | Participant privacy | `tests/exports.test.ts`, `tests/startlists.test.ts`, `tests/roster.test.ts`, `tests/checkin.test.ts`, `tests/emergency-contact.test.ts` (lists, roster, and exports omit the contact; a lookup stores no name or phone) | `e2e/checkin.spec.ts` (fallback roster), `e2e/emergency-contact.spec.ts` |
 | Exports | `tests/exports.test.ts`, `tests/startlists.test.ts`, `tests/csv.test.ts` | `e2e/csv.spec.ts` |
@@ -213,6 +213,10 @@ Run the post-claim cases in `tests/profileClaims.test.ts` with claims/guardian/a
 ### Guardian write rollback
 
 `tests/guardian-rollback.test.ts` installs rejecting triggers only in per-test disposable databases. Fail the combined initial profile/grant insert and require the enclosing order transaction to roll back; fail acceptance-evidence update after the second grant insert; fail replacement insertion after cancelling the old invitation. Require no partial profile/order/grant, unchanged open invitation and purchase/waiver evidence, no recipient access after failed acceptance, and safe successful retry once the injected failure is removed. Database cleanup follows the existing test harness. These checks establish local transaction rollback, not approved privacy/retention, identity evidence or deletion/support policy; issue [#170](https://github.com/kchan1028/event-registration/issues/170) remains open for those gates.
+
+### Publication audit
+
+Run the waiver cases in `tests/auth.test.ts` (publisher, required and ignored reasons, every addendum change, role and public visibility), the migration 43 case in `tests/migrations.test.ts`, `tests/impact.test.ts`, and the republishing cases in `tests/orders.test.ts` and `tests/categoryExtras.test.ts`. Run `e2e/organizer.spec.ts` for the reason field, its absence on other changes, the versions table and phone width, and `e2e/checkout.spec.ts` for checkout after a waiver change.
 
 ### Waiver acceptance evidence
 

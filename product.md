@@ -262,6 +262,7 @@ Status: Planned documentation only. The current app does not support time trials
 - Support parent/guardian entry and the applicable minor-signature workflow, subject to federation acceptance.
 - Collect only required profile, contact, emergency contact, team, and license information.
 - A waiver version identifies one text for the life of an event. Publishing refuses different text under a version that event already published: new text needs a new version, and an earlier version can return only with its exact text. A change of live version needs renewed agreement. If older publications already gave the live version two texts, new reservations stop until a version with only one text is published, either a new one or an earlier one with its exact text.
+- Every publication records who published it. One that changes the waiver after the first publication also needs a reason of 3 to 300 characters, kept with that version. A waiver change is a different waiver version or text, or an added, edited or removed category addendum (provisional scope: see the [recorded question](#waiver-change-reason-scope)). Only roles that can publish see who and why; riders and public pages never do. Earlier versions show the publisher as not recorded.
 - Display waiver version and signature status. Payment success alone does not mean cleared to race.
 - Confirm entries only after authoritative payment confirmation. Handle delayed or failed payments explicitly.
 - Permit organizer-configured changes, withdrawals, and refund requests. Show policy before checkout.
@@ -908,6 +909,12 @@ Open, raised November 16, 2026; owner: project owner (technical and registration
 Resolved consent follow-up (raised November 19, 2026; resolved November 22, 2026; owner: project owner): changed addenda need renewed acceptance. The owner approved fixing [#340](https://github.com/kchan1028/event-registration/issues/340), which states that rule and that the server checks it under the event lock. A reservation request carries the title and text of each addendum as accepted, and the server refuses it when the published text differs. Replay of a committed order still returns that order. Implemented locally. The main waiver had the same gap when its text changed under an unchanged version. Publishing now refuses that ([#346](https://github.com/kchan1028/event-registration/issues/346), fixed November 22, 2026), so accepting real waivers depends on the other waiver and federation gates.
 
 Read-only support lookup (implemented locally November 19, 2026). Pending checkout exposes the original reservation reference to the rider. An event owner, registration manager or finance user can enter that exact reference in **Registrations** to see the saved order number, its current status and an active hold’s expiry. A lookup miss means no order is visible at the time of the check. Keep the rider’s pending checkout and retry the same request. The lookup grants no write or cancellation authority. See the [support procedure](docs/operations.md#checking-a-pending-reservation).
+
+### Waiver change reason scope
+
+Decided November 22, 2026; owner: project owner. Told that [#352](https://github.com/kchan1028/event-registration/issues/352) "will add a 'reason' field when an organizer publishes changed waiver text", the owner answered "okay".
+
+Open, raised November 22, 2026; owner: project owner. Should the reason also be required for a new version label on the same text and for category addendum changes? It matters because the [audit rule](docs/coding-guide.md#audit-history) covers every waiver change, while the owner's answer named waiver text. Provisional assumption, not an owner decision: yes to both, because riders agree again after either change. Publishing works under that assumption and nothing is blocked. Revisit when the owner answers or organizer rehearsal finds the prompt unnecessary.
 
 ### Waitlist offer status retry
 

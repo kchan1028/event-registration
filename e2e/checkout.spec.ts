@@ -728,7 +728,7 @@ for (const { committed, legacy, waiverChanges, only } of consentRecoveryCases) {
     const originalText = 'Fictional original race condition.\n' + 'LongFictionalTerm'.repeat(30);
     category.addendum = { title: 'Original sample condition ' + 'W'.repeat(54), text: originalText };
     expect((await page.request.put(eventPath + '/config', { data: { revision: draft.revision, config: draft.config } })).ok()).toBe(true);
-    expect((await page.request.post(eventPath + '/publish', { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
+    expect((await page.request.post(eventPath + '/publish', { data: { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChangeReason: 'Fictional waiver update' } })).ok()).toBe(true);
     await page.reload();
     await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
     await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
@@ -780,7 +780,7 @@ for (const { committed, legacy, waiverChanges, only } of consentRecoveryCases) {
     const next = only ? { ...category.addendum, [only]: NEW_TERMS[only] } : NEW_TERMS;
     current.config.categories.find((cat: { id: string }) => cat.id === bodies[0].categoryIds[0]).addendum = next;
     expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision: current.revision, config: current.config } })).ok()).toBe(true);
-    expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
+    expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChangeReason: 'Fictional waiver update' } })).ok()).toBe(true);
     if (!only) await page.reload();
     await expect(terms).toBeVisible();
     if (legacy) {
@@ -898,7 +898,7 @@ test('stale waiver rejection refreshes terms without reload and requires fresh a
   current.config.registration.waiverVersion = 'CRO-STALE-SAMPLE';
   current.config.registration.waiverText = 'Updated fictional waiver requiring renewed agreement.';
   expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision: current.revision, config: current.config } })).ok()).toBe(true);
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true, waiverChangeReason: 'Fictional waiver update' } })).ok()).toBe(true);
   await page.getByRole('button', { name: 'Sign and review the order' }).click();
   await expect(page.locator('.waiver')).toHaveText(current.config.registration.waiverText);
   await expect(page.getByLabel('I have read the whole waiver')).not.toBeChecked();

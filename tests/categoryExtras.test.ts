@@ -111,7 +111,7 @@ describe('category extras API', () => {
       const cat = config.categories.find((c) => c.timingCode === 'RR-M35-34')!;
       change(cat);
       expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } })).statusCode).toBe(200);
-      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChangeReason: 'Fictional waiver update' } })).statusCode).toBe(200);
       return { config, cat };
     };
     const { config, cat } = await publish((c) => { c.addendum = { title: 'Masters rules', text: 'Original fictional rules.' }; });

@@ -203,7 +203,15 @@ export interface EventPayload {
   updatedAt: string;
   config: EventConfig;
   entries: CapacityEntry[];
-  versions: { version: number; publishedAt: string; draftRevision: number; warningsAcknowledged: number }[];
+  versions: {
+    version: number;
+    publishedAt: string;
+    draftRevision: number;
+    warningsAcknowledged: number;
+    /** Sent only to roles that can publish. Null when the version predates the record or came from a seed script. */
+    publishedBy?: string | null;
+    waiverChangeReason?: string | null;
+  }[];
   issues: Issue[];
   /** What is not connected yet, in words for the screen. `payments` follows the server's payment mode. */
   pending: { licenseVerification: string; payments: string; signIn: string };
@@ -342,8 +350,8 @@ export const api = {
   createOmnium: () => request<{ organizationId: string; eventId: string }>('POST', '/api/demo/berkeley-omnium'),
   event: (id: string) => request<EventPayload>('GET', `/api/events/${id}`),
   saveConfig: (id: string, revision: number, config: EventConfig) => request<EventPayload>('PUT', `/api/events/${id}/config`, { revision, config }),
-  publish: (id: string, acknowledgeWarnings: boolean, acknowledgeImpact = false) =>
-    request<EventPayload & { publishedVersion: number }>('POST', `/api/events/${id}/publish`, { acknowledgeWarnings, acknowledgeImpact }),
+  publish: (id: string, acknowledgeWarnings: boolean, acknowledgeImpact = false, waiverChangeReason?: string) =>
+    request<EventPayload & { publishedVersion: number }>('POST', `/api/events/${id}/publish`, { acknowledgeWarnings, acknowledgeImpact, waiverChangeReason }),
   addTestEntries: (id: string, categoryId: string, count: number) =>
     request<{ result: TestEntryResult; event: EventPayload }>('POST', `/api/events/${id}/test-entries`, { categoryId, count }),
   clearTestEntries: (id: string) => request<{ removed: number; event: EventPayload }>('DELETE', `/api/events/${id}/test-entries`),
@@ -422,7 +430,7 @@ export const api = {
   addCheckInDemoRiders: (eventId: string) => request<{ created: number }>('POST', `/api/events/${eventId}/check-in-demo-riders`),
   startLists: (eventId: string) => request<StartListOverview>('GET', `/api/events/${eventId}/start-lists`),
   snapshotStartList: (eventId: string, raceId: string) => request<{ version: number; riders: number }>('POST', `/api/events/${eventId}/start-lists/${raceId}/snapshots`),
-  changeImpact: (eventId: string) => request<{ publishedVersion: number | null; impact: ChangeImpact | null }>('GET', `/api/events/${eventId}/impact`),
+  changeImpact: (eventId: string) => request<{ publishedVersion: number | null; impact: ChangeImpact | null; waiverChanged: boolean }>('GET', `/api/events/${eventId}/impact`),
   lockStartList: (eventId: string, raceId: string) => request<{ version: number; riders: number; lockedAt: string }>('POST', `/api/events/${eventId}/start-lists/${raceId}/lock`),
   startListCsvUrl: (eventId: string, raceId: string, snapshot?: number) => `/api/events/${eventId}/start-lists/${raceId}/csv${snapshot ? `?snapshot=${snapshot}` : ''}`,
 };

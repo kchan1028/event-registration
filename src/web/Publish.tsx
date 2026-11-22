@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import type { ChangeImpact, ImpactKind } from '../shared/impact';
+import { WAIVER_REASON_MAX, WAIVER_REASON_MIN, type ChangeImpact, type ImpactKind } from '../shared/impact';
 import { countIssues, type Issue } from '../shared/validation';
 import { api, ApiError } from './api';
 import { href } from './App';
 import type { Draft } from './Builder';
 import { formatDateTime } from './format';
 import { IssueList } from './IssuesPanel';
-import { Icon, Pending } from './ui';
+import { Field, Icon, Pending } from './ui';
 
 export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i: Issue) => void }) {
   const { errors, warnings } = countIssues(draft.issues);
@@ -18,6 +18,8 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
   const [impact, setImpact] = useState<ChangeImpact | null>(null);
   const [impactAck, setImpactAck] = useState(false);
   const [impactError, setImpactError] = useState<string | null>(null);
+  const [waiverChanged, setWaiverChanged] = useState(false);
+  const [reason, setReason] = useState('');
 
   // Recompute after every saved draft revision; the server compares the saved draft with the latest published version.
   useEffect(() => {
@@ -28,6 +30,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
       .then((r) => {
         if (!live) return;
         setImpact(r.impact);
+        setWaiverChanged(r.waiverChanged);
         setImpactError(null);
         setImpactAck(false);
       })
@@ -38,15 +41,18 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
   }, [data.id, data.revision, data.publishedVersion, draft.saveState]);
 
   const needsImpactAck = !upToDate && (impact?.categories.length ?? 0) > 0;
+  const needsReason = !upToDate && waiverChanged;
+  const reasonMissing = needsReason && reason.trim().length < WAIVER_REASON_MIN;
 
   const publish = async () => {
     setBusy(true);
     setMsg(null);
     try {
-      const v = await draft.publish(ack, impactAck);
+      const v = await draft.publish(ack, impactAck, needsReason ? reason : undefined);
       setMsg({ tone: 'ok', text: `Published as version ${v}. The published version is frozen; later edits stay in the draft until you publish again.` });
       setAck(false);
       setImpactAck(false);
+      setReason('');
     } catch (e) {
       setMsg({ tone: 'error', text: (e as ApiError).message });
     } finally {
@@ -105,7 +111,18 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
             <input type="checkbox" checked={impactAck} onChange={(e) => setImpactAck(e.target.checked)} disabled={errors > 0} />I have reviewed who these changes affect
           </label>
         )}
-        <button className="btn btn--primary" onClick={publish} disabled={busy || errors > 0 || (warnings > 0 && !ack) || (needsImpactAck && !impactAck) || upToDate}>
+        {needsReason && (
+          <Field
+            className="publish-box__reason"
+            label="Reason for the waiver change"
+            hint={`Required, at least ${WAIVER_REASON_MIN} characters. Saved with this version and shown to owners and registration managers. Leave out rider details.`}
+          >
+            {(id, describedBy) => (
+              <textarea id={id} aria-describedby={describedBy} className="input" rows={3} required maxLength={WAIVER_REASON_MAX} value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy || errors > 0} />
+            )}
+          </Field>
+        )}
+        <button className="btn btn--primary" onClick={publish} disabled={busy || errors > 0 || (warnings > 0 && !ack) || (needsImpactAck && !impactAck) || reasonMissing || upToDate}>
           {busy ? 'Publishing…' : upToDate ? `Version ${data.publishedVersion} is current` : `Publish version ${(data.publishedVersion ?? 0) + 1}`}
         </button>
         {errors > 0 && <p className="muted small">Fix the errors above to publish.</p>}
@@ -122,28 +139,34 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
       </div>
 
       {data.versions.length > 0 && (
-        <section className="settings__section">
+        <section className="settings__section versions">
           <h3>Published versions</h3>
-          <table className="mini-table">
-            <thead>
-              <tr>
-                <th scope="col">Version</th>
-                <th scope="col">Published</th>
-                <th scope="col">Draft save number</th>
-                <th scope="col">Warnings acknowledged</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.versions.map((v) => (
-                <tr key={v.version}>
-                  <td className="num">v{v.version}</td>
-                  <td>{formatDateTime(v.publishedAt)}</td>
-                  <td className="num">{v.draftRevision}</td>
-                  <td className="num">{v.warningsAcknowledged}</td>
+          <div className="table-wrap" role="region" aria-label="Published versions" tabIndex={0}>
+            <table className="mini-table">
+              <thead>
+                <tr>
+                  <th scope="col">Version</th>
+                  <th scope="col">Published</th>
+                  <th scope="col">Published by</th>
+                  <th scope="col">Waiver change reason</th>
+                  <th scope="col">Draft save number</th>
+                  <th scope="col">Warnings acknowledged</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.versions.map((v) => (
+                  <tr key={v.version}>
+                    <td className="num">v{v.version}</td>
+                    <td>{formatDateTime(v.publishedAt)}</td>
+                    <td>{v.publishedBy ?? 'Not recorded'}</td>
+                    <td className="versions__reason">{v.waiverChangeReason ?? 'None'}</td>
+                    <td className="num">{v.draftRevision}</td>
+                    <td className="num">{v.warningsAcknowledged}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
     </div>
