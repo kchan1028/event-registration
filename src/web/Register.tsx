@@ -1448,21 +1448,21 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
           {originalTermsUnavailable && <p className="muted small">Original text for one or more race terms isn’t available in this tab.</p>}
         </section>
       )}
-      {currentAddenda.map((terms) => (
+      {currentAddenda.map((terms, index) => (
         <fieldset className="subfields" key={terms.categoryId}>
           <legend className="addendum-title">
             {terms.title} ({terms.categoryName})
           </legend>
           <p className="small addendum-text">{terms.text}</p>
           {!terms.accepted && extras.addenda.includes(terms.categoryId) && (
-            <p className="note" id={`renew-addendum-${terms.categoryId}`}>These terms changed or could not be matched to what you accepted. Read them and accept again.</p>
+            <p className="note" id={`renew-addendum-${index}`}>These terms changed or could not be matched to what you accepted. Read them and accept again.</p>
           )}
           <label className="check">
             <input
               id={`addendum-${terms.categoryId}`}
               type="checkbox"
               disabled={busy}
-              aria-describedby={!terms.accepted && extras.addenda.includes(terms.categoryId) ? `renew-addendum-${terms.categoryId}` : undefined}
+              aria-describedby={!terms.accepted && extras.addenda.includes(terms.categoryId) ? `renew-addendum-${index}` : undefined}
               checked={terms.accepted}
               onChange={(e) => toggleAddendum(terms, e.target.checked)}
             />
