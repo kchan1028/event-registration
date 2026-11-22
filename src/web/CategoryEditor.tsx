@@ -77,7 +77,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
         </div>
       )}
       {issues.length > 0 && (
-        <ul className="editor__issues" aria-label="Problems in this category">
+        <ul className="editor__issues" role="list" aria-label="Problems in this category">
           {issues.map((i) => (
             <li key={i.key} className={`issue issue--${i.level}`}>
               <Icon name={i.level === 'error' ? 'error' : 'warn'} size={14} />

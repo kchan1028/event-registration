@@ -42,7 +42,7 @@ export function FieldBoard({ draft, raceId, onSelect, selectedId }: { draft: Dra
       </div>
 
       {raceIssues.length > 0 && (
-        <ul className="editor__issues" aria-label="Problems in this race">
+        <ul className="editor__issues" role="list" aria-label="Problems in this race">
           {raceIssues.map((i) => (
             <li key={i.key} className={`issue issue--${i.level}`}>
               <Icon name={i.level === 'error' ? 'error' : 'warn'} size={14} />
