@@ -982,6 +982,10 @@ describe('organizer roles', () => {
       await replace();
       // Same deadline, no email attempt, and still a different invitation.
       expect((await call('POST', resendUrl, { email: shown.email, role: shown.role, revision: shown.revision })).statusCode).toBe(409);
+      const replaced = (await call('GET', url)).json().invitations[0];
+      // What an outgoing server writes to renew: the deadline, and no revision of its own.
+      await db.run('UPDATE organization_invitations SET expires_at = expires_at WHERE organization_id = $1', [org.id]);
+      expect((await call('POST', resendUrl, { email: shown.email, role: shown.role, revision: replaced.revision })).statusCode).toBe(409);
       const current = (await call('GET', url)).json().invitations[0];
       const response = await call('POST', resendUrl, { email: current.email, role: current.role, revision: current.revision });
       expect(response.statusCode).toBe(200);

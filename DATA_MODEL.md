@@ -163,7 +163,7 @@ A role granted to an email with no account yet (migration 16). Primary key (`org
 | `expires_at` | Migration 20. Not null. Sign-in after this time gives no role. Invitations that existed before migration 20 got `created_at` plus 14 days |
 | `email_attempt_id` | Migration 40. The current email attempt, or null when none was reserved (a seed). References `email_messages`; deleting that email sets this null |
 | `earlier_email` | Migration 40. True when an email for the same address and role predates that migration, or was saved without a key by an older server still running during a deploy. The invitation is never resent: cancel and invite again |
-| `revision` | Migration 41. A random value, new for each row and on each renewal. Resend (`POST /api/organizations/:id/invitations/resend`) must send the current one or gets 409 with nothing written: no renewal, attempt, history or grant. Add still renews an existing invitation without it |
+| `revision` | Migration 41. A random value, new for each row, and set by a trigger on every write of `expires_at`, so a renewal by an outgoing server changes it too. Resend (`POST /api/organizations/:id/invitations/resend`) must send the current one or gets 409 with nothing written: no renewal, attempt, history or grant. Add still renews an existing invitation without it |
 
 ### membership_changes
 

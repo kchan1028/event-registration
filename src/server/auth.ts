@@ -325,7 +325,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         }
         const t = clock();
         const expiresAt = new Date(t.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
-        const renewed = await db.run(`UPDATE organization_invitations SET expires_at = $4, invited_by = $5, revision = gen_random_uuid()::text WHERE organization_id = $1 AND email = $2 AND role = $3`, [
+        const renewed = await db.run(`UPDATE organization_invitations SET expires_at = $4, invited_by = $5 WHERE organization_id = $1 AND email = $2 AND role = $3`, [
           organizationId,
           normalized,
           role,

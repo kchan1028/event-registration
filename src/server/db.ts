@@ -748,6 +748,14 @@ export const MIGRATIONS: string[] = [
   `
   -- Changes whenever an invitation is replaced or renewed, so Resend can name exactly the one it was shown.
   ALTER TABLE organization_invitations ADD COLUMN revision text NOT NULL DEFAULT gen_random_uuid()::text;
+  -- In the database, so a renewal by an outgoing server during a deploy changes it too.
+  CREATE FUNCTION revise_invitation() RETURNS trigger LANGUAGE plpgsql AS $$
+  BEGIN
+    NEW.revision := gen_random_uuid()::text;
+    RETURN NEW;
+  END $$;
+  CREATE TRIGGER organization_invitations_revise BEFORE UPDATE OF expires_at ON organization_invitations
+    FOR EACH ROW EXECUTE FUNCTION revise_invitation();
   `,
 ];
 
