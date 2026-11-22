@@ -5,6 +5,7 @@ import { api, ApiError } from './api';
 import type { Draft } from './Builder';
 import { formatDateTime } from './format';
 import { useLoad } from './useLoad';
+import { EmergencyContactLookup } from './EmergencyContact';
 import { DownloadLink, Pending } from './ui';
 
 /** Start lists per race, timestamped snapshots, and the sample timer CSV. */
@@ -154,6 +155,7 @@ export function StartLists({ draft }: { draft: Draft }) {
                       <td className="sl-num">{r.bib ?? <span className="muted">none</span>}</td>
                       <td>
                         {r.lastName}, {r.firstName}
+                        <EmergencyContactLookup eventId={eventId} riderName={`${r.firstName} ${r.lastName}`} entryId={r.entryId} />
                       </td>
                       <td>{r.team || <span className="muted">none</span>}</td>
                       <td>{r.licenseStatus === 'reviewed' ? 'Reviewed' : <span className="sl-review">Needs review</span>}</td>

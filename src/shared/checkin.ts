@@ -106,7 +106,10 @@ export function checkInTiming(durationsMs: readonly number[]): { timed: number; 
 }
 
 export interface CheckInRider {
+  /** Rider key. Bibs and check-ins use this id. */
   orderId: string;
+  /** Registration whose name, team, and entries this card shows. */
+  detailsOrderId: string;
   checkInCode: string | null;
   name: string;
   team: string;

@@ -155,7 +155,7 @@ The database recovery gap is the time between the latest recovered committed cha
 - Every person uses their own account (organizers with MFA enforced at the final pre-launch security gate, before the live pilot), including on shared check-in tablets ([product.md](../product.md#sign-in-and-account-security)).
 - Give each role the least access its job needs. Remove access when a volunteer's event ends.
 - Secrets live in the hosting platform's secret store, never in the repository or in chat. Rotate them when someone with access leaves, and after any suspected exposure.
-- Access to restricted data (emergency contacts, license numbers, payment references, audit history) is logged.
+- Access to restricted data (emergency contacts, license numbers, payment references, audit history) is logged. Looking up one emergency contact records the signed-in account, event, order, and time, and does not store the contact.
 
 ## Rider data requests
 
