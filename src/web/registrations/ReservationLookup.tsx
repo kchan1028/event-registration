@@ -42,6 +42,11 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
 
   // The browser would drop or replace line breaks and then look up a different reference.
   const refuseLineBreaks = (e: SyntheticEvent, text: string) => {
+    // The field is read-only while a lookup runs, so its answer stays that of the reference on screen.
+    if (inFlight.current) {
+      e.preventDefault();
+      return;
+    }
     if (!/[\r\n]/.test(text)) return;
     e.preventDefault();
     // Clear the earlier reference, or Check would look that one up instead.

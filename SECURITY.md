@@ -102,7 +102,7 @@ Under the family lock, one approval row, guardian revocations, pending-invitatio
 
 The existing per-tab registration draft also retains the exact pending reservation payload, displayed waiver text and public accepted addenda until its outcome is known. The saved text is for review and is separate from the request sent to the server. Older drafts can still retry when this text is unavailable. Unknown network/server, authentication and rate-limit failures retain that request ID; pending entries and consent cannot be edited. Recovery uses the existing account-protected order endpoint and server idempotency checks. A definitive rejection refreshes published terms and clears agreement if the waiver changed. Rider replay adds no route, role, database field, logging or card storage. Browser storage remains best effort; blocked storage or closing the tab cannot guarantee refresh recovery. Use fictional data only.
 
-A separate signed-in route, `POST /api/events/:id/reservation-status`, gives staff an event-scoped reservation lookup. It requires `orders.view` and an exact request reference. It returns only the saved order number, effective status and active hold expiry, with `Cache-Control: no-store`.
+A separate signed-in route, `POST /api/events/:id/reservation-status`, gives staff an event-scoped reservation lookup. It requires `orders.view` and an exact request reference. Checkout and lookup refuse references with control characters or unpaired surrogates, which storage would reject or alter. It returns only the saved order number, effective status and active hold expiry, with `Cache-Control: no-store`.
 
 ## Checkout-session retries (Implemented locally)
 

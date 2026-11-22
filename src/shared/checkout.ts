@@ -286,9 +286,11 @@ export function awaitsLicenseReview(orderStatus: string, entry: { status: string
   return orderStatus === 'confirmed' && entry.status === 'confirmed' && !entry.licenseReviewed;
 }
 
-/** Accepted account and declared racing age, not proof of legal age or federation approval. */
-/** The rider's request key. Matched exactly, as sent. */
-export const reservationReferenceSchema = z.string().min(8).max(64);
+/**
+ * The rider's request key, matched exactly as sent. Control characters and unpaired surrogates are refused:
+ * neither a one-line field nor the database preserves them, so two keys could read as one.
+ */
+export const reservationReferenceSchema = z.string().min(8).max(64).regex(/^[^\p{Cc}\p{Cs}]+$/u, 'Use one line of plain text for the reference.');
 
 export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
 
@@ -299,6 +301,7 @@ export interface ReservationStatus {
   holdExpiresAt: string | null;
 }
 
+/** Accepted account and declared racing age, not proof of legal age or federation approval. */
 export interface WaiverEvidence {
   signerAccountId: string | null;
   riderRacingAge: number;

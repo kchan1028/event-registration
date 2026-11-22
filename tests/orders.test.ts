@@ -1,3 +1,4 @@
+import { reservationReferenceSchema } from '../src/shared/checkout';
 import { describe, expect, it } from 'vitest';
 import { testApp, testDatabaseUrl } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
@@ -417,4 +418,13 @@ describe('order numbers', () => {
     expect(await find(real.orderNumber)).toEqual([real.id]);
     expect(await find(real.orderNumber.slice(3))).toEqual([real.id]);
   });
+});
+
+it('accepts only references that survive storage and a one-line field unchanged', () => {
+  for (const ok of ['7f6c2a52-0d0b-4d59-9a57-3b7c2d8e1f00', ' spaced-reference ', '        ', 'référence-🚲-01']) {
+    expect(reservationReferenceSchema.safeParse(ok).success).toBe(true);
+  }
+  for (const bad of ['exact\nreference', 'exact\rreference', 'exact\treference', 'exact\u0000reference', 'exact\ud800reference', 'exact\udc00reference']) {
+    expect(reservationReferenceSchema.safeParse(bad).success).toBe(false);
+  }
 });

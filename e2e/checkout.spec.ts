@@ -604,6 +604,24 @@ test('organizer checks the rider’s pending reservation by exact reference', as
   await check.click();
   await expect(status).toContainText(orderNumber!);
 
+  // A paste during a lookup changes nothing: the answer belongs to the reference on screen.
+  let answer = () => {};
+  const held = new Promise<void>((resolve) => (answer = resolve));
+  await staff.route('**/reservation-status', async (route) => { await held; await route.continue(); });
+  await staffReference.fill(reference);
+  await check.click();
+  await expect(status).toContainText('Checking for a saved order');
+  await staffReference.evaluate((field) => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/plain', 'other\nreference');
+    field.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
+  });
+  await expect(staffReference).toHaveValue(reference);
+  await expect(staffReference).not.toHaveAttribute('aria-invalid');
+  answer();
+  await expect(status).toContainText(orderNumber!);
+  await staff.unroute('**/reservation-status');
+
   // Keys the checkout API accepts as sent: surrounding spaces are part of the key.
   for (const [spaced, firstName] of [[' spaced-reference-0001 ', 'Avery'], ['        ', 'Blair']] as const) {
     const saved = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: { ...(attempts[0] as object), clientRequestId: spaced, rider: { ...(attempts[0] as { rider: object }).rider, firstName }, waiver: { ...(attempts[0] as { waiver: object }).waiver, signatureName: `${firstName} Demo` } } });
