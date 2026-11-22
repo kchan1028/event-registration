@@ -15,6 +15,11 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
   const lookup = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (inFlight.current) return;
+    // A refused paste left the field empty: keep its explanation.
+    if (!reference && invalid) {
+      field.current?.focus();
+      return;
+    }
     // References match exactly: send the text as typed, with checkout's own length rule.
     const checked = reservationLookupSchema.safeParse(reference);
     if (!checked.success) {
@@ -59,7 +64,7 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
 
   return (
     <details className="settings__section">
-      <summary>Check a pending reservation</summary>
+      <summary className="lookup-toggle">Check a pending reservation</summary>
       <form className="reg-search" onSubmit={lookup}>
         <label htmlFor="staff-reservation-reference">Reservation reference</label>
         <input

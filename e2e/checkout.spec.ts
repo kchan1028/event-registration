@@ -598,7 +598,9 @@ test('organizer checks the rider’s pending reservation by exact reference', as
     await expect(staffReference).toHaveAccessibleDescription('This field cannot check a reference with a line break. Keep the original unchanged: removing the break makes it a different reference.');
     await check.click();
     await expect(status).not.toContainText(orderNumber!);
+    await expect(staffReference).toHaveAccessibleDescription(/^This field cannot check a reference with a line break/);
   }
+  expect(await lookup.locator('summary').evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
   await staffReference.fill(reference);
   await expect(staffReference).not.toHaveAttribute('aria-invalid');
   await check.click();
