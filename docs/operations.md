@@ -121,7 +121,7 @@ Implemented in the local build (November 15, 2026): `GET /api/health` runs a dat
 
 ### Proposed pilot signal checks
 
-These checks say how a signal is noticed. Who is contacted, when the deputy is called and who sees the acknowledgement follow the approved [rehearsal alert routing](#rehearsal-alert-routing). Evaluate one delivered health alert and two manual checks. A check for missing or delayed payment notifications is not part of these and is still open. Platform access, staffing and timing need approval before hosted rehearsal. Assign accountable operators while preserving existing application and provider permissions.
+These checks say how a signal is noticed. Who is contacted, when the deputy is called and who sees the acknowledgement follow the approved [rehearsal alert routing](#rehearsal-alert-routing). Evaluate one delivered health alert and two manual checks. Missing or delayed payment notifications have their own [proposed check](#proposed-pilot-payment-check). Platform access, staffing and timing need approval before hosted rehearsal. Assign accountable operators while preserving existing application and provider permissions.
 
 | Signal | Proposed observation and timing | Accountable role |
 |---|---|---|
@@ -130,6 +130,33 @@ These checks say how a signal is noticed. Who is contacted, when the deputy is c
 | Recovery coverage missing | **Manual.** Before each critical window and during restore, check the available point and retention window against the approved recovery plan. Escalate a missing or unusable point. Wait only when a suitable point is due, and count the wait. If none will become available, record a recovery hold and keep the service closed. [Render Postgres recovery and backups](https://render.com/docs/postgresql-backups) | Technical lead with approved database access |
 
 Use fictional records. Limit messages to environment, signal, observation time and accountable role. Keep rider details, payment references and provider payloads in their approved restricted views. For a delivered alert, record receipt and acknowledgement in the shared incident timeline and, only if the primary has not acknowledged by the cue, exercise the deputy route. For a manual check, record who observed it, when, and how they escalated. Native notification routing, automated payment and invitation alerts, rider email, backup job alerts, checkout error rate, expired holds and sign-in spikes remain open.
+
+### Proposed pilot payment check
+
+**Proposed, manual.** Finds a payment the application did not apply because a notification was late, missing or not matched. One person does it only if they hold both approved Stripe access and an owner or finance role. Otherwise the technical lead and an owner or finance user do it together, each reading only what their own access allows, and the export is not handed over. The check leaves payments and registrations unchanged; the export download is recorded in the audit. Run it on a report, at shift start and at an interval the pilot organizer confirms.
+
+1. **Start from payments, not events.** In the Stripe environment the application uses, list every Checkout Session created since registration opened. The application writes the order ID on each session (`client_reference_id` and `metadata.order_id`) and on its payment (`metadata.order_id`). Count a session and its payment as one, and also list a payment that carries an order ID but has no listed session. Records without an order ID are not the application's. Repeat the whole list at each check, so a payment that settles later, or during a check, is seen by the next one. This does not depend on Stripe's event history, which [goes back 30 days](https://docs.stripe.com/api/events/list). For a report, look up that payment however old it is.
+2. **Keep to one event.** Check a record when its session reference, payment reference or order ID is in this event's export. A session or payment found here whose order ID differs from its row's order is escalated before anything is left to another event. Only a record with none of the three here is left to the other events' checks, and one in no event's export is escalated.
+3. **Record the coverage.** Note when the list was taken, then download the export. Recheck a difference once before escalating, because a notification can arrive between the two. If the list or export is unavailable or incomplete, record that period as unverified and escalate.
+4. **Classify each payment from Stripe.** Paid means the payment succeeded, including one refunded later. Failed means the session completed, the payment did not succeed and it shows a payment error or was canceled. Not settled means it is still processing or its session is still open. Expired means the session expired with nothing paid. Escalate anything else.
+5. **Match it.** Find the session and payment reference in the export's `provider_event` rows and read `outcome` and `result_status`. An earlier completion event does not stand in for a later success or failure. A matching order status alone is not a match. Use the first line below that applies.
+
+| What the check finds | Action |
+|---|---|
+| Any row for it recorded as `unknown_session` | Escalate, whatever its outcome. A known session with a different order reference keeps its row in the export; an unknown session has none |
+| Paid, with no `paid` row | Escalate, including when no event, delivery or row exists. Inspect the delivery before requesting a resend |
+| Paid, recorded as `duplicate_charge` | Follow the duplicate rule below |
+| Paid, recorded as `needs_attention` | Confirm the exception queue has it |
+| Paid, recorded as `confirmed` | None |
+| Failed, with no `failed` row | Escalate |
+| Failed, with a `failed` row | None. The order can correctly stay confirmed by another payment |
+| Not settled | Leave it for the next check |
+| Expired | None, with or without a `session_expired` row: nothing was paid |
+| Anything else | Escalate |
+
+**Duplicate rule.** Use only Stripe's refunds of that payment and the `refund` rows with the same `payment_reference`. Match each Stripe refund to a row by the provider refund ID (`provider_reference`), and read Stripe's `requires_action` as `pending`, as the application does. A local `requested` row with no provider ID has not been confirmed by Stripe: escalate it to finance to reconcile, and do not create a replacement. Any other refund on one side only, or with a different amount or status, is also escalated. If any refund was escalated, stop there. Otherwise `succeeded` counts as returned, `pending` as on the way, and `failed` and `canceled` as nothing. Returned covering the charge needs no action. If it covers the charge only with what is on the way, follow it until it settles. Otherwise the shortfall goes to finance.
+
+Use fictional records in rehearsal, and keep payment references in the approved restricted views. Escalation follows the approved [rehearsal alert routing](#rehearsal-alert-routing).
 
 ### Checking a pending reservation
 
