@@ -52,24 +52,33 @@ it.each(['between queries', 'during a query', 'between nested queries'])('reject
   await other.connect();
   try {
     await db.run('CREATE TABLE drop_probe (id integer)');
+    let interrupted: unknown;
+    let stopped: unknown;
+    let active = when !== 'during a query';
     const drop = async () => {
       const { pid } = (await db.get<{ pid: number }>('SELECT pg_backend_pid() AS pid'))!;
       await db.run('INSERT INTO drop_probe VALUES (1)');
       const waiting = when === 'during a query' ? db.run('SELECT pg_sleep(5)') : null;
       const outcome = waiting?.then(() => new Error('The query was not interrupted.'), (err: Error) => err);
       if (waiting) {
-        await expect.poll(async () => (await other.query(`SELECT 1 FROM pg_stat_activity WHERE pid = $1 AND state = 'active' AND query LIKE '%pg_sleep%'`, [pid])).rowCount, { timeout: 4000 }).toBe(1);
+        for (let i = 0; i < 80 && !active; i++) {
+          active = (await other.query(`SELECT 1 FROM pg_stat_activity WHERE pid = $1 AND state = 'active' AND query LIKE '%pg_sleep%'`, [pid])).rowCount === 1;
+          if (!active) await new Promise((resolve) => setTimeout(resolve, 50));
+        }
       }
-      expect((await other.query('SELECT pg_terminate_backend($1, 5000) AS stopped', [pid])).rows).toEqual([{ stopped: true }]);
+      stopped = (await other.query('SELECT pg_terminate_backend($1, 5000) AS stopped', [pid])).rows;
       await new Promise((resolve) => setTimeout(resolve, 100));
       if (outcome) {
-        const err = await outcome;
-        expect(err).toMatchObject({ code: '57P01' });
-        throw err;
+        interrupted = await outcome;
+        throw interrupted;
       }
     };
     await expect(db.transaction(() => (when === 'between nested queries' ? db.transaction(drop) : drop()))).rejects.toThrow();
-    expect(reported.length).toBeGreaterThan(0);
+    // Checked out here, where a failed check cannot pass as the expected rejection.
+    if (when === 'during a query') expect(interrupted).toMatchObject({ code: '57P01' });
+    expect(active).toBe(true);
+    expect(stopped).toEqual([{ stopped: true }]);
+    expect(reported).toHaveLength(1);
     expect(await db.all('SELECT id FROM drop_probe')).toEqual([]);
     await db.transaction(() => db.run('INSERT INTO drop_probe VALUES (2)'));
     expect(await db.all('SELECT id FROM drop_probe')).toEqual([{ id: 2 }]);

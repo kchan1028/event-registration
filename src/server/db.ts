@@ -817,7 +817,14 @@ export function openDb(connectionString: string, onPoolError?: (err: Error) => v
   // Any connection can drop (database restart, test teardown), and an unheard error ends the process. The pool
   // listens only to idle clients, so each client gets a listener for its whole life, including the handoff from
   // idle to checked out. The pool discards a client that lost its connection when it is released.
-  pool.on('connect', (client) => client.on('error', (err) => onPoolError?.(err)));
+  pool.on('connect', (client) => {
+    let lost = false;
+    client.on('error', (err) => {
+      // One loss can emit twice (the server's reason, then the closed socket): report the first.
+      if (!lost) onPoolError?.(err);
+      lost = true;
+    });
+  });
   // An idle client's error also reaches the pool. The listener above has already reported it.
   pool.on('error', () => {});
   const tx = new AsyncLocalStorage<{ client: pg.PoolClient; depth: number }>();
