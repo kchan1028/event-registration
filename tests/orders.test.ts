@@ -1,5 +1,6 @@
 import { reservationLookupSchema, reservationReferenceSchema } from '../src/shared/checkout';
 import { describe, expect, it } from 'vitest';
+import { openDb } from '../src/server/db';
 import { testApp, testDatabaseUrl } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
 import type { WaiverEvidence } from '../src/shared/checkout';
@@ -54,10 +55,40 @@ describe('rider checkout: holds and simulated payment', () => {
     }
     expect((await publish('v2', 'Different fictional waiver.')).statusCode).toBe(200);
     // Not only the latest publication: an older version's label stays with its own text.
-    expect((await publish(v1, 'A third fictional waiver.')).statusCode).toBe(422);
+    for (const changed of ['A third fictional waiver.', `${original} `, '']) expect((await publish(v1, changed)).statusCode).toBe(422);
     const stale = await order([code('RR-M35-34')], { waiver });
     expect(stale.statusCode).toBe(409);
     expect((await publish(v1, original)).statusCode).toBe(200);
+  });
+
+  it('holds no new places on a version that older publications gave two texts, and still replays a committed order', async () => {
+    const { app, databaseUrl, eventId, code, order } = await setup();
+    const key = { clientRequestId: 'committed-before-ambiguity' };
+    const committed = await order([code('RR-M35-34')], key);
+    expect(committed.statusCode).toBe(201);
+    const db = openDb(databaseUrl);
+    try {
+      // History from before publishing enforced the rule.
+      await db.run(
+        `INSERT INTO event_versions (event_id, version, config_json, draft_revision, warnings_acknowledged, published_at)
+         SELECT event_id, 0, jsonb_set(config_json, '{registration,waiverText}', '"An earlier fictional text."'), draft_revision, warnings_acknowledged, published_at
+         FROM event_versions WHERE event_id = $1 AND version = 1`,
+        [eventId],
+      );
+    } finally {
+      await db.close();
+    }
+    const refused = await order([code('RR-M35-34')], { rider: { ...RIDER, firstName: 'Second' } });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().error).toContain('Registration is paused');
+    expect((await order([code('RR-M35-34')], key)).json().id).toBe(committed.json().id);
+
+    const { config, revision } = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
+    config.registration.waiverVersion = 'unambiguous';
+    await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } });
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    const resumed = await order([code('RR-M35-34')], { rider: { ...RIDER, firstName: 'Second' }, waiver: { version: 'unambiguous', read: true, agreed: true, signatureName: 'Second Rider', signerRole: 'rider' } });
+    expect(resumed.statusCode).toBe(201);
   });
 
   it('requires a published version', async () => {

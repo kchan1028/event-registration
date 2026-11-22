@@ -94,7 +94,7 @@ export function createRepo(db: Db, clock: () => Date) {
   }
 
   /** Checkout compares only the waiver version, so one version must mean one text for the event's whole history. */
-  async function requireWaiverVersionKeepsItsText(id: string, config: EventConfig) {
+  async function waiverVersionHasOtherText(id: string, config: EventConfig) {
     const { waiverVersion, waiverText } = config.registration;
     const other = await db.get(
       `SELECT 1 FROM event_versions
@@ -103,7 +103,12 @@ export function createRepo(db: Db, clock: () => Date) {
        LIMIT 1`,
       [id, waiverVersion, waiverText],
     );
-    if (!other) return;
+    return !!other;
+  }
+
+  async function requireWaiverVersionKeepsItsText(id: string, config: EventConfig) {
+    if (!(await waiverVersionHasOtherText(id, config))) return;
+    const { waiverVersion } = config.registration;
     const label = waiverVersion ? `Waiver version "${waiverVersion}"` : 'A blank waiver version';
     throw new HttpError(422, `${label} was already published with different text. In Event setup, enter a new waiver version, then publish, so riders agree to the new text.`);
   }
@@ -125,6 +130,7 @@ export function createRepo(db: Db, clock: () => Date) {
   }
 
   return {
+    waiverVersionHasOtherText,
     /** The given organizations with a summary of each event's draft, oldest first. */
     async listOrganizations(organizationIds: readonly string[]) {
       if (organizationIds.length === 0) return [];
