@@ -356,7 +356,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       return { action: 'send' as const, id };
     });
     if (decision.action === 'retry') await dispatchInvitation(organizationId, decision.id, by!);
-    // A committed invite or renewal is never reported as refused: if its email was then held back, the list says why.
+    // A held-back email does not refuse a committed invite or renewal: the list says why, for a caller who may still read it.
     if (decision.action === 'send') await mailer.dispatch(decision.id);
     return teamFor(organizationId, by);
   }
@@ -374,19 +374,19 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     return teamFor(organizationId, by);
   }
 
-  async function manages(account: Account, organizationId: string) {
-    return can(await rolesIn(account.id, organizationId), 'members.manage');
-  }
-
   /** The team after a write. A caller who lost ownership meanwhile does not get to read it. */
   async function teamFor(organizationId: string, by: Account | null) {
-    if (by && !(await manages(by, organizationId))) throw new HttpError(403, NO_LONGER_OWNER);
-    return listMembers(organizationId);
+    return db.transaction(async () => {
+      // Membership changes wait for this lock, so the check and the reads see one team.
+      await db.lock(`org-members:${organizationId}`);
+      if (by && !can(await rolesIn(by.id, organizationId), 'members.manage')) throw new HttpError(403, NO_LONGER_OWNER);
+      return listMembers(organizationId);
+    });
   }
 
   /** A retry commits nothing first, so the owner check is repeated just before the provider call. */
   async function dispatchInvitation(organizationId: string, attemptId: string, by: Account) {
-    const outcome = await mailer.dispatch(attemptId, () => manages(by, organizationId));
+    const outcome = await mailer.dispatch(attemptId, by.id);
     if (outcome === 'refused') throw new HttpError(403, NO_LONGER_OWNER);
     if (outcome === 'withheld') throw new HttpError(409, 'The earlier invitation email might have been sent. It was not sent again, and the invitation was not extended. To send a new email, cancel the invitation and invite again.');
     if (outcome === 'changed') throw new HttpError(409, INVITATION_CHANGED);

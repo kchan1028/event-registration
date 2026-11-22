@@ -1251,7 +1251,14 @@ describe('organizer roles', () => {
     }
   }, 15_000);
 
-  it.each(['invite an owner', 'grant an owner', 'renew', 'resend'])('refuses to %s when the caller stops being an owner while it waits', async (action) => {
+  it.each([
+    ['invite an owner', 403],
+    ['grant an owner', 403],
+    ['renew', 403],
+    ['resend', 403],
+    ['invite after a handoff', 404],
+    ['resend after a handoff', 404],
+  ] as const)('refuses to %s when the caller stops being an owner while it waits', async (action, status) => {
     const databaseUrl = await testDatabaseUrl();
     const calls: string[] = [];
     const { app } = await testApp({ databaseUrl, auth: fakeAuth(), email: { mode: 'resend', send: async (_message, key) => (calls.push(key), 'msg-accepted') } });
@@ -1260,7 +1267,9 @@ describe('organizer roles', () => {
     const base = `/api/organizations/${org.id}`;
     const body = { email: 'friend@valley.test', role: 'owner' };
     if (action === 'grant an owner') await call('GET', '/api/me', undefined, body.email);
-    const existing = action === 'renew' || action === 'resend' ? (await call('POST', `${base}/members`, body)).json().invitations[0] : null;
+    const successor = (await call('GET', '/api/me', undefined, 'successor@valley.test')).json().account.id as string;
+    const resending = action === 'resend' || action === 'resend after a handoff';
+    const existing = action === 'renew' || resending ? (await call('POST', `${base}/members`, body)).json().invitations[0] : null;
     const sent = calls.length;
     const blocker = new pg.Client({ connectionString: databaseUrl });
     await blocker.connect();
@@ -1272,12 +1281,14 @@ describe('organizer roles', () => {
       ];
       await blocker.query('BEGIN');
       await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`org-members:${org.id}`]);
-      const waiting = (action === 'resend' ? call('POST', `${base}/invitations/resend`, { ...body, revision: existing.revision }) : call('POST', `${base}/members`, body)).then((r) => r.statusCode);
+      const waiting = (resending ? call('POST', `${base}/invitations/resend`, { ...body, revision: existing.revision }) : call('POST', `${base}/members`, body)).then((r) => r.statusCode);
       await untilWaiting(blocker, 1);
-      await blocker.query(`UPDATE organization_members SET role = 'timer_export' WHERE organization_id = $1 AND role = 'owner'`, [org.id]);
+      // Losing every role is the same answer any outsider gets.
+      if (status === 404) await blocker.query(`UPDATE organization_members SET account_id = $2 WHERE organization_id = $1 AND role = 'owner'`, [org.id, successor]);
+      else await blocker.query(`UPDATE organization_members SET role = 'timer_export' WHERE organization_id = $1 AND role = 'owner'`, [org.id]);
       const before = await saved();
       await blocker.query('COMMIT');
-      expect(await waiting).toBe(403);
+      expect(await waiting).toBe(status);
       expect(await saved()).toEqual(before);
       expect(calls).toHaveLength(sent);
     } finally {
@@ -1296,15 +1307,45 @@ describe('organizer roles', () => {
     const id = (await call('POST', url, body)).json().invitations[0].lastEmail.attemptId as string;
     const db = openDb(databaseUrl);
     try {
-      await db.run(`UPDATE email_messages SET sending_until = now() + interval '1 second' WHERE id = $1`, [id]);
-      const waiting = call('POST', url, via === 'Add' ? body : { ...body, retryAttempt: id }).then((r) => r.statusCode);
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      await db.run(`UPDATE organization_members SET role = 'timer_export' WHERE organization_id = $1 AND role = 'owner'`, [org.id]);
-      expect(await waiting).toBe(403);
+      // Ownership ends as the send is claimed, after every earlier check and before the last one.
+      await db.run(`CREATE FUNCTION demote_during_claim() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN UPDATE organization_members SET role = 'timer_export' WHERE role = 'owner'; RETURN NEW; END $$`);
+      await db.run(`CREATE TRIGGER demote_during_claim AFTER UPDATE ON email_messages FOR EACH ROW WHEN (NEW.sending_until IS NOT NULL) EXECUTE FUNCTION demote_during_claim()`);
+      const response = await call('POST', url, via === 'Add' ? body : { ...body, retryAttempt: id });
+      expect(response.statusCode).toBe(403);
+      expect(response.body).not.toContain('invitations');
       expect(calls).toHaveLength(1);
       expect(await db.get('SELECT status, sending_until FROM email_messages WHERE id = $1', [id])).toEqual({ status: 'uncertain', sending_until: null });
     } finally {
       await db.close();
+    }
+  }, 15_000);
+
+  it('reads the team for a write only after a waiting ownership change', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    let organizationId = '';
+    const email: EmailSender = {
+      mode: 'resend',
+      async send() {
+        await blocker.query('BEGIN');
+        await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`org-members:${organizationId}`]);
+        await blocker.query(`UPDATE organization_members SET role = 'timer_export' WHERE organization_id = $1 AND role = 'owner'`, [organizationId]);
+        return 'msg-accepted';
+      },
+    };
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth(), email });
+    const call = (method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(OWNER), payload });
+    organizationId = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json().id;
+    try {
+      const response = call('POST', `/api/organizations/${organizationId}/members`, { email: 'friend@valley.test', role: 'finance' }).then((r) => r);
+      await untilWaiting(blocker, 1);
+      await blocker.query('COMMIT');
+      expect((await response).statusCode).toBe(403);
+      expect((await response).body).not.toContain('invitations');
+    } finally {
+      await blocker.end();
     }
   }, 15_000);
 
