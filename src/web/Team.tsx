@@ -166,7 +166,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
                   )}
                 </span>
                 {!i.earlierEmail && (
-                  <button className="link-btn" type="button" disabled={busy} onClick={() => (uncertain ? retry(i.email, i.role, i.lastEmail!.attemptId) : run(() => api.addMember(orgId, i.email, i.role)))}>
+                  <button className="link-btn" type="button" disabled={busy} onClick={() => (uncertain ? retry(i.email, i.role, i.lastEmail!.attemptId) : run(() => api.resendInvitation(orgId, i.email, i.role, i.revision)))}>
                     {uncertain ? 'Retry send' : 'Resend'}
                     <span className="sr-only">
                       {uncertain ? ` of the invitation email to ${i.email} without extending it` : ` invitation to ${i.email}, open for ${INVITATION_DAYS} more days`}

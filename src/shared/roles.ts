@@ -70,6 +70,8 @@ export interface Invitation {
   email: string;
   role: Role;
   expiresAt: string;
+  /** Changes on every renewal or replacement. Resend names it. */
+  revision: string;
   /** An email from before attempts were tracked might have been sent, so there is no resend. */
   earlierEmail: boolean;
   /** The latest invitation email. `uncertain` means the provider may have accepted it. Null when none was made (seed scripts). */
