@@ -8,6 +8,75 @@ async function selectRaceDay(page: Page, label: string) {
   await expect(days.getByRole('radio', { name: label, exact: true })).toBeChecked();
 }
 
+const connectionError = 'Cannot reach the CycleReg server. Check that it is running, then try again.';
+const staleLookupName = 'Stale Lookup Body';
+
+async function flushPaint(page: Page) {
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
+}
+
+/** Records a ready card that appears after the saved card, even if a later paint covers it. */
+async function watchForReadyCardReturn(page: Page) {
+  await page.evaluate(() => {
+    const w = window as Window & { __ciReadyReturned?: boolean };
+    w.__ciReadyReturned = false;
+    const returned = () => {
+      const detail = document.querySelector('[aria-label="Rider check-in"]');
+      if (!detail) return true;
+      const text = detail.textContent ?? '';
+      if (!text.includes('Checked in. Hand over the bib below.')) return true;
+      if (!detail.querySelector('.ci-bib__number')) return true;
+      return Array.from(detail.querySelectorAll('button')).some((button) => (button.textContent ?? '').includes('Check in and issue'));
+    };
+    const observer = new MutationObserver(() => {
+      if (returned()) w.__ciReadyReturned = true;
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
+}
+
+async function readyCardReturned(page: Page) {
+  return page.evaluate(() => (window as Window & { __ciReadyReturned?: boolean }).__ciReadyReturned === true);
+}
+
+/** Records whether text appears, including a paint that a later update removes. */
+async function watchForText(page: Page, text: string) {
+  await page.evaluate((needle) => {
+    const w = window as Window & { __ciSawText?: boolean };
+    w.__ciSawText = (document.body.textContent ?? '').includes(needle);
+    const observer = new MutationObserver(() => {
+      if ((document.body.textContent ?? '').includes(needle)) w.__ciSawText = true;
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  }, text);
+}
+
+async function sawWatchedText(page: Page) {
+  return page.evaluate(() => (window as Window & { __ciSawText?: boolean }).__ciSawText === true);
+}
+
+async function watchAlertCount(page: Page, text: string) {
+  await page.evaluate((needle) => {
+    const w = window as Window & { __ciMaxAlerts?: number };
+    const count = () => Array.from(document.querySelectorAll('[role="alert"]')).filter((el) => (el.textContent ?? '').includes(needle)).length;
+    w.__ciMaxAlerts = count();
+    const observer = new MutationObserver(() => {
+      w.__ciMaxAlerts = Math.max(w.__ciMaxAlerts ?? 0, count());
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  }, text);
+}
+
+async function maxAlertCount(page: Page) {
+  return page.evaluate(() => (window as Window & { __ciMaxAlerts?: number }).__ciMaxAlerts ?? 0);
+}
+
+function withStaleName(body: CheckInList): CheckInList {
+  return { ...body, riders: body.riders.map((rider) => ({ ...rider, name: staleLookupName })) };
+}
+
 const scenarios = [
   ...['unreceived request', 'lost response', 'gateway timeout', 'unreadable response', 'invalid response']
     .map((failure) => ({ failure, reload: false })),
@@ -260,11 +329,11 @@ test('a list read started before check-in does not restore the ready card', asyn
   await held[1].route.fulfill({ response: held[1].response });
   await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+  await watchForReadyCardReturn(page);
 
   await held[0].route.fulfill({ response: held[0].response });
-  await page.evaluate(() => new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  }));
+  await flushPaint(page);
+  expect(await readyCardReturned(page)).toBe(false);
   await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
   await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
@@ -383,9 +452,13 @@ test('an explicit lookup started before check-in does not restore the ready card
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
   // The debounced search and the check-in refresh both have to finish before the older lookup is delivered.
   await expect.poll(() => finishedCodeReads).toBeGreaterThanOrEqual(readsBeforeSave + 2);
+  await watchForReadyCardReturn(page);
+  const readsAtDelivery = finishedCodeReads;
 
   await held[0].route.fulfill({ response: held[0].response });
-  await page.waitForTimeout(400);
+  await expect.poll(async () => finishedCodeReads > readsAtDelivery || await readyCardReturned(page)).toBe(true);
+  await flushPaint(page);
+  expect(await readyCardReturned(page)).toBe(false);
   await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
   await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
@@ -428,33 +501,50 @@ test('a lookup started during check-in still opens that rider after the save', a
   await expect.poll(() => saveHeld).toBe(true);
 
   const queued: { route: Route; response: Awaited<ReturnType<Route['fetch']>> }[] = [];
-  let holdReads = true;
+  let allowNew = false;
+  let readsAfterDelivery = 0;
   await page.route(`**/api/events/${eventId}/check-in?*`, async (route) => {
     const url = new URL(route.request().url());
-    if (!holdReads || route.request().method() !== 'GET' || url.searchParams.get('q') !== other.checkInCode) {
+    if (route.request().method() !== 'GET' || url.searchParams.get('q') !== other.checkInCode) {
       await route.continue();
       return;
     }
-    queued.push({ route, response: await route.fetch() });
+    if (!allowNew) {
+      queued.push({ route, response: await route.fetch() });
+      return;
+    }
+    readsAfterDelivery += 1;
+    await route.continue();
   });
   await search.fill(other.checkInCode);
   await search.press('Enter');
   await expect.poll(() => queued.length).toBeGreaterThanOrEqual(1);
+  const explicit = queued[0];
+  // The debounced search and the save's refresh stay held so neither can cover the lookup.
+  await page.clock.runFor(150);
+  await expect.poll(() => queued.length).toBeGreaterThanOrEqual(2);
   await page.clock.resume();
   releaseSave?.();
   await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
-  holdReads = false;
-  const explicit = queued.shift();
-  if (!explicit) throw new Error('The explicit lookup was not held');
-  while (queued.length > 0) {
-    const item = queued.shift();
-    if (item) await item.route.fulfill({ response: item.response });
-  }
-  await explicit.route.fulfill({ response: explicit.response });
+  await expect.poll(() => queued.length).toBeGreaterThanOrEqual(3);
+  const heldBody = await explicit.response.json() as CheckInList;
+  if (heldBody.riders.length !== 1) throw new Error('The held lookup should match one rider');
+  await watchForText(page, staleLookupName);
+  allowNew = true;
+  await explicit.route.fulfill({
+    status: explicit.response.status(),
+    contentType: 'application/json',
+    body: JSON.stringify(withStaleName(heldBody)),
+  });
+  await expect.poll(() => readsAfterDelivery).toBeGreaterThanOrEqual(1);
+  await flushPaint(page);
   await expect(detail.getByRole('heading', { name: other.name, exact: true })).toBeVisible();
+  expect(await sawWatchedText(page)).toBe(false);
+  await expect(page.getByText(staleLookupName)).toHaveCount(0);
   const final: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
   expect(final.riders.find((candidate) => candidate.orderId === ready.orderId)).toMatchObject({ bib: 100, checkedInAt: expect.any(String) });
+  await Promise.all(queued.slice(1).map((item) => item.route.abort()));
 });
 
 test('a failed enter lookup does not present the following empty search as the result', async ({ page }) => {
@@ -549,15 +639,23 @@ test('a failed enter and its search show one connection error', async ({ page })
   await page.goto(`/#/events/${eventId}/check-in`);
   await expect(page.locator('.ci__count')).toContainText('riders on');
   await page.clock.pauseAt(new Date(openedAt.getTime() + 2_000));
+  let failedNamedReads = 0;
   await page.route(`**/api/events/${eventId}/check-in?*`, (route) => {
     if (route.request().method() !== 'GET') return route.continue();
+    if (new URL(route.request().url()).searchParams.get('q') === 'Nonexistent Person') failedNamedReads += 1;
     return route.abort();
   });
+  await watchAlertCount(page, connectionError);
   const search = page.getByRole('searchbox', { name: 'Find a rider' });
   await search.fill('Nonexistent Person');
   await search.press('Enter');
   await page.clock.runFor(150);
-  await expect(page.getByRole('alert').filter({ hasText: 'Cannot reach the CycleReg server' })).toHaveCount(1);
+  await expect.poll(() => failedNamedReads).toBeGreaterThanOrEqual(2);
+  // A paused clock never runs the frame flushPaint waits on.
+  await page.clock.resume();
+  await flushPaint(page);
+  await expect(page.getByRole('alert').filter({ hasText: connectionError })).toHaveCount(1);
+  expect(await maxAlertCount(page)).toBe(1);
 });
 
 test('a failed refresh after check-in keeps the saved card', async ({ page }) => {
@@ -573,13 +671,18 @@ test('a failed refresh after check-in keeps the saved card', async ({ page }) =>
   await expect(page.locator('.ci__count')).toContainText('riders on');
   await page.getByRole('button', { name: rider.name }).click();
   await expect(detail.getByRole('status')).toContainText('Ready to race');
+  let refreshAborted = false;
   await page.route(`**/api/events/${eventId}/check-in?*`, (route) => {
     if (route.request().method() !== 'GET') return route.continue();
+    refreshAborted = true;
     return route.abort();
   });
   await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
+  await expect.poll(() => refreshAborted).toBe(true);
+  await expect(page.getByRole('alert').filter({ hasText: connectionError })).toHaveCount(1);
+  await flushPaint(page);
   await expect(detail.getByRole('heading', { name: rider.name, exact: true })).toBeVisible();
   await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
-  await expect(page.getByRole('alert').filter({ hasText: 'Cannot reach the CycleReg server' })).toHaveCount(1);
+  await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
 });
