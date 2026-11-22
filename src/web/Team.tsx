@@ -139,7 +139,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
             <li key={`${m.accountId}-${m.role}`}>
               <span className="team__email">{m.email}</span>
               <span className="tag">{ROLE_LABELS[m.role]}</span>
-              <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.removeMember(orgId, m.email, m.role))}>
+              <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.removeMember(orgId, m.email, m.role, m.revision))}>
                 Remove<span className="sr-only">
                   {' '}
                   {ROLE_LABELS[m.role]} role from {m.email}
@@ -173,7 +173,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
                     </span>
                   </button>
                 )}
-                <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.removeMember(orgId, i.email, i.role))}>
+                <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.cancelInvitation(orgId, i.email, i.role, i.revision))}>
                   Cancel<span className="sr-only"> invitation for {i.email}</span>
                 </button>
               </li>

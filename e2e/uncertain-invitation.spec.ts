@@ -64,9 +64,39 @@ test('Resend names the invitation on screen and refreshes when it has changed', 
   expect(response.request().postDataJSON()).toEqual({ ...invited, revision });
   expect(response.status()).toBe(200);
 
-  expect((await page.request.post(`${members}/remove`, { data: invited })).ok()).toBe(true);
+  const renewed = (await (await page.request.get(members)).json()).invitations.find((i: { email: string }) => i.email === invited.email);
+  expect((await page.request.post(`/api/organizations/${organizationId}/invitations/cancel`, { data: { ...invited, revision: renewed.revision } })).ok()).toBe(true);
   await resend.click();
   await expect(team.getByRole('alert')).toContainText('This invitation changed');
   await expect(team.getByText(invited.email, { exact: true }).and(team.locator('.team__email'))).toHaveCount(0);
   expect((await (await page.request.get(members)).json()).invitations.map((i: { email: string }) => i.email)).not.toContain(invited.email);
+});
+
+test('Cancel on an outdated screen keeps a role the invitation became, and Remove still works', async ({ page, browser }) => {
+  const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
+  const members = `/api/organizations/${organizationId}/members`;
+  const invited = { email: 'cancel.stale@example.test', role: 'finance' };
+  expect((await page.request.post(members, { data: invited })).ok()).toBe(true);
+  await page.goto('/');
+  const organization = page.getByRole('article').filter({ has: page.locator(`a[href="#/events/${eventId}"]`) });
+  await organization.getByRole('button', { name: 'Team and roles', exact: true }).click();
+  const team = organization.getByRole('region', { name: /^Team and roles for / });
+  const cancel = team.getByRole('button', { name: `Cancel invitation for ${invited.email}` });
+  await expect(cancel).toBeVisible();
+
+  const recipient = await browser.newContext({ extraHTTPHeaders: { Authorization: `Bearer test:${invited.email}` } });
+  try {
+    expect((await recipient.request.get('/api/me')).ok()).toBe(true);
+    await cancel.click();
+    await expect(team.getByRole('alert')).toContainText('it was not canceled and no role was removed');
+    await expect(cancel).toHaveCount(0);
+    const revoke = team.getByRole('button', { name: new RegExp(`^Remove .* role from ${invited.email}$`) });
+    await expect(revoke).toBeVisible();
+    expect((await recipient.request.get(`/api/events/${eventId}/orders`)).status()).toBe(200);
+    await revoke.click();
+    await expect(revoke).toHaveCount(0);
+    expect((await recipient.request.get(`/api/events/${eventId}/orders`)).status()).toBe(404);
+  } finally {
+    await recipient.close();
+  }
 });

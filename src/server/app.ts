@@ -242,6 +242,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   // People and roles. Owners only.
   const memberBody = z.object({ email: z.string().trim().email('Enter an email address.').max(254), role: z.enum(ROLES) });
+  // A Team row as it was shown.
+  const shownRow = memberBody.extend({ revision: z.string().min(1).max(64) });
   app.get('/api/organizations/:id/members', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrg(me(req), id, 'members.manage');
@@ -257,14 +259,26 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/organizations/:id/invitations/resend', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrg(me(req), id, 'members.manage');
-    const { email, role, revision } = memberBody.extend({ revision: z.string().min(1).max(64) }).parse(req.body);
+    const { email, role, revision } = shownRow.parse(req.body);
     return access.addMember(id, email, role, me(req), revision);
   });
   app.post('/api/organizations/:id/members/remove', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrg(me(req), id, 'members.manage');
-    const body = memberBody.parse(req.body);
-    return access.removeMember(id, body.email, body.role, me(req));
+    // Team screens from before revisions post here for both Remove and Cancel, and cannot say which row they mean.
+    throw new HttpError(409, 'This screen is out of date, so nothing was removed. Reload the page and try again.');
+  });
+  app.post('/api/organizations/:id/members/revoke', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrg(me(req), id, 'members.manage');
+    const { email, role, revision } = shownRow.parse(req.body);
+    return access.removeMember(id, email, role, revision, me(req));
+  });
+  app.post('/api/organizations/:id/invitations/cancel', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrg(me(req), id, 'members.manage');
+    const { email, role, revision } = shownRow.parse(req.body);
+    return access.cancelInvitation(id, email, role, revision, me(req));
   });
   // An owner hands their owner role to a signed-in teammate. Recorded in the role history.
   app.post('/api/organizations/:id/ownership-transfer', async (req) => {
