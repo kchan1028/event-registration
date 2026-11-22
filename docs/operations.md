@@ -117,7 +117,7 @@ Proposed live signals and recipients, from [product.md](../product.md#quality-re
 
 Alerts must not include card data, emergency contacts, or other restricted fields.
 
-Implemented in the local build (November 15, 2026): `GET /api/health` runs a database query and answers 503 when it fails, so a platform health check (Render's health-check path, per [ADR 0004](decisions/0004-hosted-stack-and-database.md)) can take an instance out of service. On `SIGTERM` the server stops taking new requests, finishes the ones in progress, and closes its database connections. The [local database health check](testing/test-plan.md#local-database-health-check) verifies the outage and return to HTTP 200 without restarting the application. No platform is configured yet. The planned Render setup is in [docs/runbooks/deploy-render.md](runbooks/deploy-render.md).
+Implemented in the local build (November 15, 2026): `GET /api/health` runs a database query and answers 503 when it fails, so a platform health check (Render's health-check path, per [ADR 0004](decisions/0004-hosted-stack-and-database.md)) can take an instance out of service. A lost database connection is logged and does not end the process. Work that needed it fails; a migration that had already finished and lost it only while releasing its lock still counts as done. On `SIGTERM` the server stops taking new requests, finishes the ones in progress, and closes its database connections. The [local database health check](testing/test-plan.md#local-database-health-check) verifies the outage and return to HTTP 200 without restarting the application. No platform is configured yet. The planned Render setup is in [docs/runbooks/deploy-render.md](runbooks/deploy-render.md).
 
 ### Proposed pilot signal checks
 

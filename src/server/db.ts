@@ -814,8 +814,19 @@ async function applyMigrations(pool: pg.Pool): Promise<void> {
 export function openDb(connectionString: string, onPoolError?: (err: Error) => void): Db {
   // Fail fast instead of hanging when the database cannot be reached.
   const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 10_000, types });
-  // An idle connection can drop (database restart, test teardown); the pool replaces it.
-  pool.on('error', (err) => onPoolError?.(err));
+  // Any connection can drop (database restart, test teardown), and an unheard error ends the process. The pool
+  // listens only to idle clients, so each client gets a listener for its whole life, including the handoff from
+  // idle to checked out. The pool discards a client that lost its connection when it is released.
+  pool.on('connect', (client) => {
+    let lost = false;
+    client.on('error', (err) => {
+      // One loss can emit twice (the server's reason, then the closed socket): report the first.
+      if (!lost) onPoolError?.(err);
+      lost = true;
+    });
+  });
+  // An idle client's error also reaches the pool. The listener above has already reported it.
+  pool.on('error', () => {});
   const tx = new AsyncLocalStorage<{ client: pg.PoolClient; depth: number }>();
   let migrated: Promise<void> | null = null;
   let closed: Promise<void> | null = null;

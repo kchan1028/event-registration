@@ -375,7 +375,7 @@ Use the [Stripe sandbox rehearsal](../runbooks/local-setup.md#phase-2-stripe-san
 
 ### Local database health check
 
-Run `npm run test -- tests/health.test.ts`. The test uses a disposable PostgreSQL database and an unsigned request to the public health endpoint. It disables connections only to that database, closes its existing connections and checks for HTTP 503 with a generic error. It re-enables connections and verifies that the same application returns HTTP 200 without a restart. Hosted monitoring, alert delivery and platform recovery still require operational rehearsal.
+Run `npm run test -- tests/health.test.ts`. The test uses a disposable PostgreSQL database and an unsigned request to the public health endpoint. It disables connections only to that database, closes its existing connections and checks for HTTP 503 with a generic error. It re-enables connections and verifies that the same application returns HTTP 200 without a restart. It also drops the connection of an open transaction (between queries, during a query and nested) and of a migration waiting on an empty database: each must reject without ending the process, the transaction saves nothing, and the next attempt succeeds, applying every migration. An error injected while the pool hands a client over must be reported without ending the process. Hosted monitoring, alert delivery and platform recovery still require operational rehearsal.
 
 ### Pilot signal check rehearsal
 
