@@ -578,12 +578,12 @@ test('organizer checks the rider’s pending reservation by exact reference', as
   await check.click();
   await expect(status).toContainText('It starts or ends with a space');
   await expect(status).not.toContainText(orderNumber!);
-  for (const bad of ['short', 'x'.repeat(65)]) {
+  for (const [bad, why] of [['short', 'at least 8 characters'], ['x'.repeat(65), 'at most 64 characters']] as const) {
     await staffReference.fill(bad);
     await check.click();
     await expect(staffReference).toBeFocused();
     await expect(staffReference).toHaveAttribute('aria-invalid', 'true');
-    await expect(staffReference).toHaveAccessibleDescription('Enter the reservation reference shown in the rider’s pending checkout.');
+    await expect(staffReference).toHaveAccessibleDescription(new RegExp(why));
   }
   for (const type of ['paste', 'drop'] as const) {
     await staffReference.fill(reference);

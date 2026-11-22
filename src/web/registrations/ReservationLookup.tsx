@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
-import { reservationReferenceSchema } from '../../shared/checkout';
+import { reservationLookupSchema } from '../../shared/checkout';
 import { api, type ReservationStatus } from '../api';
 import { formatDateTime, ORDER_STATUS_LABEL } from '../format';
 
@@ -16,8 +16,9 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
     e.preventDefault();
     if (inFlight.current) return;
     // References match exactly: send the text as typed, with checkout's own length rule.
-    if (!reservationReferenceSchema.safeParse(reference).success) {
-      setInvalid('Enter the reservation reference shown in the rider’s pending checkout.');
+    const checked = reservationLookupSchema.safeParse(reference);
+    if (!checked.success) {
+      setInvalid(checked.error.issues[0]!.message);
       setResult(undefined);
       setError(undefined);
       field.current?.focus();

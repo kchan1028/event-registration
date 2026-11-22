@@ -15,7 +15,7 @@ import { buildCaseStudyScenarios, CASE_STUDY_ORG_ID, CASE_STUDY_REFERENCE_NOW } 
 import { configFromTemplate, newId } from '../shared/factory';
 import { type EventConfig, bibNumberSchema, createEventInputSchema, eventConfigSchema } from '../shared/schema';
 import { entriesCsv, ledgerCsv } from '../shared/exports';
-import { reservationReferenceSchema } from '../shared/checkout';
+import { reservationLookupSchema, reservationReferenceSchema } from '../shared/checkout';
 import { eventSummary } from '../shared/reports';
 import { riderCorrectionSchema } from '../shared/lookup';
 import { changeImpact, type ImpactEntry } from '../shared/impact';
@@ -605,7 +605,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   app.post('/api/events/:id/reservation-status', async (req, reply) => {
     const { id } = await onEvent(req, 'orders.view');
-    const { reference } = z.object({ reference: reservationReferenceSchema }).parse(req.body);
+    const { reference } = z.object({ reference: reservationLookupSchema }).parse(req.body);
     reply.header('Cache-Control', 'no-store');
     return { order: await orders.lookupReservation(id, reference) };
   });

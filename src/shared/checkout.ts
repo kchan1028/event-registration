@@ -286,11 +286,14 @@ export function awaitsLicenseReview(orderStatus: string, entry: { status: string
   return orderStatus === 'confirmed' && entry.status === 'confirmed' && !entry.licenseReviewed;
 }
 
-/**
- * The rider's request key, matched exactly as sent. Control characters and unpaired surrogates are refused:
- * neither a one-line field nor the database preserves them, so two keys could read as one.
- */
-export const reservationReferenceSchema = z.string().min(8).max(64).regex(/^[^\p{Cc}\p{Cs}]+$/u, 'Use one line of plain text for the reference.');
+/** The rider's request key, matched exactly as sent. Narrowing this would stop a saved hold from being retried. */
+export const reservationReferenceSchema = z
+  .string()
+  .min(8, 'A reservation reference has at least 8 characters. Copy the whole reference from the rider’s checkout.')
+  .max(64, 'A reservation reference has at most 64 characters. Copy only the reference from the rider’s checkout.');
+
+/** Staff lookup also refuses the two things PostgreSQL text cannot store exactly: NUL and an unpaired surrogate. */
+export const reservationLookupSchema = reservationReferenceSchema.regex(/^[^\0\p{Cs}]*$/u, 'The reference has a character that cannot be saved. Copy it again from the rider’s checkout.');
 
 export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
 
