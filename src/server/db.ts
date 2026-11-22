@@ -788,8 +788,27 @@ export async function ensureLocalDatabase(connectionString: string): Promise<boo
   }
 }
 
-async function applyMigrations(pool: pg.Pool): Promise<void> {
+/**
+ * Takes a client out of the pool. The pool stops listening for its errors until it is released, and an
+ * unheard error ends the process, so listen here and destroy a client that had one.
+ */
+async function checkOut(pool: pg.Pool, onError?: (err: Error) => void) {
   const client = await pool.connect();
+  let lost = false;
+  const listen = (err: Error) => {
+    lost = true;
+    onError?.(err);
+  };
+  client.on('error', listen);
+  const release = (broken = false) => {
+    client.off('error', listen);
+    client.release(broken || lost);
+  };
+  return { client, release };
+}
+
+async function applyMigrations(pool: pg.Pool, onError?: (err: Error) => void): Promise<void> {
+  const { client, release } = await checkOut(pool, onError);
   try {
     await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK]);
     await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
@@ -807,7 +826,7 @@ async function applyMigrations(pool: pg.Pool): Promise<void> {
     }
   } finally {
     await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK]).catch(() => undefined);
-    client.release();
+    release();
   }
 }
 
@@ -850,7 +869,7 @@ export function openDb(connectionString: string, onPoolError?: (err: Error) => v
           throw err;
         }
       }
-      const client = await pool.connect();
+      const { client, release } = await checkOut(pool, onPoolError);
       // A connection whose ROLLBACK failed is broken; destroy it instead of returning it to the pool.
       let broken = false;
       try {
@@ -864,7 +883,7 @@ export function openDb(connectionString: string, onPoolError?: (err: Error) => v
         });
         throw err;
       } finally {
-        client.release(broken);
+        release(broken);
       }
     },
 
@@ -874,7 +893,7 @@ export function openDb(connectionString: string, onPoolError?: (err: Error) => v
     },
 
     migrate() {
-      migrated ??= applyMigrations(pool).catch((err) => {
+      migrated ??= applyMigrations(pool, onPoolError).catch((err) => {
         migrated = null;
         throw err;
       });
