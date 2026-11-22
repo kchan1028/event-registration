@@ -33,6 +33,57 @@ it('adds protected export auditing on upgrade without backfilling requests', asy
   }
 });
 
+it('never makes an email from before migration 40 an attempt, and withholds a resend wherever one exists', async () => {
+  const url = await testDatabaseUrl({ empty: true });
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  // Every outcome the old sender could save, however clear it looked, plus an invitation that never had an email.
+  const earlier = { accepted: 'sent', local: 'recorded', refused: 'failed', readded: 'failed' };
+  try {
+    await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+    for (let version = 1; version <= 39; version++) {
+      await client.query(MIGRATIONS[version - 1]);
+      await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
+    }
+    await client.query("INSERT INTO organizations(id, name, created_at) VALUES ('org_earlier', 'Fictional club', '2027-03-01T12:00:00Z')");
+    for (const name of [...Object.keys(earlier), 'seeded']) {
+      await client.query(
+        `INSERT INTO organization_invitations (organization_id, email, role, created_at, expires_at) VALUES ('org_earlier', $1, 'finance', '2027-04-01T12:00:00Z', '2027-04-15T12:00:00Z')`,
+        [`${name}@example.test`],
+      );
+    }
+    for (const [name, status] of Object.entries(earlier)) {
+      // The re-added invitation's email is older than it: no guess is made about whose it was.
+      await client.query(
+        `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
+         VALUES ($1, 'org_earlier', 'organizer_invitation', $2, $3, 'Subject', 'Body', $4, $5)`,
+        [name, `org_earlier:${name}@example.test:finance`, `${name}@example.test`, status, name === 'readded' ? '2027-03-02T12:00:00Z' : '2027-04-01T12:00:00Z'],
+      );
+    }
+  } finally {
+    await client.end();
+  }
+  const db = openDb(url);
+  try {
+    await db.migrate();
+    expect(await db.all('SELECT email, email_attempt_id, earlier_email FROM organization_invitations ORDER BY email')).toEqual([
+      { email: 'accepted@example.test', email_attempt_id: null, earlier_email: true },
+      { email: 'local@example.test', email_attempt_id: null, earlier_email: true },
+      { email: 'readded@example.test', email_attempt_id: null, earlier_email: true },
+      { email: 'refused@example.test', email_attempt_id: null, earlier_email: true },
+      { email: 'seeded@example.test', email_attempt_id: null, earlier_email: false },
+    ]);
+    expect(await db.all('SELECT id, status, started_at FROM email_messages ORDER BY id')).toEqual(
+      Object.entries(earlier).sort(([a], [b]) => a.localeCompare(b)).map(([id, status]) => ({ id, status, started_at: null })),
+    );
+    await db.run(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
+      VALUES ('lost', 'org_earlier', 'organizer_invitation', 'lost', 'lost@example.test', 'Subject', 'Body', 'uncertain', '2027-04-02T12:00:00Z')`);
+    await expect(db.run(`UPDATE email_messages SET status = 'queued' WHERE id = 'lost'`)).rejects.toMatchObject({ code: '23514' });
+  } finally {
+    await db.close();
+  }
+});
+
 describe('migration 36: terminal cancellation request refusals', () => {
   it('enforces matching request identities and supported terminal refusal statuses', async () => {
     const databaseUrl = await testDatabaseUrl(); const { app } = await testApp({ databaseUrl });

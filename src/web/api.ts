@@ -330,6 +330,7 @@ export const api = {
   expiredInvitations: () => request<ExpiredInvitationNotice[]>('GET', '/api/rider/expired-invitations'),
   members: (orgId: string) => request<MemberList>('GET', `/api/organizations/${orgId}/members`),
   addMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role }),
+  retryInvitation: (orgId: string, email: string, role: Role, retryAttempt: string) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role, retryAttempt }),
   removeMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members/remove`, { email, role }),
   transferOwnership: (orgId: string, email: string) => request<MemberList>('POST', `/api/organizations/${orgId}/ownership-transfer`, { email }),
   organizations: () => request<OrganizationSummary[]>('GET', '/api/organizations'),

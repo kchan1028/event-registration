@@ -715,6 +715,36 @@ export const MIGRATIONS: string[] = [
     viewed_at timestamptz NOT NULL
   );
   CREATE INDEX emergency_contact_views_event_idx ON emergency_contact_views(event_id, viewed_at, id);`,
+  `
+  -- A lost provider response is not a confirmed refusal. An attempt is leased while it sends, and a retry repeats its saved sender.
+  ALTER TABLE email_messages DROP CONSTRAINT email_messages_status_check;
+  ALTER TABLE email_messages ADD CONSTRAINT email_messages_status_check
+    CHECK (status IN ('recorded', 'sent', 'failed', 'uncertain'));
+  ALTER TABLE email_messages
+    ADD COLUMN started_at timestamptz,
+    ADD COLUMN sending_until timestamptz,
+    ADD COLUMN from_email text,
+    ADD COLUMN keyed boolean NOT NULL DEFAULT false;
+  ALTER TABLE organization_invitations
+    ADD COLUMN email_attempt_id text REFERENCES email_messages(id) ON DELETE SET NULL,
+    ADD COLUMN earlier_email boolean NOT NULL DEFAULT false;
+  -- Emails from before this migration had no idempotency key and cannot be tied to one invitation.
+  -- None becomes an attempt. An invitation whose address and role has one is never offered a resend.
+  UPDATE organization_invitations i SET earlier_email = true
+  WHERE EXISTS (
+    SELECT 1 FROM email_messages e
+    WHERE e.organization_id = i.organization_id AND e.ref = i.organization_id || ':' || i.email || ':' || i.role
+  );
+  -- The outgoing server keeps running during a deploy and can still save an email without a key.
+  CREATE FUNCTION flag_unkeyed_invitation_email() RETURNS trigger LANGUAGE plpgsql AS $$
+  BEGIN
+    UPDATE organization_invitations i SET earlier_email = true
+    WHERE i.organization_id = NEW.organization_id AND NEW.ref = i.organization_id || ':' || i.email || ':' || i.role;
+    RETURN NEW;
+  END $$;
+  CREATE TRIGGER email_messages_flag_unkeyed AFTER INSERT ON email_messages
+    FOR EACH ROW WHEN (NOT NEW.keyed) EXECUTE FUNCTION flag_unkeyed_invitation_email();
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

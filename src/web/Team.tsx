@@ -36,17 +36,18 @@ function describeChange(c: MembershipChange): string {
   }
 }
 
-const EMAIL_STATUS: Record<'recorded' | 'sent' | 'failed', string> = {
+const EMAIL_STATUS: Record<'recorded' | 'sent' | 'failed' | 'uncertain', string> = {
   recorded: 'Email recorded, not sent (local email)',
   sent: 'Email sent',
   failed: 'Email failed to send',
+  uncertain: 'Email might have been sent',
 };
 
 /**
  * People and roles for one organization. Owners only; the server refuses everyone else.
  * Adding an email that has never signed in records an invitation that becomes a role the
  * first time that person signs in with the same email, if that is within INVITATION_DAYS.
- * Resending (adding it again) emails it again and starts the period over. An owner can hand ownership to a teammate
+ * Resending a completed invitation emails it again and starts the period over. Retrying an email that might already have been sent does not. An owner can hand ownership to a teammate
  * who has signed in; every change appears under Recent changes with who made it.
  */
 export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }) {
@@ -67,15 +68,27 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
   async function run(action: () => Promise<MemberList>) {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       setList(await action());
       return true;
     } catch (e) {
       setError((e as ApiError).message);
+      // A conflict means the list on screen is out of date.
+      if ((e as ApiError).status === 409) await api.members(orgId).then(setList, () => undefined);
       return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  async function retry(email: string, role: Role, attemptId: string) {
+    await run(async () => {
+      const next = await api.retryInvitation(orgId, email, role, attemptId);
+      const status = next.invitations.find((i) => i.lastEmail?.attemptId === attemptId)?.lastEmail?.status;
+      setNotice(status ? `${email}: ${EMAIL_STATUS[status]}.` : `The invitation for ${email} changed. The list shows where it stands now.`);
+      return next;
+    });
   }
 
   async function handOver() {
@@ -115,11 +128,10 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
           {error}
         </p>
       )}
-      {notice && (
-        <p className="note note--ok" role="status">
-          {notice}
-        </p>
-      )}
+      {/* Always mounted, so screen readers hear the text arrive. A retry result is not always good news. */}
+      <p className={notice ? 'note' : 'sr-only'} role="status">
+        {notice}
+      </p>
       {!list && !error && <div className="skeleton" aria-label="Loading team" />}
       {list && (
         <ul className="team__list">
@@ -137,6 +149,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
           ))}
           {list.invitations.map((i) => {
             const expired = new Date(i.expiresAt) <= new Date();
+            const uncertain = i.lastEmail?.status === 'uncertain';
             return (
               <li key={`invite-${i.email}-${i.role}`}>
                 <span className="team__email">{i.email}</span>
@@ -144,16 +157,22 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
                 {expired && <span className="tag tag--error">Expired</span>}
                 <span className="muted small">
                   {expired ? 'Ended' : 'Not signed in yet, open until'} <time dateTime={i.expiresAt}>{formatDateTime(i.expiresAt)}</time>
-                  {i.lastEmail && (
+                  {i.earlierEmail && ' · An earlier email might have been sent. To send a new one, cancel and invite again.'}
+                  {!i.earlierEmail && i.lastEmail && (
                     <>
                       {' · '}
-                      <span className={i.lastEmail.status === 'failed' ? 'team__email-failed' : undefined}>{EMAIL_STATUS[i.lastEmail.status]}</span>
+                      <span className={i.lastEmail.status === 'failed' ? 'team__email-failed' : i.lastEmail.status === 'uncertain' ? 'team__email-uncertain' : undefined}>{EMAIL_STATUS[i.lastEmail.status]}</span>
                     </>
                   )}
                 </span>
-                <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.addMember(orgId, i.email, i.role))}>
-                  Resend<span className="sr-only"> invitation to {i.email}, open for {INVITATION_DAYS} more days</span>
-                </button>
+                {!i.earlierEmail && (
+                  <button className="link-btn" type="button" disabled={busy} onClick={() => (uncertain ? retry(i.email, i.role, i.lastEmail!.attemptId) : run(() => api.addMember(orgId, i.email, i.role)))}>
+                    {uncertain ? 'Retry send' : 'Resend'}
+                    <span className="sr-only">
+                      {uncertain ? ` of the invitation email to ${i.email} without extending it` : ` invitation to ${i.email}, open for ${INVITATION_DAYS} more days`}
+                    </span>
+                  </button>
+                )}
                 <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.removeMember(orgId, i.email, i.role))}>
                   Cancel<span className="sr-only"> invitation for {i.email}</span>
                 </button>

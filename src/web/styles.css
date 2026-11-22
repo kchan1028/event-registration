@@ -4479,6 +4479,16 @@ fieldset:disabled .field label {
   color: var(--error);
   font-weight: 600;
 }
+.team__email-uncertain {
+  /* --warn-icon is 4.4:1 on white, short of 4.5:1 at this size. */
+  color: #9a6600;
+  font-weight: 600;
+}
+@media screen {
+  :root[data-theme='dark'] .team__email-uncertain {
+    color: var(--warn-icon);
+  }
+}
 
 /* My registrations */
 .my-reg {
@@ -4523,6 +4533,7 @@ fieldset:disabled .field label {
 .cancellation-preview details { width: 100%; overflow-wrap: anywhere; }
 .lookup-toggle { cursor: pointer; min-height: 44px; line-height: 44px; }
 @media (pointer: coarse), (max-width: 760px) {
+  .team__list .link-btn { min-height: 44px; min-width: 44px; }
   .input.reference-input { min-height: 44px; font-size: 16px; }
   .btn.lookup-submit { min-height: 44px; }
 }
