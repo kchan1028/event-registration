@@ -130,7 +130,11 @@ export function CheckIn({ eventId }: { eventId: string }) {
     setLookupError(null);
     try {
       const fresh = await api.checkInList(eventId, dayId, query);
-      if (epoch !== lookupEpoch.current || seenApplied !== appliedEpoch.current) return;
+      if (epoch !== lookupEpoch.current) return;
+      if (seenApplied !== appliedEpoch.current) {
+        void lookup(query);
+        return;
+      }
       // Discard a list read that started before this explicit result arrived.
       listEpoch.current++;
       setData(fresh);
@@ -145,7 +149,12 @@ export function CheckIn({ eventId }: { eventId: string }) {
         select(rider);
       }
     } catch (err) {
-      if (epoch === lookupEpoch.current && seenApplied === appliedEpoch.current) setLookupError((err as ApiError).message);
+      if (epoch !== lookupEpoch.current) return;
+      if (seenApplied !== appliedEpoch.current) {
+        void lookup(query);
+        return;
+      }
+      setLookupError((err as ApiError).message);
     }
   }
 
@@ -294,7 +303,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
                 />
               </form>
               {lookupError && <p className="text-error small" role="alert">{lookupError}</p>}
-              {error && <p className="text-error small" role="alert">{error}</p>}
+              {error && error !== lookupError && <p className="text-error small" role="alert">{error}</p>}
               <button
                 type="button"
                 className="btn btn--secondary btn--small ci__scan-btn"
