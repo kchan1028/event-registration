@@ -875,6 +875,37 @@ describe('organizer roles', () => {
     }
   });
 
+  it('leaves the deadline, attempt and history alone when a resend races the outgoing server', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const calls: string[] = [];
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth(), email: { mode: 'resend', send: async (_message, key) => (calls.push(key), 'msg-accepted') } });
+    const call = (method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(OWNER), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const url = `/api/organizations/${org.id}/members`;
+    const body = { email: 'treasurer@valley.test', role: 'finance' };
+    const sent = (await call('POST', url, body)).json();
+    const outgoing = new pg.Client({ connectionString: databaseUrl });
+    await outgoing.connect();
+    try {
+      await outgoing.query('BEGIN');
+      await outgoing.query(
+        `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
+         VALUES ('eml_outgoing', $1, 'organizer_invitation', $2, $3, 'Subject', 'Body', 'recorded', now())`,
+        [org.id, `${org.id}:${body.email}:${body.role}`, body.email],
+      );
+      const resend = call('POST', url, body).then((response) => response.statusCode);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await outgoing.query('COMMIT');
+      expect(await resend).toBe(409);
+      const after = (await call('GET', url)).json();
+      expect(after.history).toEqual(sent.history);
+      expect(after.invitations).toEqual([{ ...sent.invitations[0], earlierEmail: true }]);
+      expect(calls).toHaveLength(1);
+    } finally {
+      await outgoing.end();
+    }
+  });
+
   it('does not reuse a canceled attempt when a seed re-adds it at the same timestamp', async () => {
     const now = new Date('2027-04-03T12:00:00.000Z');
     const email: EmailSender = {

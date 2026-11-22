@@ -311,7 +311,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       const decision = await db.transaction(async () => {
         await db.lock(`org-members:${organizationId}`);
         const extant = await db.get<{ email_attempt_id: string | null; earlier_email: boolean }>(
-          `SELECT email_attempt_id, earlier_email FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3`,
+          // The row lock makes this wait for, or hold off, an outgoing server's insert that flags the invitation.
+          `SELECT email_attempt_id, earlier_email FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 FOR UPDATE`,
           [organizationId, normalized, role],
         );
         if (by && extant?.earlier_email) throw new HttpError(409, EARLIER_EMAIL);
