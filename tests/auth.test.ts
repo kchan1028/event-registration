@@ -200,6 +200,33 @@ describe('organizer roles', () => {
     }
   }, 15_000);
 
+  it('makes a role removal wait for a release that already passed its check', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { call, eventId, order, valley, team } = await withRoles(databaseUrl);
+    await call(team.registration_manager, 'GET', '/api/me');
+    const { members } = (await call(OWNER, 'GET', `/api/organizations/${valley}/members`)).json() as { members: { email: string; role: string; revision: string }[] };
+    const shown = members.find((m) => m.email === team.registration_manager && m.role === 'registration_manager')!;
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    try {
+      await blocker.query('BEGIN');
+      // Holds the release at its write, after its permission check.
+      await blocker.query('SELECT 1 FROM orders WHERE id = $1 FOR UPDATE', [order.id]);
+      const release = call(team.registration_manager, 'POST', `/api/events/${eventId}/reservation-release`, { reference: 'rider-request-0001', riderRequested: true, reason: 'Fictional request' }).then((r) => r.statusCode);
+      await untilWaiting(blocker, 1);
+      let removed = false;
+      const removal = call(OWNER, 'POST', `/api/organizations/${valley}/members/revoke`, { email: shown.email, role: shown.role, revision: shown.revision }).then((r) => ((removed = true), r.statusCode));
+      await untilWaiting(blocker, 2);
+      expect(removed).toBe(false);
+      await blocker.query('COMMIT');
+      expect(await release).toBe(200);
+      expect(await removal).toBe(200);
+      expect((await call(team.registration_manager, 'POST', `/api/events/${eventId}/reservation-release`, { reference: 'rider-request-0001', riderRequested: true, reason: 'Fictional request' })).statusCode).toBe(404);
+    } finally {
+      await blocker.end();
+    }
+  }, 15_000);
+
   it('gives each role only its own tools', async () => {
     const { call, eventId, event, valley, team } = await withRoles();
     const routes: Record<string, [Method, string, unknown?]> = {

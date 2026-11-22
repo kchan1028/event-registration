@@ -57,7 +57,23 @@ Last verified: November 15, 2026 with Docker 27.4 and PostgreSQL 17, before sign
 5. Before the pilot, [rehearse and measure a hosted restore](../testing/test-plan.md#measure-hosted-recovery-before-the-pilot) using a fictional source with the backup configuration intended for the pilot and a separate restore target. Repoint and redeploy an isolated application copy, reconcile its records and capture timing and results in the rehearsal record or pull request. Render documents a ten-minute minimum age for a requested recovery point. An immediate request may therefore require an older point than the approved gap permits. Wait for a suitable point and include that wait in the time to safe reopening. If none will become available, record a recovery hold. The rehearsal fails once the approved reopening limit passes, even if no restore has started. [Render Postgres recovery and backups](https://render.com/docs/postgresql-backups#perform-a-recovery)
 6. Update this runbook's status, [roadmap.md](../../roadmap.md#phase-2--build-the-registration-core), and [SECURITY.md](../../SECURITY.md).
 
+## Upgrades and rollbacks across migration 44
+
+Status: Planned. Not exercised, because nothing is deployed.
+
+Staff hold release trusts that every server able to start Stripe checkout records the attempt (migration 44). A server from before that migration does not, so the two must never take traffic together. This overrides the overlapping deploy described under [Notes](#notes) for this boundary.
+
+1. Upgrade: suspend the service and confirm every old instance has stopped. Then deploy the new version and resume.
+2. Rollback to a version from before migration 44: suspend the service and confirm every new instance has stopped. Then start the old version.
+3. Upgrade again after such a rollback: suspend the old version. Before resuming on the new one, stop staff release of holds the old version may have sent to checkout:
+
+```sql
+UPDATE orders SET stripe_checkout_tracked = false WHERE status IN ('held', 'payment_failed');
+```
+
+Those holds then expire or go to the treasurer. Rehearse this on staging before the first production upgrade that crosses the boundary.
+
 ## Notes
 
 - The image includes dev dependencies (Vite and tsx), about 390 MB. A smaller image that compiles the server ahead of time is possible later; it is not needed for correctness.
-- Render keeps the previous deploy running until the new one passes its health check, and sends `SIGTERM` with a 30-second grace period (`maxShutdownDelaySeconds`) to instances it replaces.
+- Except [across migration 44](#upgrades-and-rollbacks-across-migration-44), Render keeps the previous deploy running until the new one passes its health check, and sends `SIGTERM` with a 30-second grace period (`maxShutdownDelaySeconds`) to instances it replaces.

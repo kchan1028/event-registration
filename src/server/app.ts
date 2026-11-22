@@ -660,8 +660,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const staff = {
       accountId: me(req).id,
       reason,
-      // Checked again under the event lock: the role can be removed while this waits.
-      authorize: () => access.requireEvent(me(req), id, 'entries.manage'),
+      // Checked again under the event and membership locks: the role cannot be removed between this check and the release.
+      authorize: () => access.requireEventUntilSaved(me(req), id, 'entries.manage'),
     };
     return { order: await orders.releaseReservation(id, reference, staff), releaseEnabled: false };
   });

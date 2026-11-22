@@ -735,6 +735,32 @@ test('a registration manager releases a hold the rider asked to release', async 
   await expect(page.getByRole('button', { name: /Complete simulated payment/ })).toBeDisabled();
 });
 
+test('a rider already on Stripe review sees a staff release', async ({ page }) => {
+  // The screen is in Stripe mode; the simulated test server refuses checkout with the same 409 a release causes.
+  await page.route('**/api/public/events/*', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...(await response.json()), paymentMode: 'stripe_test' } });
+  });
+  const eventId = await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  const sent = page.waitForRequest((request) => request.method() === 'POST' && /\/api\/rider\/events\/[^/]+\/orders$/.test(request.url()));
+  await signAndReview(page, 'Alex Demo');
+  const request = await sent;
+  const { id } = await (await request.response())!.json();
+  const payOnStripe = page.getByRole('button', { name: /on Stripe/ });
+  await expect(payOnStripe).toBeEnabled();
+  const released = await page.request.post(`/api/events/${eventId}/reservation-release`, { data: { reference: request.postDataJSON().clientRequestId, riderRequested: true, reason: 'Rider requested release' } });
+  expect(released.status()).toBe(200);
+  await payOnStripe.click();
+  await expect(page.getByRole('alert').filter({ hasText: 'The organizer released your hold' })).toBeVisible();
+  await expect(payOnStripe).toBeDisabled();
+  await page.goto(`/#/orders/${id}`);
+  await expect(page.getByText('The organizer released this hold.')).toBeVisible();
+});
+
 test('a rejected reservation keeps details editable and rapid submission creates one hold', async ({ page }) => {
   await openEvent(page, 'criterium');
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
