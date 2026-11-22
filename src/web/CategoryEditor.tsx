@@ -123,7 +123,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
 
       <section className="editor__section" aria-labelledby={`${cat.id}-elig`}>
         <h3 id={`${cat.id}-elig`}>Who can enter</h3>
-        <p className="editor__help">A rider qualifies if they meet every condition in at least one path. Category numbers are not treated as a ladder: list each allowed category.</p>
+        <p className="editor__help">A rider qualifies if they meet every condition in at least one path. Category numbers are not treated as a ladder{draft.readOnly ? '.' : ': list each allowed category.'}</p>
         {cat.eligibility.paths.map((p, i) => (
           <PathEditor
             key={p.id}

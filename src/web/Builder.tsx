@@ -327,7 +327,7 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
             <FieldBoard draft={draft} raceId={race.id} onSelect={setSelected} selectedId={selected} />
           ) : draft.readOnly ? (
             <div className="issues-panel">
-              {config.categories.length > 0 && <p className="issues-panel__tip">Select a category in the schedule to see its details.</p>}
+              {route.view === 'race' && config.categories.length > 0 && <p className="issues-panel__tip">Select a category in the schedule to see its details.</p>}
             </div>
           ) : (
             <IssuesPanel issues={draft.issues} config={config} onOpen={openIssue} eventId={route.eventId} />

@@ -60,10 +60,15 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
       await expect(details.getByLabel('Category name')).toHaveValue(category.name);
       await expect(details.getByLabel('Category name')).toBeDisabled();
       await expect(details.getByRole('button')).toHaveCount(1);
-      await expect(details.getByText(/Choose how this race is measured|Set a cap, a start group/)).toHaveCount(0);
+      await expect(details.getByText(/Choose how this race is measured|Set a cap, a start group|list each allowed category/)).toHaveCount(0);
       await details.getByRole('button', { name: 'Close category details' }).click();
       await expect(details).toHaveCount(0);
 
+      if (role !== 'check_in_volunteer') {
+        await member.goto(`/#/events/${eventId}/${role === 'finance' ? 'registrations' : 'startlists'}`);
+        await expect(member.getByRole('heading', { name: role === 'finance' ? 'Registrations' : /start list/i }).first()).toBeVisible();
+        await expect(member.getByText('Select a category in the schedule to see its details.')).toHaveCount(0);
+      }
       await member.setViewportSize({ width: 390, height: 900 });
       await member.reload();
       await expect(member.getByText('View only', { exact: true })).toBeVisible();
