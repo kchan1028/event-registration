@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type R
 import { BIB_SCOPES, rangeFor, canCheckInWithBib, changedBibAssignments, type BibChange, type BibReassignmentPlan, type BibSettings, type CheckInReadinessConflict } from '../shared/checkin';
 import { formatTime } from '../shared/format';
 import { api, ApiError, type CheckInList, type CheckInRider } from './api';
+import { EmergencyContactLookup } from './EmergencyContact';
 import { can } from '../shared/roles';
 import { WalkUpRegistration } from './WalkUpRegistration';
 import { AutomaticBibs } from './AutomaticBibs';
@@ -18,8 +19,9 @@ function recoveryKey(eventId: string, dayId: string, orderId: string) {
 
 /**
  * Race-day check-in. Built for a volunteer at a folding table: find the rider,
- * read one unmistakable ready/blocked result, issue the bib. No payment amounts,
- * emails, or emergency contacts appear here.
+ * read one unmistakable ready/blocked result, issue the bib. No payment amounts
+ * or emails appear here. The card omits the emergency contact. A separate
+ * control, after the bib controls, looks one up and can hide it again.
  */
 export function CheckIn({ eventId }: { eventId: string }) {
   const [dayId, setDayId] = useState<string | null>(null);
@@ -688,6 +690,8 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
           </p>
         )}
       </div>}
+
+      <EmergencyContactLookup key={rider.detailsOrderId} eventId={eventId} riderName={rider.name} orderId={rider.detailsOrderId} />
 
       {recovery !== 'pending' && rider.bibHistory.some((h) => h.releasedAt) && (
         <div className="ci-section">

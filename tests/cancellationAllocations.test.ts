@@ -37,7 +37,7 @@ async function setup() {
     return paid.json() as OrderView;
   };
   const preview = (payload: object, headers = {}) => app.inject({ method: 'POST', url: `/api/events/${eventId}/cancellation-allocation-preview`, payload, headers });
-  const get = async (id: string) => (await app.inject({ method: 'GET', url: `/api/orders/${id}` })).json() as OrderView;
+  const get = async (id: string) => (await app.inject({ method: 'GET', url: `/api/orders/${id}`, headers: as(RIDER) })).json() as OrderView;
   return { app, eventId, organizationId, config, cat, order, preview, get, edit, databaseUrl };
 }
 
