@@ -49,7 +49,7 @@ export function FieldBoard({ draft, raceId, onSelect, selectedId }: { draft: Dra
               <span className="clip__time num">--:--</span>
               <h4 className="clip__name">Not in a start group</h4>
             </header>
-            <p className="clip__hint">These categories have no start time yet. Add each one to a start group.</p>
+            <p className="clip__hint">These categories have no start time yet.{!readOnly && ' Add each one to a start group.'}</p>
             <TagList cats={unassigned} groups={groups} draft={draft} onSelect={onSelect} selectedId={selectedId} />
           </article>
         )}

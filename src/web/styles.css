@@ -3026,6 +3026,9 @@ button.issue {
 .schedule-anchor:focus {
   outline: none;
 }
+.editor__fields:disabled button {
+  display: none;
+}
 fieldset:disabled .check,
 fieldset:disabled .field label {
   color: var(--muted);

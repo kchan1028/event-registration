@@ -144,14 +144,16 @@ function Row({ cat, draft, first, last, selected, hasError, entries, onSelect, p
         {!readOnly && <input type="checkbox" aria-label={`Select ${name} for bulk edit`} checked={picked} onChange={onPick} />}
       </td>
       <td className="col-order">
-        <div className="order-btns" hidden={readOnly}>
-          <button className="icon-btn" disabled={first} aria-label={`Move ${name} up`} onClick={(e) => (e.stopPropagation(), update((c) => moveCategory(c, cat.id, -1)))}>
-            <Icon name="up" size={14} />
-          </button>
-          <button className="icon-btn" disabled={last} aria-label={`Move ${name} down`} onClick={(e) => (e.stopPropagation(), update((c) => moveCategory(c, cat.id, 1)))}>
-            <Icon name="down" size={14} />
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="order-btns">
+            <button className="icon-btn" disabled={first} aria-label={`Move ${name} up`} onClick={(e) => (e.stopPropagation(), update((c) => moveCategory(c, cat.id, -1)))}>
+              <Icon name="up" size={14} />
+            </button>
+            <button className="icon-btn" disabled={last} aria-label={`Move ${name} down`} onClick={(e) => (e.stopPropagation(), update((c) => moveCategory(c, cat.id, 1)))}>
+              <Icon name="down" size={14} />
+            </button>
+          </div>
+        )}
       </td>
       <td>
         <button className="cat-row__name" onClick={(e) => (e.stopPropagation(), onSelect(cat.id))} aria-pressed={selected}>

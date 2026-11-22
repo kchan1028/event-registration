@@ -46,15 +46,15 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
     <div className="editor">
       <header className="editor__head">
         <p className="editor__context">{draft.readOnly ? `A category in ${race.name} (view only)` : `Editing a category in ${race.name}`}</p>
-        <button ref={closeRef} className="icon-btn editor__close" onClick={onClose} aria-label="Close category editor">
+        <button ref={closeRef} className="icon-btn editor__close" onClick={onClose} aria-label={draft.readOnly ? 'Close category details' : 'Close category editor'}>
           <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d="M4 4l8 8M12 4l-8 8" />
           </svg>
         </button>
       </header>
 
-      {/* View only: every control below is switched off together. The wrapper takes no space of its own. */}
-      <fieldset disabled={draft.readOnly} style={{ display: 'contents' }}>
+      {/* View only: the values below are switched off together and the buttons that change them are hidden. The wrapper takes no space of its own. */}
+      <fieldset className="editor__fields" disabled={draft.readOnly} style={{ display: 'contents' }}>
       <Field label="Category name" className="field--title">
         {(id) => <input id={id} className="input input--title" value={cat.name} onChange={(e) => set((c) => ({ ...c, name: e.target.value }))} maxLength={120} />}
       </Field>

@@ -300,10 +300,12 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
           )}
           {route.view === 'race' && !race && (
             <div className="empty">
-              <p>This event has no races. Add one in event setup.</p>
-              <a className="btn btn--secondary" href={href({ page: 'event', eventId: route.eventId, view: 'setup' })}>
-                Open event setup
-              </a>
+              <p>{draft.readOnly ? 'This event has no races yet.' : 'This event has no races. Add one in event setup.'}</p>
+              {!draft.readOnly && (
+                <a className="btn btn--secondary" href={href({ page: 'event', eventId: route.eventId, view: 'setup' })}>
+                  Open event setup
+                </a>
+              )}
             </div>
           )}
           {editView && draft.readOnly && <NoAccess>Event setup, shared pools, import, and publishing need a registration manager or owner.</NoAccess>}
@@ -317,12 +319,16 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
         {selectedCategory && !wide && <div className="scrim" aria-hidden="true" onClick={() => setSelected(null)} />}
         <aside
           className={`inspector ${selectedCategory ? 'is-open' : ''} ${wide && race && !selectedCategory ? 'inspector--board' : ''}`}
-          aria-label={selectedCategory ? 'Category editor' : race && wide ? 'Start groups and shared field limits' : 'Checks before publishing'}
+          aria-label={selectedCategory ? (draft.readOnly ? 'Category details' : 'Category editor') : race && wide ? 'Start groups and shared field limits' : draft.readOnly ? 'Schedule details' : 'Checks before publishing'}
         >
           {selectedCategory ? (
             <CategoryEditor key={selectedCategory.id} draft={draft} categoryId={selectedCategory.id} onClose={() => setSelected(null)} onSelect={setSelected} drawer={!wide} />
           ) : wide && race && route.view === 'race' ? (
             <FieldBoard draft={draft} raceId={race.id} onSelect={setSelected} selectedId={selected} />
+          ) : draft.readOnly ? (
+            <div className="issues-panel">
+              <p className="issues-panel__tip">Select a category in the schedule to see its details.</p>
+            </div>
           ) : (
             <IssuesPanel issues={draft.issues} config={config} onOpen={openIssue} eventId={route.eventId} />
           )}
