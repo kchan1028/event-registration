@@ -595,7 +595,7 @@ test('organizer checks the rider’s pending reservation by exact reference', as
     }, type);
     expect(refused).toBe(true);
     await expect(staffReference).toHaveValue('');
-    await expect(staffReference).toHaveAccessibleDescription('A reservation reference is one line. Copy it again without line breaks.');
+    await expect(staffReference).toHaveAccessibleDescription('This field cannot check a reference with a line break. Keep the original unchanged: removing the break makes it a different reference.');
     await check.click();
     await expect(status).not.toContainText(orderNumber!);
   }

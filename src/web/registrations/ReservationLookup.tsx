@@ -54,7 +54,7 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
     setReference('');
     setResult(undefined);
     setError(undefined);
-    setInvalid('A reservation reference is one line. Copy it again without line breaks.');
+    setInvalid('This field cannot check a reference with a line break. Keep the original unchanged: removing the break makes it a different reference.');
   };
 
   return (
@@ -90,7 +90,7 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
               {result.order.holdExpiresAt && <> · Hold expires {formatDateTime(result.order.holdExpiresAt)}</>}
             </p>
           )}
-          {result?.order === null && <p>No order is visible for this reference yet. {reference !== reference.trim() && 'It starts or ends with a space, which counts as part of the reference. '}Check the reference against the rider’s checkout. Ask the rider to keep the pending checkout and retry the same reservation.</p>}
+          {result?.order === null && <p>No order is visible for this reference yet. {reference !== reference.trim() && 'It starts or ends with a space or other blank character, which counts as part of the reference. '}Check the reference against the rider’s checkout. Ask the rider to keep the pending checkout and retry the same reservation.</p>}
         </div>
         {error && <p className="field__error" role="alert">{error}</p>}
       </form>
