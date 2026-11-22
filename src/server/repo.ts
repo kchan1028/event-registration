@@ -264,6 +264,11 @@ export function createRepo(db: Db, clock: () => Date) {
       return db.transaction(async () => {
         await db.lock(eventLock(id));
         const current = await requireEvent(id);
+        const given = audit.waiverChange;
+        // A waiver review covers one draft and live version, even if the newer draft no longer changes the waiver.
+        if (given && (given.revision !== current.revision || given.publishedVersion !== current.publishedVersion)) {
+          throw new HttpError(409, 'The draft or the published version changed after this reason was written. Reload, review the waiver change again, then write the reason.');
+        }
         await requireCancellationPlacementUnchanged(db, id, current.config);
         const issues = validateConfig(current.config, await entries(id));
         const { errors, warnings } = countIssues(issues);
@@ -272,12 +277,8 @@ export function createRepo(db: Db, clock: () => Date) {
         await requireWaiverVersionKeepsItsText(id, current.config);
         let reason: string | null = null;
         if (current.publishedVersion !== null && waiverChanged(await getVersion(id, current.publishedVersion), current.config)) {
-          const given = audit.waiverChange;
           const problem = waiverReasonProblem(given?.reason ?? '');
           if (!given || problem) throw new HttpError(422, problem ?? 'Write why the waiver changed before publishing.');
-          if (given.revision !== current.revision || given.publishedVersion !== current.publishedVersion) {
-            throw new HttpError(409, 'The draft or the published version changed after this reason was written. Reload, review the waiver change again, then write the reason.');
-          }
           reason = given.reason.trim();
         }
         const version = (current.publishedVersion ?? 0) + 1;

@@ -295,6 +295,23 @@ describe('organizer roles', () => {
     expect(open.body).not.toContain('Club counsel reworded it');
   });
 
+  it('refuses a stale waiver review even when the newer draft puts the live waiver back', async () => {
+    const { call, eventId } = await twoClubs();
+    const url = `/api/events/${eventId}`;
+    const save = async (waiverVersion: string | null, name: string) => {
+      const { config, revision } = (await call(OWNER, 'GET', url)).json() as { config: EventConfig; revision: number };
+      const live = (await call(OWNER, 'GET', `${url}/versions/1`)).json().config as EventConfig;
+      config.registration.waiverVersion = waiverVersion ?? live.registration.waiverVersion;
+      config.event.name = name;
+      return (await call(OWNER, 'PUT', `${url}/config`, { revision, config })).json().revision as number;
+    };
+    const revision = await save('draft-a', 'Draft A');
+    await save(null, 'Draft B');
+    const refused = await call(OWNER, 'POST', `${url}/publish`, { acknowledgeWarnings: true, waiverChange: { reason: 'Reason for draft A', revision, publishedVersion: 1 } });
+    expect(refused.statusCode).toBe(409);
+    expect((await call(OWNER, 'GET', url)).json().publishedVersion).toBe(1);
+  });
+
   it('needs a reason for a new waiver version and for every change to a category addendum', async () => {
     const { call, eventId, categoryId } = await twoClubs();
     const category = (c: EventConfig) => c.categories.find((x) => x.id === categoryId)!;

@@ -47,14 +47,16 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
     };
   }, [data.id, data.revision, data.publishedVersion, draft.saveState, check]);
 
-  const needsImpactAck = !upToDate && (impact?.categories.length ?? 0) > 0;
   // Publishing again waits for a comparison of exactly the draft and live version on this screen.
   const needsComparison = !upToDate && data.publishedVersion !== null;
   const sameDraft = compared?.revision === data.revision && compared?.publishedVersion === data.publishedVersion;
   const comparisonReady = !needsComparison || (draft.saveState === 'saved' && sameDraft);
   // The server can only be ahead of this screen, when someone else saved or published.
   const changedElsewhere = compared !== null && (compared.revision > data.revision || (compared.publishedVersion ?? 0) > (data.publishedVersion ?? 0));
-  const needsReason = !upToDate && !!compared?.waiverChanged;
+  // Ask nothing from, and show nothing of, a comparison of another draft.
+  const shownImpact = sameDraft ? impact : null;
+  const needsImpactAck = !upToDate && (shownImpact?.categories.length ?? 0) > 0;
+  const needsReason = !upToDate && sameDraft && !!compared?.waiverChanged;
   const reasonProblem = needsReason ? waiverReasonProblem(reason) : null;
   // Too short is what the hint says; show an error only for what typing more cannot fix.
   const reasonError = reasonProblem && [...reason.trim()].length >= WAIVER_REASON_MIN ? reasonProblem : undefined;
@@ -71,7 +73,8 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
       setReason('');
     } catch (e) {
       setMsg({ tone: 'error', text: (e as ApiError).message });
-      if ((e as ApiError).status === 409) setCheck((n) => n + 1);
+      // Either refusal can mean that the draft changed elsewhere.
+      if ([409, 422].includes((e as ApiError).status)) setCheck((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -111,7 +114,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
 
       {data.publishedVersion !== null && !upToDate && (
         <ImpactPanel
-          impact={impact}
+          impact={shownImpact}
           error={changedElsewhere ? 'This event was changed or published somewhere else. Reload it and review the changes before publishing.' : impactError}
           recovery={
             changedElsewhere
