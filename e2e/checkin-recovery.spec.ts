@@ -331,7 +331,10 @@ test('a list read started before check-in does not restore the ready card', asyn
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
   await watchForReadyCardReturn(page);
 
+  const staleListRead = held[0].route.request();
+  const deliveredList = page.waitForResponse((response) => response.request() === staleListRead);
   await held[0].route.fulfill({ response: held[0].response });
+  expect(await (await deliveredList).finished()).toBeNull();
   await flushPaint(page);
   expect(await readyCardReturned(page)).toBe(false);
   await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
@@ -453,10 +456,11 @@ test('an explicit lookup started before check-in does not restore the ready card
   // The debounced search and the check-in refresh both have to finish before the older lookup is delivered.
   await expect.poll(() => finishedCodeReads).toBeGreaterThanOrEqual(readsBeforeSave + 2);
   await watchForReadyCardReturn(page);
-  const readsAtDelivery = finishedCodeReads;
 
+  const staleLookup = held[0].route.request();
+  const deliveredLookup = page.waitForResponse((response) => response.request() === staleLookup);
   await held[0].route.fulfill({ response: held[0].response });
-  await expect.poll(async () => finishedCodeReads > readsAtDelivery || await readyCardReturned(page)).toBe(true);
+  expect(await (await deliveredLookup).finished()).toBeNull();
   await flushPaint(page);
   expect(await readyCardReturned(page)).toBe(false);
   await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
@@ -640,9 +644,15 @@ test('a failed enter and its search show one connection error', async ({ page })
   await expect(page.locator('.ci__count')).toContainText('riders on');
   await page.clock.pauseAt(new Date(openedAt.getTime() + 2_000));
   let failedNamedReads = 0;
+  page.on('requestfailed', (request) => {
+    if (request.method() !== 'GET') return;
+    const url = new URL(request.url());
+    if (url.pathname === `/api/events/${eventId}/check-in` && url.searchParams.get('q') === 'Nonexistent Person') {
+      failedNamedReads += 1;
+    }
+  });
   await page.route(`**/api/events/${eventId}/check-in?*`, (route) => {
     if (route.request().method() !== 'GET') return route.continue();
-    if (new URL(route.request().url()).searchParams.get('q') === 'Nonexistent Person') failedNamedReads += 1;
     return route.abort();
   });
   await watchAlertCount(page, connectionError);
