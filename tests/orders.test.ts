@@ -2,6 +2,7 @@ import { reservationLookupSchema, reservationReferenceSchema } from '../src/shar
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../src/server/db';
 import { testApp, testDatabaseUrl } from './support/db';
+import { waiverChangeFor } from './support/waiver';
 import type { EventConfig } from '../src/shared/schema';
 import type { WaiverEvidence } from '../src/shared/checkout';
 
@@ -41,8 +42,9 @@ describe('rider checkout: holds and simulated payment', () => {
     const publish = async (waiverVersion: string, waiverText: string) => {
       const { config, revision } = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
       Object.assign(config.registration, { waiverVersion, waiverText });
-      expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } })).statusCode).toBe(200);
-      return app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } });
+      const saved = await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } });
+      expect(saved.statusCode).toBe(200);
+      return app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChange: waiverChangeFor(saved.json()) } });
     };
     const { waiverVersion: v1, waiverText: original } = event.config.registration;
     const live = async () => (await app.inject({ method: 'GET', url: `/api/public/events/${eventId}` })).json().config.registration;
@@ -85,8 +87,8 @@ describe('rider checkout: holds and simulated payment', () => {
 
     const { config, revision } = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
     config.registration.waiverVersion = 'unambiguous';
-    await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } });
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    const saved = await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } });
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChange: waiverChangeFor(saved.json()) } })).statusCode).toBe(200);
     const resumed = await order([code('RR-M35-34')], { rider: { ...RIDER, firstName: 'Second' }, waiver: { version: 'unambiguous', read: true, agreed: true, signatureName: 'Second Rider', signerRole: 'rider' } });
     expect(resumed.statusCode).toBe(201);
   });

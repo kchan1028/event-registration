@@ -41,6 +41,37 @@ const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringif
 const limitText = (n: number | null) => (n === null ? 'no limit' : String(n));
 const STATUS: Record<Category['status'], string> = { active: 'open', closed: 'closed', archived: 'archived' };
 
+export const WAIVER_REASON_MIN = 3;
+export const WAIVER_REASON_MAX = 300;
+
+/** A reason and what it was written for: the saved draft and the live version it was compared with. */
+export interface WaiverChange {
+  reason: string;
+  revision: number;
+  publishedVersion: number;
+}
+
+/** What is wrong with a reason, or null. Counts code points, as PostgreSQL does, so an emoji is one character. */
+export function waiverReasonProblem(reason: string): string | null {
+  const length = [...reason.trim()].length;
+  if (length < WAIVER_REASON_MIN) return `Write why the waiver changed (at least ${WAIVER_REASON_MIN} characters) before publishing.`;
+  if (length > WAIVER_REASON_MAX) return `Shorten the reason for the waiver change to ${WAIVER_REASON_MAX} characters.`;
+  if (reason.includes('\0')) return 'Remove the unsupported character from the reason for the waiver change.';
+  return null;
+}
+
+/**
+ * True when publishing the draft changes what riders agree to: the waiver's version or text, or a
+ * category's addendum, including one removed with its category. An archived category still counts,
+ * so its terms cannot be changed while archived and come back without a reason.
+ */
+export function waiverChanged(published: EventConfig, draft: EventConfig): boolean {
+  if (published.registration.waiverVersion !== draft.registration.waiverVersion || published.registration.waiverText !== draft.registration.waiverText) return true;
+  const before = new Map(published.categories.map((c) => [c.id, c.addendum]));
+  const after = new Map(draft.categories.map((c) => [c.id, c.addendum]));
+  return [...new Set([...before.keys(), ...after.keys()])].some((id) => before.get(id)?.title !== after.get(id)?.title || before.get(id)?.text !== after.get(id)?.text);
+}
+
 function categoryChanges(before: EventConfig, after: EventConfig, b: Category, a: Category): { kinds: ImpactKind[]; details: string[] } {
   const kinds = new Set<ImpactKind>();
   const details: string[] = [];

@@ -84,7 +84,7 @@ describe('change impact API', () => {
     const now = new Date('2027-03-01T18:00:00Z');
     const { app } = await testApp({ now: () => now, holdMinutes: 10 });
     const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-    expect((await app.inject({ method: 'GET', url: `/api/events/${eventId}/impact` })).json()).toEqual({ publishedVersion: null, impact: null });
+    expect((await app.inject({ method: 'GET', url: `/api/events/${eventId}/impact` })).json()).toEqual({ revision: expect.any(Number), publishedVersion: null, impact: null, waiverChanged: false });
 
     await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
     const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };

@@ -188,7 +188,13 @@ test('changed waiver text needs a new waiver version before it publishes', async
     await page.getByRole('link', { name: /Review and publish/ }).first().click();
     const ack = page.getByLabel(/I have reviewed the/);
     if (await ack.count()) await ack.first().check();
-    await page.getByRole('button', { name: 'Publish version 2' }).click();
+    const button = page.getByRole('button', { name: 'Publish version 2' });
+    const reason = page.getByLabel('Reason for the waiver change', { exact: true });
+    await expect(reason).toBeVisible();
+    await reason.fill('no');
+    await expect(button).toBeDisabled();
+    await reason.fill('Club counsel reworded it');
+    await button.click();
   };
   await publish();
   await expect(page.locator('.publish-box').getByRole('status')).toContainText('already published with different text. In Event setup, enter a new waiver version');
@@ -198,6 +204,118 @@ test('changed waiver text needs a new waiver version before it publishes', async
   await saved(page);
   await publish();
   await expect(page.locator('.publish-box').getByRole('status')).toContainText('Published as version 2');
+  await expect(page.getByLabel('Reason for the waiver change', { exact: true })).toHaveCount(0);
+  const row = page.getByRole('region', { name: 'Published versions' }).getByRole('row').nth(1);
+  await expect(row).toContainText('Club counsel reworded it');
+  await expect(row).toContainText('@');
+});
+
+test('a waiver change fits a phone and a change elsewhere asks for no reason', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  const edit = async (change: (config: { event: { name: string }; registration: { waiverVersion: string } }) => void) => {
+    const { config, revision } = await (await page.request.get(`/api/events/${eventId}`)).json();
+    change(config);
+    expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision, config } })).ok()).toBe(true);
+  };
+  await page.setViewportSize({ width: 390, height: 844 });
+  await edit((config) => void (config.event.name = 'Renamed fictional weekend'));
+  const impact = page.waitForResponse((r) => r.url().endsWith(`/api/events/${eventId}/impact`));
+  await page.goto(`/#/events/${eventId}/publish`);
+  await impact;
+  await expect(page.getByText('No change touches a category that has entries.')).toBeVisible();
+  const reason = page.getByLabel('Reason for the waiver change', { exact: true });
+  await expect(reason).toHaveCount(0);
+
+  await edit((config) => void (config.registration.waiverVersion = 'sample-relabeled'));
+  await page.reload();
+  await expect(reason).toBeVisible();
+  await expect(reason).toHaveAccessibleDescription(/Leave out rider details/);
+  expect(await reason.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+  expect((await reason.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('republishing waits for the comparison, and a reason never moves to another draft', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  const url = `/api/events/${eventId}`;
+  expect((await page.request.post(`${url}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  const changeWaiver = async (waiverVersion: string) => {
+    const { config, revision } = await (await page.request.get(url)).json();
+    config.registration.waiverVersion = waiverVersion;
+    expect((await page.request.put(`${url}/config`, { data: { revision, config } })).ok()).toBe(true);
+  };
+  await changeWaiver('sample-a');
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(`**${url}/impact`, async (route) => {
+    await held;
+    await route.fulfill({ status: 503, json: { error: 'The comparison is unavailable.' } });
+  });
+  await page.goto(`/#/events/${eventId}/publish`);
+  const button = page.getByRole('button', { name: 'Publish version 2' });
+  await expect(page.getByText('Checking what changed since the published version')).toBeVisible();
+  await expect(button).toBeDisabled();
+  release();
+  await expect(page.getByRole('alert').filter({ hasText: 'The comparison is unavailable.' })).toBeVisible();
+  await expect(button).toBeDisabled();
+  await page.unroute(`**${url}/impact`);
+  const retry = page.getByRole('button', { name: 'Try again' });
+  expect((await retry.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await retry.click();
+
+  const reason = page.getByLabel('Reason for the waiver change', { exact: true });
+  await reason.fill('🚲🚲');
+  await expect(button).toBeDisabled();
+  await reason.fill('🚲'.repeat(300));
+  await expect(button).toBeEnabled();
+  await reason.fill('🚲'.repeat(301));
+  await expect(reason).toHaveAccessibleDescription(/Shorten the reason/);
+  await expect(button).toBeDisabled();
+
+  await reason.fill('Reason written for draft A');
+  await changeWaiver('sample-b');
+  await button.click();
+  await expect(page.locator('.publish-box').getByRole('status')).toContainText('review the waiver change again');
+  await expect(button).toBeDisabled();
+  await page.getByRole('button', { name: 'Reload event' }).click();
+  await expect(reason).toHaveValue('');
+  await expect(button).toBeDisabled();
+  await reason.fill('Reason written for draft B');
+  await button.click();
+  await expect(page.locator('.publish-box').getByRole('status')).toContainText('Published as version 2');
+  await expect(page.getByRole('region', { name: 'Published versions' })).toContainText('Reason written for draft B');
+});
+
+test('a comparison of another draft never asks this screen for a reason', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  const url = `/api/events/${eventId}`;
+  expect((await page.request.post(`${url}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  const edit = async (change: (config: { event: { name: string }; registration: { waiverVersion: string } }) => void) => {
+    const { config, revision } = await (await page.request.get(url)).json();
+    change(config);
+    expect((await page.request.put(`${url}/config`, { data: { revision, config } })).ok()).toBe(true);
+  };
+  await edit((config) => void (config.event.name = 'Renamed on this screen'));
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(`**${url}/impact`, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.goto(`/#/events/${eventId}/publish`);
+  await expect(page.getByText('Checking what changed since the published version')).toBeVisible();
+  await edit((config) => void (config.registration.waiverVersion = 'saved-elsewhere'));
+  release();
+  const reload = page.getByRole('button', { name: 'Reload event' });
+  await expect(reload).toBeVisible();
+  const reason = page.getByLabel('Reason for the waiver change', { exact: true });
+  await expect(reason).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Publish version 2' })).toBeDisabled();
+  await reload.click();
+  await expect(reason).toBeVisible();
 });
 
 test('the refund warning opens refund rules and clears once notes are saved', async ({ page }) => {

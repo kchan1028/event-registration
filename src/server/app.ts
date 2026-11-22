@@ -18,7 +18,7 @@ import { entriesCsv, ledgerCsv } from '../shared/exports';
 import { reservationLookupSchema, reservationReferenceSchema } from '../shared/checkout';
 import { eventSummary } from '../shared/reports';
 import { riderCorrectionSchema } from '../shared/lookup';
-import { changeImpact, type ImpactEntry } from '../shared/impact';
+import { changeImpact, waiverChanged, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
 import { reconciliationCsv } from './reconciliation';
 import { cancellationExportState, cancellationExportFilename } from './cancellationClosure';
@@ -185,13 +185,15 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return reply.status(status).send({ error: status >= 500 ? 'Something went wrong on the server.' : (err as Error).message });
   });
 
-  async function eventPayload(id: string) {
+  /** `showAudit` is for callers who can publish: who published and why name staff, so other roles never get them. */
+  async function eventPayload(id: string, showAudit: boolean) {
     const record = await repo.getEvent(id);
     const entries = await repo.entries(id);
+    const versions = await repo.listVersions(id);
     return {
       ...record,
       entries,
-      versions: await repo.listVersions(id),
+      versions: showAudit ? versions : versions.map(({ publishedBy, waiverChangeReason, ...version }) => version),
       issues: validateConfig(record.config, entries),
       pending: {
         licenseVerification: 'USA Cycling license and category checks are not connected. Every license is unverified and needs review.',
@@ -293,40 +295,55 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     await access.requireOrg(me(req), id, 'event.edit');
     const input = createEventInputSchema.parse(req.body);
     const record = await repo.createEvent(id, configFromTemplate(input));
-    return reply.status(201).send(await eventPayload(record.id));
+    return reply.status(201).send(await eventPayload(record.id, true));
   });
 
   app.get('/api/events/:id', async (req) => {
     const { id, roles } = await onEvent(req, 'event.view');
-    return { ...(await eventPayload(id)), roles };
+    return { ...(await eventPayload(id, can(roles, 'event.edit'))), roles };
   });
 
   app.put('/api/events/:id/config', async (req) => {
     const { id } = await onEvent(req, 'event.edit');
     const body = z.object({ revision: z.number().int(), config: eventConfigSchema }).parse(req.body);
     await repo.saveDraft(id, body.revision, body.config);
-    return eventPayload(id);
+    return eventPayload(id, true);
   });
 
   app.post('/api/events/:id/publish', async (req) => {
     const { id } = await onEvent(req, 'event.edit');
-    const body = z.object({ acknowledgeWarnings: z.boolean().default(false), acknowledgeImpact: z.boolean().default(false) }).parse(req.body ?? {});
+    const body = z
+      .object({
+        acknowledgeWarnings: z.boolean().default(false),
+        acknowledgeImpact: z.boolean().default(false),
+        // Only repo.publish knows whether a reason is needed, so it checks one; a malformed one counts as none.
+        waiverChange: z.object({ reason: z.string(), revision: z.number().int(), publishedVersion: z.number().int() }).optional().catch(undefined),
+      })
+      .parse(req.body ?? {});
     // One transaction under the event lock: the impact that was reviewed is the impact that is published
     // and recorded, with no entry or draft change in between. repo.publish joins it as a savepoint.
     const version = await db.transaction(async () => {
       await db.lock(eventLock(id));
+      // A waiver review covers one draft and live version, even if a newer draft no longer changes the waiver.
+      // Checked first, so a stale review is not asked to acknowledge a draft it never saw.
+      if (body.waiverChange) {
+        const { revision, publishedVersion } = await repo.getEvent(id);
+        if (body.waiverChange.revision !== revision || body.waiverChange.publishedVersion !== publishedVersion) {
+          throw new HttpError(409, 'The draft or the published version changed after this reason was written. Reload, review the waiver change again, then write the reason.');
+        }
+      }
       // A change that touches riders who already entered must be reviewed, like warnings.
       const { impact } = await impactFor(id);
       if (impact && impact.categories.length > 0 && !body.acknowledgeImpact) {
         const n = impact.categories.length;
         throw new HttpError(422, `Review who the ${n} changed ${n === 1 ? 'category' : 'categories'} with entries affect before publishing.`, impact);
       }
-      const result = await repo.publish(id, body.acknowledgeWarnings);
+      const result = await repo.publish(id, body.acknowledgeWarnings, { publishedBy: me(req).id, waiverChangeReason: body.waiverChange?.reason });
       // Paid entries the change touches each get an item in the resolution workflow.
       if (impact && impact.categories.length > 0) await resolutions.record(id, result.version, impact);
       return result.version;
     });
-    return { ...(await eventPayload(id)), publishedVersion: version };
+    return { ...(await eventPayload(id, true)), publishedVersion: version };
   });
 
   app.get('/api/events/:id/resolutions', async (req) => {
@@ -346,7 +363,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
    */
   async function impactFor(id: string) {
     const record = await repo.getEvent(id);
-    if (record.publishedVersion === null) return { publishedVersion: null, impact: null };
+    if (record.publishedVersion === null) return { revision: record.revision, publishedVersion: null, impact: null, waiverChanged: false };
     const published = await repo.getVersion(id, record.publishedVersion);
     const rows = await db.all<{ order_id: string; category_id: string; status: string; rider_json: { firstName?: string; lastName?: string } }>(
       `SELECT oe.order_id, oe.category_id, oe.status, o.rider_json FROM order_entries oe JOIN orders o ON o.id = oe.order_id
@@ -362,7 +379,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
         riderName: [rider.firstName, rider.lastName].filter(Boolean).join(' ') || 'Unnamed rider',
       };
     });
-    return { publishedVersion: record.publishedVersion, impact: changeImpact(published, record.config, entries) };
+    return { revision: record.revision, publishedVersion: record.publishedVersion, impact: changeImpact(published, record.config, entries), waiverChanged: waiverChanged(published, record.config) };
   }
 
   app.get('/api/events/:id/impact', async (req) => {
@@ -384,13 +401,13 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       })
       .parse(req.body);
     const result = await repo.addTestEntries(id, body.categoryId, body.count, body.riderRefs);
-    return { result, event: await eventPayload(id) };
+    return { result, event: await eventPayload(id, true) };
   });
 
   app.delete('/api/events/:id/test-entries', async (req) => {
     const { id } = await onEvent(req, 'event.edit');
     const removed = await repo.clearTestEntries(id);
-    return { removed, event: await eventPayload(id) };
+    return { removed, event: await eventPayload(id, true) };
   });
 
   // Rider checkout. Uses the latest published version only.
@@ -887,7 +904,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       }
       const org = await repo.createOrganization(orgName, orgId);
       const event = await repo.createEvent(org.id, build(), eventId);
-      await repo.publish(event.id, true);
+      await repo.publish(event.id, true, { publishedBy: me(req).id });
       const eventIds = [event.id];
       return { created: true, organizationId: org.id, eventIds };
     });

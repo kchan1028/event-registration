@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import type { ChangeImpact, ImpactKind } from '../shared/impact';
+import { WAIVER_REASON_MAX, WAIVER_REASON_MIN, waiverReasonProblem, type ChangeImpact, type ImpactKind } from '../shared/impact';
 import { countIssues, type Issue } from '../shared/validation';
 import { api, ApiError } from './api';
 import { href } from './App';
 import type { Draft } from './Builder';
 import { formatDateTime } from './format';
 import { IssueList } from './IssuesPanel';
-import { Icon, Pending } from './ui';
+import { Field, Icon, Pending } from './ui';
 
 export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i: Issue) => void }) {
   const { errors, warnings } = countIssues(draft.issues);
@@ -18,37 +18,63 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
   const [impact, setImpact] = useState<ChangeImpact | null>(null);
   const [impactAck, setImpactAck] = useState(false);
   const [impactError, setImpactError] = useState<string | null>(null);
+  const [compared, setCompared] = useState<{ revision: number; publishedVersion: number | null; waiverChanged: boolean } | null>(null);
+  const [check, setCheck] = useState(0);
+  const [reason, setReason] = useState('');
+  // A reason is for one draft against one live version.
+  useEffect(() => setReason(''), [data.revision, data.publishedVersion]);
 
   // Recompute after every saved draft revision; the server compares the saved draft with the latest published version.
   useEffect(() => {
     if (data.publishedVersion === null || draft.saveState !== 'saved') return;
     let live = true;
+    setImpactError(null);
     api
       .changeImpact(data.id)
       .then((r) => {
         if (!live) return;
         setImpact(r.impact);
-        setImpactError(null);
+        setCompared(r);
         setImpactAck(false);
       })
-      .catch((e: ApiError) => live && setImpactError(e.message));
+      .catch((e: ApiError) => {
+        if (!live) return;
+        setCompared(null);
+        setImpactError(e.message);
+      });
     return () => {
       live = false;
     };
-  }, [data.id, data.revision, data.publishedVersion, draft.saveState]);
+  }, [data.id, data.revision, data.publishedVersion, draft.saveState, check]);
 
-  const needsImpactAck = !upToDate && (impact?.categories.length ?? 0) > 0;
+  // Publishing again waits for a comparison of exactly the draft and live version on this screen.
+  const needsComparison = !upToDate && data.publishedVersion !== null;
+  const sameDraft = compared?.revision === data.revision && compared?.publishedVersion === data.publishedVersion;
+  const comparisonReady = !needsComparison || (draft.saveState === 'saved' && sameDraft);
+  // The server can only be ahead of this screen, when someone else saved or published.
+  const changedElsewhere = compared !== null && (compared.revision > data.revision || (compared.publishedVersion ?? 0) > (data.publishedVersion ?? 0));
+  // Ask nothing from, and show nothing of, a comparison of another draft.
+  const shownImpact = sameDraft ? impact : null;
+  const needsImpactAck = !upToDate && (shownImpact?.categories.length ?? 0) > 0;
+  const needsReason = !upToDate && sameDraft && !!compared?.waiverChanged;
+  const reasonProblem = needsReason ? waiverReasonProblem(reason) : null;
+  // Too short is what the hint says; show an error only for what typing more cannot fix.
+  const reasonError = reasonProblem && [...reason.trim()].length >= WAIVER_REASON_MIN ? reasonProblem : undefined;
 
   const publish = async () => {
     setBusy(true);
     setMsg(null);
     try {
-      const v = await draft.publish(ack, impactAck);
+      const waiverChange = needsReason && data.publishedVersion !== null ? { reason, revision: data.revision, publishedVersion: data.publishedVersion } : undefined;
+      const v = await draft.publish(ack, impactAck, waiverChange);
       setMsg({ tone: 'ok', text: `Published as version ${v}. The published version is frozen; later edits stay in the draft until you publish again.` });
       setAck(false);
       setImpactAck(false);
+      setReason('');
     } catch (e) {
       setMsg({ tone: 'error', text: (e as ApiError).message });
+      // Either refusal can mean that the draft changed elsewhere.
+      if ([409, 422].includes((e as ApiError).status)) setCheck((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -87,7 +113,23 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
       )}
 
       {data.publishedVersion !== null && !upToDate && (
-        <ImpactPanel impact={impact} error={impactError} saving={draft.saveState !== 'saved'} publishedVersion={data.publishedVersion} />
+        <ImpactPanel
+          impact={shownImpact}
+          error={changedElsewhere ? 'This event was changed or published somewhere else. Reload it and review the changes before publishing.' : impactError}
+          recovery={
+            changedElsewhere
+              ? {
+                  label: 'Reload event',
+                  run: () => {
+                    setMsg(null);
+                    draft.reload();
+                  },
+                }
+              : { label: 'Try again', run: () => setCheck((n) => n + 1) }
+          }
+          saving={draft.saveState !== 'saved'}
+          publishedVersion={data.publishedVersion}
+        />
       )}
 
       <div className="publish-box">
@@ -105,10 +147,25 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
             <input type="checkbox" checked={impactAck} onChange={(e) => setImpactAck(e.target.checked)} disabled={errors > 0} />I have reviewed who these changes affect
           </label>
         )}
-        <button className="btn btn--primary" onClick={publish} disabled={busy || errors > 0 || (warnings > 0 && !ack) || (needsImpactAck && !impactAck) || upToDate}>
+        {needsReason && (
+          <Field
+            className="publish-box__reason"
+            label="Reason for the waiver change"
+            error={reasonError}
+            hint={`Required, ${WAIVER_REASON_MIN} to ${WAIVER_REASON_MAX} characters. Saved with this version and shown to owners and registration managers. Leave out rider details.`}
+          >
+            {(id, describedBy) => (
+              <textarea id={id} aria-describedby={describedBy} aria-invalid={!!reasonError || undefined} className="input" rows={3} required value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy || errors > 0} />
+            )}
+          </Field>
+        )}
+        <button className="btn btn--primary" onClick={publish} disabled={busy || errors > 0 || (warnings > 0 && !ack) || (needsImpactAck && !impactAck) || !comparisonReady || !!reasonProblem || upToDate}>
           {busy ? 'Publishing…' : upToDate ? `Version ${data.publishedVersion} is current` : `Publish version ${(data.publishedVersion ?? 0) + 1}`}
         </button>
         {errors > 0 && <p className="muted small">Fix the errors above to publish.</p>}
+        {errors === 0 && !comparisonReady && (
+          <p className="muted small">{impactError || changedElsewhere ? 'Publishing waits until the comparison above succeeds.' : 'Checking what changed since the published version…'}</p>
+        )}
         {data.publishedVersion !== null && (
           <a className="btn btn--secondary btn--small" href={href({ page: 'register', eventId: data.id })}>
             Open rider registration (version {data.publishedVersion})
@@ -122,28 +179,34 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
       </div>
 
       {data.versions.length > 0 && (
-        <section className="settings__section">
+        <section className="settings__section versions">
           <h3>Published versions</h3>
-          <table className="mini-table">
-            <thead>
-              <tr>
-                <th scope="col">Version</th>
-                <th scope="col">Published</th>
-                <th scope="col">Draft save number</th>
-                <th scope="col">Warnings acknowledged</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.versions.map((v) => (
-                <tr key={v.version}>
-                  <td className="num">v{v.version}</td>
-                  <td>{formatDateTime(v.publishedAt)}</td>
-                  <td className="num">{v.draftRevision}</td>
-                  <td className="num">{v.warningsAcknowledged}</td>
+          <div className="table-wrap" role="region" aria-label="Published versions" tabIndex={0}>
+            <table className="mini-table">
+              <thead>
+                <tr>
+                  <th scope="col">Version</th>
+                  <th scope="col">Published</th>
+                  <th scope="col">Published by</th>
+                  <th scope="col">Waiver change reason</th>
+                  <th scope="col">Draft save number</th>
+                  <th scope="col">Warnings acknowledged</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.versions.map((v) => (
+                  <tr key={v.version}>
+                    <td className="num">v{v.version}</td>
+                    <td>{formatDateTime(v.publishedAt)}</td>
+                    <td>{v.publishedBy ?? 'Not recorded'}</td>
+                    <td className="versions__reason">{v.waiverChangeReason ?? 'None'}</td>
+                    <td className="num">{v.draftRevision}</td>
+                    <td className="num">{v.warningsAcknowledged}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
     </div>
@@ -159,15 +222,28 @@ const KIND_LABEL: Record<ImpactKind, string> = {
   availability: 'Availability',
 };
 
-function ImpactPanel({ impact, error, saving, publishedVersion }: { impact: ChangeImpact | null; error: string | null; saving: boolean; publishedVersion: number }) {
+interface PanelProps {
+  impact: ChangeImpact | null;
+  error: string | null;
+  recovery: { label: string; run: () => void };
+  saving: boolean;
+  publishedVersion: number;
+}
+
+function ImpactPanel({ impact, error, recovery, saving, publishedVersion }: PanelProps) {
   return (
     <section className="settings__section impact" aria-labelledby="impact-title">
       <h3 id="impact-title">Who these changes affect</h3>
       <p className="muted small">Compared with version {publishedVersion}, for riders who already entered or hold a place. {saving ? 'Updating after the draft saves.' : ''}</p>
       {error ? (
-        <p className="text-error small" role="alert">
-          {error}
-        </p>
+        <>
+          <p className="text-error small" role="alert">
+            {error}
+          </p>
+          <button type="button" className="btn btn--secondary impact__recover" onClick={recovery.run}>
+            {recovery.label}
+          </button>
+        </>
       ) : !impact ? (
         <div className="skeleton impact__loading" />
       ) : impact.categories.length === 0 ? (

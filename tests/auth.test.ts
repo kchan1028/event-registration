@@ -232,6 +232,125 @@ describe('organizer roles', () => {
     expect(((await call(team.check_in_volunteer, 'GET', `/api/events/${eventId}`)).json() as { roles: string[] }).roles).toEqual(['check_in_volunteer']);
   });
 
+  it('records who published and why the waiver changed, and shows both only to roles that can publish', async () => {
+    const { call, eventId, team } = await withRoles();
+    const manager = team.registration_manager;
+    const edit = async (change: (config: EventConfig) => void) => {
+      const { config, revision } = (await call(manager, 'GET', `/api/events/${eventId}`)).json() as { config: EventConfig; revision: number };
+      change(config);
+      expect((await call(manager, 'PUT', `/api/events/${eventId}/config`, { revision, config })).statusCode).toBe(200);
+      return (await call(manager, 'GET', `/api/events/${eventId}/impact`)).json().waiverChanged as boolean;
+    };
+    const send = (waiverChange?: unknown) => call(manager, 'POST', `/api/events/${eventId}/publish`, { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChange });
+    const reviewed = async () => {
+      const { revision, publishedVersion } = (await call(manager, 'GET', `/api/events/${eventId}`)).json();
+      return { revision, publishedVersion };
+    };
+    const publish = async (reason?: string) => send(reason === undefined ? undefined : { reason, ...(await reviewed()) });
+    const latest = async (email: string = manager) => (await call(email, 'GET', `/api/events/${eventId}`)).json().versions[0];
+
+    expect(await latest()).toMatchObject({ version: 1, publishedBy: OWNER, waiverChangeReason: null });
+
+    // A change that leaves the waiver alone needs no reason and keeps none.
+    expect(await edit((c) => void (c.event.name = 'Renamed Weekend'))).toBe(false);
+    // Whatever arrives as an unneeded reason is ignored, valid or not.
+    expect((await publish('x'.repeat(301))).statusCode).toBe(200);
+    expect(await latest()).toMatchObject({ version: 2, publishedBy: manager, waiverChangeReason: null });
+
+    expect(await edit((c) => void Object.assign(c.registration, { waiverVersion: 'v2', waiverText: 'Changed fictional waiver.' }))).toBe(true);
+    for (const missing of [undefined, '', '   ', ' no ']) {
+      const refused = await publish(missing);
+      expect(refused.statusCode).toBe(422);
+      expect(refused.json().error).toContain('Write why the waiver changed');
+    }
+    // Limits count characters as people see code points, so a bicycle emoji is one.
+    for (const [invalid, message] of [['🚲🚲', 'at least 3'], ['🚲'.repeat(301), '300 characters'], ['Reworded\u0000by counsel', 'unsupported character']]) {
+      const refused = await publish(invalid);
+      expect(refused.statusCode).toBe(422);
+      expect(refused.json().error).toContain(message);
+    }
+    expect((await send({ reason: 5 })).statusCode).toBe(422);
+    // A reason belongs to the draft and live version it was written for.
+    const before = await reviewed();
+    for (const stale of [{ ...before, revision: before.revision - 1 }, { ...before, publishedVersion: 1 }]) {
+      const refused = await send({ reason: 'Club counsel reworded it', ...stale });
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json().error).toContain('review the waiver change again');
+    }
+    expect(await edit((c) => void (c.registration.waiverText = 'A second fictional wording.'))).toBe(true);
+    expect((await send({ reason: 'Club counsel reworded it', ...before })).statusCode).toBe(409);
+    expect(await latest()).toMatchObject({ version: 2 });
+    expect((await publish('  Club counsel reworded it  ')).statusCode).toBe(200);
+    expect(await latest(OWNER)).toMatchObject({ version: 3, publishedBy: manager, waiverChangeReason: 'Club counsel reworded it' });
+
+    for (const email of [team.check_in_volunteer, team.timer_export, team.finance]) {
+      const shown = await latest(email);
+      expect(shown.version).toBe(3);
+      expect(shown).not.toHaveProperty('publishedBy');
+      expect(shown).not.toHaveProperty('waiverChangeReason');
+    }
+    const open = await call(RIDER_EMAIL, 'GET', `/api/public/events/${eventId}`);
+    expect(open.statusCode).toBe(200);
+    expect(open.body).not.toContain(manager);
+    expect(open.body).not.toContain('Club counsel reworded it');
+  });
+
+  it('refuses a stale waiver review even when the newer draft puts the live waiver back', async () => {
+    const { call, eventId, categoryId } = await twoClubs();
+    const url = `/api/events/${eventId}`;
+    const save = async (waiverVersion: string | null, name: string) => {
+      const { config, revision } = (await call(OWNER, 'GET', url)).json() as { config: EventConfig; revision: number };
+      const live = (await call(OWNER, 'GET', `${url}/versions/1`)).json().config as EventConfig;
+      config.registration.waiverVersion = waiverVersion ?? live.registration.waiverVersion;
+      config.event.name = name;
+      return (await call(OWNER, 'PUT', `${url}/config`, { revision, config })).json().revision as number;
+    };
+    const revision = await save('draft-a', 'Draft A');
+    await save(null, 'Draft B');
+    const refused = await call(OWNER, 'POST', `${url}/publish`, { acknowledgeWarnings: true, waiverChange: { reason: 'Reason for draft A', revision, publishedVersion: 1 } });
+    expect(refused.statusCode).toBe(409);
+
+    // It is refused as stale before any other check: here B also needs an impact and a warning acknowledgement.
+    const now = (await call(OWNER, 'GET', url)).json() as { config: EventConfig; revision: number };
+    now.config.categories.find((c) => c.id === categoryId)!.pricing.baseCents += 1000;
+    expect((await call(OWNER, 'PUT', `${url}/config`, now)).statusCode).toBe(200);
+    const first = await call(OWNER, 'POST', `${url}/publish`, { waiverChange: { reason: 'Reason for draft A', revision, publishedVersion: 1 } });
+    expect(first.statusCode).toBe(409);
+    expect(first.json().error).toContain('review the waiver change again');
+    expect((await call(OWNER, 'GET', url)).json().publishedVersion).toBe(1);
+  });
+
+  it('needs a reason for a new waiver version and for every change to a category addendum', async () => {
+    const { call, eventId, categoryId } = await twoClubs();
+    const category = (c: EventConfig) => c.categories.find((x) => x.id === categoryId)!;
+    const changes: ((c: EventConfig) => void)[] = [
+      (c) => void (c.registration.waiverVersion = 'relabeled'),
+      (c) => void (category(c).addendum = { title: 'Gear rules', text: 'Fictional gear rules.' }),
+      (c) => void (category(c).addendum!.title = 'Equipment rules'),
+      (c) => void (category(c).addendum!.text += ' Changed.'),
+      (c) => void (category(c).addendum = null),
+      (c) => void c.categories.push({ ...structuredClone(category(c)), id: 'cat_added', name: 'Added category', timingCode: 'ADDED', classifications: [{ code: 'ADDED', label: 'Added category' }], addendum: { title: 'New rules', text: 'Fictional new rules.' } }),
+      (c) => void (c.categories = c.categories.filter((x) => x.id !== 'cat_added')),
+      (c) => void c.categories.push({ ...structuredClone(category(c)), id: 'cat_added', name: 'Added category', timingCode: 'ADDED', classifications: [{ code: 'ADDED', label: 'Added category' }], addendum: { title: 'New rules', text: 'Fictional new rules.' } }),
+      // Terms edited while archived could otherwise come back without a reason.
+      (c) => void Object.assign(c.categories.find((x) => x.id === 'cat_added')!, { status: 'archived', addendum: { title: 'New rules', text: 'Edited while archived.' } }),
+    ];
+    for (const change of changes) {
+      const { config, revision } = (await call(OWNER, 'GET', `/api/events/${eventId}`)).json() as { config: EventConfig; revision: number };
+      change(config);
+      expect((await call(OWNER, 'PUT', `/api/events/${eventId}/config`, { revision, config })).statusCode).toBe(200);
+      const publish = async (reason?: string) => {
+        const now = (await call(OWNER, 'GET', `/api/events/${eventId}`)).json();
+        const waiverChange = reason === undefined ? undefined : { reason, revision: now.revision, publishedVersion: now.publishedVersion };
+        return call(OWNER, 'POST', `/api/events/${eventId}/publish`, { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChange });
+      };
+      const refused = await publish();
+      expect(refused.statusCode).toBe(422);
+      expect(refused.json().error).toContain('Write why the waiver changed');
+      expect((await publish('Fictional rules update')).statusCode).toBe(200);
+    }
+  });
+
   it('turns an invitation into a role when that person first signs in, and lets the owner remove it', async () => {
     const { call, valley, eventId } = await twoClubs();
     const newcomer = 'newcomer@valley.test';

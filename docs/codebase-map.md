@@ -9,7 +9,7 @@ Paths verified against `main` at commit `740d0b9` (November 16, 2026). When a ch
 - **One app, three layers.** `src/web/` (React, built by Vite) calls the Fastify server in `src/server/` over `/api/...`. Both import the same rules from `src/shared/`, so the browser preview and the server's checks agree. The server is the authority; the browser is never trusted.
 - **Entry points.** `src/server/index.ts` starts the server (reads `.env`, creates a missing local database, picks the listen address in `listen.ts`). `src/server/app.ts` `buildApp()` creates every module, registers every route, and applies migrations when the server becomes ready. `src/web/main.tsx` mounts `App.tsx`, which does hash routing (`#/register/...`, `#/events/...`, `#/orders/...`).
 - **Data.** PostgreSQL through `src/server/db.ts` (`all`, `get`, `run`, `transaction`, `lock`). Schema changes are appended to the `MIGRATIONS` array in `db.ts`; never edit an earlier entry. Tables are described in [DATA_MODEL.md](../DATA_MODEL.md).
-- **Event configuration** is one JSON document validated by `eventConfigSchema` in `src/shared/schema.ts`, saved as a draft and frozen into numbered published versions (`src/server/repo.ts`). Orders keep the version they were sold under.
+- **Event configuration** is one JSON document validated by `eventConfigSchema` in `src/shared/schema.ts`, saved as a draft and frozen into numbered published versions (`src/server/repo.ts`). A publish that changes the waiver (`waiverChanged` in `src/shared/impact.ts`) needs `waiverChange` (the reason, the saved draft revision and the live version), so tests and scripts that republish changed waiver terms must send one (`tests/support/waiver.ts`). Orders keep the version they were sold under.
 
 ## By task area
 

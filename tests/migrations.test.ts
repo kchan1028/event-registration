@@ -419,3 +419,25 @@ describe('migration 31: guardian removal evidence', () => {
     } finally { await db.close(); }
   });
 });
+
+describe('migration 43: who published a version, and why its waiver changed', () => {
+  it('leaves earlier versions unknown and refuses a blank reason or an unknown publisher', async () => {
+    const url = await testDatabaseUrl({ empty: true });
+    const client = new pg.Client({ connectionString: url }); await client.connect();
+    try {
+      await client.query(`CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
+      for (let v = 0; v < 42; v++) { await client.query(MIGRATIONS[v]); await client.query(`INSERT INTO schema_migrations(version) VALUES ($1)`, [v + 1]); }
+      await client.query(`INSERT INTO organizations(id,name,created_at) VALUES ('org','Example Club',now())`);
+      await client.query(`INSERT INTO events(id,organization_id,draft_json,revision,created_at,updated_at) VALUES ('evt','org','{}',1,now(),now())`);
+      await client.query(`INSERT INTO event_versions(event_id,version,config_json,draft_revision,warnings_acknowledged,published_at) VALUES ('evt',1,'{}',1,0,now())`);
+    } finally { await client.end(); }
+    const db = openDb(url);
+    try {
+      await db.migrate(); await db.migrate();
+      expect(await db.get(`SELECT published_by,waiver_change_reason FROM event_versions WHERE event_id='evt'`)).toEqual({ published_by: null, waiver_change_reason: null });
+      const insert = (by: string | null, reason: string | null) => db.run(`INSERT INTO event_versions(event_id,version,config_json,draft_revision,warnings_acknowledged,published_at,published_by,waiver_change_reason) VALUES ('evt',2,'{}',1,0,now(),$1,$2)`, [by, reason]);
+      await expect(insert(null, '  ')).rejects.toMatchObject({ code: '23514' });
+      await expect(insert('acc_missing', 'Fictional reason')).rejects.toMatchObject({ code: '23503' });
+    } finally { await db.close(); }
+  });
+});

@@ -1225,6 +1225,19 @@ fieldset {
 .inspector--board .board__grid {
   grid-template-columns: 1fr;
 }
+.versions {
+  min-width: 0; /* lets the table scroll inside its box instead of widening the page */
+}
+.versions > .table-wrap {
+  width: 100%;
+  min-width: 0;
+}
+.versions__reason {
+  min-width: 180px;
+  max-width: 320px;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
 .pv-row__tally {
   margin-top: var(--s-2);
   max-width: 360px;
@@ -1926,6 +1939,19 @@ button.issue {
   padding: var(--s-4);
   border: 1px solid var(--ink);
   border-radius: var(--r-lg);
+}
+.publish-box__reason {
+  justify-self: stretch;
+  max-width: 560px;
+}
+@media (max-width: 760px) {
+  /* Under 16px, iOS zooms the page when the field takes focus. */
+  .publish-box__reason .input {
+    font-size: 16px;
+  }
+  .impact__recover {
+    min-height: 44px;
+  }
 }
 
 /* Rider preview ---------------------------------------------------------- */
