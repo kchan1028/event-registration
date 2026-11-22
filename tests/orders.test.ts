@@ -35,6 +35,31 @@ async function setup(opts: { publish?: boolean } = {}) {
 }
 
 describe('rider checkout: holds and simulated payment', () => {
+  it('never publishes different waiver text under a version already used, so the signed version identifies the text', async () => {
+    const { app, eventId, event, order, code, waiver } = await setup();
+    const publish = async (waiverVersion: string, waiverText: string) => {
+      const { config, revision } = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
+      Object.assign(config.registration, { waiverVersion, waiverText });
+      expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } })).statusCode).toBe(200);
+      return app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } });
+    };
+    const { waiverVersion: v1, waiverText: original } = event.config.registration;
+    const live = async () => (await app.inject({ method: 'GET', url: `/api/public/events/${eventId}` })).json().config.registration;
+
+    for (const changed of ['Different fictional waiver.', `${original} `, '']) {
+      const refused = await publish(v1, changed);
+      expect(refused.statusCode).toBe(422);
+      expect(refused.json().error).toContain('already published with different text');
+      expect(await live()).toMatchObject({ waiverVersion: v1, waiverText: original });
+    }
+    expect((await publish('v2', 'Different fictional waiver.')).statusCode).toBe(200);
+    // Not only the latest publication: an older version's label stays with its own text.
+    expect((await publish(v1, 'A third fictional waiver.')).statusCode).toBe(422);
+    const stale = await order([code('RR-M35-34')], { waiver });
+    expect(stale.statusCode).toBe(409);
+    expect((await publish(v1, original)).statusCode).toBe(200);
+  });
+
   it('requires a published version', async () => {
     const { order, code } = await setup({ publish: false });
     const res = await order([code('RR-M35-34')]);
