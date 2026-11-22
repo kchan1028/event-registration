@@ -599,6 +599,13 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return orders.cancel(id);
   });
 
+  app.post('/api/events/:id/reservation-status', async (req, reply) => {
+    const { id } = await onEvent(req, 'orders.view');
+    const { reference } = z.object({ reference: z.string().min(8).max(64) }).parse(req.body);
+    reply.header('Cache-Control', 'no-store');
+    return { order: await orders.lookupReservation(id, reference) };
+  });
+
   app.get('/api/events/:id/orders', async (req) => {
     const { id } = await onEvent(req, 'orders.view');
     const { q } = z.object({ q: z.string().max(120).optional() }).parse(req.query);

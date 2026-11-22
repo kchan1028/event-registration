@@ -66,6 +66,38 @@ describe('rider checkout: holds and simulated payment', () => {
     expect(await entriesCount()).toBe(before + 1);
   });
 
+  it('looks up a reservation by exact reference without creating or extending a hold', async () => {
+    const { app, eventId, order, code, clock, entriesCount } = await setup();
+    const reference = 'reservation-reference-0001';
+    const url = `/api/events/${eventId}/reservation-status`;
+    const check = (value: string) => app.inject({ method: 'POST', url, payload: { reference: value } });
+    const before = await entriesCount();
+
+    const unknown = await check(reference);
+    expect(unknown.statusCode).toBe(200);
+    expect(unknown.json()).toEqual({ order: null });
+    expect(unknown.headers['cache-control']).toBe('no-store');
+    expect(await entriesCount()).toBe(before);
+    expect((await check('short')).statusCode).toBe(400);
+
+    const response = await order([code('RR-M35-34')], { clientRequestId: reference });
+    expect(response.statusCode).toBe(201);
+    const saved = response.json<{ orderNumber: string; holdExpiresAt: string }>();
+    expect((await check(reference)).json()).toEqual({
+      order: { orderNumber: saved.orderNumber, status: 'held', holdExpiresAt: saved.holdExpiresAt },
+    });
+    expect((await check(reference.toUpperCase())).json()).toEqual({ order: null });
+    const other = (await app.inject({ method: 'POST', url: '/api/demo' })).json<{ eventId: string }>();
+    expect((await app.inject({ method: 'POST', url: `/api/events/${other.eventId}/reservation-status`, payload: { reference } })).json()).toEqual({ order: null });
+    expect(await entriesCount()).toBe(before + 1);
+    clock.advance(10);
+    expect((await check(reference)).json()).toEqual({
+      order: { orderNumber: saved.orderNumber, status: 'expired', holdExpiresAt: null },
+    });
+    expect(await entriesCount()).toBe(before);
+    expect((await app.inject({ method: 'GET', url: `/api/events/${eventId}/orders` })).json()).toHaveLength(1);
+  });
+
   it('refuses ineligible entries, missing guardians, and a stale waiver', async () => {
     const { order, code, waiver } = await setup();
     expect((await order([code('RR-P12')])).statusCode).toBe(422); // Cat 3 is not P/1/2

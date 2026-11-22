@@ -142,7 +142,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
   }
 
   /** Effective status: holds that ran out read as expired without a background job. */
-  function effectiveStatus(row: OrderRow): OrderStatus {
+  function effectiveStatus(row: Pick<OrderRow, 'status' | 'hold_expires_at'>): OrderStatus {
     if ((row.status === 'held' || row.status === 'payment_failed') && row.hold_expires_at <= nowIso()) return 'expired';
     return row.status;
   }
@@ -608,6 +608,22 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       );
       const views = await viewsOf(rows);
       return views.map((v, i) => ({ ...v, placedByYou: rows[i].account_id === account.id, canManage: rows[i].can_manage === true } satisfies RegistrationAccess));
+    },
+
+    /** Look up a committed reservation by its exact rider request reference, within one event. */
+    async lookupReservation(eventId: string, clientRequestId: string) {
+      const row = await db.get<Pick<OrderRow, 'id' | 'published_version' | 'status' | 'hold_expires_at'>>(
+        'SELECT id, published_version, status, hold_expires_at FROM orders WHERE event_id = $1 AND client_request_id = $2',
+        [eventId, clientRequestId],
+      );
+      if (!row) return null;
+      const config = await repo.getVersion(eventId, row.published_version);
+      const status = effectiveStatus(row);
+      return {
+        orderNumber: formatOrderNumber(row.id, config.event.isDemo),
+        status,
+        holdExpiresAt: status === 'held' || status === 'payment_failed' ? row.hold_expires_at : null,
+      };
     },
 
     /** Every order of the event, newest first. With `query`, only registrations it finds (see `matchesRegistration`). */

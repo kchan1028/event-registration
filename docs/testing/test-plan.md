@@ -270,6 +270,7 @@ Focused browser scenarios in `e2e/checkout.spec.ts` cover [#127](https://github.
 
 - Failed-submit summary links focus the field; sequential typing retains focus and full values. A new failed submission focuses the updated summary.
 - Lose the response after a reservation commits, refresh, and retry with exactly the original payload/key; recover the same order and one entry set. Rapid submission produces one request.
+- Lose the initial reservation before it reaches the server and again after an exact retry commits. Verify the rider’s reference survives reload, authorized staff can find the reference from Registrations, and a miss retains the existing retry path.
 - Unknown server/network, auth and rate-limit outcomes preserve recovery and disable submitted-data edits; a late waitlist offer must not overwrite the pending draft. Definitive rejection allows correction.
 - Publish new waiver/addendum terms during an unknown outcome, with and without an original commit. Recover the accepted snapshot when committed; otherwise refresh terms and require renewed agreement.
 - A recovered cancelled order cannot be paid and permits reselection.

@@ -119,6 +119,12 @@ Alerts must not include card data, emergency contacts, or other restricted field
 
 Implemented in the local build (November 15, 2026): `GET /api/health` runs a database query and answers 503 when it fails, so a platform health check (Render's health-check path, per [ADR 0004](decisions/0004-hosted-stack-and-database.md)) can take an instance out of service. On `SIGTERM` the server stops taking new requests, finishes the ones in progress, and closes its database connections. The [local database health check](testing/test-plan.md#local-database-health-check) verifies the outage and return to HTTP 200 without restarting the application. No platform is configured yet. The planned Render setup is in [docs/runbooks/deploy-render.md](runbooks/deploy-render.md).
 
+### Checking a pending reservation
+
+This lookup is available in the local build. An owner, registration manager or finance user opens the correct event’s **Registrations**, expands **Check a pending reservation**, and enters the reference from the rider’s pending checkout. The result shows the saved order number, status and, for an active hold, its expiry. Staff can use the order number in **Find a registration** to see the order under normal permissions.
+
+If the result says no order is visible yet, have the rider keep that tab and retry the same reservation. The original request may still be processing. If lookup fails or recovery remains stuck, follow the event’s escalation contact when one is assigned. Operator cancellation authority and escalation coverage remain open for the pilot.
+
 ## Backups and recovery
 
 The [local fictional-data restore procedure](runbooks/local-backup-restore.md) exercises a separate logical archive/restore, record comparison and application recovery checks without touching the working database. It prepares the team for the hosted rehearsal. Hosted scheduled and off-site recovery and staff acceptance remain open.

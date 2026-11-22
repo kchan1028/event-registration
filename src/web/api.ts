@@ -99,6 +99,12 @@ export interface WaitlistOffer {
 
 export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
 
+export interface ReservationStatus {
+  orderNumber: string;
+  status: OrderStatus;
+  holdExpiresAt: string | null;
+}
+
 export type { PublicEventSummary } from '../shared/schema';
 
 export interface RefundablePaymentView {
@@ -358,6 +364,8 @@ export const api = {
   waitlist: (eventId: string) => request<{ offerHours: number; entries: WaitlistEntryView[] }>('GET', `/api/events/${eventId}/waitlist`),
   offerWaitlistPlace: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer`),
   removeFromWaitlist: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/remove`),
+  reservationStatus: (eventId: string, reference: string) =>
+    request<{ order: ReservationStatus | null }>('POST', `/api/events/${eventId}/reservation-status`, { reference }),
   publicEvent: (id: string) => request<PublicEvent>('GET', `/api/public/events/${id}`),
   createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; bundleIntent?: string | null; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null; extras?: OrderExtras; couponCode?: string | null }) =>
     request<OrderView>('POST', `/api/rider/events/${eventId}/orders`, body),

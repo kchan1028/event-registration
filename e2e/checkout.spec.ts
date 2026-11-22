@@ -508,6 +508,70 @@ test('lost hold response retries the same reservation across refresh', async ({ 
   await expect(page.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
 });
 
+test('organizer checks the rider’s pending reservation by exact reference', async ({ page }) => {
+  const eventId = await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  const attempts: unknown[] = [];
+  let orderNumber: string | null = null;
+  await page.route('**/api/rider/events/*/orders', async (route) => {
+    attempts.push(route.request().postDataJSON());
+    if (attempts.length === 1) {
+      await route.abort();
+      return;
+    }
+    const response = await route.fetch();
+    if (attempts.length === 2) {
+      orderNumber = (await response.json()).orderNumber;
+      await route.abort();
+      return;
+    }
+    await route.fulfill({ response });
+  });
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.locator('.error-summary')).toContainText('Cannot reach');
+  const riderReference = page.getByRole('textbox', { name: 'Reservation reference' });
+  const reference = await riderReference.inputValue();
+  expect(reference).toMatch(/^[0-9a-f-]{36}$/);
+  await page.reload();
+  await expect(riderReference).toHaveValue(reference);
+
+  const staff = await page.context().newPage();
+  await staff.addInitScript((email) => sessionStorage.setItem('cyclereg.test-session', email), E2E_ORGANIZER);
+  await staff.setViewportSize({ width: 390, height: 844 });
+  await staff.goto(`/#/events/${eventId}/registrations`);
+  await staff.getByText('Check a pending reservation', { exact: true }).click();
+  const lookup = staff.locator('details').filter({ hasText: 'Check a pending reservation' });
+  const check = lookup.getByRole('button', { name: 'Check reservation' });
+  await lookup.getByRole('textbox', { name: 'Reservation reference' }).fill(reference);
+  await check.press('Enter');
+  const status = lookup.getByRole('status');
+  await expect(status).toContainText('No order is visible for this reference yet');
+  await expect(status).toContainText('Check the reference against the rider’s checkout.');
+  await expect(status).toContainText('retry the same reservation');
+  await expect(check).toBeFocused();
+  expect((await new AxeBuilder({ page: staff }).include('details:has(#staff-reservation-reference)').analyze()).violations).toEqual([]);
+  expect(await lookup.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+
+  await page.getByRole('button', { name: 'Retry reservation' }).click();
+  await expect.poll(() => orderNumber).toBeTruthy();
+  await expect(page.locator('.error-summary')).toContainText('Cannot reach');
+  await check.click();
+  await expect(status).toContainText(orderNumber!);
+  await expect(status).toContainText('Places held, unpaid');
+  await expect(status).toContainText('Hold expires');
+  await lookup.screenshot({ path: 'test-results/reservation-lookup-phone.png' });
+
+  await page.getByRole('button', { name: 'Retry reservation' }).click();
+  await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
+  expect(attempts).toHaveLength(3);
+  expect(attempts[1]).toStrictEqual(attempts[0]);
+  expect(attempts[2]).toStrictEqual(attempts[0]);
+  await staff.close();
+});
+
 test('a rejected reservation keeps details editable and rapid submission creates one hold', async ({ page }) => {
   await openEvent(page, 'criterium');
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
