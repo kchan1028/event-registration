@@ -312,6 +312,9 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       await db.lock(`org-members:${organizationId}`);
       // Checked again under the lock: the caller can lose ownership while this waits. A seed has no caller.
       if (by) await requireOrg(by, organizationId, 'members.manage');
+      // First sign-in holds this lock while it turns invitations into roles: either it sees this invitation, or this sees
+      // its account and grants. Taken after the membership lock, as in Cancel.
+      await db.lock(`account:${normalized}`);
       // Resend only renews the invitation it was shown. It never invites or grants.
       const target = resendRevision ? undefined : await db.get<Account>(`SELECT id, email FROM accounts WHERE lower(email) = $1`, [normalized]);
       if (target) {
