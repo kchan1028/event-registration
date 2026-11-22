@@ -2632,6 +2632,12 @@ button.issue {
   line-height: 1.6;
   max-width: 70ch;
 }
+.reg-race-terms {
+  overflow-wrap: anywhere;
+}
+.reg-race-terms .addendum-text {
+  white-space: pre-wrap;
+}
 .hold {
   display: inline-flex;
   align-items: center;
