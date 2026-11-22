@@ -11,8 +11,8 @@ export const orderExtrasSchema = z.object({
   answers: z.record(z.string().max(64), z.record(z.string().max(64), z.string().trim().max(500))).default({}),
   /** Category IDs whose waiver addendum the rider accepted. */
   addenda: z.array(z.string().max(64)).max(20).default([]),
-  /** categoryId -> the addendum as shown when the rider accepted it. Checked when places are held, not stored with the order. */
-  acceptedTerms: z.record(z.string().max(64), z.object({ title: z.string().max(80), text: z.string().max(4000) })).optional(),
+  /** Each addendum as shown when the rider accepted it. A list, because any string is a category ID. Checked when places are held, not stored with the order. */
+  acceptedTerms: z.array(z.object({ categoryId: z.string().max(64), title: z.string().max(80), text: z.string().max(4000) })).max(20).optional(),
 });
 
 export type OrderExtras = z.infer<typeof orderExtrasSchema>;
@@ -21,7 +21,7 @@ export const EMPTY_EXTRAS: OrderExtras = { answers: {}, addenda: [] };
 
 /** An acceptance covers only the title and text that were shown: a changed addendum must be accepted again. */
 export function acceptedAddendum(cat: Pick<Category, 'id' | 'addendum'>, extras: OrderExtras): boolean {
-  const seen = extras.acceptedTerms?.[cat.id];
+  const seen = extras.acceptedTerms?.find((terms) => terms.categoryId === cat.id);
   return !!cat.addendum && !!seen && extras.addenda.includes(cat.id) && seen.title === cat.addendum.title && seen.text === cat.addendum.text;
 }
 

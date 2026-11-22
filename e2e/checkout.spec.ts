@@ -701,7 +701,8 @@ test('a new reservation omits consent for a removed race addendum', async ({ pag
   await expect(page.getByRole('region', { name: 'Race terms you accepted' })).toHaveCount(0);
 });
 
-const consentRecoveryCases = [
+const NEW_TERMS = { title: 'New sample condition', text: 'Fictional new condition.' };
+const consentRecoveryCases: { committed: boolean; legacy: boolean; waiverChanges: boolean; only?: 'title' | 'text' }[] = [
   { committed: true, legacy: false, waiverChanges: true },
   { committed: false, legacy: false, waiverChanges: true },
   { committed: true, legacy: true, waiverChanges: true },
@@ -709,10 +710,15 @@ const consentRecoveryCases = [
   { committed: true, legacy: false, waiverChanges: false },
   { committed: false, legacy: false, waiverChanges: false },
   { committed: false, legacy: true, waiverChanges: false },
+  // One field at a time, in a tab that still holds the old publication.
+  { committed: true, legacy: false, waiverChanges: false, only: 'title' },
+  { committed: true, legacy: false, waiverChanges: false, only: 'text' },
+  { committed: false, legacy: false, waiverChanges: false, only: 'title' },
+  { committed: false, legacy: false, waiverChanges: false, only: 'text' },
 ];
 
-for (const { committed, legacy, waiverChanges } of consentRecoveryCases) {
-  const scenario = [committed ? 'committed' : 'not committed', legacy ? 'older draft' : null, waiverChanges ? null : 'addendum only'].filter(Boolean).join(', ');
+for (const { committed, legacy, waiverChanges, only } of consentRecoveryCases) {
+  const scenario = [committed ? 'committed' : 'not committed', legacy ? 'older draft' : null, waiverChanges ? null : 'addendum only', only ? `${only}, no reload` : null].filter(Boolean).join(', ');
   test(`publication changes do not alter uncertain consent (${scenario})`, async ({ page }, testInfo) => {
     if (!committed) await page.setViewportSize({ width: 390, height: 844 });
     const eventId = await openEvent(page, 'criterium');
@@ -771,10 +777,11 @@ for (const { committed, legacy, waiverChanges } of consentRecoveryCases) {
       current.config.registration.waiverVersion = 'CRO-UPDATED-SAMPLE';
       current.config.registration.waiverText = 'New fictional waiver text, not real event policy.';
     }
-    current.config.categories.find((cat: { id: string }) => cat.id === bodies[0].categoryIds[0]).addendum = { title: 'New sample condition', text: 'Fictional new condition.' };
+    const next = only ? { ...category.addendum, [only]: NEW_TERMS[only] } : NEW_TERMS;
+    current.config.categories.find((cat: { id: string }) => cat.id === bodies[0].categoryIds[0]).addendum = next;
     expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision: current.revision, config: current.config } })).ok()).toBe(true);
     expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
-    await page.reload();
+    if (!only) await page.reload();
     await expect(terms).toBeVisible();
     if (legacy) {
       await expect(terms).toContainText('Original text for one or more race terms isn’t available in this tab.');
@@ -806,7 +813,8 @@ for (const { committed, legacy, waiverChanges } of consentRecoveryCases) {
       await expect(page.getByLabel('I agree to this waiver', { exact: true })).toBeChecked({ checked: !waiverChanges });
       expect(orderIds).toHaveLength(0);
       await expect(terms).toHaveCount(0);
-      await expect(page.getByText('Fictional new condition.', { exact: true })).toBeVisible();
+      await expect(page.locator('.addendum-text')).toHaveText(next.text);
+      await expect(page.locator('.addendum-title')).toContainText(next.title);
       if (!waiverChanges) await expect(page.locator('.error-summary')).toContainText('Read them and accept again');
     }
     expect(bodies).toHaveLength(2);
@@ -823,7 +831,7 @@ for (const { committed, legacy, waiverChanges } of consentRecoveryCases) {
       await page.getByRole('button', { name: 'Sign and review the order' }).click();
       await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
       expect(bodies[2].clientRequestId).not.toBe(bodies[0].clientRequestId);
-      expect((bodies[2].extras as { acceptedTerms?: unknown }).acceptedTerms).toEqual({ [category.id]: { title: 'New sample condition', text: 'Fictional new condition.' } });
+      expect((bodies[2].extras as { acceptedTerms?: unknown }).acceptedTerms).toEqual([{ categoryId: category.id, ...next }]);
     }
   });
 }

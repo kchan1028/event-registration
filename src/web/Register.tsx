@@ -1353,7 +1353,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
     update((x) => {
       const ex = x.extras ?? EMPTY_EXTRAS;
       if (!on) return { ...x, extras: { ...ex, addenda: ex.addenda.filter((a) => a !== categoryId) } };
-      return { ...x, extras: { ...ex, addenda: [...new Set([...ex.addenda, categoryId])], acceptedTerms: { ...ex.acceptedTerms, [categoryId]: { title, text } } } };
+      return { ...x, extras: { ...ex, addenda: [...new Set([...ex.addenda, categoryId])], acceptedTerms: [...(ex.acceptedTerms ?? []).filter((a) => a.categoryId !== categoryId), { categoryId, title, text }] } };
     });
 
   const hold = async () => {
@@ -1381,7 +1381,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
         extras: {
           ...extras,
           addenda: acceptedAddenda.map(({ categoryId }) => categoryId),
-          acceptedTerms: Object.fromEntries(acceptedAddenda.map(({ categoryId, title, text }) => [categoryId, { title, text }])),
+          acceptedTerms: acceptedAddenda.map(({ categoryId, title, text }) => ({ categoryId, title, text })),
         },
         couponCode: draft.coupon?.code ?? null,
       },
@@ -1455,14 +1455,14 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
           </legend>
           <p className="small addendum-text">{terms.text}</p>
           {!terms.accepted && extras.addenda.includes(terms.categoryId) && (
-            <p className="note" id={`addendum-${terms.categoryId}-renew`}>These terms changed or could not be matched to what you accepted. Read them and accept again.</p>
+            <p className="note" id={`renew-addendum-${terms.categoryId}`}>These terms changed or could not be matched to what you accepted. Read them and accept again.</p>
           )}
           <label className="check">
             <input
               id={`addendum-${terms.categoryId}`}
               type="checkbox"
               disabled={busy}
-              aria-describedby={!terms.accepted && extras.addenda.includes(terms.categoryId) ? `addendum-${terms.categoryId}-renew` : undefined}
+              aria-describedby={!terms.accepted && extras.addenda.includes(terms.categoryId) ? `renew-addendum-${terms.categoryId}` : undefined}
               checked={terms.accepted}
               onChange={(e) => toggleAddendum(terms, e.target.checked)}
             />
