@@ -157,8 +157,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       const t = nowIso();
       await db.run(`INSERT INTO accounts (id, provider_user_id, email, created_at) VALUES ($1, $2, $3, $4)`, [id, signedIn.providerUserId, email, t]);
       const invitations = await db.all<{ organization_id: string; role: Role; open: boolean }>(
-        // The row locks give sign-in and a concurrent Cancel one outcome: whichever is first wins.
-        `SELECT organization_id, role, expires_at > $2 AS open FROM organization_invitations WHERE email = $1 FOR UPDATE`,
+        `SELECT organization_id, role, expires_at > $2 AS open FROM organization_invitations WHERE email = $1`,
         [email, t],
       );
       for (const i of invitations) await record(i.organization_id, i.open ? 'invitation_accepted' : 'invitation_expired', email, i.role, id);
@@ -424,6 +423,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       await db.lock(`org-members:${organizationId}`);
       // Checked again under the lock: the caller can lose ownership while this waits.
       await requireOrg(by, organizationId, 'members.manage');
+      // First sign-in holds this lock while it turns invitations into roles, so the two have one outcome.
+      await db.lock(`account:${normalized}`);
       const cancelled = await db.run(`DELETE FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 AND revision = $4`, [organizationId, normalized, role, revision]);
       if (!cancelled) throw new HttpError(409, INVITATION_NOT_CANCELED);
       await record(organizationId, 'invitation_cancelled', normalized, role, by.id);

@@ -22,6 +22,13 @@ const RIDER = { firstName: 'Test', lastName: 'Rider', email: RIDER_EMAIL, team: 
 
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
+/** Waits until this many requests are blocked on a lock in the test's database. */
+async function untilWaiting(client: pg.Client, count: number) {
+  await expect
+    .poll(async () => (await client.query(`SELECT DISTINCT pid FROM pg_locks WHERE NOT granted AND pid IN (SELECT pid FROM pg_locks WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()))`)).rowCount, { timeout: 5000 })
+    .toBe(count);
+}
+
 async function inviteWith(db: Db, organizationId: string, email: string, attemptId: string, at: Date) {
   await db.run(
     `INSERT INTO organization_invitations (organization_id, email, role, created_at, expires_at, email_attempt_id) VALUES ($1, $2, 'finance', $3, $4, $5)`,
@@ -1203,15 +1210,42 @@ describe('organizer roles', () => {
       await blocker.query('BEGIN');
       await blocker.query('LOCK TABLE membership_changes IN EXCLUSIVE MODE');
       const signIn = call('GET', '/api/me', undefined, body.email).then((r) => r.statusCode);
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await untilWaiting(blocker, 1);
       const cancel = call('POST', `${base}/invitations/cancel`, { ...body, revision }).then((r) => r.statusCode);
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await untilWaiting(blocker, 2);
       await blocker.query('ROLLBACK');
       expect(await signIn).toBe(200);
       expect(await cancel).toBe(409);
       const after = (await call('GET', `${base}/members`)).json();
       expect(after.members).toEqual(expect.arrayContaining([expect.objectContaining(body)]));
       expect(after.history.map((h: { action: string }) => h.action)).not.toContain('invitation_cancelled');
+    } finally {
+      await blocker.end();
+    }
+  }, 15_000);
+
+  it('grants nothing when Cancel reaches the account lock before a first sign-in', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth() });
+    const call = (method: Method, url: string, payload?: object, who = OWNER) => app.inject({ method, url, headers: as(who), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const base = `/api/organizations/${org.id}`;
+    const body = { email: 'treasurer@valley.test', role: 'finance' };
+    const { revision } = (await call('POST', `${base}/members`, body)).json().invitations[0];
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`account:${body.email}`]);
+      const cancel = call('POST', `${base}/invitations/cancel`, { ...body, revision }).then((r) => r.statusCode);
+      await untilWaiting(blocker, 1);
+      const signIn = call('GET', '/api/me', undefined, body.email).then((r) => r.statusCode);
+      await untilWaiting(blocker, 2);
+      await blocker.query('ROLLBACK');
+      expect([await cancel, await signIn]).toEqual([200, 200]);
+      const after = (await call('GET', `${base}/members`)).json();
+      expect(after.members).not.toEqual(expect.arrayContaining([expect.objectContaining(body)]));
+      expect(after.history.map((h: { action: string }) => h.action)).not.toContain('invitation_accepted');
     } finally {
       await blocker.end();
     }
@@ -1233,7 +1267,7 @@ describe('organizer roles', () => {
       await blocker.query('BEGIN');
       await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`org-members:${org.id}`]);
       const waiting = call('POST', `${base}/${route}`, { ...body, revision: row.revision }).then((r) => r.statusCode);
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await untilWaiting(blocker, 1);
       await blocker.query(`UPDATE organization_members SET role = 'timer_export' WHERE organization_id = $1 AND role = 'owner'`, [org.id]);
       await blocker.query('COMMIT');
       expect(await waiting).toBe(403);
