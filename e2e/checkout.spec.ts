@@ -585,6 +585,15 @@ test('organizer checks the rider’s pending reservation by exact reference', as
     await expect(staffReference).toHaveAttribute('aria-invalid', 'true');
     await expect(staffReference).toHaveAccessibleDescription('Enter the reservation reference shown in the rider’s pending checkout.');
   }
+  await staffReference.fill('');
+  const pasteRefused = await staffReference.evaluate((field) => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/plain', 'exact\nreference');
+    return !field.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
+  });
+  expect(pasteRefused).toBe(true);
+  await expect(staffReference).toHaveValue('');
+  await expect(staffReference).toHaveAccessibleDescription('A reservation reference is one line. Copy it again without line breaks.');
   await staffReference.fill(reference);
   await expect(staffReference).not.toHaveAttribute('aria-invalid');
   await check.click();

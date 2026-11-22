@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
 import { api, type ReservationStatus } from '../api';
 import { formatDateTime, ORDER_STATUS_LABEL } from '../format';
 
@@ -39,6 +39,15 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
     }
   };
 
+  // The browser would drop or replace line breaks and then look up a different reference.
+  const refuseLineBreaks = (e: SyntheticEvent, text: string) => {
+    if (!/[\r\n]/.test(text)) return;
+    e.preventDefault();
+    setResult(undefined);
+    setError(undefined);
+    setInvalid('A reservation reference is one line. Copy it again without line breaks.');
+  };
+
   return (
     <details className="settings__section">
       <summary>Check a pending reservation</summary>
@@ -52,6 +61,8 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
           aria-describedby={invalid ? 'staff-reservation-reference-error' : undefined}
           value={reference}
           onChange={(e) => { setReference(e.target.value); setResult(undefined); setError(undefined); setInvalid(undefined); }}
+          onPaste={(e) => refuseLineBreaks(e, e.clipboardData.getData('text'))}
+          onDrop={(e) => refuseLineBreaks(e, e.dataTransfer.getData('text'))}
           readOnly={checking}
           autoComplete="off"
           spellCheck={false}
