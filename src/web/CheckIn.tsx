@@ -36,6 +36,8 @@ export function CheckIn({ eventId }: { eventId: string }) {
   // A newer list read drops an older one. An explicit lookup also drops a list read that started before its result.
   const listEpoch = useRef(0);
   const lookupEpoch = useRef(0);
+  // A save bumps this. A lookup that started earlier must not paint over that save or drop its refresh.
+  const appliedEpoch = useRef(0);
   const [batchMode, setBatchMode] = useState<BibBatchMode | null>(null);
   const [showBibs, setShowBibs] = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
@@ -78,6 +80,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
   refreshCurrentList.current = () => { void load(q, dayId); };
 
   const riders = data?.riders ?? [];
+  const listFailed = (error !== null || lookupError !== null) && listedQuery !== q;
   const selected = riders.find((r) => r.orderId === selectedId) ?? null;
   const day = data?.days.find((d) => d.id === data.dayId);
   const selectedRecoveryKey = selected && data ? recoveryKey(eventId, data.dayId, selected.orderId) : null;
@@ -122,11 +125,12 @@ export function CheckIn({ eventId }: { eventId: string }) {
     const query = text.trim();
     if (!query) return;
     const epoch = ++lookupEpoch.current;
+    const seenApplied = appliedEpoch.current;
     listEpoch.current++;
     setLookupError(null);
     try {
       const fresh = await api.checkInList(eventId, dayId, query);
-      if (epoch !== lookupEpoch.current) return;
+      if (epoch !== lookupEpoch.current || seenApplied !== appliedEpoch.current) return;
       // Discard a list read that started before this explicit result arrived.
       listEpoch.current++;
       setData(fresh);
@@ -141,11 +145,12 @@ export function CheckIn({ eventId }: { eventId: string }) {
         select(rider);
       }
     } catch (err) {
-      if (epoch === lookupEpoch.current) setLookupError((err as ApiError).message);
+      if (epoch === lookupEpoch.current && seenApplied === appliedEpoch.current) setLookupError((err as ApiError).message);
     }
   }
 
   function replace(r: CheckInRider, savedDayId: string) {
+    appliedEpoch.current++;
     clearVerification();
     setData((current) => {
       if (current?.dayId !== savedDayId) return current;
@@ -312,14 +317,14 @@ export function CheckIn({ eventId }: { eventId: string }) {
                 />
               )}
               <p className="ci__count" aria-live="polite">
-                {error && listedQuery !== q
+                {listFailed
                   ? 'The list could not be updated.'
                   : q
                     ? `${riders.length} ${riders.length === 1 ? 'match' : 'matches'}`
                     : `${riders.length} riders on ${day?.label ?? 'this day'}`}
               </p>
               {riders.length === 0 ? (
-                <EmptyList data={data} searching={!!q} onAdded={() => void load(q, dayId)} />
+                listFailed ? null : <EmptyList data={data} searching={!!q} onAdded={() => refreshCurrentList.current()} />
               ) : (
                 <ul className="ci__results">
                   {riders.map((r) => (
