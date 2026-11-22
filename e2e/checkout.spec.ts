@@ -535,6 +535,7 @@ test('organizer checks the rider’s pending reservation by exact reference', as
   const riderReference = page.getByRole('textbox', { name: 'Reservation reference' });
   const reference = await riderReference.inputValue();
   expect(reference).toMatch(/^[0-9a-f-]{36}$/);
+  await expect(riderReference).toHaveAccessibleDescription('If retries keep failing, share this reference with the event organizer before starting another registration.');
   await page.reload();
   await expect(riderReference).toHaveValue(reference);
 
@@ -562,6 +563,35 @@ test('organizer checks the rider’s pending reservation by exact reference', as
   await expect(status).toContainText(orderNumber!);
   await expect(status).toContainText('Places held, unpaid');
   await expect(status).toContainText('Hold expires');
+  // The order committed after this list loaded: it must be findable by number without a reload.
+  await staff.getByLabel('Find a registration').fill(orderNumber!);
+  await expect(staff.getByText(`1 registration matches “${orderNumber}”.`)).toBeVisible();
+
+  const staffReference = lookup.getByRole('textbox', { name: 'Reservation reference' });
+  await staffReference.fill(`  ${reference} `);
+  await check.click();
+  await expect(status).toContainText(orderNumber!);
+  for (const bad of ['short', '        ', 'x'.repeat(65)]) {
+    await staffReference.fill(bad);
+    await check.click();
+    await expect(staffReference).toBeFocused();
+    await expect(staffReference).toHaveAttribute('aria-invalid', 'true');
+    await expect(staffReference).toHaveAccessibleDescription('Enter the reservation reference shown in the rider’s pending checkout.');
+  }
+  await staffReference.fill(reference);
+  await expect(staffReference).not.toHaveAttribute('aria-invalid');
+  await check.click();
+  await expect(status).toContainText(orderNumber!);
+
+  // Keys the checkout API accepts as sent: surrounding spaces are part of the key.
+  const spaced = ` spaced-reference-0001 `;
+  const saved = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: { ...(attempts[0] as object), clientRequestId: spaced, rider: { ...(attempts[0] as { rider: object }).rider, firstName: 'Avery' }, waiver: { ...(attempts[0] as { waiver: object }).waiver, signatureName: 'Avery Demo' } } });
+  expect(saved.status()).toBe(201);
+  await staffReference.fill(spaced);
+  await check.click();
+  await expect(status).toContainText((await saved.json()).orderNumber);
+  await staffReference.fill(reference);
+  await check.click();
   await lookup.screenshot({ path: 'test-results/reservation-lookup-phone.png' });
 
   await page.getByRole('button', { name: 'Retry reservation' }).click();

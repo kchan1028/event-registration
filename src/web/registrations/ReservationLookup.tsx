@@ -2,8 +2,10 @@ import { useRef, useState, type FormEvent } from 'react';
 import { api, type ReservationStatus } from '../api';
 import { formatDateTime, ORDER_STATUS_LABEL } from '../format';
 
-export function ReservationLookup({ eventId }: { eventId: string }) {
+export function ReservationLookup({ eventId, onFound }: { eventId: string; onFound: (order: ReservationStatus) => void }) {
   const inFlight = useRef(false);
+  const field = useRef<HTMLInputElement>(null);
+  const [invalid, setInvalid] = useState<string>();
   const [reference, setReference] = useState('');
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<{ order: ReservationStatus | null }>();
@@ -12,17 +14,28 @@ export function ReservationLookup({ eventId }: { eventId: string }) {
   const lookup = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (inFlight.current) return;
-    const input = reference.trim();
-    if (input.length < 8 || input.length > 64) {
-      setError('Enter the reservation reference shown in the rider’s pending checkout.');
+    // References match exactly, so try the text as typed before dropping the spaces a paste can add.
+    const candidates = [...new Set([reference, reference.trim()])].filter((value) => value.trim() && value.length >= 8 && value.length <= 64);
+    if (candidates.length === 0) {
+      setInvalid('Enter the reservation reference shown in the rider’s pending checkout.');
+      setResult(undefined);
+      setError(undefined);
+      field.current?.focus();
       return;
     }
     inFlight.current = true;
     setChecking(true);
     setResult(undefined);
     setError(undefined);
+    setInvalid(undefined);
     try {
-      setResult(await api.reservationStatus(eventId, input));
+      let order: ReservationStatus | null = null;
+      for (const value of candidates) {
+        order = (await api.reservationStatus(eventId, value)).order;
+        if (order) break;
+      }
+      setResult({ order });
+      if (order) onFound(order);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not check the reservation. Try again.');
     } finally {
@@ -38,14 +51,17 @@ export function ReservationLookup({ eventId }: { eventId: string }) {
         <label htmlFor="staff-reservation-reference">Reservation reference</label>
         <input
           id="staff-reservation-reference"
+          ref={field}
           className="input"
+          aria-invalid={!!invalid || undefined}
+          aria-describedby={invalid ? 'staff-reservation-reference-error' : undefined}
           value={reference}
-          onChange={(e) => { setReference(e.target.value); setResult(undefined); setError(undefined); }}
+          onChange={(e) => { setReference(e.target.value); setResult(undefined); setError(undefined); setInvalid(undefined); }}
           readOnly={checking}
           autoComplete="off"
           spellCheck={false}
-          maxLength={64}
         />
+        {invalid && <p className="field__error" id="staff-reservation-reference-error" role="alert">{invalid}</p>}
         <div>
           <button className="btn btn--secondary" aria-disabled={checking || undefined}>
             {checking ? 'Checking…' : 'Check reservation'}

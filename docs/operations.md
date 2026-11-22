@@ -121,7 +121,7 @@ Implemented in the local build (November 15, 2026): `GET /api/health` runs a dat
 
 ### Checking a pending reservation
 
-This lookup is available in the local build. An owner, registration manager or finance user opens the correct event’s **Registrations**, expands **Check a pending reservation**, and enters the reference from the rider’s pending checkout. The result shows the saved order number, status and, for an active hold, its expiry. Staff can use the order number in **Find a registration** to see the order under normal permissions.
+This lookup is available in the local build. An owner, registration manager or finance user opens the correct event’s **Registrations**, expands **Check a pending reservation**, and enters the reference from the rider’s pending checkout. The result shows the saved order number, status and, for an active hold, its expiry. A result refreshes the list when needed, so staff can use the order number in **Find a registration** to see the order under normal permissions.
 
 If the result says no order is visible yet, have the rider keep that tab and retry the same reservation. The original request may still be processing. If lookup fails or recovery remains stuck, follow the event’s escalation contact when one is assigned. Operator cancellation authority and escalation coverage remain open for the pilot.
 
