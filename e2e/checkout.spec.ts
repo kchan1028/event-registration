@@ -579,6 +579,7 @@ for (const { committed, legacy } of consentRecoveryCases) {
     await page.getByRole('button', { name: 'Continue to racer details' }).click();
     await page.getByRole('button', { name: 'Continue to the waiver' }).click();
     await expect(page.locator('.addendum-text')).toHaveText(originalText);
+    await expect(page.locator('.addendum-text')).toHaveCSS('white-space', 'pre-wrap');
     await page.getByLabel('I accept this', { exact: true }).check();
     const bodies: { clientRequestId: string; categoryIds: string[]; waiver: { version: string }; extras: { addenda: string[] } }[] = [];
     const orderIds: string[] = [];
@@ -598,6 +599,7 @@ for (const { committed, legacy } of consentRecoveryCases) {
     const terms = page.getByRole('region', { name: 'Race terms you accepted', exact: true });
     await expect(terms.getByRole('heading', { name: /Original sample condition/ })).toBeVisible();
     expect(await terms.locator('.addendum-text').textContent()).toBe(originalText);
+    await expect(terms.locator('.addendum-text')).toHaveCSS('white-space', 'pre-wrap');
     await expect(terms.getByRole('checkbox')).toHaveCount(0);
     expect(bodies[0].extras.addenda).toEqual([category.id]);
     if (legacy) {

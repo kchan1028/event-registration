@@ -2635,8 +2635,10 @@ button.issue {
 .reg-race-terms {
   overflow-wrap: anywhere;
 }
-.reg-race-terms .addendum-text {
+/* Terms read the same when signed and when recovered. */
+.addendum-text {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .hold {
   display: inline-flex;
