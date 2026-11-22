@@ -214,7 +214,7 @@ The first release has these roles (from [product.md](../product.md#4-organizer-w
 - Check-in codes identify an entry and contain no personal details.
 - Public participant lists show no sensitive data by default.
 - Keep personal data out of logs, error reports, analytics, and URLs.
-- Retention and deletion rules must be defined before the pilot (an open decision).
+- Retention and deletion rules must be defined before the pilot. Only the emergency-contact lookup record has an approved period (365 days, not yet enforced); the rest is an open decision.
 
 ### Secrets
 

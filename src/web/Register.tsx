@@ -36,6 +36,13 @@ const STEPS: { key: Step; label: string }[] = [
 
 type Details = Omit<RiderDetails, 'racingAge' | 'licenseCategory' | 'licenseType' | 'competitionClass' | 'collegiateDivision'>;
 
+interface ReservationAddendum {
+  categoryId: string;
+  categoryName: string;
+  title: string;
+  text: string;
+}
+
 interface Draft {
   step: Step;
   reached: number; // furthest step index completed
@@ -46,8 +53,12 @@ interface Draft {
   waiver: { read: boolean; signatureName: string; agreed: boolean };
   orderId: string | null;
   clientRequestId: string;
-  /** Exact submission and waiver text to recover after an uncertain response. */
-  pendingReservation: { request: Parameters<typeof api.createOrder>[1]; waiverText: string } | null;
+  /** Exact submission and displayed terms to recover after an uncertain response. */
+  pendingReservation: {
+    request: Parameters<typeof api.createOrder>[1];
+    waiverText: string;
+    addenda?: ReservationAddendum[];
+  } | null;
   /** Private link token from a waitlist offer; lets this rider take the reserved place. */
   offerToken?: string | null;
   offerCategoryId?: string | null;
@@ -1322,7 +1333,20 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
   }, []);
 
   const extras = draft.extras ?? EMPTY_EXTRAS;
-  const addendumCats = pending ? [] : draft.selected.map((id) => config.categories.find((c) => c.id === id)).filter((c): c is NonNullable<typeof c> => !!c?.addendum);
+  const currentAddenda = pending ? [] : draft.selected.flatMap((id) => {
+    const category = config.categories.find((c) => c.id === id);
+    return category?.addendum ? [{ categoryId: id, categoryName: category.name, ...category.addendum }] : [];
+  });
+  const submittedIds = pending?.request.extras?.addenda;
+  const acceptedIds = pending && Array.isArray(submittedIds)
+    ? pending.request.categoryIds.filter((id) => submittedIds.includes(id))
+    : [];
+  const savedAddenda = pending?.addenda;
+  const submittedAddenda = Array.isArray(savedAddenda)
+    ? savedAddenda.filter((terms) => terms && acceptedIds.includes(terms.categoryId)
+      && typeof terms.categoryName === 'string' && typeof terms.title === 'string' && typeof terms.text === 'string')
+    : [];
+  const originalTermsUnavailable = submittedAddenda.length < acceptedIds.length;
   const toggleAddendum = (catId: string, on: boolean) =>
     update((x) => {
       const ex = x.extras ?? EMPTY_EXTRAS;
@@ -1342,6 +1366,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
       setErrors(errs);
       if (errs.length) return;
     } else setErrors([]);
+    const acceptedAddenda = currentAddenda.filter((terms) => extras.addenda.includes(terms.categoryId));
     const submission = pending ?? {
       request: {
         clientRequestId: draft.clientRequestId,
@@ -1350,10 +1375,11 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
         rider: riderFrom(draft, needsGuardian) as RiderDetails,
         waiver: { version: config.registration.waiverVersion, read: true as const, agreed: true as const, signatureName: w.signatureName.trim(), signerRole: needsGuardian ? 'guardian' as const : 'rider' as const },
         offerToken: draft.offerToken ?? null,
-        extras,
+        extras: { ...extras, addenda: acceptedAddenda.map(({ categoryId }) => categoryId) },
         couponCode: draft.coupon?.code ?? null,
       },
       waiverText: config.registration.waiverText,
+      addenda: acceptedAddenda,
     };
     setBusy(true);
     update((x) => ({ ...x, pendingReservation: submission }));
@@ -1387,7 +1413,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
         ref={boxRef}
         className="waiver"
         tabIndex={0}
-        aria-label="Waiver text. Scroll to the end to enable signing."
+        aria-label={pending ? 'Original waiver text' : 'Waiver text. Scroll to the end to enable signing.'}
         onScroll={(e) => {
           const el = e.currentTarget;
           if (!draft.pendingReservation && !w.read && el.scrollTop + el.clientHeight >= el.scrollHeight - 8) setW({ read: true });
@@ -1398,14 +1424,26 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
       <label className="check">
         <input id="f-waiver-read" type="checkbox" disabled={busy || !!draft.pendingReservation} checked={w.read} onChange={(e) => setW({ read: e.target.checked })} />I have read the whole waiver
       </label>
-      {addendumCats.map((cat) => (
-        <fieldset className="subfields" key={cat.id}>
-          <legend>
-            {cat.addendum!.title} ({cat.name})
+      {(submittedAddenda.length > 0 || originalTermsUnavailable) && (
+        <section className="subfields reg-race-terms" aria-labelledby="submitted-race-terms">
+          <h3 id="submitted-race-terms">Race terms you accepted</h3>
+          {submittedAddenda.map((terms) => (
+            <div key={terms.categoryId}>
+              <h4 className="small">{terms.title} ({terms.categoryName})</h4>
+              <p className="small addendum-text">{terms.text}</p>
+            </div>
+          ))}
+          {originalTermsUnavailable && <p className="muted small">Original text for one or more race terms isn’t available in this tab.</p>}
+        </section>
+      )}
+      {currentAddenda.map((terms) => (
+        <fieldset className="subfields" key={terms.categoryId}>
+          <legend className="addendum-title">
+            {terms.title} ({terms.categoryName})
           </legend>
-          <p className="small addendum-text">{cat.addendum!.text}</p>
+          <p className="small addendum-text">{terms.text}</p>
           <label className="check">
-            <input id={`addendum-${cat.id}`} type="checkbox" disabled={busy || !!draft.pendingReservation} checked={extras.addenda.includes(cat.id)} onChange={(e) => toggleAddendum(cat.id, e.target.checked)} />
+            <input id={`addendum-${terms.categoryId}`} type="checkbox" disabled={busy} checked={extras.addenda.includes(terms.categoryId)} onChange={(e) => toggleAddendum(terms.categoryId, e.target.checked)} />
             {needsGuardian ? 'As parent or guardian, I accept this for the rider' : 'I accept this'}
           </label>
         </fieldset>

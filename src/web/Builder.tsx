@@ -246,6 +246,8 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
   const editView = route.view === 'setup' || route.view === 'pools' || route.view === 'publish' || route.view === 'import';
   const race = config.races.find((r) => r.id === raceId) ?? null;
   const selectedCategory = selected ? config.categories.find((c) => c.id === selected && c.raceId === race?.id) : undefined;
+  // View-only roles have no publishing checks, so their side column exists only for category details or the wide board.
+  const showSide = !draft.readOnly || !!selectedCategory || (wide && !!race);
 
   const openIssue = (issue: Issue) => {
     const t = issue.target;
@@ -288,7 +290,7 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
           {can(roles, 'startlists') && <a href={href({ page: 'event', eventId: route.eventId, view: 'startlists' })}>Open start lists</a>}
         </p>
       )}
-      <div className={`workspace ${selectedCategory ? 'has-selection' : ''}`}>
+      <div className={`workspace ${selectedCategory ? 'has-selection' : ''} ${showSide ? '' : 'workspace--no-side'}`}>
         <Rail draft={draft} route={route} activeRaceId={race?.id ?? null} errors={counts.errors} warnings={counts.warnings} />
         <main className="main" id="main">
           {route.view === 'race' && race && (
@@ -317,22 +319,20 @@ export function Builder({ route }: { route: Extract<Route, { page: 'event' }> })
           {route.view === 'startlists' && (can(roles, 'startlists') ? <StartLists draft={draft} /> : <NoAccess>Start lists need a timer and exports, registration manager, or owner role.</NoAccess>)}
         </main>
         {selectedCategory && !wide && <div className="scrim" aria-hidden="true" onClick={() => setSelected(null)} />}
-        <aside
-          className={`inspector ${selectedCategory ? 'is-open' : ''} ${wide && race && !selectedCategory ? 'inspector--board' : ''}`}
-          aria-label={selectedCategory ? (draft.readOnly ? 'Category details' : 'Category editor') : race && wide ? 'Start groups and shared field limits' : draft.readOnly ? 'Schedule details' : 'Checks before publishing'}
-        >
-          {selectedCategory ? (
-            <CategoryEditor key={selectedCategory.id} draft={draft} categoryId={selectedCategory.id} onClose={() => setSelected(null)} onSelect={setSelected} drawer={!wide} />
-          ) : wide && race && route.view === 'race' ? (
-            <FieldBoard draft={draft} raceId={race.id} onSelect={setSelected} selectedId={selected} />
-          ) : draft.readOnly ? (
-            <div className="issues-panel">
-              {route.view === 'race' && config.categories.length > 0 && <p className="issues-panel__tip">Select a category in the schedule to see its details.</p>}
-            </div>
-          ) : (
-            <IssuesPanel issues={draft.issues} config={config} onOpen={openIssue} eventId={route.eventId} />
-          )}
-        </aside>
+        {showSide && (
+          <aside
+            className={`inspector ${selectedCategory ? 'is-open' : ''} ${wide && race && !selectedCategory ? 'inspector--board' : ''}`}
+            aria-label={selectedCategory ? (draft.readOnly ? 'Category details' : 'Category editor') : race && wide ? 'Start groups and shared field limits' : 'Checks before publishing'}
+          >
+            {selectedCategory ? (
+              <CategoryEditor key={selectedCategory.id} draft={draft} categoryId={selectedCategory.id} onClose={() => setSelected(null)} onSelect={setSelected} drawer={!wide} />
+            ) : wide && race && route.view === 'race' ? (
+              <FieldBoard draft={draft} raceId={race.id} onSelect={setSelected} selectedId={selected} />
+            ) : (
+              <IssuesPanel issues={draft.issues} config={config} onOpen={openIssue} eventId={route.eventId} />
+            )}
+          </aside>
+        )}
       </div>
     </div>
   );

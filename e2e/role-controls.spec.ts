@@ -81,7 +81,11 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
       if (role !== 'check_in_volunteer') {
         await member.goto(`/#/events/${eventId}/${role === 'finance' ? 'registrations' : 'startlists'}`);
         await expect(member.getByRole('heading', { name: role === 'finance' ? 'Registrations' : /start list/i }).first()).toBeVisible();
-        await expect(member.getByText('Select a category in the schedule to see its details.')).toHaveCount(0);
+        await expect(member.locator('aside.inspector')).toHaveCount(0);
+        for (const width of [1100, 1440]) {
+          await member.setViewportSize({ width, height: 900 });
+          expect(await member.locator('#main').evaluate((main) => Math.round(main.getBoundingClientRect().right) === document.documentElement.clientWidth)).toBe(true);
+        }
       }
       await member.setViewportSize({ width: 390, height: 900 });
       await member.reload();
@@ -110,7 +114,7 @@ test('an event without races offers setup only to an editor', async ({ page, bro
     await member.goto(`/#/events/${eventId}`);
     await expect(member.getByText('This event has no races yet.')).toBeVisible();
     await expect(member.getByRole('link', { name: 'Open event setup' })).toHaveCount(0);
-    await expect(member.getByText('Select a category in the schedule to see its details.')).toHaveCount(0);
+    await expect(member.locator('aside.inspector')).toHaveCount(0);
   });
 
   await page.goto(`/#/events/${eventId}`);
