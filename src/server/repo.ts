@@ -93,6 +93,26 @@ export function createRepo(db: Db, clock: () => Date) {
     return toRecord(row);
   }
 
+  /** Checkout compares only the waiver version, so one version must mean one text for the event's whole history. */
+  async function waiverVersionHasOtherText(id: string, config: EventConfig) {
+    const { waiverVersion, waiverText } = config.registration;
+    const other = await db.get(
+      `SELECT 1 FROM event_versions
+       WHERE event_id = $1 AND COALESCE(config_json #>> '{registration,waiverVersion}', '') = $2
+         AND COALESCE(config_json #>> '{registration,waiverText}', '') <> $3
+       LIMIT 1`,
+      [id, waiverVersion, waiverText],
+    );
+    return !!other;
+  }
+
+  async function requireWaiverVersionKeepsItsText(id: string, config: EventConfig) {
+    if (!(await waiverVersionHasOtherText(id, config))) return;
+    const { waiverVersion } = config.registration;
+    const label = waiverVersion ? `Waiver version "${waiverVersion}"` : 'A blank waiver version';
+    throw new HttpError(422, `${label} was already published with different text. In Event setup, enter a new waiver version, then publish, so riders agree to the new text.`);
+  }
+
   async function entries(eventId: string, asOf = now()): Promise<CapacityEntry[]> {
     const rows = await db.all<{ id: string; category_id: string; rider_ref: string }>(entriesSql, [eventId, asOf]);
     return rows.map((r) => ({ id: r.id, categoryId: r.category_id, riderRef: r.rider_ref }));
@@ -110,6 +130,7 @@ export function createRepo(db: Db, clock: () => Date) {
   }
 
   return {
+    waiverVersionHasOtherText,
     /** The given organizations with a summary of each event's draft, oldest first. */
     async listOrganizations(organizationIds: readonly string[]) {
       if (organizationIds.length === 0) return [];
@@ -241,6 +262,7 @@ export function createRepo(db: Db, clock: () => Date) {
         const { errors, warnings } = countIssues(issues);
         if (errors > 0) throw new HttpError(422, `Fix ${errors} ${errors === 1 ? 'error' : 'errors'} before publishing.`, issues);
         if (warnings > 0 && !acknowledgeWarnings) throw new HttpError(422, `Review and acknowledge ${warnings} ${warnings === 1 ? 'warning' : 'warnings'} before publishing.`, issues);
+        await requireWaiverVersionKeepsItsText(id, current.config);
         const version = (current.publishedVersion ?? 0) + 1;
         await db.run(
           `INSERT INTO event_versions (event_id, version, config_json, draft_revision, warnings_acknowledged, published_at) VALUES ($1, $2, $3, $4, $5, $6)`,

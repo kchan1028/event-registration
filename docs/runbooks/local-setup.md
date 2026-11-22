@@ -207,7 +207,7 @@ In local mode the app records organizer invitation emails in `email_messages` an
 
 1. In the project's Resend account, create a sending key and verify a sender domain. For an initial test, Resend's `onboarding@resend.dev` sender can send to the account owner's address.
 2. In the server's local `.env`, set `EMAIL_MODE=resend`, `EMAIL_FROM=<sender address>`, `RESEND_API_KEY=<sending key>`, and `EMAIL_TEST_RECIPIENTS=<comma-separated test addresses>`. Restart `npm run dev`.
-3. Invite a listed test address from **Team and roles**. Check the invitation shows “Email sent” and confirm receipt in the test inbox. “Email sent” means Resend accepted the request. For a failed send, check `email_messages.error` and use **Resend** in the team panel to retry.
+3. Invite a listed test address from **Team and roles**. The message's sign-in link uses `PUBLIC_APP_URL` (see the configuration table). Check the invitation shows “Email sent” and confirm receipt in the test inbox. “Email sent” means Resend accepted the request. “Email failed to send” is a confirmed refusal by Resend or a block by the local test list: **Resend** extends the invitation and tries again. “Email might have been sent” means the outcome was lost: **Retry send** repeats that same attempt and does not extend the invitation. After 24 hours it refuses: cancel the invitation and invite again. An invitation with an email from before migration 40 has no resend at all: check the test inbox, then cancel and invite again if a new email is needed. Only one send of an attempt runs at a time. A seed that re-adds a canceled invitation does not reuse the earlier attempt. `email_messages.error` stores a short safe outcome, not the raw provider body.
 
 If migrating a local setup, replace `EMAIL_MODE=ses` and remove `SES_REGION`, `SES_AWS_PROFILE`, and `SES_CONFIGURATION_SET`. Use `EMAIL_MODE=local` to keep email recorded only. The server refuses `EMAIL_MODE=resend` with `NODE_ENV=production`.
 
@@ -242,7 +242,7 @@ Check-in staff can use **Change bib** on a rider card, including a number alloca
 
 For protected changes, Select all excludes checked-in riders. Select them individually and acknowledge changing issued bibs before previewing. The server enforces this acknowledgement across every day sharing the number.
 
-Shared bibs must fit the overlap of every applicable entry range across their collision scope. A category without a range uses the event/day range. If ranges do not overlap, adjust them or configure separate bibs per day; no partial allocation is saved. Existing issued numbers are retained until a deliberate correction.
+Shared bibs must fit the overlap of every applicable entry range across their collision scope. A category without a range uses the event/day range. If ranges do not overlap, adjust them, or configure separate bibs per day if the conflict is between days; no partial allocation is saved. Existing issued numbers are retained until a deliberate correction.
 
 To correct an issued bib after refund, withdrawal, or cancellation, search by rider name, bib, or check-in code. Inactive riders appear only if they still hold an active bib in the selected collision scope. Use **Change bib**, enter a reason, acknowledge a checked-in change, preview, and apply. Payment, refund, entry, readiness, and check-in states remain unchanged. These owner decisions resolve the questions in [issues #95 and #97](../../product.md#automatic-and-bulk-bib-assignment).
 

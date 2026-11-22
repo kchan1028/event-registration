@@ -234,7 +234,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
         </p>
       )}
 
-      {data && showRegistration && <WalkUpRegistration eventId={eventId} dayId={data.dayId} published={data.published} />}
+      {data && showRegistration && <WalkUpRegistration eventId={eventId} dayId={data.dayId} published={data.published} canPublish={can(data.roles, 'event.edit')} />}
 
       {data && batchMode && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId + batchMode} eventId={eventId} dayId={data.dayId} mode={batchMode} onChanged={() => refreshCurrentList.current()} onClose={() => setBatchMode(null)} />}
 
@@ -275,7 +275,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
 
           {!rangeFor(data.settings, data.dayId) && (
             <p className="ci__notice" role="status">
-              <Icon name="warn" /> No bib range is set for {data.settings.scope === 'weekend' ? 'this event' : (day?.label ?? 'this day')}. Set one under <strong>Bib ranges</strong> before checking riders in.
+              <Icon name="warn" /> No bib range is set for {data.settings.scope === 'weekend' ? 'this event' : (day?.label ?? 'this day')}. {can(data.roles, 'checkin.settings') ? <>Set one under <strong>Bib ranges</strong></> : 'Ask a registration manager or owner to set one'} for riders who still need a bib and whose category has no range of its own.
             </p>
           )}
 
@@ -759,11 +759,14 @@ function EmptyList({ data, searching, onAdded }: { data: CheckInList; searching:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (searching) return <p className="ci__empty">No rider matches. Check the spelling, or try the team or check-in code.</p>;
-  if (!data.published) return <p className="ci__empty">This event is not published yet. Publish it so riders can register, then check them in here.</p>;
+  const canEdit = can(data.roles, 'event.edit');
+  if (!data.published) {
+    return <p className="ci__empty">This event is not published yet. {canEdit ? 'Publish it so riders can register, then check them in here.' : 'A registration manager or owner publishes it.'}</p>;
+  }
   return (
     <div className="ci__empty">
       <p>No registered riders for this day yet.</p>
-      {data.isDemo && (
+      {data.isDemo && canEdit && (
         <>
           <button
             type="button"

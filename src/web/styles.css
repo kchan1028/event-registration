@@ -1020,6 +1020,9 @@ fieldset {
   min-height: 0;
   overflow: auto;
 }
+.workspace--no-side > .main {
+  grid-column: 2 / -1;
+}
 
 .rail {
   background: var(--tyvek);
@@ -2632,6 +2635,18 @@ button.issue {
   line-height: 1.6;
   max-width: 70ch;
 }
+.reg-race-terms {
+  overflow-wrap: anywhere;
+}
+.addendum-title {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+/* Terms read the same when signed and when recovered. */
+.addendum-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .hold {
   display: inline-flex;
   align-items: center;
@@ -3026,6 +3041,9 @@ button.issue {
 .schedule-anchor:focus {
   outline: none;
 }
+.editor__fields:disabled button {
+  display: none;
+}
 fieldset:disabled .check,
 fieldset:disabled .field label {
   color: var(--muted);
@@ -3273,6 +3291,11 @@ fieldset:disabled .field label {
   .cat-row td:nth-child(n + 3) {
     grid-column: 1;
     font-size: 13.5px;
+  }
+  /* View only: no select or order cells to place. */
+  .cat-table--view .cat-row td:nth-child(n) {
+    grid-column: 1 / -1;
+    grid-row: auto;
   }
   .cat-row .col-num {
     text-align: left !important;
@@ -4456,6 +4479,16 @@ fieldset:disabled .field label {
   color: var(--error);
   font-weight: 600;
 }
+.team__email-uncertain {
+  /* --warn-icon is 4.4:1 on white, short of 4.5:1 at this size. */
+  color: #9a6600;
+  font-weight: 600;
+}
+@media screen {
+  :root[data-theme='dark'] .team__email-uncertain {
+    color: var(--warn-icon);
+  }
+}
 
 /* My registrations */
 .my-reg {
@@ -4498,6 +4531,12 @@ fieldset:disabled .field label {
 .cancellation-preview > * { max-width: 100%; }
 .cancellation-preview p { margin: 0; }
 .cancellation-preview details { width: 100%; overflow-wrap: anywhere; }
+.lookup-toggle { cursor: pointer; min-height: 44px; line-height: 44px; }
+@media (pointer: coarse), (max-width: 760px) {
+  .team__list .link-btn { min-height: 44px; min-width: 44px; }
+  .input.reference-input { min-height: 44px; font-size: 16px; }
+  .btn.lookup-submit { min-height: 44px; }
+}
 .cancellation-preview summary { cursor: pointer; padding-block: var(--s-2); font-weight: 600; }
 .cancellation-preview .table-wrap { width: 100%; }
 .cancellation-preview table { width: 100%; border-collapse: collapse; }

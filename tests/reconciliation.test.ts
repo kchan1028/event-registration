@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { testApp, testDatabaseUrl } from './support/db';
 import { as } from './support/auth';
 import { parseCsv } from '../src/shared/csv';
+import { takeOffTeam } from './support/membership';
 
 async function setup() {
   const databaseUrl = await testDatabaseUrl();
@@ -114,7 +115,7 @@ describe('local finance reconciliation CSV', () => {
       const r = await s.download(as(email)); expect(r.statusCode).toBe(role === 'finance' ? 200 : 403);
       if (role !== 'finance') { for (const header of ['content-disposition', 'x-cyclereg-cancellation', 'x-cyclereg-export-context', 'x-cyclereg-export-generated-at']) expect(r.headers[header]).toBeUndefined(); }
       else {
-        expect((await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members/remove`, payload: { email, role } })).statusCode).toBe(200);
+        expect((await takeOffTeam((method, url, payload) => s.app.inject({ method, url, payload }), s.organizationId, email, role)).statusCode).toBe(200);
         expect((await s.download(as(email))).statusCode).toBe(404);
       }
     }

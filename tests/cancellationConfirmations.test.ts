@@ -5,6 +5,7 @@ import { as } from './support/auth';
 import { localEmail } from '../src/server/email';
 import type { EventConfig } from '../src/shared/schema';
 import { CANCELLATION_PLAN_NOT_RECORDED, type CancellationConfirmationInput, CancellationConfirmationPreview, CancellationSelection } from '../src/shared/cancellations';
+import { takeOffTeam } from './support/membership';
 
 async function setup() {
   let instant = new Date('2027-03-01T18:00:00Z');
@@ -183,7 +184,7 @@ describe('reviewed cancellation plan confirmation', () => {
     await s.app.inject({ method: 'GET', url: '/api/me', headers: as(email) });
     const body = s.input(await s.preview()); const response = await s.confirm(body, as(email));
     expect(response.statusCode).toBe(200); const record = response.json();
-    expect((await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members/remove`, payload: { email, role: 'finance' } })).statusCode).toBe(200);
+    expect((await takeOffTeam((method, url, payload) => s.app.inject({ method, url, payload }), s.organizationId, email, 'finance')).statusCode).toBe(200);
     expect((await s.get(record.id, as(email))).statusCode).toBe(404);
     expect((await s.confirm(body, as(email))).statusCode).toBe(404);
     expect((await s.get(record.id)).json()).toEqual(record); expect(await s.count()).toBe(1);

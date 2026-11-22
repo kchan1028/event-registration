@@ -1,7 +1,7 @@
 import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/researchExamples';
 import { QrCodeImage } from './QrCodeImage';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
+import { acceptedAddendum, checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
 import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, fullCategoryGuidance, MESSAGES, missingBundleRaces, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails } from '../shared/checkout';
 import { evaluateCategory, excludedBecauseClassUnspecified, licenseLabel, summarizeEligibility, summarizePath, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
@@ -36,6 +36,13 @@ const STEPS: { key: Step; label: string }[] = [
 
 type Details = Omit<RiderDetails, 'racingAge' | 'licenseCategory' | 'licenseType' | 'competitionClass' | 'collegiateDivision'>;
 
+interface ReservationAddendum {
+  categoryId: string;
+  categoryName: string;
+  title: string;
+  text: string;
+}
+
 interface Draft {
   step: Step;
   reached: number; // furthest step index completed
@@ -46,8 +53,12 @@ interface Draft {
   waiver: { read: boolean; signatureName: string; agreed: boolean };
   orderId: string | null;
   clientRequestId: string;
-  /** Exact submission and waiver text to recover after an uncertain response. */
-  pendingReservation: { request: Parameters<typeof api.createOrder>[1]; waiverText: string } | null;
+  /** Exact submission and displayed terms to recover after an uncertain response. */
+  pendingReservation: {
+    request: Parameters<typeof api.createOrder>[1];
+    waiverText: string;
+    addenda?: ReservationAddendum[];
+  } | null;
   /** Private link token from a waitlist offer; lets this rider take the reserved place. */
   offerToken?: string | null;
   offerCategoryId?: string | null;
@@ -1322,11 +1333,27 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
   }, []);
 
   const extras = draft.extras ?? EMPTY_EXTRAS;
-  const addendumCats = pending ? [] : draft.selected.map((id) => config.categories.find((c) => c.id === id)).filter((c): c is NonNullable<typeof c> => !!c?.addendum);
-  const toggleAddendum = (catId: string, on: boolean) =>
+  const currentAddenda = pending ? [] : draft.selected.flatMap((id) => {
+    const category = config.categories.find((c) => c.id === id);
+    return category?.addendum
+      ? [{ categoryId: id, categoryName: category.name, ...category.addendum, accepted: acceptedAddendum(category, extras) }]
+      : [];
+  });
+  const submittedIds = pending?.request.extras?.addenda;
+  const acceptedIds = pending && Array.isArray(submittedIds)
+    ? pending.request.categoryIds.filter((id) => submittedIds.includes(id))
+    : [];
+  const savedAddenda = pending?.addenda;
+  const submittedAddenda = Array.isArray(savedAddenda)
+    ? savedAddenda.filter((terms) => terms && acceptedIds.includes(terms.categoryId)
+      && typeof terms.categoryName === 'string' && typeof terms.title === 'string' && typeof terms.text === 'string')
+    : [];
+  const originalTermsUnavailable = submittedAddenda.length < acceptedIds.length;
+  const toggleAddendum = ({ categoryId, title, text }: ReservationAddendum, on: boolean) =>
     update((x) => {
       const ex = x.extras ?? EMPTY_EXTRAS;
-      return { ...x, extras: { ...ex, addenda: on ? [...new Set([...ex.addenda, catId])] : ex.addenda.filter((a) => a !== catId) } };
+      if (!on) return { ...x, extras: { ...ex, addenda: ex.addenda.filter((a) => a !== categoryId) } };
+      return { ...x, extras: { ...ex, addenda: [...new Set([...ex.addenda, categoryId])], acceptedTerms: [...(ex.acceptedTerms ?? []).filter((a) => a.categoryId !== categoryId), { categoryId, title, text }] } };
     });
 
   const hold = async () => {
@@ -1342,6 +1369,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
       setErrors(errs);
       if (errs.length) return;
     } else setErrors([]);
+    const acceptedAddenda = currentAddenda.filter((terms) => terms.accepted).map(({ accepted: _, ...terms }) => terms);
     const submission = pending ?? {
       request: {
         clientRequestId: draft.clientRequestId,
@@ -1350,10 +1378,15 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
         rider: riderFrom(draft, needsGuardian) as RiderDetails,
         waiver: { version: config.registration.waiverVersion, read: true as const, agreed: true as const, signatureName: w.signatureName.trim(), signerRole: needsGuardian ? 'guardian' as const : 'rider' as const },
         offerToken: draft.offerToken ?? null,
-        extras,
+        extras: {
+          ...extras,
+          addenda: acceptedAddenda.map(({ categoryId }) => categoryId),
+          acceptedTerms: acceptedAddenda.map(({ categoryId, title, text }) => ({ categoryId, title, text })),
+        },
         couponCode: draft.coupon?.code ?? null,
       },
       waiverText: config.registration.waiverText,
+      addenda: acceptedAddenda,
     };
     setBusy(true);
     update((x) => ({ ...x, pendingReservation: submission }));
@@ -1379,7 +1412,12 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
     <section className="reg__panel" aria-labelledby="waiver-title">
       <ErrorSummary errors={errors} />
       <h2 id="waiver-title">Waiver</h2>
-      {draft.pendingReservation && <p className="note" role="status">Your reservation request is pending. Retry to recover the same order before changing your entries. Your original details, waiver and signature are saved. If retries keep failing, contact the event organizer before starting another registration.</p>}
+      {pending && <>
+        <p className="note" role="status">Your reservation request is pending. Retry to recover the same order before changing your entries. Your original details, waiver and signature are saved.</p>
+        <Field id="reservation-reference" label="Reservation reference" hint="If retries keep failing, share this reference with the event organizer before starting another registration.">
+          {(id, describedBy) => <input id={id} aria-describedby={describedBy} className="input reference-input" readOnly value={pending.request.clientRequestId} />}
+        </Field>
+      </>}
       <p className="muted small">
         Version <code className="code">{(pending?.request.waiver.version ?? config.registration.waiverVersion) || 'none'}</code>.{config.event.isDemo ? ' Sample text for the demo: a signature here has no legal effect.' : ''}
       </p>
@@ -1387,7 +1425,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
         ref={boxRef}
         className="waiver"
         tabIndex={0}
-        aria-label="Waiver text. Scroll to the end to enable signing."
+        aria-label={pending ? 'Original waiver text' : 'Waiver text. Scroll to the end to enable signing.'}
         onScroll={(e) => {
           const el = e.currentTarget;
           if (!draft.pendingReservation && !w.read && el.scrollTop + el.clientHeight >= el.scrollHeight - 8) setW({ read: true });
@@ -1398,14 +1436,36 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
       <label className="check">
         <input id="f-waiver-read" type="checkbox" disabled={busy || !!draft.pendingReservation} checked={w.read} onChange={(e) => setW({ read: e.target.checked })} />I have read the whole waiver
       </label>
-      {addendumCats.map((cat) => (
-        <fieldset className="subfields" key={cat.id}>
-          <legend>
-            {cat.addendum!.title} ({cat.name})
+      {(submittedAddenda.length > 0 || originalTermsUnavailable) && (
+        <section className="subfields reg-race-terms" aria-labelledby="submitted-race-terms">
+          <h3 id="submitted-race-terms">Race terms you accepted</h3>
+          {submittedAddenda.map((terms) => (
+            <div key={terms.categoryId}>
+              <h4 className="small">{terms.title} ({terms.categoryName})</h4>
+              <p className="small addendum-text">{terms.text}</p>
+            </div>
+          ))}
+          {originalTermsUnavailable && <p className="muted small">Original text for one or more race terms isn’t available in this tab.</p>}
+        </section>
+      )}
+      {currentAddenda.map((terms, index) => (
+        <fieldset className="subfields" key={terms.categoryId}>
+          <legend className="addendum-title">
+            {terms.title} ({terms.categoryName})
           </legend>
-          <p className="small addendum-text">{cat.addendum!.text}</p>
+          <p className="small addendum-text">{terms.text}</p>
+          {!terms.accepted && extras.addenda.includes(terms.categoryId) && (
+            <p className="note" id={`renew-addendum-${index}`}>These terms changed or could not be matched to what you accepted. Read them and accept again.</p>
+          )}
           <label className="check">
-            <input id={`addendum-${cat.id}`} type="checkbox" disabled={busy || !!draft.pendingReservation} checked={extras.addenda.includes(cat.id)} onChange={(e) => toggleAddendum(cat.id, e.target.checked)} />
+            <input
+              id={`addendum-${terms.categoryId}`}
+              type="checkbox"
+              disabled={busy}
+              aria-describedby={!terms.accepted && extras.addenda.includes(terms.categoryId) ? `renew-addendum-${index}` : undefined}
+              checked={terms.accepted}
+              onChange={(e) => toggleAddendum(terms, e.target.checked)}
+            />
             {needsGuardian ? 'As parent or guardian, I accept this for the rider' : 'I accept this'}
           </label>
         </fieldset>

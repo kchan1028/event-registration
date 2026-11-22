@@ -4,6 +4,7 @@ import { testApp } from './support/db';
 import { as } from './support/auth';
 import { CANCELLATION_NOT_EXECUTED } from '../src/shared/cancellations';
 import type { PaymentProvider } from '../src/server/payments';
+import { takeOffTeam } from './support/membership';
 
 const input = (confirmationId: string, clientRequestId = 'atomic-cancellation-request') => ({ confirmationId, clientRequestId, acknowledgeSimulatedCancellation: true });
 async function prepared(policy: Parameters<typeof setup>[0] = 'full_refund') {
@@ -237,7 +238,7 @@ describe('atomic simulated cancellation', () => {
     await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members`, payload: { email, role: 'finance' } });
     const response = await s.execute(input(s.plan.id), as(email)); expect(response.statusCode).toBe(200); const saved = response.json();
     expect(saved.executedBy).toBe((await s.app.inject({ method: 'GET', url: '/api/me', headers: as(email) })).json().account.id);
-    await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members/remove`, payload: { email, role: 'finance' } });
+    await takeOffTeam((method, url, payload) => s.app.inject({ method, url, payload }), s.organizationId, email, 'finance');
     expect((await s.execute(input(s.plan.id), as(email))).statusCode).toBe(404);
     expect((await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/cancellation-executions/${saved.id}`, headers: as(email) })).statusCode).toBe(404);
     expect((await s.execute()).json()).toEqual(saved);
@@ -425,7 +426,7 @@ describe('atomic simulated cancellation', () => {
       const email = `${role}@execution-check.test`; await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members`, payload: { email, role } });
       expect((await s.app.inject({ method: 'GET', url, headers: as(email) })).statusCode).toBe(expected);
     }
-    await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members/remove`, payload: { email: 'finance@execution-check.test', role: 'finance' } });
+    await takeOffTeam((method, url, payload) => s.app.inject({ method, url, payload }), s.organizationId, 'finance@execution-check.test', 'finance');
     expect((await s.app.inject({ method: 'GET', url, headers: as('finance@execution-check.test') })).statusCode).toBe(404);
     const other = await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/events`, payload: { name: 'Other Fictional Race', template: 'weekend', startDate: '2027-04-01', timeZone: 'America/Los_Angeles' } });
     expect((await s.app.inject({ method: 'GET', url: `/api/events/${other.json().id}/cancellation-confirmations/${s.plan.id}/execution-check` })).statusCode).toBe(404);

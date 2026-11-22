@@ -103,7 +103,9 @@ test('finance can download while registration managers cannot, and revocation is
       if (role === 'registration_manager') await expect(section).toHaveCount(0);
       else {
         const pending = member.waitForEvent('download'); await section.getByRole('button', { name: 'Download local records (CSV)' }).click(); await pending;
-        expect((await page.request.post(`/api/organizations/${s.organizationId}/members/remove`, { data: { email, role } })).status()).toBe(200);
+        const team = await (await page.request.get(`/api/organizations/${s.organizationId}/members`)).json();
+        const { revision } = team.members.find((m: { email: string; role: string }) => m.email === email && m.role === role);
+        expect((await page.request.post(`/api/organizations/${s.organizationId}/members/revoke`, { data: { email, role, revision } })).status()).toBe(200);
         let downloads = 0; member.on('download', () => downloads++);
         const deniedResponse = member.waitForResponse(`**/api/events/${s.eventId}/exports/reconciliation.csv`);
         await section.getByRole('button', { name: 'Download local records (CSV)' }).click();

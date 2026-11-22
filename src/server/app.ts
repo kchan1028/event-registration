@@ -15,6 +15,7 @@ import { buildCaseStudyScenarios, CASE_STUDY_ORG_ID, CASE_STUDY_REFERENCE_NOW } 
 import { configFromTemplate, newId } from '../shared/factory';
 import { type EventConfig, bibNumberSchema, createEventInputSchema, eventConfigSchema } from '../shared/schema';
 import { entriesCsv, ledgerCsv } from '../shared/exports';
+import { reservationLookupSchema, reservationReferenceSchema } from '../shared/checkout';
 import { eventSummary } from '../shared/reports';
 import { riderCorrectionSchema } from '../shared/lookup';
 import { changeImpact, type ImpactEntry } from '../shared/impact';
@@ -241,6 +242,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   // People and roles. Owners only.
   const memberBody = z.object({ email: z.string().trim().email('Enter an email address.').max(254), role: z.enum(ROLES) });
+  // A Team row as it was shown.
+  const shownRow = memberBody.extend({ revision: z.string().min(1).max(64) });
   app.get('/api/organizations/:id/members', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrg(me(req), id, 'members.manage');
@@ -249,14 +252,33 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/organizations/:id/members', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrg(me(req), id, 'members.manage');
-    const body = memberBody.parse(req.body);
-    return access.addMember(id, body.email, body.role, me(req));
+    const { email, role, retryAttempt } = memberBody.extend({ retryAttempt: z.string().min(1).max(64).optional() }).parse(req.body);
+    return retryAttempt ? access.retryInvitation(id, email, role, retryAttempt) : access.addMember(id, email, role, me(req));
+  });
+  // Its own route, so a server from before it answers 404 instead of treating Resend as Add.
+  app.post('/api/organizations/:id/invitations/resend', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrg(me(req), id, 'members.manage');
+    const { email, role, revision } = shownRow.parse(req.body);
+    return access.addMember(id, email, role, me(req), revision);
   });
   app.post('/api/organizations/:id/members/remove', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrg(me(req), id, 'members.manage');
-    const body = memberBody.parse(req.body);
-    return access.removeMember(id, body.email, body.role, me(req));
+    // Team screens from before revisions post here for both Remove and Cancel, and cannot say which row they mean.
+    throw new HttpError(409, 'This screen is out of date, so nothing was removed. Reload the page and try again.');
+  });
+  app.post('/api/organizations/:id/members/revoke', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrg(me(req), id, 'members.manage');
+    const { email, role, revision } = shownRow.parse(req.body);
+    return access.removeMember(id, email, role, revision, me(req));
+  });
+  app.post('/api/organizations/:id/invitations/cancel', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrg(me(req), id, 'members.manage');
+    const { email, role, revision } = shownRow.parse(req.body);
+    return access.cancelInvitation(id, email, role, revision, me(req));
   });
   // An owner hands their owner role to a signed-in teammate. Recorded in the role history.
   app.post('/api/organizations/:id/ownership-transfer', async (req) => {
@@ -417,7 +439,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = idParam.parse(req.params);
     const body = z
       .object({
-        clientRequestId: z.string().min(8).max(64),
+        clientRequestId: reservationReferenceSchema,
         categoryIds: z.array(idStr).min(1).max(10),
         bundleIntent: idStr.nullable().optional(),
         rider: z.unknown(),
@@ -600,6 +622,13 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = idParam.parse(req.params);
     await access.requireOrderAccess(me(req), { orderId: id }, { rider: true });
     return orders.cancel(id);
+  });
+
+  app.post('/api/events/:id/reservation-status', async (req, reply) => {
+    const { id } = await onEvent(req, 'orders.view');
+    const { reference } = z.object({ reference: reservationLookupSchema }).parse(req.body);
+    reply.header('Cache-Control', 'no-store');
+    return { order: await orders.lookupReservation(id, reference) };
   });
 
   app.get('/api/events/:id/orders', async (req) => {

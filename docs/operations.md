@@ -117,7 +117,52 @@ Proposed live signals and recipients, from [product.md](../product.md#quality-re
 
 Alerts must not include card data, emergency contacts, or other restricted fields.
 
-Implemented in the local build (November 15, 2026): `GET /api/health` runs a database query and answers 503 when it fails, so a platform health check (Render's health-check path, per [ADR 0004](decisions/0004-hosted-stack-and-database.md)) can take an instance out of service. On `SIGTERM` the server stops taking new requests, finishes the ones in progress, and closes its database connections. The [local database health check](testing/test-plan.md#local-database-health-check) verifies the outage and return to HTTP 200 without restarting the application. No platform is configured yet. The planned Render setup is in [docs/runbooks/deploy-render.md](runbooks/deploy-render.md).
+Implemented in the local build (November 15, 2026): `GET /api/health` runs a database query and answers 503 when it fails, so a platform health check (Render's health-check path, per [ADR 0004](decisions/0004-hosted-stack-and-database.md)) can take an instance out of service. A lost database connection is logged and does not end the process. Work that needed it fails; a migration that had already finished and lost it only while releasing its lock still counts as done. On `SIGTERM` the server stops taking new requests, finishes the ones in progress, and closes its database connections. The [local database health check](testing/test-plan.md#local-database-health-check) verifies the outage and return to HTTP 200 without restarting the application. No platform is configured yet. The planned Render setup is in [docs/runbooks/deploy-render.md](runbooks/deploy-render.md).
+
+### Proposed pilot signal checks
+
+These checks say how a signal is noticed. Who is contacted, when the deputy is called and who sees the acknowledgement follow the approved [rehearsal alert routing](#rehearsal-alert-routing). Evaluate one delivered health alert and two manual checks. Missing or delayed payment notifications have their own [proposed check](#proposed-pilot-payment-check). Platform access, staffing and timing need approval before hosted rehearsal. Assign accountable operators while preserving existing application and provider permissions.
+
+| Signal | Proposed observation and timing | Accountable role |
+|---|---|---|
+| Service unhealthy | **Delivered alert candidate.** Evaluate Render failure notifications against the existing health-check path. Choose the channel and prove delivery to the support primary, plus the technical lead at detection for a critical incident. The endpoint checks database connectivity. Verify checkout, desk and dependencies separately before declaring them available. [Render health checks](https://render.com/docs/health-checks), [Render notifications](https://render.com/docs/notifications) | Support primary receives and owns until a deputy accepts; technical lead also receives a critical incident |
+| Organizer invitation delivery failure | **Manual.** On a controlled test send or report, an owner checks Team for the application send status. An authorized provider operator checks the test recipient and timestamp in Resend. A successful API send only means acceptance for delivery. A local rejection, such as an unlisted recipient, may have no provider record. The provider check needs an isolated non-production test setup: the hosted services run in production mode, which refuses Resend, so there it is Blocked. Clerk sign-in email follows its own provider rehearsal. [Resend email event types](https://resend.com/docs/webhooks/event-types#email-events) | Organization owner and approved Resend operator; support owner coordinates |
+| Recovery coverage missing | **Manual.** Before each critical window and during restore, check the available point and retention window against the approved recovery plan. Escalate a missing or unusable point. Wait only when a suitable point is due, and count the wait. If none will become available, record a recovery hold and keep the service closed. [Render Postgres recovery and backups](https://render.com/docs/postgresql-backups) | Technical lead with approved database access |
+
+Use fictional records. Limit messages to environment, signal, observation time and accountable role. Keep rider details, payment references and provider payloads in their approved restricted views. For a delivered alert, record receipt and acknowledgement in the shared incident timeline and, only if the primary has not acknowledged by the cue, exercise the deputy route. For a manual check, record who observed it, when, and how they escalated. Native notification routing, automated payment and invitation alerts, rider email, backup job alerts, checkout error rate, expired holds and sign-in spikes remain open.
+
+### Proposed pilot payment check
+
+**Proposed, manual.** Finds a payment the application did not apply because a notification was late, missing or not matched. One person does it only if they hold both approved Stripe access and an owner or finance role. Otherwise the technical lead and an owner or finance user do it together, each reading only what their own access allows, and the export is not handed over. The check leaves payments and registrations unchanged; the export download is recorded in the audit. Run it on a report, at shift start and at an interval the pilot organizer confirms.
+
+1. **Start from payments, not events.** In the Stripe environment the application uses, list every Checkout Session created since registration opened. The application writes the order ID on each session (`client_reference_id` and `metadata.order_id`) and on its payment (`metadata.order_id`). Count a session and its payment as one, and also list a payment that carries an order ID but has no listed session. Records without an order ID are not the application's. Repeat the whole list at each check, so a payment that settles later, or during a check, is seen by the next one. This does not depend on Stripe's event history, which [goes back 30 days](https://docs.stripe.com/api/events/list). For a report, look up that payment however old it is.
+2. **Keep to one event.** Check a record when its session reference, payment reference or order ID is in this event's export. A session or payment found here whose order ID differs from its row's order is escalated before anything is left to another event. Only a record with none of the three here is left to the other events' checks, and one in no event's export is escalated.
+3. **Record the coverage.** Note when the list was taken, then download the export. Recheck a difference once before escalating, because a notification can arrive between the two. If the list or export is unavailable or incomplete, record that period as unverified and escalate.
+4. **Classify each payment from Stripe.** Paid means the payment succeeded, including one refunded later. Failed means the session completed, the payment did not succeed and it shows a payment error or was canceled. Not settled means it is still processing or its session is still open. Expired means the session expired with nothing paid. Escalate anything else.
+5. **Match it.** Find the session and payment reference in the export's `provider_event` rows and read `outcome` and `result_status`. An earlier completion event does not stand in for a later success or failure. A matching order status alone is not a match. Use the first line below that applies.
+
+| What the check finds | Action |
+|---|---|
+| Any row for it recorded as `unknown_session` | Escalate, whatever its outcome. A known session with a different order reference keeps its row in the export; an unknown session has none |
+| Paid, with no `paid` row | Escalate, including when no event, delivery or row exists. Inspect the delivery before requesting a resend |
+| Paid, recorded as `duplicate_charge` | Follow the duplicate rule below |
+| Paid, recorded as `needs_attention` | Confirm the exception queue has it |
+| Paid, recorded as `confirmed` | None |
+| Failed, with no `failed` row | Escalate |
+| Failed, with a `failed` row | None. The order can correctly stay confirmed by another payment |
+| Not settled | Leave it for the next check |
+| Expired | None, with or without a `session_expired` row: nothing was paid |
+| Anything else | Escalate |
+
+**Duplicate rule.** Use only Stripe's refunds of that payment and the `refund` rows with the same `payment_reference`. Match each Stripe refund to a row by the provider refund ID (`provider_reference`), and read Stripe's `requires_action` as `pending`, as the application does. A local `requested` row with no provider ID has not been confirmed by Stripe: escalate it to finance to reconcile, and do not create a replacement. Any other refund on one side only, or with a different amount or status, is also escalated. If any refund was escalated, stop there. Otherwise `succeeded` counts as returned, `pending` as on the way, and `failed` and `canceled` as nothing. Returned covering the charge needs no action. If it covers the charge only with what is on the way, follow it until it settles. Otherwise the shortfall goes to finance.
+
+Use fictional records in rehearsal, and keep payment references in the approved restricted views. Escalation follows the approved [rehearsal alert routing](#rehearsal-alert-routing).
+
+### Checking a pending reservation
+
+This lookup is available in the local build. An owner, registration manager or finance user opens the correct event’s **Registrations**, expands **Check a pending reservation**, and enters the reference from the rider’s pending checkout. The result shows the saved order number, status and, for an active hold, its expiry. The reference matches exactly as entered, including any spaces. Checkout generates it as a single-line UUID. A result switches the list to **All** and refreshes it, so staff can use the order number in **Find a registration** to see the order under normal permissions. If the list shows a loading error, select **Check reservation** again.
+
+If the result says no order is visible yet, have the rider keep that tab and retry the same reservation. The original request may still be processing. If lookup fails or recovery remains stuck, follow the event’s escalation contact when one is assigned. Operator cancellation authority and escalation coverage remain open for the pilot.
 
 ## Backups and recovery
 
@@ -153,7 +198,7 @@ The database recovery gap is the time between the latest recovered committed cha
 
 ## Rider data requests
 
-Retention and deletion periods are not set; they are in the [decision backlog](decisions/README.md#decision-backlog) and must be decided before the pilot. Until then:
+The emergency-contact lookup record has an approved retention of 365 days, not yet enforced. Other retention periods and every deletion procedure are not set; they are in the [decision backlog](decisions/README.md#decision-backlog) and must be decided before the pilot. Until then:
 
 - route requests to see, correct, or delete rider data to the event owner and the support owner;
 - keep waiver and financial records that the federation or tax rules may require, even when other data is deleted; and
@@ -177,7 +222,7 @@ The [readiness checklist](research/prelaunch-readiness.md#race-day-readiness-che
 2. Freeze starts and critical/high initial-response targets are approved for rehearsal. Event-specific window end times, live operating acceptance and actual coverage remain open under [Operating calendar](#operating-calendar-for-an-event) and [Incident severity](#incident-severity).
 3. Recovery targets approved November 19, 2026. Hosted proof and operator acceptance remain open under [Backups and recovery](#backups-and-recovery).
 4. Which monitoring and alerting tools fit a small volunteer team? (hosting ADR)
-5. What retention periods apply to waivers, financial records, and everything else?
+5. What retention periods apply to waivers, financial records, and everything else except the emergency-contact lookup record (365 days, decided November 22, 2026)?
 
 ### November 16, 2026 research follow-up
 
@@ -189,6 +234,6 @@ Unresolved operating decisions and validation steps are listed below. The named 
 | 2, freeze/response targets | Product owner with registration lead; race-morning disruption needs an agreed response | Rehearsal freeze starts and critical/high response targets approved November 19, 2026. Rehearse both windows. Confirm event-specific window end times before rehearsal. Live acceptance, named staffing and out-of-window response targets remain open. |
 | 3, recovery measurement | Technical lead and treasurer, unassigned; restore must preserve money, capacity and entries | Targets approved November 19, 2026. Hosted measurement and recovery sign-off remain open. Run the hosted rehearsal once its environment and operators are approved. |
 | 4, monitoring/tools | Technical/support lead, unassigned; failures need an accountable receiver | [Rehearsal routing](#rehearsal-alert-routing) is approved. Live recipients, monitoring service, alert thresholds and after-hours coverage remain open. Synthetic fault cases can proceed. Revisit live routing and tooling before hosted operational sign-off. |
-| 5, retention | Project owner/privacy responsibility unassigned; waivers, financial records, paper rosters and opaque telemetry keys remain personal data | No retention period or analytics collection approved. Synthetic measurements proceed; real-data collection blocked until access/retention approval before pilot. |
+| 5, retention | Project owner/privacy responsibility unassigned; waivers, financial records, paper rosters and opaque telemetry keys remain personal data | Only the emergency-contact lookup record has an approved period (365 days, November 22, 2026; enforcement Planned). No other retention period or analytics collection approved. Synthetic measurements proceed; real-data collection blocked until access/retention approval before pilot. |
 
 Related decisions remain in [product.md decisions 4–6 and 8–10](../product.md#open-decisions), [ADR 0005](decisions/0005-merchant-and-settlement-model.md), [federation questions](usac-questions.md) and [timer review](timer-export-review.md). The new research does not resolve merchant liability, event-year waiver/licensing approval, timer acknowledgement where applicable or safe device/accessibility arrangements. Revisit those existing records before the corresponding live-money, sanctioned-event or physical rehearsal gate.

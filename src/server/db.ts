@@ -715,6 +715,52 @@ export const MIGRATIONS: string[] = [
     viewed_at timestamptz NOT NULL
   );
   CREATE INDEX emergency_contact_views_event_idx ON emergency_contact_views(event_id, viewed_at, id);`,
+  `
+  -- A lost provider response is not a confirmed refusal. An attempt is leased while it sends, and a retry repeats its saved sender.
+  ALTER TABLE email_messages DROP CONSTRAINT email_messages_status_check;
+  ALTER TABLE email_messages ADD CONSTRAINT email_messages_status_check
+    CHECK (status IN ('recorded', 'sent', 'failed', 'uncertain'));
+  ALTER TABLE email_messages
+    ADD COLUMN started_at timestamptz,
+    ADD COLUMN sending_until timestamptz,
+    ADD COLUMN from_email text,
+    ADD COLUMN keyed boolean NOT NULL DEFAULT false;
+  ALTER TABLE organization_invitations
+    ADD COLUMN email_attempt_id text REFERENCES email_messages(id) ON DELETE SET NULL,
+    ADD COLUMN earlier_email boolean NOT NULL DEFAULT false;
+  -- Emails from before this migration had no idempotency key and cannot be tied to one invitation.
+  -- None becomes an attempt. An invitation whose address and role has one is never offered a resend.
+  UPDATE organization_invitations i SET earlier_email = true
+  WHERE EXISTS (
+    SELECT 1 FROM email_messages e
+    WHERE e.organization_id = i.organization_id AND e.ref = i.organization_id || ':' || i.email || ':' || i.role
+  );
+  -- The outgoing server keeps running during a deploy and can still save an email without a key.
+  CREATE FUNCTION flag_unkeyed_invitation_email() RETURNS trigger LANGUAGE plpgsql AS $$
+  BEGIN
+    UPDATE organization_invitations i SET earlier_email = true
+    WHERE i.organization_id = NEW.organization_id AND NEW.ref = i.organization_id || ':' || i.email || ':' || i.role;
+    RETURN NEW;
+  END $$;
+  CREATE TRIGGER email_messages_flag_unkeyed AFTER INSERT ON email_messages
+    FOR EACH ROW WHEN (NOT NEW.keyed) EXECUTE FUNCTION flag_unkeyed_invitation_email();
+  `,
+  `
+  -- Changes whenever an invitation is replaced or renewed, so Resend can name exactly the one it was shown.
+  ALTER TABLE organization_invitations ADD COLUMN revision text NOT NULL DEFAULT gen_random_uuid()::text;
+  -- In the database, so a renewal by an outgoing server during a deploy changes it too.
+  CREATE FUNCTION revise_invitation() RETURNS trigger LANGUAGE plpgsql AS $$
+  BEGIN
+    NEW.revision := gen_random_uuid()::text;
+    RETURN NEW;
+  END $$;
+  CREATE TRIGGER organization_invitations_revise BEFORE UPDATE OF expires_at ON organization_invitations
+    FOR EACH ROW EXECUTE FUNCTION revise_invitation();
+  `,
+  `
+  -- Identifies one grant, so Remove cannot take a role that was granted after the screen loaded.
+  ALTER TABLE organization_members ADD COLUMN revision text NOT NULL DEFAULT gen_random_uuid()::text;
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
@@ -784,8 +830,19 @@ async function applyMigrations(pool: pg.Pool): Promise<void> {
 export function openDb(connectionString: string, onPoolError?: (err: Error) => void): Db {
   // Fail fast instead of hanging when the database cannot be reached.
   const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 10_000, types });
-  // An idle connection can drop (database restart, test teardown); the pool replaces it.
-  pool.on('error', (err) => onPoolError?.(err));
+  // Any connection can drop (database restart, test teardown), and an unheard error ends the process. The pool
+  // listens only to idle clients, so each client gets a listener for its whole life, including the handoff from
+  // idle to checked out. The pool discards a client that lost its connection when it is released.
+  pool.on('connect', (client) => {
+    let lost = false;
+    client.on('error', (err) => {
+      // One loss can emit twice (the server's reason, then the closed socket): report the first.
+      if (!lost) onPoolError?.(err);
+      lost = true;
+    });
+  });
+  // An idle client's error also reaches the pool. The listener above has already reported it.
+  pool.on('error', () => {});
   const tx = new AsyncLocalStorage<{ client: pg.PoolClient; depth: number }>();
   let migrated: Promise<void> | null = null;
   let closed: Promise<void> | null = null;

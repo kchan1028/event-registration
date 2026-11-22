@@ -4,7 +4,7 @@ import type { RefundStatus, RefundRequest, RefundRequestResult } from '../shared
 import type { RefundPolicyPreview } from '../shared/refundPolicy';
 import type { CreateEventInput, EventConfig, CapacityEntry, PublicEventSummary } from '../shared/schema';
 import type { Issue } from '../shared/validation';
-import type { ReadinessItem, RiderDetails, WaiverAcceptance, WaiverEvidence } from '../shared/checkout';
+import type { OrderStatus, ReadinessItem, ReservationStatus, RiderDetails, WaiverAcceptance, WaiverEvidence } from '../shared/checkout';
 import type { Quote } from '../shared/pricing';
 import type { z } from 'zod';
 import type { couponInputSchema, CouponTerms } from '../shared/coupons';
@@ -97,7 +97,7 @@ export interface WaitlistOffer {
   rider: Omit<WaitlistJoin, 'categoryId'>;
 }
 
-export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
+export type { OrderStatus, ReservationStatus };
 
 export type { PublicEventSummary } from '../shared/schema';
 
@@ -301,7 +301,7 @@ export async function downloadFile(url: string): Promise<void> {
 }
 
 export interface MemberList {
-  members: { accountId: string; email: string; role: Role }[];
+  members: { accountId: string; email: string; role: Role; revision: string }[];
   invitations: Invitation[];
   /** The most recent role changes, newest first. */
   history: MembershipChange[];
@@ -330,7 +330,10 @@ export const api = {
   expiredInvitations: () => request<ExpiredInvitationNotice[]>('GET', '/api/rider/expired-invitations'),
   members: (orgId: string) => request<MemberList>('GET', `/api/organizations/${orgId}/members`),
   addMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role }),
-  removeMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members/remove`, { email, role }),
+  resendInvitation: (orgId: string, email: string, role: Role, revision: string) => request<MemberList>('POST', `/api/organizations/${orgId}/invitations/resend`, { email, role, revision }),
+  retryInvitation: (orgId: string, email: string, role: Role, retryAttempt: string) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role, retryAttempt }),
+  removeMember: (orgId: string, email: string, role: Role, revision: string) => request<MemberList>('POST', `/api/organizations/${orgId}/members/revoke`, { email, role, revision }),
+  cancelInvitation: (orgId: string, email: string, role: Role, revision: string) => request<MemberList>('POST', `/api/organizations/${orgId}/invitations/cancel`, { email, role, revision }),
   transferOwnership: (orgId: string, email: string) => request<MemberList>('POST', `/api/organizations/${orgId}/ownership-transfer`, { email }),
   organizations: () => request<OrganizationSummary[]>('GET', '/api/organizations'),
   createOrganization: (name: string) => request<{ id: string; name: string }>('POST', '/api/organizations', { name }),
@@ -358,6 +361,8 @@ export const api = {
   waitlist: (eventId: string) => request<{ offerHours: number; entries: WaitlistEntryView[] }>('GET', `/api/events/${eventId}/waitlist`),
   offerWaitlistPlace: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer`),
   removeFromWaitlist: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/remove`),
+  reservationStatus: (eventId: string, reference: string) =>
+    request<{ order: ReservationStatus | null }>('POST', `/api/events/${eventId}/reservation-status`, { reference }),
   publicEvent: (id: string) => request<PublicEvent>('GET', `/api/public/events/${id}`),
   createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; bundleIntent?: string | null; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null; extras?: OrderExtras; couponCode?: string | null }) =>
     request<OrderView>('POST', `/api/rider/events/${eventId}/orders`, body),

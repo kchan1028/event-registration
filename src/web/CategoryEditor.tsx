@@ -25,7 +25,8 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
   const groups = config.startGroups.filter((g) => g.raceId === cat.raceId);
   // Every place in use in this category: test entries, confirmed and held order entries, and live waitlist offers.
   const entries = draft.data.entries.filter((e) => e.categoryId === cat.id).length;
-  const issues = draft.issues.filter((i) => i.target.kind === 'category' && i.target.id === cat.id);
+  // View only: the copy alert already says a review is open, and the review's own message is a task for an editor.
+  const issues = draft.issues.filter((i) => i.target.kind === 'category' && i.target.id === cat.id && !(draft.readOnly && i.key === `cat.${cat.id}.review`));
   const set = (fn: (c: Category) => Category) => update((cfg) => updateCategory(cfg, cat.id, fn));
 
   const remove = () => {
@@ -46,22 +47,22 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
     <div className="editor">
       <header className="editor__head">
         <p className="editor__context">{draft.readOnly ? `A category in ${race.name} (view only)` : `Editing a category in ${race.name}`}</p>
-        <button ref={closeRef} className="icon-btn editor__close" onClick={onClose} aria-label="Close category editor">
+        <button ref={closeRef} className="icon-btn editor__close" onClick={onClose} aria-label={draft.readOnly ? 'Close category details' : 'Close category editor'}>
           <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d="M4 4l8 8M12 4l-8 8" />
           </svg>
         </button>
       </header>
 
-      {/* View only: every control below is switched off together. The wrapper takes no space of its own. */}
-      <fieldset disabled={draft.readOnly} style={{ display: 'contents' }}>
+      {/* View only: the values below are switched off together and the buttons that change them are hidden. The wrapper takes no space of its own. */}
+      <fieldset className="editor__fields" disabled={draft.readOnly} style={{ display: 'contents' }}>
       <Field label="Category name" className="field--title">
         {(id) => <input id={id} className="input input--title" value={cat.name} onChange={(e) => set((c) => ({ ...c, name: e.target.value }))} maxLength={120} />}
       </Field>
 
       {cat.needsReview && (
         <div className="alert alert--warn">
-          <p>{cat.reviewReason}</p>
+          <p>{draft.readOnly ? 'An organizer has not finished reviewing this copied category.' : cat.reviewReason}</p>
           <button className="btn btn--small btn--secondary" onClick={() => set((c) => ({ ...c, needsReview: false, reviewReason: '' }))}>
             <Icon name="check" /> I have reviewed this copy
           </button>
@@ -76,7 +77,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
         </div>
       )}
       {issues.length > 0 && (
-        <ul className="editor__issues" aria-label="Problems in this category">
+        <ul className="editor__issues" role="list" aria-label="Problems in this category">
           {issues.map((i) => (
             <li key={i.key} className={`issue issue--${i.level}`}>
               <Icon name={i.level === 'error' ? 'error' : 'warn'} size={14} />
@@ -123,7 +124,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
 
       <section className="editor__section" aria-labelledby={`${cat.id}-elig`}>
         <h3 id={`${cat.id}-elig`}>Who can enter</h3>
-        <p className="editor__help">A rider qualifies if they meet every condition in at least one path. Category numbers are not treated as a ladder: list each allowed category.</p>
+        <p className="editor__help">A rider qualifies if they meet every condition in at least one path. Category numbers are not treated as a ladder{draft.readOnly ? '.' : ': list each allowed category.'}</p>
         {cat.eligibility.paths.map((p, i) => (
           <PathEditor
             key={p.id}
@@ -165,7 +166,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
             </select>
           )}
         </Field>
-        <LengthEditor length={cat.length} discipline={race.discipline} onChange={(l) => set((c) => ({ ...c, length: l }))} />
+        <LengthEditor readOnly={draft.readOnly} length={cat.length} discipline={race.discipline} onChange={(l) => set((c) => ({ ...c, length: l }))} />
       </section>
 
       <section className="editor__section" aria-labelledby={`${cat.id}-price`}>
@@ -225,12 +226,12 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
 
       <section className="editor__section" aria-labelledby={`${cat.id}-cap`}>
         <h3 id={`${cat.id}-cap`}>Capacity</h3>
-        <Field label="Category cap" hint={`Blank: no cap of its own. Cannot go below the ${entries} ${entries === 1 ? 'place' : 'places'} already taken.`}>
+        <Field label="Category cap" hint={`Blank: no cap of its own.${draft.readOnly ? '' : ` Cannot go below the ${entries} ${entries === 1 ? 'place' : 'places'} already taken.`}`}>
           {(id, d) => <IntInput id={id} describedBy={d} value={cat.cap} min={Math.max(1, entries)} onCommit={(v) => set((c) => ({ ...c, cap: v }))} />}
         </Field>
         <label className="check">
           <input type="checkbox" checked={!!cat.waitlistEnabled} onChange={(e) => set((c) => ({ ...c, waitlistEnabled: e.target.checked }))} />
-          Offer a waitlist when this category is full (you offer freed places in order; each offer holds the place for {OFFER_HOURS} hours)
+          Offer a waitlist when this category is full ({draft.readOnly ? 'freed places are offered in order' : 'you offer freed places in order'}; each offer holds the place for {OFFER_HOURS} hours)
         </label>
         <CapacityUsage draft={draft} categoryId={cat.id} />
         {!draft.readOnly && <TestEntries draft={draft} categoryId={cat.id} disabled={cat.status !== 'active'} />}
@@ -243,10 +244,10 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
           <div className="extra-q" key={q.id}>
             <Field label={`Question ${i + 1}`}>
               {(id) => (
-                <input id={id} className="input" value={q.label} maxLength={120} placeholder="For example: Club or school" onChange={(e) => set((c) => ({ ...c, questions: (c.questions ?? []).map((x) => (x.id === q.id ? { ...x, label: e.target.value } : x)) }))} />
+                <input id={id} className="input" value={q.label} maxLength={120} placeholder={draft.readOnly ? undefined : 'For example: Club or school'} onChange={(e) => set((c) => ({ ...c, questions: (c.questions ?? []).map((x) => (x.id === q.id ? { ...x, label: e.target.value } : x)) }))} />
               )}
             </Field>
-            <Field label="Answers to choose from" hint="Comma-separated. Leave blank for a free-text answer.">
+            <Field label="Answers to choose from" hint={draft.readOnly ? 'Blank: a free-text answer.' : 'Comma-separated. Leave blank for a free-text answer.'}>
               {(id, d) => (
                 <input
                   id={id}
@@ -435,7 +436,7 @@ function PathEditor({ path, index, total, onChange, onRemove }: { path: Eligibil
   );
 }
 
-function LengthEditor({ length, discipline, onChange }: { length: RaceLength; discipline: string; onChange: (l: RaceLength) => void }) {
+function LengthEditor({ readOnly, length, discipline, onChange }: { readOnly: boolean; length: RaceLength; discipline: string; onChange: (l: RaceLength) => void }) {
   const kinds: { value: RaceLength['kind']; label: string }[] = [
     { value: 'distance', label: 'Distance' },
     { value: 'duration', label: 'Minutes (+ laps)' },
@@ -458,7 +459,7 @@ function LengthEditor({ length, discipline, onChange }: { length: RaceLength; di
           </label>
         ))}
       </div>
-      {length.kind === 'unset' && <p className="text-error small">Not set yet. Choose how this race is measured.</p>}
+      {length.kind === 'unset' && <p className="text-error small">Not set yet.{!readOnly && ' Choose how this race is measured.'}</p>}
       {length.kind === 'distance' && (
         <div className="form-row form-row--3">
           <Field label="Distance">
@@ -495,7 +496,7 @@ function LengthEditor({ length, discipline, onChange }: { length: RaceLength; di
       {length.kind === 'duration' && (
         <div className="form-row form-row--start">
           <Field label="Minutes">{(id) => <IntInput id={id} value={length.minutes} min={1} max={600} allowEmpty={false} onCommit={(v) => v !== null && onChange({ ...length, minutes: v })} />}</Field>
-          <Field label="Plus laps" hint="For example 45 min + 3 laps">
+          <Field label="Plus laps" hint={readOnly ? undefined : 'For example 45 min + 3 laps'}>
             {(id, d) => <IntInput id={id} describedBy={d} value={length.plusLaps} min={0} max={50} onCommit={(v) => onChange({ ...length, plusLaps: v })} />}
           </Field>
         </div>
@@ -509,7 +510,7 @@ function LengthEditor({ length, discipline, onChange }: { length: RaceLength; di
 
 function CapacityUsage({ draft, categoryId }: { draft: Draft; categoryId: string }) {
   const usage = usageForCategory(draft.config, draft.data.entries, categoryId);
-  if (usage.length === 0) return <p className="muted small">No limits apply to this category. Set a cap, a start group field limit, or a shared pool.</p>;
+  if (usage.length === 0) return <p className="muted small">No limits apply to this category.{!draft.readOnly && ' Set a cap, a start group field limit, or a shared pool.'}</p>;
   const kindLabel = { category: 'Category cap', start_group: 'Start group field limit', pool: 'Shared pool' } as const;
   const binding = Math.min(...usage.map((u) => u.remaining));
   return (

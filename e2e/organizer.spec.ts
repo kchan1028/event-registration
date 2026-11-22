@@ -146,6 +146,8 @@ test('category editor keeps helper text from shifting the control beside it', as
   expect(narrowHint.right).toBeLessThanOrEqual(390);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
+  // The narrow drawer takes focus when the width change arrives, which can be after the resize returns.
+  await expect(editor.getByRole('button', { name: 'Close category editor' })).toBeFocused();
   await editor.getByLabel('Timing code', { exact: true }).focus();
   await expect(editor.getByLabel('Timing code', { exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
@@ -174,6 +176,28 @@ test('on a phone, the category editor opens as a drawer that takes and returns f
   await page.locator('.scrim').click({ position: { x: 70, y: 400 } });
   await expect(page.locator('.inspector.is-open')).toHaveCount(0);
   await expect(name).toBeFocused();
+});
+
+test('changed waiver text needs a new waiver version before it publishes', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  await page.goto(`/#/events/${eventId}/setup`);
+  await page.getByLabel('Waiver text', { exact: true }).fill('Changed fictional waiver.');
+  await saved(page);
+  const publish = async () => {
+    await page.getByRole('link', { name: /Review and publish/ }).first().click();
+    const ack = page.getByLabel(/I have reviewed the/);
+    if (await ack.count()) await ack.first().check();
+    await page.getByRole('button', { name: 'Publish version 2' }).click();
+  };
+  await publish();
+  await expect(page.locator('.publish-box').getByRole('status')).toContainText('already published with different text. In Event setup, enter a new waiver version');
+
+  await page.getByRole('link', { name: 'Event setup', exact: true }).click();
+  await page.getByLabel('Waiver version', { exact: true }).fill('sample-changed');
+  await saved(page);
+  await publish();
+  await expect(page.locator('.publish-box').getByRole('status')).toContainText('Published as version 2');
 });
 
 test('the refund warning opens refund rules and clears once notes are saved', async ({ page }) => {

@@ -346,7 +346,7 @@ test('a volunteer can retry check-in after the organizer resolves missing and ex
         bib: null, checkedInAt: null, bibHistory: [], entries: next.entries, result: next.result,
       });
     };
-    await verifyRefusal('No bib range covers every applicable entry. Set bib ranges before checking riders in.');
+    await verifyRefusal('No bib range covers every applicable entry. A registration manager or owner sets bib ranges before this rider can get a bib.');
 
     // Staff issue the only configured bib to the first rider before retrying this one.
     await setRange(100);
@@ -354,7 +354,7 @@ test('a volunteer can retry check-in after the organizer resolves missing and ex
     expect(issued.ok()).toBe(true);
     const recordedFirst = await issued.json();
     expect(recordedFirst).toMatchObject({ bib: 100, checkedInAt: expect.any(String) });
-    await verifyRefusal('Every bib from 100 to 100 is in use. Extend the bib range.');
+    await verifyRefusal('Every bib from 100 to 100 is in use. A registration manager or owner can extend the bib range.');
 
     await setRange(101);
     await issue.click();
