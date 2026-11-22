@@ -1,3 +1,4 @@
+import { staffHoldReleaseFromEnv } from '../src/server/app';
 import { reservationLookupSchema, reservationReferenceSchema } from '../src/shared/checkout';
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../src/server/db';
@@ -197,6 +198,17 @@ describe('rider checkout: holds and simulated payment', () => {
         .toEqual({ staff_released_by: actor, staff_released_at: '2027-03-01T18:00:00.000Z', staff_release_reason: 'Rider requested release' });
       expect(await db.get('SELECT count(*)::int AS count FROM payment_attempts WHERE order_id=$1', [created.id])).toEqual({ count: 1 });
     } finally { await db.close(); }
+  });
+
+  it('refuses every release while staff release is off, as production is by default', async () => {
+    expect([{}, { STAFF_HOLD_RELEASE: 'off' }, { NODE_ENV: 'production' }, { NODE_ENV: 'production', STAFF_HOLD_RELEASE: 'yes' }, { NODE_ENV: 'production', STAFF_HOLD_RELEASE: 'on' }].map(staffHoldReleaseFromEnv))
+      .toEqual([true, false, false, false, true]);
+    const { eventId, order, code, databaseUrl } = await setup();
+    const { app } = await testApp({ databaseUrl, staffHoldRelease: false, now: () => new Date('2027-03-01T18:00:00Z') });
+    const reference = 'staff-release-turned-off';
+    await order([code('RR-M35-34')], { clientRequestId: reference });
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/reservation-status`, payload: { reference } })).json()).toMatchObject({ order: { status: 'held' }, releaseEnabled: false });
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/reservation-release`, payload: { reference, riderRequested: true, reason: 'Fictional request' } })).statusCode).toBe(409);
   });
 
   it('refuses expired holds, confirmed orders and holds with provider activity', async () => {

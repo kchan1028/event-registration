@@ -81,6 +81,16 @@ export interface AppOptions {
   email?: EmailSender;
   /** Disabled unless age18 and explicit support account IDs are configured. */
   profileClaims?: ProfileClaimSettings;
+  /** Staff release of unpaid holds. Defaults to staffHoldReleaseFromEnv. */
+  staffHoldRelease?: boolean;
+}
+
+/**
+ * A server from before migration 44 can start Stripe checkout without recording it, so production keeps
+ * staff release off until an operator confirms none is running (docs/runbooks/deploy-render.md).
+ */
+export function staffHoldReleaseFromEnv(env: Record<string, string | undefined> = process.env): boolean {
+  return env.STAFF_HOLD_RELEASE === 'on' || (env.NODE_ENV !== 'production' && env.STAFF_HOLD_RELEASE !== 'off');
 }
 
 export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; orders: Orders; access: Access; automaticBibs: AutomaticBibs } {
@@ -97,6 +107,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const coupons = createCoupons(db, repo, clock);
   const juniors = createJuniors(db, clock);
   const profileClaims = createProfileClaims(db, clock, claimSettings);
+  const staffHoldRelease = opts.staffHoldRelease ?? staffHoldReleaseFromEnv();
   const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10), coupons, juniors);
   const identity = createIdentity(db, orders, clock);
   const resolutions = createResolutions(db, orders, clock);
@@ -646,11 +657,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { reference } = z.object({ reference: reservationLookupSchema }).parse(req.body);
     reply.header('Cache-Control', 'no-store');
     const result = await orders.lookupReservation(id, reference);
-    return { ...result, releaseEnabled: result.releaseEnabled && can(roles, 'entries.manage') };
+    return { ...result, releaseEnabled: staffHoldRelease && result.releaseEnabled && can(roles, 'entries.manage') };
   });
 
   app.post('/api/events/:id/reservation-release', async (req, reply) => {
     const { id } = await onEvent(req, 'entries.manage');
+    if (!staffHoldRelease) throw new HttpError(409, 'Staff hold release is turned off on this server. Ask the treasurer to review the hold.');
     const { reference, reason } = z.object({
       reference: reservationLookupSchema,
       riderRequested: z.literal(true),

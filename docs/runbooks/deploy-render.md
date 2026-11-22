@@ -61,19 +61,23 @@ Last verified: November 15, 2026 with Docker 27.4 and PostgreSQL 17, before sign
 
 Status: Planned. Not exercised, because nothing is deployed.
 
-Staff hold release trusts that every server able to start Stripe checkout records the attempt (migration 44). A server from before that migration does not, so the two must never take traffic together. This overrides the overlapping deploy described under [Notes](#notes) for this boundary.
+A server from before migration 44 can start Stripe checkout without recording it. Normal deploys overlap old and new instances, so production and staging keep staff hold release off unless `STAFF_HOLD_RELEASE` is `on`.
 
-1. Upgrade: suspend the service and confirm every old instance has stopped. Then deploy the new version and resume.
-2. Rollback to a version from before migration 44: suspend the service and confirm every new instance has stopped. Then start the old version.
-3. Upgrade again after such a rollback: suspend the old version. Before resuming on the new one, stop staff release of holds the old version may have sent to checkout:
+To turn it on, after the first upgrade or after upgrading again from a rollback:
+
+1. Deploy with `STAFF_HOLD_RELEASE` unset or `off`.
+2. Confirm that every instance from before migration 44 has stopped, including its shutdown grace period.
+3. Mark the holds those instances could have sent to checkout. They then expire or go to the treasurer:
 
 ```sql
 UPDATE orders SET stripe_checkout_tracked = false WHERE status IN ('held', 'payment_failed');
 ```
 
-Those holds then expire or go to the treasurer. Rehearse this on staging before the first production upgrade that crosses the boundary.
+4. Set `STAFF_HOLD_RELEASE=on` and deploy.
+
+Before rolling back to a version from before migration 44, set `STAFF_HOLD_RELEASE=off`, deploy, and confirm every instance that had it on has stopped. Only then deploy the older version. Rehearse both directions on staging before production uses staff release.
 
 ## Notes
 
 - The image includes dev dependencies (Vite and tsx), about 390 MB. A smaller image that compiles the server ahead of time is possible later; it is not needed for correctness.
-- Except [across migration 44](#upgrades-and-rollbacks-across-migration-44), Render keeps the previous deploy running until the new one passes its health check, and sends `SIGTERM` with a 30-second grace period (`maxShutdownDelaySeconds`) to instances it replaces.
+- Render keeps the previous deploy running until the new one passes its health check, and sends `SIGTERM` with a 30-second grace period (`maxShutdownDelaySeconds`) to instances it replaces.

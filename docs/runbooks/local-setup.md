@@ -129,6 +129,7 @@ SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts
 | `SERVE_WEB=1` | Serves the built web app without production mode (used by the end-to-end test) | unset | No |
 | `AUTH_MODE=test`, `VITE_AUTH_MODE=test` | Forces the local-only test sign-in even when Clerk keys are set (the end-to-end test uses it). Refused in production and on network addresses | unset | No |
 | `HOLD_MINUTES` | How long rider checkout holds places before payment | `10` | No |
+| `STAFF_HOLD_RELEASE` | `on` or `off` for staff release of unpaid holds. In production follow the [migration 44 procedure](deploy-render.md#upgrades-and-rollbacks-across-migration-44) before `on` | on locally, off in production | No |
 | `STRIPE_SECRET_KEY` | Stripe test-mode secret key (`sk_test_...` or `rk_test_...`). Set it to use Stripe hosted Checkout instead of the simulated payment. Live keys are refused | unset (simulated payment) | **Yes.** Only in `.env` or the platform's secret store |
 | `STRIPE_WEBHOOK_SECRET` | Webhook signing secret (`whsec_...`). Required when `STRIPE_SECRET_KEY` is set | none | **Yes** |
 | `PUBLIC_APP_URL` | Origin Stripe sends riders back to after paying, and the sign-in link in invitation emails. Required in production when Stripe is on | `http://127.0.0.1:5273` outside production | No |

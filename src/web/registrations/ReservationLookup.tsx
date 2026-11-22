@@ -132,7 +132,7 @@ export function ReservationLookup({ eventId, canManage, onFound }: { eventId: st
               {order.holdExpiresAt && <> · Hold expires {formatDateTime(order.holdExpiresAt)}</>}
             </p>
           )}
-          {canManage && active && !result?.releaseEnabled && <p>This hold cannot be released here. Ask the treasurer to review its payment history.</p>}
+          {canManage && active && !result?.releaseEnabled && <p>This hold cannot be released here. Ask the treasurer to review it.</p>}
           {result?.order === null && <p>No order is visible for this reference yet. {reference !== reference.trim() && 'It starts or ends with a space or other blank character, which counts as part of the reference. '}Check the reference against the rider’s checkout. Ask the rider to keep the pending checkout and retry the same reservation.</p>}
         </div>
         {error && <p className="field__error" role="alert">{error}</p>}
