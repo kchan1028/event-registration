@@ -2632,6 +2632,18 @@ button.issue {
   line-height: 1.6;
   max-width: 70ch;
 }
+.reg-race-terms {
+  overflow-wrap: anywhere;
+}
+.addendum-title {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+/* Terms read the same when signed and when recovered. */
+.addendum-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .hold {
   display: inline-flex;
   align-items: center;
