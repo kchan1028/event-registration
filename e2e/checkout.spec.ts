@@ -643,14 +643,61 @@ test('a rejected reservation keeps details editable and rapid submission creates
   expect(posts).toBe(1);
 });
 
-for (const committed of [true, false]) {
-  test(`publication changes do not alter uncertain consent (${committed ? 'committed' : 'not committed'})`, async ({ page }) => {
+test('a new reservation omits consent for a removed race addendum', async ({ page }) => {
+  const eventId = await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await expect(page.locator('.addendum-text')).toHaveCount(0);
+  await page.evaluate((id) => {
+    const key = `cyclereg.register.${id}`;
+    const saved = JSON.parse(sessionStorage.getItem(key)!);
+    saved.extras = { ...saved.extras, addenda: [saved.selected[0]] };
+    sessionStorage.setItem(key, JSON.stringify(saved));
+  }, eventId);
+  await page.reload();
+  await page.route('**/api/rider/events/*/orders', async (route) => {
+    expect(route.request().postDataJSON().extras.addenda).toEqual([]);
+    await route.abort('failed');
+  }, { times: 1 });
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.getByRole('button', { name: 'Retry reservation' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Race terms you accepted' })).toHaveCount(0);
+});
+
+const consentRecoveryCases = [
+  { committed: true, legacy: false },
+  { committed: false, legacy: false },
+  { committed: true, legacy: true },
+  { committed: false, legacy: true },
+];
+
+for (const { committed, legacy } of consentRecoveryCases) {
+  const scenario = [committed ? 'committed' : 'not committed', legacy ? 'older draft' : null].filter(Boolean).join(', ');
+  test(`publication changes do not alter uncertain consent (${scenario})`, async ({ page }, testInfo) => {
+    if (!committed) await page.setViewportSize({ width: 390, height: 844 });
     const eventId = await openEvent(page, 'criterium');
+    const eventPath = `/api/events/${eventId}`;
+    const draft = await (await page.request.get(eventPath)).json();
+    const category = draft.config.categories.find((c: { timingCode: string }) => c.timingCode === 'DVC-M45');
+    const originalText = 'Fictional original race condition.\n' + 'LongFictionalTerm'.repeat(30);
+    category.addendum = { title: 'Original sample condition ' + 'W'.repeat(54), text: originalText };
+    expect((await page.request.put(eventPath + '/config', { data: { revision: draft.revision, config: draft.config } })).ok()).toBe(true);
+    expect((await page.request.post(eventPath + '/publish', { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
+    await page.reload();
     await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
     await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
     await page.getByRole('button', { name: 'Continue to racer details' }).click();
     await page.getByRole('button', { name: 'Continue to the waiver' }).click();
-    const bodies: { clientRequestId: string; categoryIds: string[]; waiver: { version: string } }[] = [];
+    await expect(page.locator('.addendum-text')).toHaveText(originalText);
+    await expect(page.locator('.addendum-text')).toHaveCSS('white-space', 'pre-wrap');
+    const wide = page.viewportSize()!;
+    await page.setViewportSize({ width: 360, height: 800 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    await page.setViewportSize(wide);
+    await page.getByLabel('I accept this', { exact: true }).check();
+    const bodies: { clientRequestId: string; categoryIds: string[]; waiver: { version: string }; extras: { addenda: string[] } }[] = [];
     const orderIds: string[] = [];
     await page.route('**/api/rider/events/*/orders', async (route) => {
       bodies.push(route.request().postDataJSON());
@@ -665,6 +712,20 @@ for (const committed of [true, false]) {
     });
     await signAndReview(page, 'Alex Demo');
     await expect(page.locator('.error-summary')).toContainText('Cannot reach');
+    const terms = page.getByRole('region', { name: 'Race terms you accepted', exact: true });
+    await expect(terms.getByRole('heading', { name: /Original sample condition/ })).toBeVisible();
+    expect(await terms.locator('.addendum-text').textContent()).toBe(originalText);
+    await expect(terms.locator('.addendum-text')).toHaveCSS('white-space', 'pre-wrap');
+    await expect(terms.getByRole('checkbox')).toHaveCount(0);
+    expect(bodies[0].extras.addenda).toEqual([category.id]);
+    if (legacy) {
+      await page.evaluate((id) => {
+        const key = `cyclereg.register.${id}`;
+        const stored = JSON.parse(sessionStorage.getItem(key)!);
+        delete stored.pendingReservation.addenda;
+        sessionStorage.setItem(key, JSON.stringify(stored));
+      }, eventId);
+    }
     const current = await (await page.request.get(`/api/events/${eventId}`)).json();
     current.config.registration.waiverVersion = 'CRO-UPDATED-SAMPLE';
     current.config.registration.waiverText = 'New fictional waiver text, not real event policy.';
@@ -672,6 +733,19 @@ for (const committed of [true, false]) {
     expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision: current.revision, config: current.config } })).ok()).toBe(true);
     expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
     await page.reload();
+    await expect(terms).toBeVisible();
+    if (legacy) {
+      await expect(terms).toContainText('Original text for one or more race terms isn’t available in this tab.');
+      await expect(terms.locator('.addendum-text')).toHaveCount(0);
+    } else {
+      await expect(terms.locator('.addendum-text')).toHaveText(originalText);
+    }
+    if (!committed) {
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+      expect((await new AxeBuilder({ page }).include('[aria-labelledby="submitted-race-terms"]').analyze()).violations).toEqual([]);
+      await terms.screenshot({ path: testInfo.outputPath('pending-race-terms-phone.png') });
+    }
+    await expect(page.getByText('Fictional new condition.', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Retry reservation' }).click();
     if (committed) {
       await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
@@ -688,6 +762,8 @@ for (const committed of [true, false]) {
       await expect(page.getByLabel('I have read the whole waiver')).not.toBeChecked();
       await expect(page.getByLabel('I agree to this waiver', { exact: true })).not.toBeChecked();
       expect(orderIds).toHaveLength(0);
+      await expect(terms).toHaveCount(0);
+      await expect(page.getByText('Fictional new condition.', { exact: true })).toBeVisible();
     }
     expect(bodies).toHaveLength(2);
     expect(bodies[1]).toEqual(bodies[0]);

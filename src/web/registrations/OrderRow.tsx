@@ -221,7 +221,7 @@ function RiderCorrections({ order, canManage, onChange }: { order: OrderView; ca
           {order.corrections.map((c, i) => (
             <li key={i} className="order__entry order__change">
               <span className="small">
-                <strong>Details corrected</strong> · {formatDateTime(c.at)}{c.by && ` · by ${c.by}`} · Reason: {c.reason}
+                <strong>Details corrected</strong> · {formatDateTime(c.at)}{c.by && ` · by ${c.by}`} · Reason: {c.reason || 'hidden, because it can contain the emergency contact'}
                 <br />
                 {[
                   c.changes.filter((x) => !EMERGENCY_FIELDS.has(x.field)).map((x) => `${x.label}: “${x.before || 'blank'}” to “${x.after || 'blank'}”`).join('; '),

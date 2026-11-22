@@ -332,7 +332,7 @@ A rider's checkout in the app. Payment is simulated; no money moves.
 | `created_at`, `updated_at`, `confirmed_at` | |
 | `account_id` | Migration 16. The signed-in account that placed the order; indexed. That account manages unlinked adult orders; active explicit guardians manage linked junior orders, including payment/cancellation. Authorized organizer roles and the junior's read-only viewer retain their separate permissions. Null for orders made before sign-in and for simulated demo riders. Set to null if the account is deleted |
 
-A retried checkout with the same `client_request_id` returns the first order only to the account that placed it; another account gets 409. The browser retains the exact pending request and displayed waiver text in its existing per-tab draft until recovery or definitive rejection; same-tab refresh preserves the original ID when session storage is available. This adds no database column or migration. Each order still carries its own copy of the rider's details: there is no separate rider profile table, and one account can register other riders (for example a parent). The existing event/request key also supports a read-only event-scoped reservation status lookup.
+A retried checkout with the same `client_request_id` returns the first order only to the account that placed it; another account gets 409. The browser retains the exact pending request, the displayed waiver text and the text of the accepted addenda in its existing per-tab draft until recovery or definitive rejection; same-tab refresh preserves the original ID when session storage is available. This adds no database column or migration. Each order still carries its own copy of the rider's details: there is no separate rider profile table, and one account can register other riders (for example a parent). The existing event/request key also supports a read-only event-scoped reservation status lookup.
 
 ### coupons
 
@@ -447,7 +447,7 @@ Migration 15. Append-only audit of organizer corrections to rider details (produ
 | `order_id` | References `orders`. Indexed with `created_at` |
 | `changes_json` | Array of `{ field, label, before, after }`, only fields that changed. Correctable fields: first and last name, email, phone, team, license number, emergency contact name and phone. Eligibility fields (racing age, license category and type, competition class, collegiate division) and the waiver signature cannot be corrected |
 | `cleared_reviews_json` | Set when a corrected license number cleared earlier license reviews on the order: each cleared entry's category ID, review note, and review time. Null otherwise |
-| `reason` | Required, 3 to 300 characters |
+| `reason` | Required, 3 to 300 characters, stored without leading or trailing spaces. Staff responses blank it when the correction changed an emergency-contact field; rider and guardian order responses include it |
 | `corrected_by` | Account that made the correction (migration 19); null for corrections made before migration 19. Set to null if that account is deleted |
 | `created_at` | |
 
@@ -795,7 +795,7 @@ Account and event foreign keys restrict deletion while evidence remains. The sco
 
 ## Emergency contact lookups
 
-`emergency_contact_views` records one row each time an organizer looks up one registration's emergency contact. Its fields are an opaque `ecv` id, the signed-in account, the event, the order, and the time. It does not store the contact name or phone. Account, event, and order foreign keys use `ON DELETE RESTRICT`. The index is `(event_id, viewed_at, id)`. There is no application read endpoint. The generated case-study reset deletes these rows for its fictional events before it deletes those events. How long the rows are kept is still the open retention decision in [product.md](product.md#data-storage).
+`emergency_contact_views` records one row each time an organizer looks up one registration's emergency contact. Its fields are an opaque `ecv` id, the signed-in account, the event, the order, and the time. It does not store the contact name or phone. Account, event, and order foreign keys use `ON DELETE RESTRICT`. The index is `(event_id, viewed_at, id)`. There is no application read endpoint. The generated case-study reset deletes these rows for its fictional events before it deletes those events. The approved retention is 365 days from `viewed_at` ([product.md](product.md#open-decisions), decision 6). Nothing enforces it yet: enforcement is Planned, and the deletion procedure is still open.
 
 ## Deletion behavior
 
