@@ -3841,6 +3841,31 @@ fieldset:disabled .field label {
   }
 }
 
+.ec-lookup {
+  margin-top: var(--s-2);
+}
+.ec-lookup__shown {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+.ec-lookup__contact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-3);
+  margin: 0;
+}
+.ec-lookup .btn,
+.ec-lookup a {
+  min-height: 44px;
+}
+.ec-lookup a {
+  display: inline-flex;
+  align-items: center;
+}
+
 /* ---------- Start lists and timer export ---------- */
 .sl-races {
   margin: var(--s-4) 0 var(--s-3);

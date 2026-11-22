@@ -707,6 +707,14 @@ export const MIGRATIONS: string[] = [
     ADD COLUMN walk_up_marked_at timestamptz,
     ADD COLUMN walk_up_marked_by text REFERENCES accounts(id) ON DELETE RESTRICT,
     ADD CONSTRAINT walk_up_marker_complete CHECK ((walk_up_marked_at IS NULL) = (walk_up_marked_by IS NULL));`,
+  `CREATE TABLE emergency_contact_views (
+    id text PRIMARY KEY,
+    actor_account_id text NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+    event_id text NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
+    order_id text NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
+    viewed_at timestamptz NOT NULL
+  );
+  CREATE INDEX emergency_contact_views_event_idx ON emergency_contact_views(event_id, viewed_at, id);`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

@@ -40,14 +40,19 @@ export type Permission =
   /** Refund money to a rider: part or all of an entry, or a payment that confirmed no place. */
   | 'payments.refund'
   /** Add and remove people and roles in the organization. */
-  | 'members.manage';
+  | 'members.manage'
+  /**
+   * Look up one registration's emergency contact. Every organizer role has this.
+   * It is a separate action: lists, rosters, and exports still omit the contact.
+   */
+  | 'emergency.view';
 
 const GRANTS: Record<Role, readonly Permission[]> = {
-  owner: ['event.view', 'event.edit', 'orders.view', 'entries.manage', 'checkin', 'checkin.settings', 'startlists', 'export.entries', 'export.ledger', 'members.manage', 'payments.refund'],
-  registration_manager: ['event.view', 'event.edit', 'orders.view', 'entries.manage', 'checkin', 'checkin.settings', 'startlists', 'export.entries'],
-  check_in_volunteer: ['event.view', 'checkin'],
-  timer_export: ['event.view', 'startlists', 'export.entries'],
-  finance: ['event.view', 'orders.view', 'export.ledger', 'payments.refund'],
+  owner: ['event.view', 'event.edit', 'orders.view', 'entries.manage', 'checkin', 'checkin.settings', 'startlists', 'export.entries', 'export.ledger', 'members.manage', 'payments.refund', 'emergency.view'],
+  registration_manager: ['event.view', 'event.edit', 'orders.view', 'entries.manage', 'checkin', 'checkin.settings', 'startlists', 'export.entries', 'emergency.view'],
+  check_in_volunteer: ['event.view', 'checkin', 'emergency.view'],
+  timer_export: ['event.view', 'startlists', 'export.entries', 'emergency.view'],
+  finance: ['event.view', 'orders.view', 'export.ledger', 'payments.refund', 'emergency.view'],
 };
 
 export function can(roles: readonly Role[], permission: Permission): boolean {
