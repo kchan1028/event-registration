@@ -60,6 +60,7 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
       await expect(details.getByLabel('Category name')).toHaveValue(category.name);
       await expect(details.getByLabel('Category name')).toBeDisabled();
       await expect(details.getByRole('button')).toHaveCount(1);
+      await expect(details.getByText(/Choose how this race is measured|Set a cap, a start group/)).toHaveCount(0);
       await details.getByRole('button', { name: 'Close category details' }).click();
       await expect(details).toHaveCount(0);
 
@@ -90,6 +91,7 @@ test('an event without races offers setup only to an editor', async ({ page, bro
     await member.goto(`/#/events/${eventId}`);
     await expect(member.getByText('This event has no races yet.')).toBeVisible();
     await expect(member.getByRole('link', { name: 'Open event setup' })).toHaveCount(0);
+    await expect(member.getByText('Select a category in the schedule to see its details.')).toHaveCount(0);
   });
 
   await page.goto(`/#/events/${eventId}`);

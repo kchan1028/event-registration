@@ -165,7 +165,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
             </select>
           )}
         </Field>
-        <LengthEditor length={cat.length} discipline={race.discipline} onChange={(l) => set((c) => ({ ...c, length: l }))} />
+        <LengthEditor readOnly={draft.readOnly} length={cat.length} discipline={race.discipline} onChange={(l) => set((c) => ({ ...c, length: l }))} />
       </section>
 
       <section className="editor__section" aria-labelledby={`${cat.id}-price`}>
@@ -435,7 +435,7 @@ function PathEditor({ path, index, total, onChange, onRemove }: { path: Eligibil
   );
 }
 
-function LengthEditor({ length, discipline, onChange }: { length: RaceLength; discipline: string; onChange: (l: RaceLength) => void }) {
+function LengthEditor({ readOnly, length, discipline, onChange }: { readOnly: boolean; length: RaceLength; discipline: string; onChange: (l: RaceLength) => void }) {
   const kinds: { value: RaceLength['kind']; label: string }[] = [
     { value: 'distance', label: 'Distance' },
     { value: 'duration', label: 'Minutes (+ laps)' },
@@ -458,7 +458,7 @@ function LengthEditor({ length, discipline, onChange }: { length: RaceLength; di
           </label>
         ))}
       </div>
-      {length.kind === 'unset' && <p className="text-error small">Not set yet. Choose how this race is measured.</p>}
+      {length.kind === 'unset' && <p className="text-error small">Not set yet.{!readOnly && ' Choose how this race is measured.'}</p>}
       {length.kind === 'distance' && (
         <div className="form-row form-row--3">
           <Field label="Distance">
@@ -509,7 +509,7 @@ function LengthEditor({ length, discipline, onChange }: { length: RaceLength; di
 
 function CapacityUsage({ draft, categoryId }: { draft: Draft; categoryId: string }) {
   const usage = usageForCategory(draft.config, draft.data.entries, categoryId);
-  if (usage.length === 0) return <p className="muted small">No limits apply to this category. Set a cap, a start group field limit, or a shared pool.</p>;
+  if (usage.length === 0) return <p className="muted small">No limits apply to this category.{!draft.readOnly && ' Set a cap, a start group field limit, or a shared pool.'}</p>;
   const kindLabel = { category: 'Category cap', start_group: 'Start group field limit', pool: 'Shared pool' } as const;
   const binding = Math.min(...usage.map((u) => u.remaining));
   return (
