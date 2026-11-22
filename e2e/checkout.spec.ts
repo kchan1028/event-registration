@@ -702,14 +702,17 @@ test('a new reservation omits consent for a removed race addendum', async ({ pag
 });
 
 const consentRecoveryCases = [
-  { committed: true, legacy: false },
-  { committed: false, legacy: false },
-  { committed: true, legacy: true },
-  { committed: false, legacy: true },
+  { committed: true, legacy: false, waiverChanges: true },
+  { committed: false, legacy: false, waiverChanges: true },
+  { committed: true, legacy: true, waiverChanges: true },
+  { committed: false, legacy: true, waiverChanges: true },
+  { committed: true, legacy: false, waiverChanges: false },
+  { committed: false, legacy: false, waiverChanges: false },
+  { committed: false, legacy: true, waiverChanges: false },
 ];
 
-for (const { committed, legacy } of consentRecoveryCases) {
-  const scenario = [committed ? 'committed' : 'not committed', legacy ? 'older draft' : null].filter(Boolean).join(', ');
+for (const { committed, legacy, waiverChanges } of consentRecoveryCases) {
+  const scenario = [committed ? 'committed' : 'not committed', legacy ? 'older draft' : null, waiverChanges ? null : 'addendum only'].filter(Boolean).join(', ');
   test(`publication changes do not alter uncertain consent (${scenario})`, async ({ page }, testInfo) => {
     if (!committed) await page.setViewportSize({ width: 390, height: 844 });
     const eventId = await openEvent(page, 'criterium');
@@ -758,12 +761,16 @@ for (const { committed, legacy } of consentRecoveryCases) {
         const key = `cyclereg.register.${id}`;
         const stored = JSON.parse(sessionStorage.getItem(key)!);
         delete stored.pendingReservation.addenda;
+        delete stored.pendingReservation.request.extras.acceptedTerms;
+        delete stored.extras.acceptedTerms;
         sessionStorage.setItem(key, JSON.stringify(stored));
       }, eventId);
     }
     const current = await (await page.request.get(`/api/events/${eventId}`)).json();
-    current.config.registration.waiverVersion = 'CRO-UPDATED-SAMPLE';
-    current.config.registration.waiverText = 'New fictional waiver text, not real event policy.';
+    if (waiverChanges) {
+      current.config.registration.waiverVersion = 'CRO-UPDATED-SAMPLE';
+      current.config.registration.waiverText = 'New fictional waiver text, not real event policy.';
+    }
     current.config.categories.find((cat: { id: string }) => cat.id === bodies[0].categoryIds[0]).addendum = { title: 'New sample condition', text: 'Fictional new condition.' };
     expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision: current.revision, config: current.config } })).ok()).toBe(true);
     expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
@@ -781,6 +788,7 @@ for (const { committed, legacy } of consentRecoveryCases) {
       await terms.screenshot({ path: testInfo.outputPath('pending-race-terms-phone.png') });
     }
     await expect(page.getByText('Fictional new condition.', { exact: true })).toHaveCount(0);
+    if (legacy) delete (bodies[0].extras as { acceptedTerms?: unknown }).acceptedTerms;
     await page.getByRole('button', { name: 'Retry reservation' }).click();
     if (committed) {
       await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
@@ -789,19 +797,34 @@ for (const { committed, legacy } of consentRecoveryCases) {
       await page.getByRole('button', { name: 'Continue to racer details' }).click();
       await page.getByRole('button', { name: 'Continue to the waiver' }).click();
       await expect(page.locator('.waiver')).toHaveText(current.config.registration.waiverText);
-      await expect(page.getByLabel('I agree to this waiver', { exact: true })).not.toBeChecked();
+      await expect(page.getByLabel('I agree to this waiver', { exact: true })).toBeChecked({ checked: !waiverChanges });
       await expect(page.getByLabel(/Type your full name to sign/)).toHaveValue('Alex Demo');
     } else {
       await expect(page.locator('.error-summary')).toBeVisible();
       await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeEnabled();
-      await expect(page.getByLabel('I have read the whole waiver')).not.toBeChecked();
-      await expect(page.getByLabel('I agree to this waiver', { exact: true })).not.toBeChecked();
+      await expect(page.getByLabel('I have read the whole waiver')).toBeChecked({ checked: !waiverChanges });
+      await expect(page.getByLabel('I agree to this waiver', { exact: true })).toBeChecked({ checked: !waiverChanges });
       expect(orderIds).toHaveLength(0);
       await expect(terms).toHaveCount(0);
       await expect(page.getByText('Fictional new condition.', { exact: true })).toBeVisible();
+      if (!waiverChanges) await expect(page.locator('.error-summary')).toContainText('Read them and accept again');
     }
     expect(bodies).toHaveLength(2);
     expect(bodies[1]).toEqual(bodies[0]);
+
+    // Every way back to the waiver asks again for changed race terms, and only for what changed.
+    const renew = page.getByLabel('I accept this', { exact: true });
+    await expect(renew).not.toBeChecked();
+    await expect(renew).toHaveAccessibleDescription(/Read them and accept again/);
+    expect((await new AxeBuilder({ page }).include('fieldset:has(.addendum-text)').analyze()).violations).toEqual([]);
+    if (!waiverChanges) {
+      await renew.check();
+      await expect(renew).not.toHaveAttribute('aria-describedby');
+      await page.getByRole('button', { name: 'Sign and review the order' }).click();
+      await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
+      expect(bodies[2].clientRequestId).not.toBe(bodies[0].clientRequestId);
+      expect((bodies[2].extras as { acceptedTerms?: unknown }).acceptedTerms).toEqual({ [category.id]: { title: 'New sample condition', text: 'Fictional new condition.' } });
+    }
   });
 }
 

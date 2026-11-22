@@ -11,11 +11,19 @@ export const orderExtrasSchema = z.object({
   answers: z.record(z.string().max(64), z.record(z.string().max(64), z.string().trim().max(500))).default({}),
   /** Category IDs whose waiver addendum the rider accepted. */
   addenda: z.array(z.string().max(64)).max(20).default([]),
+  /** categoryId -> the addendum as shown when the rider accepted it. Checked when places are held, not stored with the order. */
+  acceptedTerms: z.record(z.string().max(64), z.object({ title: z.string().max(80), text: z.string().max(4000) })).optional(),
 });
 
 export type OrderExtras = z.infer<typeof orderExtrasSchema>;
 
 export const EMPTY_EXTRAS: OrderExtras = { answers: {}, addenda: [] };
+
+/** An acceptance covers only the title and text that were shown: a changed addendum must be accepted again. */
+export function acceptedAddendum(cat: Pick<Category, 'id' | 'addendum'>, extras: OrderExtras): boolean {
+  const seen = extras.acceptedTerms?.[cat.id];
+  return !!cat.addendum && !!seen && extras.addenda.includes(cat.id) && seen.title === cat.addendum.title && seen.text === cat.addendum.text;
+}
 
 /** Problems with the answers and addenda for the chosen categories, each with the field it belongs to. */
 export function checkExtras(config: EventConfig, categoryIds: readonly string[], extras: OrderExtras): { field: string; message: string }[] {
@@ -32,7 +40,13 @@ export function checkExtras(config: EventConfig, categoryIds: readonly string[],
         problems.push({ field, message: `${cat.name}: choose one of the listed answers for "${q.label}".` });
       }
     }
-    if (cat.addendum && !extras.addenda.includes(cat.id)) problems.push({ field: `addendum-${cat.id}`, message: `${cat.name}: accept "${cat.addendum.title}".` });
+    if (cat.addendum && !acceptedAddendum(cat, extras)) {
+      const renew = extras.addenda.includes(cat.id);
+      const message = renew
+        ? `${cat.name}: the terms "${cat.addendum.title}" changed or could not be matched to what you accepted. Read them and accept again.`
+        : `${cat.name}: accept "${cat.addendum.title}".`;
+      problems.push({ field: `addendum-${cat.id}`, message });
+    }
   }
   return problems;
 }

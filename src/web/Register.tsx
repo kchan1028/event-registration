@@ -1,7 +1,7 @@
 import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/researchExamples';
 import { QrCodeImage } from './QrCodeImage';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
+import { acceptedAddendum, checkExtras, EMPTY_EXTRAS, type OrderExtras } from '../shared/categoryExtras';
 import { checkSelection, checkSignature, findConflicts, formatLocalDateTime, fullCategoryGuidance, MESSAGES, missingBundleRaces, needsGuardian as guardianNeeded, profileOf, riderDetailsSchema, windowState, type RiderDetails } from '../shared/checkout';
 import { evaluateCategory, excludedBecauseClassUnspecified, licenseLabel, summarizeEligibility, summarizePath, type EligibilityResult, type RiderProfile } from '../shared/eligibility';
 import { DEMO_RIDERS } from '../shared/fixtures';
@@ -1335,7 +1335,9 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
   const extras = draft.extras ?? EMPTY_EXTRAS;
   const currentAddenda = pending ? [] : draft.selected.flatMap((id) => {
     const category = config.categories.find((c) => c.id === id);
-    return category?.addendum ? [{ categoryId: id, categoryName: category.name, ...category.addendum }] : [];
+    return category?.addendum
+      ? [{ categoryId: id, categoryName: category.name, ...category.addendum, accepted: acceptedAddendum(category, extras) }]
+      : [];
   });
   const submittedIds = pending?.request.extras?.addenda;
   const acceptedIds = pending && Array.isArray(submittedIds)
@@ -1347,10 +1349,11 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
       && typeof terms.categoryName === 'string' && typeof terms.title === 'string' && typeof terms.text === 'string')
     : [];
   const originalTermsUnavailable = submittedAddenda.length < acceptedIds.length;
-  const toggleAddendum = (catId: string, on: boolean) =>
+  const toggleAddendum = ({ categoryId, title, text }: ReservationAddendum, on: boolean) =>
     update((x) => {
       const ex = x.extras ?? EMPTY_EXTRAS;
-      return { ...x, extras: { ...ex, addenda: on ? [...new Set([...ex.addenda, catId])] : ex.addenda.filter((a) => a !== catId) } };
+      if (!on) return { ...x, extras: { ...ex, addenda: ex.addenda.filter((a) => a !== categoryId) } };
+      return { ...x, extras: { ...ex, addenda: [...new Set([...ex.addenda, categoryId])], acceptedTerms: { ...ex.acceptedTerms, [categoryId]: { title, text } } } };
     });
 
   const hold = async () => {
@@ -1366,7 +1369,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
       setErrors(errs);
       if (errs.length) return;
     } else setErrors([]);
-    const acceptedAddenda = currentAddenda.filter((terms) => extras.addenda.includes(terms.categoryId));
+    const acceptedAddenda = currentAddenda.filter((terms) => terms.accepted).map(({ accepted: _, ...terms }) => terms);
     const submission = pending ?? {
       request: {
         clientRequestId: draft.clientRequestId,
@@ -1375,7 +1378,11 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
         rider: riderFrom(draft, needsGuardian) as RiderDetails,
         waiver: { version: config.registration.waiverVersion, read: true as const, agreed: true as const, signatureName: w.signatureName.trim(), signerRole: needsGuardian ? 'guardian' as const : 'rider' as const },
         offerToken: draft.offerToken ?? null,
-        extras: { ...extras, addenda: acceptedAddenda.map(({ categoryId }) => categoryId) },
+        extras: {
+          ...extras,
+          addenda: acceptedAddenda.map(({ categoryId }) => categoryId),
+          acceptedTerms: Object.fromEntries(acceptedAddenda.map(({ categoryId, title, text }) => [categoryId, { title, text }])),
+        },
         couponCode: draft.coupon?.code ?? null,
       },
       waiverText: config.registration.waiverText,
@@ -1447,8 +1454,18 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
             {terms.title} ({terms.categoryName})
           </legend>
           <p className="small addendum-text">{terms.text}</p>
+          {!terms.accepted && extras.addenda.includes(terms.categoryId) && (
+            <p className="note" id={`addendum-${terms.categoryId}-renew`}>These terms changed or could not be matched to what you accepted. Read them and accept again.</p>
+          )}
           <label className="check">
-            <input id={`addendum-${terms.categoryId}`} type="checkbox" disabled={busy} checked={extras.addenda.includes(terms.categoryId)} onChange={(e) => toggleAddendum(terms.categoryId, e.target.checked)} />
+            <input
+              id={`addendum-${terms.categoryId}`}
+              type="checkbox"
+              disabled={busy}
+              aria-describedby={!terms.accepted && extras.addenda.includes(terms.categoryId) ? `addendum-${terms.categoryId}-renew` : undefined}
+              checked={terms.accepted}
+              onChange={(e) => toggleAddendum(terms, e.target.checked)}
+            />
             {needsGuardian ? 'As parent or guardian, I accept this for the rider' : 'I accept this'}
           </label>
         </fieldset>

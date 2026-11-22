@@ -24,7 +24,7 @@ describe('category extras rules', () => {
     const { config, catId } = configured();
     const fields = checkExtras(config, [catId], { answers: { [catId]: { 'q-size': 'XL' } }, addenda: [] }).map((p) => p.field);
     expect(fields).toEqual([`q-${catId}-q-club`, `q-${catId}-q-size`, `addendum-${catId}`]);
-    expect(checkExtras(config, [catId], { answers: { [catId]: { 'q-club': 'Demo Wheelers', 'q-size': 'M' } }, addenda: [catId] })).toEqual([]);
+    expect(checkExtras(config, [catId], { answers: { [catId]: { 'q-club': 'Demo Wheelers', 'q-size': 'M' } }, addenda: [catId], acceptedTerms: { [catId]: config.categories.find((c) => c.id === catId)!.addendum! } })).toEqual([]);
   });
 
   it('drops answers for categories not chosen and questions that no longer exist', () => {
@@ -74,7 +74,7 @@ describe('category extras API', () => {
     expect(noAddendum.statusCode).toBe(422);
     expect((noAddendum.json() as { error: string }).error).toContain('Masters rules');
 
-    const ok = await order({ answers: { [cat.id]: { 'q-club': 'Demo Wheelers' } }, addenda: [cat.id] }, 3);
+    const ok = await order({ answers: { [cat.id]: { 'q-club': 'Demo Wheelers' } }, addenda: [cat.id], acceptedTerms: { [cat.id]: cat.addendum } }, 3);
     expect(ok.statusCode).toBe(201);
     const created = ok.json() as { id: string; answers: { label: string; answer: string }[]; addenda: { title: string }[]; entries: { id: string }[] };
     expect(created.answers).toEqual([expect.objectContaining({ label: 'Club', answer: 'Demo Wheelers' })]);
@@ -92,5 +92,39 @@ describe('category extras API', () => {
     const checked = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${created.id}`, payload: { dayId: list.dayId, bib: null } });
     expect(checked.statusCode).toBe(200);
     expect((checked.json() as { bib: number }).bib).toBe(500);
+  });
+
+  it.each(['text', 'title'] as const)('binds acceptance to the %s the rider saw, and still replays a committed order', async (part) => {
+    const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z'), holdMinutes: 10 });
+    const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
+    const publish = async (change: (cat: EventConfig['categories'][number]) => void) => {
+      const { config, revision } = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
+      const cat = config.categories.find((c) => c.timingCode === 'RR-M35-34')!;
+      change(cat);
+      expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } })).statusCode).toBe(200);
+      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+      return { config, cat };
+    };
+    const { config, cat } = await publish((c) => { c.addendum = { title: 'Masters rules', text: 'Original fictional rules.' }; });
+    const waiver = { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Demo', signerRole: 'rider' };
+    const order = (clientRequestId: string, extras: Record<string, unknown>, rider = RIDER, signature = waiver) =>
+      app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId, categoryIds: [cat.id], rider, waiver: signature, extras } });
+    const saw = { addenda: [cat.id], acceptedTerms: { [cat.id]: cat.addendum } };
+    const committed = await order('consent-committed', saw);
+    expect(committed.statusCode).toBe(201);
+
+    const { cat: changed } = await publish((c) => { c.addendum![part] += ' Changed.'; });
+    const other = { ...RIDER, firstName: 'Sam', email: 'sam.demo@example.test' };
+    const signed = { ...waiver, signatureName: 'Sam Demo' };
+    const lost = await order('consent-lost-request', saw, other, signed);
+    expect(lost.statusCode).toBe(422);
+    expect((lost.json() as { error: string }).error).toContain('Read them and accept again');
+    // An ID alone says nothing about which text was read.
+    expect((await order('consent-id-only', { addenda: [cat.id] }, other, signed)).statusCode).toBe(422);
+    expect((await app.inject({ method: 'GET', url: `/api/events/${eventId}/orders` })).body).not.toContain('sam.demo@example.test');
+
+    const replay = await order('consent-committed', saw);
+    expect((replay.json() as { id: string }).id).toBe((committed.json() as { id: string }).id);
+    expect((await order('consent-renewed', { addenda: [cat.id], acceptedTerms: { [cat.id]: changed.addendum } }, other, signed)).statusCode).toBe(201);
   });
 });

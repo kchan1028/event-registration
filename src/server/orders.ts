@@ -424,9 +424,10 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const signatureProblem = checkSignature(rider, waiver, check.needsGuardian);
         if (signatureProblem) throw new HttpError(422, signatureProblem);
         // Per-category questions and waiver addenda (product.md 1a).
-        const extras = pruneExtras(config, input.categoryIds, orderExtrasSchema.parse(input.extras ?? {}));
-        const extraProblems = checkExtras(config, input.categoryIds, extras);
+        const submitted = orderExtrasSchema.parse(input.extras ?? {});
+        const extraProblems = checkExtras(config, input.categoryIds, submitted);
         if (extraProblems.length > 0) throw new HttpError(422, extraProblems[0].message, extraProblems);
+        const extras = pruneExtras(config, input.categoryIds, submitted);
 
         // A waitlist offer lets its rider take the reserved place in that one category.
         let offer: { id: string; category_id: string } | null = null;
