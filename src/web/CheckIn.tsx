@@ -31,7 +31,11 @@ export function CheckIn({ eventId }: { eventId: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [recovery, setRecovery] = useState(() => new Map<string, CheckInRecovery>());
   const [lookupError, setLookupError] = useState<string | null>(null);
-  const lookupVersion = useRef(0);
+  /** Query that produced the rider list now on screen. */
+  const [listedQuery, setListedQuery] = useState<string | null>(null);
+  // A newer list read drops an older one. An explicit lookup also drops a list read that started before its result.
+  const listEpoch = useRef(0);
+  const lookupEpoch = useRef(0);
   const [batchMode, setBatchMode] = useState<BibBatchMode | null>(null);
   const [showBibs, setShowBibs] = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
@@ -48,16 +52,18 @@ export function CheckIn({ eventId }: { eventId: string }) {
 
   const load = useCallback(
     (query: string, day: string | null) => {
-      const version = lookupVersion.current;
+      const epoch = ++listEpoch.current;
+      const lookupSeen = lookupEpoch.current;
       return api
         .checkInList(eventId, day, query)
         .then((d) => {
-          if (version !== lookupVersion.current) return;
+          if (epoch !== listEpoch.current || lookupSeen !== lookupEpoch.current) return;
           setData(d);
+          setListedQuery(query);
           setError(null);
         })
         .catch((e: ApiError) => {
-          if (version === lookupVersion.current) setError(e.message);
+          if (epoch === listEpoch.current && lookupSeen === lookupEpoch.current) setError(e.message);
         });
     },
     [eventId],
@@ -115,14 +121,16 @@ export function CheckIn({ eventId }: { eventId: string }) {
   async function lookup(text: string) {
     const query = text.trim();
     if (!query) return;
-    const version = ++lookupVersion.current;
+    const epoch = ++lookupEpoch.current;
+    listEpoch.current++;
     setLookupError(null);
     try {
       const fresh = await api.checkInList(eventId, dayId, query);
-      if (version !== lookupVersion.current) return;
-      // Discard background reads that started before this explicit result arrived.
-      lookupVersion.current++;
+      if (epoch !== lookupEpoch.current) return;
+      // Discard a list read that started before this explicit result arrived.
+      listEpoch.current++;
       setData(fresh);
+      setListedQuery(query);
       setError(null);
       if (fresh.riders.length === 1) {
         const rider = fresh.riders[0];
@@ -133,7 +141,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
         select(rider);
       }
     } catch (err) {
-      if (version === lookupVersion.current) setLookupError((err as ApiError).message);
+      if (epoch === lookupEpoch.current) setLookupError((err as ApiError).message);
     }
   }
 
@@ -148,7 +156,8 @@ export function CheckIn({ eventId }: { eventId: string }) {
 
   function nextRider() {
     clearVerification();
-    lookupVersion.current++;
+    lookupEpoch.current++;
+    listEpoch.current++;
     setLookupError(null);
     setSelectedId(null);
     startedAt.current = null;
@@ -179,7 +188,8 @@ export function CheckIn({ eventId }: { eventId: string }) {
                   name="ci-day"
                   checked={d.id === data.dayId}
                   onChange={() => {
-                    lookupVersion.current++;
+                    lookupEpoch.current++;
+                    listEpoch.current++;
                     setLookupError(null);
                     clearVerification();
                     setDayId(d.id);
@@ -213,7 +223,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
       {data && batchMode && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId + batchMode} eventId={eventId} dayId={data.dayId} mode={batchMode} onChanged={() => refreshCurrentList.current()} onClose={() => setBatchMode(null)} />}
 
       {data && showBibs && can(data.roles, 'checkin.settings') && <>
-        <BibSettingsPanel data={data} onSaved={() => void load(q, dayId)} onClose={() => setShowBibs(false)} />
+        <BibSettingsPanel data={data} onSaved={() => refreshCurrentList.current()} onClose={() => setShowBibs(false)} />
         <AutomaticBibs key={eventId} eventId={eventId} />
       </>}
 
@@ -271,13 +281,15 @@ export function CheckIn({ eventId }: { eventId: string }) {
                   onChange={(e) => {
                     if (!q && e.target.value && startedAt.current === null) startedAt.current = performance.now();
                     if (!e.target.value) startedAt.current = null;
-                    lookupVersion.current++;
+                    lookupEpoch.current++;
+                    listEpoch.current++;
                     setLookupError(null);
                     setQ(e.target.value);
                   }}
                 />
               </form>
               {lookupError && <p className="text-error small" role="alert">{lookupError}</p>}
+              {error && <p className="text-error small" role="alert">{error}</p>}
               <button
                 type="button"
                 className="btn btn--secondary btn--small ci__scan-btn"
@@ -300,7 +312,11 @@ export function CheckIn({ eventId }: { eventId: string }) {
                 />
               )}
               <p className="ci__count" aria-live="polite">
-                {q ? `${riders.length} ${riders.length === 1 ? 'match' : 'matches'}` : `${riders.length} riders on ${day?.label ?? 'this day'}`}
+                {error && listedQuery !== q
+                  ? 'The list could not be updated.'
+                  : q
+                    ? `${riders.length} ${riders.length === 1 ? 'match' : 'matches'}`
+                    : `${riders.length} riders on ${day?.label ?? 'this day'}`}
               </p>
               {riders.length === 0 ? (
                 <EmptyList data={data} searching={!!q} onAdded={() => void load(q, dayId)} />

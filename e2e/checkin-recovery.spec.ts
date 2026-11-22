@@ -213,3 +213,121 @@ for (const mobile of [false, true]) {
     });
   }
 }
+
+test('a list read started before check-in does not restore the ready card', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
+  expect((await page.request.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } })).ok()).toBe(true);
+  const list: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
+  const rider = list.riders.find((candidate) => candidate.result.ready && candidate.bib === null && candidate.checkInCode);
+  if (!rider?.checkInCode) throw new Error('The fictional fixture needs a ready, unassigned rider with a check-in code');
+
+  await page.clock.install();
+  await page.goto(`/#/events/${eventId}/check-in`);
+  await page.clock.runFor(1);
+  const search = page.getByRole('searchbox', { name: 'Find a rider' });
+  const detail = page.getByRole('region', { name: 'Rider check-in' });
+  const held: { route: Route; response: Awaited<ReturnType<Route['fetch']>> }[] = [];
+  let codeGets = 0;
+  await page.route(`**/api/events/${eventId}/check-in?*`, async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== 'GET' || url.searchParams.get('q') !== rider.checkInCode) {
+      await route.continue();
+      return;
+    }
+    codeGets += 1;
+    if (codeGets === 1) {
+      await route.continue();
+      return;
+    }
+    held.push({ route, response: await route.fetch() });
+  });
+
+  await search.fill(rider.checkInCode);
+  await search.press('Enter');
+  await expect(detail.getByRole('status')).toContainText('Ready to race');
+  await page.clock.runFor(150);
+  await expect.poll(() => held.length).toBe(1);
+
+  await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
+  await expect.poll(() => held.length).toBe(2);
+  await held[1].route.fulfill({ response: held[1].response });
+  await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
+  await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+
+  await held[0].route.fulfill({ response: held[0].response });
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
+  await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
+  await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+  await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
+});
+
+test('saving bib ranges refreshes the search on screen', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
+  const list: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
+  const rider = list.riders.find((candidate) => candidate.checkInCode);
+  if (!rider?.checkInCode) throw new Error('The fictional fixture needs a rider with a check-in code');
+
+  await page.goto(`/#/events/${eventId}/check-in`);
+  await page.getByRole('button', { name: 'Bib ranges', exact: true }).click();
+  const ranges = page.getByRole('form', { name: 'Bib ranges', exact: true });
+  await ranges.getByRole('textbox', { name: 'First', exact: true }).fill('100');
+  await ranges.getByRole('textbox', { name: 'Last', exact: true }).fill('199');
+
+  let releaseSave: (() => void) | undefined;
+  const gate = new Promise<void>((resolve) => { releaseSave = resolve; });
+  let saveStarted = false;
+  await page.route(`**/api/events/${eventId}/bib-settings`, async (route) => {
+    if (route.request().method() !== 'PUT') {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    saveStarted = true;
+    await gate;
+    await route.fulfill({ response });
+  });
+  await ranges.getByRole('button', { name: 'Save bib ranges', exact: true }).click();
+  await expect.poll(() => saveStarted).toBe(true);
+
+  let codeReplies = 0;
+  page.on('response', (response) => {
+    const url = new URL(response.url());
+    if (response.request().method() === 'GET' && url.pathname === `/api/events/${eventId}/check-in` && url.searchParams.get('q') === rider.checkInCode) {
+      codeReplies += 1;
+    }
+  });
+  const search = page.getByRole('searchbox', { name: 'Find a rider' });
+  const detail = page.getByRole('region', { name: 'Rider check-in' });
+  await search.fill(rider.checkInCode);
+  await search.press('Enter');
+  await expect(detail.getByRole('heading', { name: rider.name, exact: true })).toBeVisible();
+  await expect.poll(() => codeReplies).toBeGreaterThanOrEqual(2);
+
+  const refresh = page.waitForResponse((response) => (
+    response.request().method() === 'GET' && new URL(response.url()).pathname === `/api/events/${eventId}/check-in`
+  ));
+  releaseSave?.();
+  expect(new URL((await refresh).url()).searchParams.get('q')).toBe(rider.checkInCode);
+  await expect(detail.getByRole('heading', { name: rider.name, exact: true })).toBeVisible();
+});
+
+test('a failed search does not count the previous riders as matches', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
+  await page.goto(`/#/events/${eventId}/check-in`);
+  const search = page.getByRole('searchbox', { name: 'Find a rider' });
+  await expect(search).toBeVisible();
+  const count = page.locator('.ci__count');
+  await expect(count).toContainText('riders on');
+  await page.route(`**/api/events/${eventId}/check-in?*`, (route) => route.abort());
+  await search.fill('x'.repeat(81));
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(count).not.toContainText('matches');
+});
