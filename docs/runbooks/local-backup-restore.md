@@ -149,7 +149,8 @@ try {
     await request('GET', `${organization}/members`, 403);
     actor = successor;
     const team = await request('GET', `${organization}/members`, 200);
-    assert.deepEqual(team.members, [
+    // Each grant's revision is random (migration 42), so compare everything else.
+    assert.deepEqual(team.members.map(({ revision, ...member }: { revision: string }) => member), [
       { accountId: account.id, email: formerOwner, role: 'finance' },
       { accountId: incoming.id, email: successor, role: 'check_in_volunteer' },
       { accountId: incoming.id, email: successor, role: 'owner' },
