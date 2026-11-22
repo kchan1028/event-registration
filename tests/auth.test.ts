@@ -4,8 +4,8 @@ import pg from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthProvider } from '../src/server/auth';
 import { authProviderFromEnv } from '../src/server/auth';
-import { openDb } from '../src/server/db';
-import { EmailNotSent, EmailRefusal, EmailUncertain, RESEND_IDEMPOTENCY_WINDOW_MS, createMailer, emailFromEnv, type EmailSender } from '../src/server/email';
+import { openDb, type Db } from '../src/server/db';
+import { EmailNotSent, EmailRefusal, EmailUncertain, RESEND_IDEMPOTENCY_WINDOW_MS, createMailer, emailFromEnv, type EmailSender, type Mailer } from '../src/server/email';
 import type { EventConfig } from '../src/shared/schema';
 import { INVITATION_DAYS } from '../src/shared/roles';
 import { as, fakeAuth } from './support/auth';
@@ -20,6 +20,21 @@ const RIDER_EMAIL = 'rider@example.test';
 const RIDER = { firstName: 'Test', lastName: 'Rider', email: RIDER_EMAIL, team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Test Contact', phone: '555-555-0199' } };
 
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
+
+async function inviteWith(db: Db, organizationId: string, email: string, attemptId: string, at: Date) {
+  await db.run(
+    `INSERT INTO organization_invitations (organization_id, email, role, created_at, expires_at, email_attempt_id) VALUES ($1, $2, 'finance', $3, $4, $5)`,
+    [organizationId, email, at.toISOString(), new Date(at.getTime() + INVITATION_DAYS * 86_400_000).toISOString(), attemptId],
+  );
+}
+
+/** An invitation with a reserved, undispatched email. */
+async function reservedAttempt(db: Db, mailer: Mailer, email: string, at: Date) {
+  await db.run(`INSERT INTO organizations (id, name, created_at) VALUES ('org_send', 'Valley Velo', $1) ON CONFLICT DO NOTHING`, [at.toISOString()]);
+  const id = await mailer.reserve('organizer_invitation', `org_send:${email}:finance`, 'org_send', { to: email, subject: 'Invitation', text: 'Sign in to CycleReg.' });
+  await inviteWith(db, 'org_send', email, id, at);
+  return id;
+}
 
 /** Two clubs: Valley (with a published demo event and one rider order) and Hills (empty). */
 async function twoClubs(databaseUrl?: string) {
@@ -209,7 +224,7 @@ describe('organizer roles', () => {
     const invited = (await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: newcomer, role: 'check_in_volunteer' })).json() as {
       invitations: { email: string; role: string; expiresAt: string }[];
     };
-    expect(invited.invitations).toEqual([{ email: newcomer, role: 'check_in_volunteer', expiresAt: expect.any(String), lastEmail: { status: 'recorded', at: expect.any(String) } }]);
+    expect(invited.invitations).toEqual([{ email: newcomer, role: 'check_in_volunteer', expiresAt: expect.any(String), lastEmail: { attemptId: expect.any(String), status: 'recorded', at: expect.any(String) } }]);
     expect((await call(newcomer, 'GET', `/api/events/${eventId}/check-in`)).statusCode).toBe(200);
     const members = (await call(OWNER, 'GET', `/api/organizations/${valley}/members`)).json() as { members: { email: string }[]; invitations: unknown[] };
     expect(members.members.map((m) => m.email)).toContain(newcomer);
@@ -232,8 +247,8 @@ describe('organizer roles', () => {
     now = new Date(now.getTime() + 13 * DAY);
     const list = (await invite(renewed)).json() as { invitations: unknown[] };
     expect(list.invitations).toEqual([
-      { email: late, role: 'finance', expiresAt: new Date(Date.parse('2027-03-01T18:00:00Z') + INVITATION_DAYS * DAY).toISOString(), lastEmail: { status: 'recorded', at: '2027-03-01T18:00:00.000Z' } },
-      { email: renewed, role: 'finance', expiresAt: new Date(now.getTime() + INVITATION_DAYS * DAY).toISOString(), lastEmail: { status: 'recorded', at: now.toISOString() } },
+      { email: late, role: 'finance', expiresAt: new Date(Date.parse('2027-03-01T18:00:00Z') + INVITATION_DAYS * DAY).toISOString(), lastEmail: { attemptId: expect.any(String), status: 'recorded', at: '2027-03-01T18:00:00.000Z' } },
+      { email: renewed, role: 'finance', expiresAt: new Date(now.getTime() + INVITATION_DAYS * DAY).toISOString(), lastEmail: { attemptId: expect.any(String), status: 'recorded', at: now.toISOString() } },
     ]);
     now = new Date(now.getTime() + 2 * DAY);
     // Signing in after the invitation expired gives no role; the renewed one still works.
@@ -337,7 +352,7 @@ describe('organizer roles', () => {
       expect(first.statusCode).toBe(200);
       const opened = await listed();
       const expiresAt = opened.invitations[0].expiresAt;
-      expect(opened.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, lastEmail: { status: 'uncertain', at: now.toISOString() } }]);
+      expect(opened.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, lastEmail: { attemptId: expect.any(String), status: 'uncertain', at: now.toISOString() } }]);
       expect(opened.history.filter((row) => row.email === 'treasurer@valley.test').map((row) => row.action)).toEqual(['invited']);
       let stored = await client.query<{ status: string; provider_message_id: string | null; error: string | null }>(`SELECT status, provider_message_id, error FROM email_messages ORDER BY created_at, seq`);
       expect(stored.rows).toEqual([{ status: 'uncertain', provider_message_id: null, error: 'Send outcome unknown after a timeout.' }]);
@@ -347,7 +362,7 @@ describe('organizer roles', () => {
       const recovered = await invite('treasurer@valley.test');
       expect(recovered.statusCode).toBe(200);
       const retried = await listed();
-      expect(retried.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, lastEmail: { status: 'sent', at: now.toISOString() } }]);
+      expect(retried.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, lastEmail: { attemptId: expect.any(String), status: 'sent', at: now.toISOString() } }]);
       expect(retried.history.filter((row) => row.email === 'treasurer@valley.test').map((row) => row.action)).toEqual(['invited']);
       expect(calls.map((item) => item.key)).toEqual([calls[0].key, calls[0].key]);
       expect(calls[1].body).toBe(calls[0].body);
@@ -432,16 +447,9 @@ describe('organizer roles', () => {
       requests.push(invite());
       await waiting(2);
       await blocker.query('ROLLBACK');
-      const waitingOnAttempt = async (count: number) => {
-        await expect.poll(async () => {
-          const { rows } = await blocker.query<{ count: number }>(`SELECT count(*)::int AS count FROM pg_locks WHERE locktype = 'advisory' AND NOT granted`);
-          return rows[0].count;
-        }, { timeout: 5000 }).toBe(count);
-      };
       await expect.poll(() => calls.length, { timeout: 5000 }).toBe(1);
-      await waitingOnAttempt(1);
       requests.push(invite());
-      await waitingOnAttempt(2);
+      await new Promise((resolve) => setTimeout(resolve, 300));
       expect(calls).toHaveLength(1);
       expect((await blocker.query(`SELECT status FROM email_messages`)).rows).toEqual([{ status: 'uncertain' }]);
       holdSend = false;
@@ -505,13 +513,10 @@ describe('organizer roles', () => {
       requests.push(invite());
       await orgWaiters(2);
       await blocker.query('ROLLBACK');
-      const attemptWaiters = async (count: number) => {
-        await expect.poll(async () => (await blocker.query<{ count: number }>(`SELECT count(*)::int AS count FROM pg_locks WHERE locktype = 'advisory' AND NOT granted`)).rows[0].count, { timeout: 5000 }).toBe(count);
-      };
       await expect.poll(() => calls.length, { timeout: 5000 }).toBe(1);
-      await attemptWaiters(1);
       requests.push(invite());
-      await attemptWaiters(2);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(calls).toHaveLength(1);
       expect((await blocker.query(`SELECT count(*)::int AS n FROM email_messages`)).rows).toEqual([{ n: 1 }]);
       holdSend = false;
       releaseSend();
@@ -563,9 +568,10 @@ describe('organizer roles', () => {
         subject: 'Invitation',
         text: 'Sign in to CycleReg.',
       });
-      expect(await mailer.dispatch(retryFirst, false)).toBe('uncertain');
+      await inviteWith(db, 'org_attempt_order', 'treasurer@valley.test', retryFirst, now);
+      expect(await mailer.dispatch(retryFirst)).toBe('uncertain');
       refuse = true;
-      expect(await mailer.dispatch(retryFirst, true)).toBe('uncertain');
+      expect(await mailer.dispatch(retryFirst)).toBe('uncertain');
       expect(seenDuringSend).toEqual([
         { status: 'uncertain', started: true },
         { status: 'uncertain', started: true },
@@ -582,7 +588,8 @@ describe('organizer roles', () => {
         subject: 'Invitation',
         text: 'Sign in to CycleReg.',
       });
-      expect(await mailer.dispatch(firstOnly, true)).toBe('failed');
+      await inviteWith(db, 'org_attempt_order', 'timer@valley.test', firstOnly, now);
+      expect(await mailer.dispatch(firstOnly)).toBe('failed');
       expect(await db.get(`SELECT status, provider_message_id, started_at IS NOT NULL AS started FROM email_messages WHERE id = $1`, [firstOnly])).toEqual({
         status: 'failed',
         provider_message_id: null,
@@ -610,15 +617,12 @@ describe('organizer roles', () => {
     const mailer = createMailer(db, email, () => now);
     let sends: Promise<unknown>[] = [];
     try {
-      await db.run(`INSERT INTO organizations (id, name, created_at) VALUES ('org_pool', 'Valley Velo', $1)`, [now.toISOString()]);
       const ids: string[] = [];
-      for (let i = 0; i < 12; i++) {
-        ids.push(await mailer.reserve('organizer_invitation', `org_pool:${i}`, 'org_pool', { to: `member${i}@valley.test`, subject: 'Invitation', text: 'Sign in to CycleReg.' }));
-      }
+      for (let i = 0; i < 12; i++) ids.push(await reservedAttempt(db, mailer, `member${i}@valley.test`, now));
       // More callers than the pool has connections, both across attempts and on one attempt.
-      sends = [...ids, ...Array<string>(12).fill(ids[0])].map((id) => mailer.dispatch(id, true));
+      sends = [...ids, ...Array<string>(12).fill(ids[0])].map((id) => mailer.dispatch(id));
       const settled = Promise.allSettled(sends);
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await expect.poll(() => calls.length, { timeout: 5000 }).toBe(12);
       const unrelated = await Promise.race([db.get('SELECT 1 AS ok'), new Promise((resolve) => setTimeout(() => resolve('no connection free'), 2_000))]);
       expect(unrelated).toEqual({ ok: 1 });
       releaseSend();
@@ -631,36 +635,148 @@ describe('organizer roles', () => {
     }
   }, 30_000);
 
-  it('survives losing the locked connection during a send and retries the same attempt', async () => {
+  it('keeps one send in flight when every database connection drops during it', async () => {
     const databaseUrl = await testDatabaseUrl();
     const db = openDb(databaseUrl);
     const other = new pg.Client({ connectionString: databaseUrl });
     const now = new Date('2027-04-04T12:00:00.000Z');
+    let releaseSend = () => {};
+    const slow = new Promise<void>((resolve) => (releaseSend = resolve));
     const calls: string[] = [];
     const email: EmailSender = {
       mode: 'resend',
       async send(_message, idempotencyKey) {
         calls.push(idempotencyKey);
-        if (calls.length === 1) {
-          await other.query(`SELECT pg_terminate_backend(pid) FROM pg_locks WHERE locktype = 'advisory' AND granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`);
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
+        await slow;
         return 'msg-accepted';
       },
     };
     const mailer = createMailer(db, email, () => now);
+    let sends: Promise<unknown>[] = [];
     try {
       await other.connect();
-      await db.run(`INSERT INTO organizations (id, name, created_at) VALUES ('org_drop', 'Valley Velo', $1)`, [now.toISOString()]);
-      const id = await mailer.reserve('organizer_invitation', 'org_drop:timer', 'org_drop', { to: 'timer@valley.test', subject: 'Invitation', text: 'Sign in to CycleReg.' });
-      await expect(mailer.dispatch(id, true)).rejects.toThrow();
-      expect(await db.get(`SELECT status, started_at IS NOT NULL AS started FROM email_messages WHERE id = $1`, [id])).toEqual({ status: 'uncertain', started: true });
-      expect(await mailer.dispatch(id, false)).toBe('sent');
-      expect(calls).toEqual([id, id]);
+      const id = await reservedAttempt(db, mailer, 'timer@valley.test', now);
+      sends = [mailer.dispatch(id)];
+      await expect.poll(() => calls.length, { timeout: 5000 }).toBe(1);
+      await other.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()`);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      sends.push(mailer.dispatch(id));
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(calls).toEqual([id]);
+      releaseSend();
+      expect(await Promise.all(sends)).toEqual(['sent', 'sent']);
+      expect(calls).toEqual([id]);
     } finally {
+      releaseSend();
+      await Promise.allSettled(sends);
       await other.end();
       await db.close();
     }
+  });
+
+  it('lets a send left open by a stopped process be retried once its lease runs out', async () => {
+    const db = openDb(await testDatabaseUrl());
+    const now = new Date('2027-04-04T12:00:00.000Z');
+    const calls: string[] = [];
+    const mailer = createMailer(db, { mode: 'resend', send: async (_message, key) => (calls.push(key), 'msg-accepted') }, () => now);
+    try {
+      const id = await reservedAttempt(db, mailer, 'timer@valley.test', now);
+      await db.run(`UPDATE email_messages SET started_at = $2, sending_until = now() + interval '1 second' WHERE id = $1`, [id, now.toISOString()]);
+      const retry = mailer.dispatch(id);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(calls).toEqual([]);
+      expect(await retry).toBe('sent');
+      expect(calls).toEqual([id]);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('withholds every caller after 24 hours, including the original request', async () => {
+    const db = openDb(await testDatabaseUrl());
+    let now = new Date('2027-04-04T12:00:00.000Z');
+    const calls: string[] = [];
+    const mailer = createMailer(db, { mode: 'resend', send: async (_message, key) => { calls.push(key); throw new EmailUncertain('Send outcome unknown after a timeout.'); } }, () => now);
+    try {
+      const id = await reservedAttempt(db, mailer, 'timer@valley.test', now);
+      expect(await mailer.dispatch(id)).toBe('uncertain');
+      now = new Date(now.getTime() + RESEND_IDEMPOTENCY_WINDOW_MS);
+      expect(await mailer.dispatch(id)).toBe('withheld');
+      expect(calls).toEqual([id]);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('does not send a queued retry after the invitation is canceled', async () => {
+    const db = openDb(await testDatabaseUrl());
+    const now = new Date('2027-04-04T12:00:00.000Z');
+    let releaseSend = () => {};
+    const slow = new Promise<void>((resolve) => (releaseSend = resolve));
+    const calls: string[] = [];
+    const mailer = createMailer(db, { mode: 'resend', send: async (_message, key) => { calls.push(key); await slow; throw new EmailUncertain('Send outcome unknown after a timeout.'); } }, () => now);
+    let sends: Promise<unknown>[] = [];
+    try {
+      const id = await reservedAttempt(db, mailer, 'timer@valley.test', now);
+      sends = [mailer.dispatch(id)];
+      await expect.poll(() => calls.length, { timeout: 5000 }).toBe(1);
+      sends.push(mailer.dispatch(id));
+      await db.run('DELETE FROM organization_invitations WHERE email_attempt_id = $1', [id]);
+      releaseSend();
+      expect(await Promise.all(sends)).toEqual(['uncertain', 'changed']);
+      expect(calls).toEqual([id]);
+    } finally {
+      releaseSend();
+      await Promise.allSettled(sends);
+      await db.close();
+    }
+  });
+
+  it('retries with the saved sender, and local mode does not count as a send', async () => {
+    const db = openDb(await testDatabaseUrl());
+    const now = new Date('2027-04-04T12:00:00.000Z');
+    const senders: (string | undefined)[] = [];
+    const resend = (from: string): EmailSender => ({ mode: 'resend', from, send: async (message) => { senders.push(message.from); throw new EmailRefusal('Resend returned HTTP 403.'); } });
+    const original = createMailer(db, resend('First <first@example.test>'), () => now);
+    try {
+      const id = await reservedAttempt(db, original, 'timer@valley.test', now);
+      expect(await createMailer(db, emailFromEnv({}), () => now).dispatch(id)).toBe('withheld');
+      expect(await db.get('SELECT started_at FROM email_messages WHERE id = $1', [id])).toEqual({ started_at: null });
+      expect(await createMailer(db, resend('Second <second@example.test>'), () => now).dispatch(id)).toBe('failed');
+      expect(senders).toEqual(['First <first@example.test>']);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it.each(['recovered', 'canceled', 'signed in after cancellation'])('a stale Retry send changes nothing once the invitation is %s', async (change) => {
+    const invited = 'treasurer@valley.test';
+    const calls: string[] = [];
+    let lose = true;
+    const email: EmailSender = {
+      mode: 'resend',
+      async send(_message, key) {
+        calls.push(key);
+        if (lose) throw new EmailUncertain('Send outcome unknown after a timeout.');
+        return 'msg-accepted';
+      },
+    };
+    const { app } = await testApp({ auth: fakeAuth(), email });
+    const call = (method: Method, url: string, payload?: object, who = OWNER) => app.inject({ method, url, headers: as(who), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const url = `/api/organizations/${org.id}/members`;
+    const body = { email: invited, role: 'finance' };
+    const stale = { ...body, retryAttempt: (await call('POST', url, body)).json().invitations[0].lastEmail.attemptId as string };
+    lose = false;
+    if (change === 'recovered') await call('POST', url, stale);
+    else await call('POST', `${url}/remove`, body);
+    if (change === 'signed in after cancellation') await call('GET', '/api/me', undefined, invited);
+    const before = (await call('GET', url)).json();
+    const sent = calls.length;
+
+    expect((await call('POST', url, stale)).statusCode).toBe(change === 'recovered' ? 200 : 409);
+    expect(calls).toHaveLength(sent);
+    expect((await call('GET', url)).json()).toEqual(before);
   });
 
   it('does not reuse a canceled attempt when a seed re-adds it at the same timestamp', async () => {

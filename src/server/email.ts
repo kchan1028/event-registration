@@ -1,9 +1,12 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import { newId } from '../shared/factory';
 import type { Db } from './db';
 
 /** Outgoing email is recorded before sending. Send failures leave the underlying action intact. */
 export interface OutgoingEmail {
   to: string;
+  /** The sender saved with the attempt. A retry must repeat it under the same idempotency key. */
+  from?: string;
   subject: string;
   text: string;
 }
@@ -11,6 +14,8 @@ export interface OutgoingEmail {
 export interface EmailSender {
   /** `local`: recorded only, never sent. `resend`: sent through Resend. */
   mode: 'local' | 'resend';
+  /** The configured sender address, saved with each attempt. */
+  from?: string;
   /**
    * Sends one message and returns the provider's message ID.
    * Throws `EmailRefusal` when the provider confirms it did not accept the message,
@@ -51,6 +56,11 @@ export class EmailUncertain extends Error {
  */
 export const RESEND_IDEMPOTENCY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+const SEND_TIMEOUT_MS = 10_000;
+/** Longer than the provider timeout, so a lease only runs out when the process that took it is gone. */
+const SEND_LEASE_SECONDS = SEND_TIMEOUT_MS / 1000 + 5;
+const LEASE_POLL_MS = 200;
+
 export type EmailStatus = 'recorded' | 'sent' | 'failed' | 'uncertain';
 
 /** Records every message and sends nothing. */
@@ -66,6 +76,7 @@ export function localEmail(): EmailSender {
 function resendEmail(from: string, apiKey: string, testRecipients: Set<string>): EmailSender {
   return {
     mode: 'resend',
+    from,
     async send(message, idempotencyKey) {
       if (!testRecipients.has(message.to.trim().toLowerCase())) {
         throw new EmailNotSent('Recipient is outside the configured email test list.');
@@ -79,8 +90,8 @@ function resendEmail(from: string, apiKey: string, testRecipients: Set<string>):
           method: 'POST',
           redirect: 'error',
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
-          body: JSON.stringify({ from, to: [message.to], subject: message.subject, text: message.text }),
-          signal: AbortSignal.timeout(10_000),
+          body: JSON.stringify({ from: message.from ?? from, to: [message.to], subject: message.subject, text: message.text }),
+          signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
         });
       } catch (err) {
         const name = err instanceof Error ? err.name : '';
@@ -132,7 +143,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
     try {
       const providerId = await sender.send(message, id);
       const saved = await db.run(
-        `UPDATE email_messages SET status = 'sent', provider_message_id = $1, sent_at = $2, error = NULL WHERE id = $3 AND status = 'uncertain'`,
+        `UPDATE email_messages SET status = 'sent', provider_message_id = $1, sent_at = $2, error = NULL, sending_until = NULL WHERE id = $3 AND status = 'uncertain'`,
         [providerId, clock().toISOString(), id],
       );
       return saved ? 'sent' : 'uncertain';
@@ -140,10 +151,10 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       const safe = storedError(err);
       // Only the call that first committed started_at may record a definite refusal.
       if (mayRecordRefusal && (err instanceof EmailRefusal || err instanceof EmailNotSent)) {
-        await db.run(`UPDATE email_messages SET status = 'failed', error = $1 WHERE id = $2 AND status = 'uncertain'`, [safe, id]);
+        await db.run(`UPDATE email_messages SET status = 'failed', error = $1, sending_until = NULL WHERE id = $2 AND status = 'uncertain'`, [safe, id]);
         return 'failed';
       }
-      await db.run(`UPDATE email_messages SET error = $1 WHERE id = $2 AND status = 'uncertain'`, [safe, id]);
+      await db.run(`UPDATE email_messages SET error = $1, sending_until = NULL WHERE id = $2 AND status = 'uncertain'`, [safe, id]);
       return 'uncertain';
     }
   }
@@ -154,33 +165,49 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       const id = newId('eml');
       const status = sender.mode === 'local' ? 'recorded' : 'uncertain';
       await db.run(
-        `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [id, organizationId, kind, ref, message.to, message.subject, message.text, status, clock().toISOString()],
+        `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at, from_email) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [id, organizationId, kind, ref, message.to, message.subject, message.text, status, clock().toISOString(), sender.from ?? null],
       );
       return id;
     },
 
     /**
      * Sends one reserved attempt after its row has committed.
-     * The attempt lock is held for the provider call. `started_at` is committed before that call,
-     * so a lost response cannot make a later refusal look like the first send.
-     * `withheld` means a retry can no longer prove the 24-hour provider window, so nothing is sent.
+     * The caller leases the row and commits `started_at` before the provider call, and holds no connection
+     * during it. Other callers wait for the lease, then read the committed status.
+     * `withheld` means the send cannot be repeated safely (local mode, or past the 24-hour provider window).
+     * `changed` means no invitation points at the attempt any more, so nothing is sent.
      */
-    async dispatch(id: string, firstAttempt: boolean): Promise<EmailStatus | 'withheld'> {
-      return db.hold(`email-attempt:${id}`, async () => {
-        const row = await db.get<{ created_at: string; to_email: string; subject: string; body_text: string; status: EmailStatus }>(
-          `SELECT created_at, to_email, subject, body_text, status FROM email_messages WHERE id = $1`,
+    async dispatch(id: string): Promise<EmailStatus | 'withheld' | 'changed'> {
+      for (;;) {
+        const row = await db.get<{ created_at: string; to_email: string; from_email: string | null; subject: string; body_text: string; status: EmailStatus; current: boolean; sending: boolean }>(
+          `SELECT created_at, to_email, from_email, subject, body_text, status,
+             EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = email_messages.id) AS current,
+             COALESCE(sending_until > now(), false) AS sending
+           FROM email_messages WHERE id = $1`,
           [id],
         );
-        if (!row || row.status === 'recorded') return row?.status ?? 'uncertain';
+        if (!row) return 'changed';
         if (row.status !== 'uncertain') return row.status;
-        if (!firstAttempt) {
-          const created = Date.parse(row.created_at);
-          if (!Number.isFinite(created) || clock().getTime() - created >= RESEND_IDEMPOTENCY_WINDOW_MS) return 'withheld';
+        if (row.sending) {
+          await sleep(LEASE_POLL_MS);
+          continue;
         }
-        const claimed = await db.run(`UPDATE email_messages SET started_at = $2 WHERE id = $1 AND started_at IS NULL`, [id, clock().toISOString()]);
-        return finish(id, { to: row.to_email, subject: row.subject, text: row.body_text }, claimed === 1);
-      });
+        if (!row.current) return 'changed';
+        const created = Date.parse(row.created_at);
+        if (sender.mode === 'local' || !Number.isFinite(created) || clock().getTime() - created >= RESEND_IDEMPOTENCY_WINDOW_MS) return 'withheld';
+        // Checked again in the claim: another caller or a cancellation may have committed since the read.
+        const claim = await db.get<{ first: boolean }>(
+          `UPDATE email_messages m
+           SET started_at = COALESCE(m.started_at, $2), sending_until = now() + make_interval(secs => $3)
+           FROM (SELECT id, started_at FROM email_messages WHERE id = $1 FOR UPDATE) was
+           WHERE m.id = was.id AND m.status = 'uncertain' AND (m.sending_until IS NULL OR m.sending_until <= now())
+             AND EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id)
+           RETURNING was.started_at IS NULL AS first`,
+          [id, clock().toISOString(), SEND_LEASE_SECONDS],
+        );
+        if (claim) return finish(id, { to: row.to_email, from: row.from_email ?? undefined, subject: row.subject, text: row.body_text }, claim.first);
+      }
     },
   };
 }

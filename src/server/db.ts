@@ -29,11 +29,6 @@ export interface Db {
   lock(key: string): Promise<void>;
   /** Applies pending migrations once per process; safe when several instances start together. */
   migrate(): Promise<void>;
-  /**
-   * Holds a session advisory lock for the whole call. Queries inside `fn` run on that connection and commit
-   * one by one, so a holder never waits for a second connection. Not for use inside a transaction, and no transaction inside it.
-   */
-  hold<T>(key: string, fn: () => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
 
@@ -751,6 +746,10 @@ export const MIGRATIONS: string[] = [
   WHERE status IN ('sent', 'failed')
      OR (status = 'uncertain' AND error IS NOT NULL);
   `,
+  `
+  -- A send holds a short lease on its row, not a database connection, and a retry keeps the sender it was saved with.
+  ALTER TABLE email_messages ADD COLUMN sending_until timestamptz, ADD COLUMN from_email text;
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
@@ -817,25 +816,18 @@ async function applyMigrations(pool: pg.Pool): Promise<void> {
   }
 }
 
-/** Connections `hold` may occupy at once, well under the pool's ten, so other requests keep working. */
-const MAX_HOLDS = 3;
-
 export function openDb(connectionString: string, onPoolError?: (err: Error) => void): Db {
   // Fail fast instead of hanging when the database cannot be reached.
   const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 10_000, types });
   // An idle connection can drop (database restart, test teardown); the pool replaces it.
   pool.on('error', (err) => onPoolError?.(err));
   const tx = new AsyncLocalStorage<{ client: pg.PoolClient; depth: number }>();
-  const held = new AsyncLocalStorage<pg.PoolClient>();
-  // A holder can wait on a provider for seconds, so later holders queue here, before they take a connection.
-  let holds = 0;
-  const waitingToHold: (() => void)[] = [];
   let migrated: Promise<void> | null = null;
   let closed: Promise<void> | null = null;
 
   async function query<T extends pg.QueryResultRow>(sql: string, params: readonly Param[] = []) {
     const current = tx.getStore();
-    return (current?.client ?? held.getStore() ?? pool).query<T>(sql, params as Param[]);
+    return (current ? current.client : pool).query<T>(sql, params as Param[]);
   }
 
   return {
@@ -863,7 +855,6 @@ export function openDb(connectionString: string, onPoolError?: (err: Error) => v
           throw err;
         }
       }
-      if (held.getStore()) throw new Error('db.transaction() must not be called inside db.hold().');
       const client = await pool.connect();
       // A connection whose ROLLBACK failed is broken; destroy it instead of returning it to the pool.
       let broken = false;
@@ -885,37 +876,6 @@ export function openDb(connectionString: string, onPoolError?: (err: Error) => v
     async lock(key: string) {
       if (!tx.getStore()) throw new Error('db.lock() must be called inside a transaction.');
       await query('SELECT pg_advisory_xact_lock(hashtext($1))', [key]);
-    },
-
-    async hold<T>(key: string, fn: () => Promise<T>): Promise<T> {
-      if (tx.getStore() || held.getStore()) throw new Error('db.hold() must not be called inside a transaction or another hold.');
-      if (holds < MAX_HOLDS) holds++;
-      else await new Promise<void>((resolve) => waitingToHold.push(resolve));
-      try {
-        const client = await pool.connect();
-        let broken = false;
-        // The pool stops listening while a client is checked out, and an unheard error would end the process.
-        const onError = (err: Error) => {
-          broken = true;
-          onPoolError?.(err);
-        };
-        client.on('error', onError);
-        try {
-          await client.query('SELECT pg_advisory_lock(hashtext($1)::bigint)', [key]);
-          return await held.run(client, fn);
-        } finally {
-          await client.query('SELECT pg_advisory_unlock(hashtext($1)::bigint)', [key]).catch(() => {
-            broken = true;
-          });
-          client.off('error', onError);
-          client.release(broken);
-        }
-      } finally {
-        // Hand the slot straight to the next waiter.
-        const next = waitingToHold.shift();
-        if (next) next();
-        else holds--;
-      }
     },
 
     migrate() {

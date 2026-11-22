@@ -249,8 +249,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/organizations/:id/members', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrg(me(req), id, 'members.manage');
-    const body = memberBody.parse(req.body);
-    return access.addMember(id, body.email, body.role, me(req));
+    const { email, role, retryAttempt } = memberBody.extend({ retryAttempt: z.string().min(1).max(64).optional() }).parse(req.body);
+    return retryAttempt ? access.retryInvitation(id, email, role, retryAttempt) : access.addMember(id, email, role, me(req));
   });
   app.post('/api/organizations/:id/members/remove', async (req) => {
     const { id } = idParam.parse(req.params);

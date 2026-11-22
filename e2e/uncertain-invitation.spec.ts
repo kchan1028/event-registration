@@ -7,7 +7,7 @@ test('an uncertain invitation can be retried without promising extra days', asyn
   await page.route(`**/api/organizations/${organizationId}/members`, (route) => route.fulfill({
     json: {
       members: [{ accountId: 'acct_owner', email: 'organizer@example.test', role: 'owner' }],
-      invitations: [{ email: 'timer@example.test', role: 'finance', expiresAt, lastEmail: { status: 'uncertain', at: '2027-05-01T12:00:00.000Z' } }],
+      invitations: [{ email: 'timer@example.test', role: 'finance', expiresAt, lastEmail: { attemptId: 'eml_lost', status: 'uncertain', at: '2027-05-01T12:00:00.000Z' } }],
       history: [],
     },
   }));
@@ -28,7 +28,11 @@ test('an uncertain invitation can be retried without promising extra days', asyn
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       await expect(retry).toBeVisible();
     }
+    const posted = page.waitForRequest((request) => request.method() === 'POST' && request.url().endsWith('/members'));
+    const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/members'));
     await retry.click();
+    expect((await posted).postDataJSON()).toEqual({ email: 'timer@example.test', role: 'finance', retryAttempt: 'eml_lost' });
+    await answered;
     await expect(openUntil).toHaveAttribute('datetime', expiresAt);
     expect((await new AxeBuilder({ page }).include('section.team').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   }

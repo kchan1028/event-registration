@@ -133,6 +133,8 @@ export function authProviderFromEnv(env: Record<string, string | undefined> = pr
 const HISTORY_LIMIT = 50;
 
 /** Accounts, organization roles, and the checks every organizer route makes. `appUrl`: where invitation emails send people to sign in; empty when email is only recorded. */
+const INVITATION_CHANGED = 'This invitation changed, so this request sent no email.';
+
 export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, mailer: Mailer, appUrl: string) {
   const nowIso = () => clock().toISOString();
 
@@ -272,8 +274,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       `SELECT m.account_id, a.email, m.role FROM organization_members m JOIN accounts a ON a.id = m.account_id WHERE m.organization_id = $1 ORDER BY a.email, m.role`,
       [organizationId],
     );
-    const invitations = await db.all<{ email: string; role: Role; expires_at: string; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null }>(
-      `SELECT i.email, i.role, i.expires_at, m.status AS email_status, m.created_at AS email_at FROM organization_invitations i
+    const invitations = await db.all<{ email: string; role: Role; expires_at: string; email_id: string | null; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null }>(
+      `SELECT i.email, i.role, i.expires_at, m.id AS email_id, m.status AS email_status, m.created_at AS email_at FROM organization_invitations i
        LEFT JOIN email_messages m ON m.id = i.email_attempt_id
        WHERE i.organization_id = $1 ORDER BY i.email, i.role`,
       [organizationId],
@@ -286,7 +288,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     return {
       members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role })),
       invitations: invitations.map(
-        (i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at, lastEmail: i.email_status && i.email_at ? { status: i.email_status, at: i.email_at } : null }),
+        (i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at, lastEmail: i.email_id && i.email_status && i.email_at ? { attemptId: i.email_id, status: i.email_status, at: i.email_at } : null }),
       ),
       history: history.map((h): MembershipChange => ({ action: h.action, email: h.email, role: h.role, by: h.actor_email, at: h.created_at })),
     };
@@ -314,7 +316,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         // Only the attempt stored on this invitation counts. A cancelled row is gone, so a re-add starts over.
         if (extant?.email_attempt_id) {
           const attempt = await db.get<{ id: string; status: string }>(`SELECT id, status FROM email_messages WHERE id = $1`, [extant.email_attempt_id]);
-          if (attempt?.status === 'uncertain') return by ? { action: 'retry' as const, id: attempt.id } : { action: 'none' as const };
+          if (attempt?.status === 'uncertain') return by ? { action: 'send' as const, id: attempt.id } : { action: 'none' as const };
         }
         const t = clock();
         const expiresAt = new Date(t.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
@@ -341,11 +343,28 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         await db.run(`UPDATE organization_invitations SET email_attempt_id = $1 WHERE organization_id = $2 AND email = $3 AND role = $4`, [id, organizationId, normalized, role]);
         return { action: 'send' as const, id };
       });
-      if ((decision.action === 'retry' || decision.action === 'send') && (await mailer.dispatch(decision.id, decision.action === 'send')) === 'withheld') {
-        throw new HttpError(409, 'The earlier invitation email might have been sent. It was not sent again, and the invitation was not extended.');
-      }
+      if (decision.action === 'send') await dispatchInvitation(decision.id);
     }
     return listMembers(organizationId);
+  }
+
+  /** Retries one attempt while it is still the invitation's own. Unlike addMember, it never invites, renews, or grants. */
+  async function retryInvitation(organizationId: string, email: string, role: Role, attemptId: string) {
+    const current = await db.get(`SELECT 1 FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 AND email_attempt_id = $4`, [
+      organizationId,
+      email.trim().toLowerCase(),
+      role,
+      attemptId,
+    ]);
+    if (!current) throw new HttpError(409, INVITATION_CHANGED);
+    await dispatchInvitation(attemptId);
+    return listMembers(organizationId);
+  }
+
+  async function dispatchInvitation(attemptId: string) {
+    const outcome = await mailer.dispatch(attemptId);
+    if (outcome === 'withheld') throw new HttpError(409, 'The earlier invitation email might have been sent. It was not sent again, and the invitation was not extended.');
+    if (outcome === 'changed') throw new HttpError(409, INVITATION_CHANGED);
   }
 
   async function invitationMessage(organizationId: string, email: string, role: Role, by: Account, expiresAt: string) {
@@ -418,7 +437,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     );
   }
 
-  return { accountFor, requireOrg, requireEvent, requireOrderAccess, memberships, grant, listMembers, addMember, removeMember, transferOwnership, expiredInvitations };
+  return { accountFor, requireOrg, requireEvent, requireOrderAccess, memberships, grant, listMembers, addMember, retryInvitation, removeMember, transferOwnership, expiredInvitations };
 }
 
 export type Access = ReturnType<typeof createAccess>;

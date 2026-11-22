@@ -73,6 +73,8 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
       return true;
     } catch (e) {
       setError((e as ApiError).message);
+      // A conflict means the list on screen is out of date.
+      if ((e as ApiError).status === 409) await api.members(orgId).then(setList, () => undefined);
       return false;
     } finally {
       setBusy(false);
@@ -153,7 +155,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
                     </>
                   )}
                 </span>
-                <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.addMember(orgId, i.email, i.role))}>
+                <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => (uncertain ? api.retryInvitation(orgId, i.email, i.role, i.lastEmail!.attemptId) : api.addMember(orgId, i.email, i.role)))}>
                   {uncertain ? 'Retry send' : 'Resend'}
                   <span className="sr-only">
                     {uncertain ? ` of the invitation email to ${i.email} without extending it` : ` invitation to ${i.email}, open for ${INVITATION_DAYS} more days`}

@@ -12,7 +12,7 @@ Revoking a Clerk session prevents it from receiving fresh tokens. CycleReg verif
 
 ## Transactional invitation email (Implemented locally)
 
-The server sends organizer invitation emails through Resend only in test mode with a configured recipient list. Keep the sending key in server-only environment configuration and use controlled test inboxes. The request contains the recipient address and invitation text. The app records API acceptance or send failure and keeps delivery evidence separate from invitation role grants. Production mode refuses Resend sends.
+The server sends organizer invitation emails through Resend only in test mode with a configured recipient list. Keep the sending key in server-only environment configuration and use controlled test inboxes. The request contains the recipient address and invitation text. The app records API acceptance or send failure and keeps delivery evidence separate from invitation role grants. Production mode refuses Resend sends. Retry send is owner-only and names one email attempt. The server sends only while that attempt still belongs to the invitation, so a stale retry cannot invite, renew, or grant a role.
 
 ## Expired invitation guidance (Implemented locally)
 

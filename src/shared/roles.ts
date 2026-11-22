@@ -71,7 +71,7 @@ export interface Invitation {
   role: Role;
   expiresAt: string;
   /** The latest invitation email. `uncertain` means the provider may have accepted it. Null when none was made (seed scripts). */
-  lastEmail: { status: 'recorded' | 'sent' | 'failed' | 'uncertain'; at: string } | null;
+  lastEmail: { attemptId: string; status: 'recorded' | 'sent' | 'failed' | 'uncertain'; at: string } | null;
 }
 
 export interface MembershipChange {
