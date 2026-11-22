@@ -80,7 +80,9 @@ export function CheckIn({ eventId }: { eventId: string }) {
   refreshCurrentList.current = () => { void load(q, dayId); };
 
   const riders = data?.riders ?? [];
-  const listFailed = (error !== null || lookupError !== null) && listedQuery !== q;
+  // A failed read of the query on screen, including one that last returned nobody, is not an empty result.
+  // Keep a non-empty list: the open card is taken from these rows.
+  const listFailed = (error !== null || lookupError !== null) && (listedQuery !== q || riders.length === 0);
   const selected = riders.find((r) => r.orderId === selectedId) ?? null;
   const day = data?.days.find((d) => d.id === data.dayId);
   const selectedRecoveryKey = selected && data ? recoveryKey(eventId, data.dayId, selected.orderId) : null;

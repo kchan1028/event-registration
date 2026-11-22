@@ -374,8 +374,11 @@ test('an explicit lookup started before check-in does not restore the ready card
   await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
   await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+  // Let the save's list refresh finish before the older lookup can paint over it.
+  await page.waitForTimeout(400);
 
   await held[0].route.fulfill({ response: held[0].response });
+  await page.waitForTimeout(400);
   await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
   await expect(detail.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
@@ -431,6 +434,8 @@ test('a lookup started during check-in still opens that rider after the save', a
   await expect.poll(() => held.length).toBe(1);
   await page.clock.resume();
   releaseSave?.();
+  await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
+  await expect(detail.locator('.ci-bib__number')).toHaveText('100');
   await held[0].route.fulfill({ response: held[0].response });
   await expect(detail.getByRole('heading', { name: other.name, exact: true })).toBeVisible();
   const final: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
@@ -448,15 +453,28 @@ test('a failed enter lookup does not count the previous riders as matches', asyn
   const count = page.locator('.ci__count');
   await expect(count).toContainText('riders on');
   await page.clock.pauseAt(new Date(openedAt.getTime() + 2_000));
+  let enterAborted = false;
   await page.route(`**/api/events/${eventId}/check-in?*`, (route) => {
     if (route.request().method() !== 'GET') return route.continue();
-    return route.abort();
+    const query = new URL(route.request().url()).searchParams.get('q');
+    if (query === 'Nonexistent Person' && !enterAborted) {
+      enterAborted = true;
+      return route.abort();
+    }
+    return route.continue();
   });
   await search.fill('Nonexistent Person');
   await search.press('Enter');
+  const debounced = page.waitForResponse((response) => {
+    if (!response.ok() || response.request().method() !== 'GET') return false;
+    const url = new URL(response.url());
+    return url.pathname === `/api/events/${eventId}/check-in` && url.searchParams.get('q') === 'Nonexistent Person';
+  });
   await page.clock.runFor(150);
-  await expect(page.getByRole('alert').first()).toBeVisible();
+  await debounced;
+  await expect(page.getByRole('alert')).toHaveCount(1);
   await expect(count).toHaveText('The list could not be updated.');
+  await expect(page.getByText('No rider matches. Check the spelling, or try the team or check-in code.')).toHaveCount(0);
 });
 
 test('a failed search does not present the previous empty list as the result', async ({ page }) => {
@@ -481,4 +499,21 @@ test('a failed search does not present the previous empty list as the result', a
   await search.fill('');
   await expect(count).toHaveText('The list could not be updated.');
   await expect(page.getByText('No registered riders for this day yet.')).toHaveCount(0);
+});
+
+test('a failed refresh of an empty day does not say that nobody is registered', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  await page.goto(`/#/events/${eventId}/check-in`);
+  const count = page.locator('.ci__count');
+  await expect(page.getByText('No registered riders for this day yet.')).toBeVisible();
+  await page.route(`**/api/events/${eventId}/check-in?*`, (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    return route.abort();
+  });
+  await page.getByRole('button', { name: 'Add fictional demo riders', exact: true }).click();
+  await expect(page.getByRole('alert').first()).toBeVisible();
+  await expect(count).toHaveText('The list could not be updated.');
+  await expect(page.getByText('No registered riders for this day yet.')).toHaveCount(0);
+  await expect(page.getByText('No rider matches. Check the spelling, or try the team or check-in code.')).toHaveCount(0);
 });
