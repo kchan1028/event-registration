@@ -216,7 +216,7 @@ Run the post-claim cases in `tests/profileClaims.test.ts` with claims/guardian/a
 
 ### Publication audit
 
-Run the waiver cases in `tests/auth.test.ts` (publisher, required and ignored reasons, every addendum change, role and public visibility), the migration 43 case in `tests/migrations.test.ts`, `tests/impact.test.ts`, and the republishing cases in `tests/orders.test.ts` and `tests/categoryExtras.test.ts`. Run `e2e/organizer.spec.ts` for the reason field, its absence on other changes, the versions table and phone width, and `e2e/checkout.spec.ts` for checkout after a waiver change.
+Run the waiver cases in `tests/auth.test.ts` (publisher; required, ignored, malformed and stale reasons; every addendum change, including deleting its category; role and public visibility), the migration 43 case in `tests/migrations.test.ts`, `tests/impact.test.ts`, and the republishing cases in `tests/orders.test.ts` and `tests/categoryExtras.test.ts`. Run `e2e/organizer.spec.ts` for the reason field and its limits, its absence on other changes, a delayed or failed comparison, a draft saved elsewhere, the versions table and phone width, and `e2e/checkout.spec.ts` for checkout after a waiver change.
 
 ### Waiver acceptance evidence
 

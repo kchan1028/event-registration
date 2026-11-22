@@ -1949,6 +1949,9 @@ button.issue {
   .publish-box__reason .input {
     font-size: 16px;
   }
+  .impact__recover {
+    min-height: 44px;
+  }
 }
 
 /* Rider preview ---------------------------------------------------------- */

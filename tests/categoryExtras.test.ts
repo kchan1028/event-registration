@@ -4,6 +4,7 @@ import { categoryBibRange, checkExtras, orderExtrasSchema, pruneExtras } from '.
 import { buildDemoEvent } from '../src/shared/demo';
 import type { EventConfig } from '../src/shared/schema';
 import { validateConfig } from '../src/shared/validation';
+import { waiverChangeFor } from './support/waiver';
 
 /* Per-category rider questions, waiver addenda, and bib ranges. */
 
@@ -110,8 +111,9 @@ describe('category extras API', () => {
       const { config, revision } = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
       const cat = config.categories.find((c) => c.timingCode === 'RR-M35-34')!;
       change(cat);
-      expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } })).statusCode).toBe(200);
-      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChangeReason: 'Fictional waiver update' } })).statusCode).toBe(200);
+      const saved = await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } });
+      expect(saved.statusCode).toBe(200);
+      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChange: waiverChangeFor(saved.json()) } })).statusCode).toBe(200);
       return { config, cat };
     };
     const { config, cat } = await publish((c) => { c.addendum = { title: 'Masters rules', text: 'Original fictional rules.' }; });

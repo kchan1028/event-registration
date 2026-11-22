@@ -13,7 +13,7 @@ import type { FieldChange, RiderCorrection } from '../shared/lookup';
 import type { BibChange, BibReassignment, BibReassignmentPlan, BibReassignmentResult, AutomaticBibInput, AutomaticBibJob, BibSettings, BibBatch, BibPlan, CheckInRider, CheckInList } from '../shared/checkin';
 import type { WaitlistJoin, WaitlistStatus } from '../shared/waitlist';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
-import type { ChangeImpact } from '../shared/impact';
+import type { ChangeImpact, WaiverChange } from '../shared/impact';
 import type { EventSummary } from '../shared/reports';
 import type { Invitation, MembershipChange, Role, ExpiredInvitationNotice } from '../shared/roles';
 import type { GuardianAccess, GuardianInvitation, GuardianRelationship, JuniorProfile, ReceivedGuardianInvitation, RegistrationAccess } from '../shared/juniors';
@@ -350,8 +350,8 @@ export const api = {
   createOmnium: () => request<{ organizationId: string; eventId: string }>('POST', '/api/demo/berkeley-omnium'),
   event: (id: string) => request<EventPayload>('GET', `/api/events/${id}`),
   saveConfig: (id: string, revision: number, config: EventConfig) => request<EventPayload>('PUT', `/api/events/${id}/config`, { revision, config }),
-  publish: (id: string, acknowledgeWarnings: boolean, acknowledgeImpact = false, waiverChangeReason?: string) =>
-    request<EventPayload & { publishedVersion: number }>('POST', `/api/events/${id}/publish`, { acknowledgeWarnings, acknowledgeImpact, waiverChangeReason }),
+  publish: (id: string, acknowledgeWarnings: boolean, acknowledgeImpact = false, waiverChange?: WaiverChange) =>
+    request<EventPayload & { publishedVersion: number }>('POST', `/api/events/${id}/publish`, { acknowledgeWarnings, acknowledgeImpact, waiverChange }),
   addTestEntries: (id: string, categoryId: string, count: number) =>
     request<{ result: TestEntryResult; event: EventPayload }>('POST', `/api/events/${id}/test-entries`, { categoryId, count }),
   clearTestEntries: (id: string) => request<{ removed: number; event: EventPayload }>('DELETE', `/api/events/${id}/test-entries`),
@@ -430,7 +430,7 @@ export const api = {
   addCheckInDemoRiders: (eventId: string) => request<{ created: number }>('POST', `/api/events/${eventId}/check-in-demo-riders`),
   startLists: (eventId: string) => request<StartListOverview>('GET', `/api/events/${eventId}/start-lists`),
   snapshotStartList: (eventId: string, raceId: string) => request<{ version: number; riders: number }>('POST', `/api/events/${eventId}/start-lists/${raceId}/snapshots`),
-  changeImpact: (eventId: string) => request<{ publishedVersion: number | null; impact: ChangeImpact | null; waiverChanged: boolean }>('GET', `/api/events/${eventId}/impact`),
+  changeImpact: (eventId: string) => request<{ revision: number; publishedVersion: number | null; impact: ChangeImpact | null; waiverChanged: boolean }>('GET', `/api/events/${eventId}/impact`),
   lockStartList: (eventId: string, raceId: string) => request<{ version: number; riders: number; lockedAt: string }>('POST', `/api/events/${eventId}/start-lists/${raceId}/lock`),
   startListCsvUrl: (eventId: string, raceId: string, snapshot?: number) => `/api/events/${eventId}/start-lists/${raceId}/csv${snapshot ? `?snapshot=${snapshot}` : ''}`,
 };

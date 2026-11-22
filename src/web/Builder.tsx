@@ -12,6 +12,7 @@ import { IssuesPanel } from './IssuesPanel';
 import { Pools } from './Pools';
 import { Preview } from './Preview';
 import { Publish } from './Publish';
+import type { WaiverChange } from '../shared/impact';
 import { StartLists } from './StartLists';
 import { Registrations } from './Registrations';
 import { CsvImport } from './CsvImport';
@@ -34,7 +35,7 @@ export interface Draft {
   update: (fn: (c: EventConfig) => EventConfig) => void;
   addTestEntries: (categoryId: string, count: number) => Promise<TestEntryResult>;
   clearTestEntries: () => Promise<number>;
-  publish: (acknowledgeWarnings: boolean, acknowledgeImpact?: boolean, waiverChangeReason?: string) => Promise<number>;
+  publish: (acknowledgeWarnings: boolean, acknowledgeImpact?: boolean, waiverChange?: WaiverChange) => Promise<number>;
   reload: () => void;
 }
 
@@ -147,9 +148,9 @@ function useDraft(eventId: string) {
   }, [eventId, setData]);
 
   const publish = useCallback(
-    async (acknowledgeWarnings: boolean, acknowledgeImpact = false, waiverChangeReason?: string) => {
+    async (acknowledgeWarnings: boolean, acknowledgeImpact = false, waiverChange?: WaiverChange) => {
       if (!(await flush())) throw new ApiError(409, 'The latest changes could not be saved, so nothing was published.');
-      const payload = await api.publish(eventId, acknowledgeWarnings, acknowledgeImpact, waiverChangeReason);
+      const payload = await api.publish(eventId, acknowledgeWarnings, acknowledgeImpact, waiverChange);
       setData(payload);
       return payload.publishedVersion;
     },

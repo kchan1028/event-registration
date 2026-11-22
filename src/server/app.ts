@@ -18,7 +18,7 @@ import { entriesCsv, ledgerCsv } from '../shared/exports';
 import { reservationLookupSchema, reservationReferenceSchema } from '../shared/checkout';
 import { eventSummary } from '../shared/reports';
 import { riderCorrectionSchema } from '../shared/lookup';
-import { changeImpact, WAIVER_REASON_MAX, waiverChanged, type ImpactEntry } from '../shared/impact';
+import { changeImpact, waiverChanged, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
 import { reconciliationCsv } from './reconciliation';
 import { cancellationExportState, cancellationExportFilename } from './cancellationClosure';
@@ -313,7 +313,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   app.post('/api/events/:id/publish', async (req) => {
     const { id } = await onEvent(req, 'event.edit');
     const body = z
-      .object({ acknowledgeWarnings: z.boolean().default(false), acknowledgeImpact: z.boolean().default(false), waiverChangeReason: z.string().trim().max(WAIVER_REASON_MAX).optional() })
+      .object({
+        acknowledgeWarnings: z.boolean().default(false),
+        acknowledgeImpact: z.boolean().default(false),
+        // Only repo.publish knows whether a reason is needed, so it checks one; a malformed one counts as none.
+        waiverChange: z.object({ reason: z.string(), revision: z.number().int(), publishedVersion: z.number().int() }).optional().catch(undefined),
+      })
       .parse(req.body ?? {});
     // One transaction under the event lock: the impact that was reviewed is the impact that is published
     // and recorded, with no entry or draft change in between. repo.publish joins it as a savepoint.
@@ -325,7 +330,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
         const n = impact.categories.length;
         throw new HttpError(422, `Review who the ${n} changed ${n === 1 ? 'category' : 'categories'} with entries affect before publishing.`, impact);
       }
-      const result = await repo.publish(id, body.acknowledgeWarnings, { publishedBy: me(req).id, waiverChangeReason: body.waiverChangeReason });
+      const result = await repo.publish(id, body.acknowledgeWarnings, { publishedBy: me(req).id, waiverChange: body.waiverChange });
       // Paid entries the change touches each get an item in the resolution workflow.
       if (impact && impact.categories.length > 0) await resolutions.record(id, result.version, impact);
       return result.version;
@@ -350,7 +355,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
    */
   async function impactFor(id: string) {
     const record = await repo.getEvent(id);
-    if (record.publishedVersion === null) return { publishedVersion: null, impact: null, waiverChanged: false };
+    if (record.publishedVersion === null) return { revision: record.revision, publishedVersion: null, impact: null, waiverChanged: false };
     const published = await repo.getVersion(id, record.publishedVersion);
     const rows = await db.all<{ order_id: string; category_id: string; status: string; rider_json: { firstName?: string; lastName?: string } }>(
       `SELECT oe.order_id, oe.category_id, oe.status, o.rider_json FROM order_entries oe JOIN orders o ON o.id = oe.order_id
@@ -366,7 +371,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
         riderName: [rider.firstName, rider.lastName].filter(Boolean).join(' ') || 'Unnamed rider',
       };
     });
-    return { publishedVersion: record.publishedVersion, impact: changeImpact(published, record.config, entries), waiverChanged: waiverChanged(published, record.config) };
+    return { revision: record.revision, publishedVersion: record.publishedVersion, impact: changeImpact(published, record.config, entries), waiverChanged: waiverChanged(published, record.config) };
   }
 
   app.get('/api/events/:id/impact', async (req) => {
