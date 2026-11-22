@@ -3,6 +3,7 @@ import { randomInt } from 'node:crypto';
 import { canAdmit, remainingForCategory, type LimitUsage } from '../shared/capacity';
 import { evaluateCategory } from '../shared/eligibility';
 import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNow, missingBundleRaces, needsGuardian, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance, type WaiverEvidence } from '../shared/checkout';
+import type { OrderStatus, ReservationStatus } from '../shared/checkout';
 import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { termsOf } from '../shared/coupons';
@@ -25,7 +26,7 @@ import { eventLock, HttpError, type Repo } from './repo';
  * Payment is simulated, or Stripe test mode (src/server/payments.ts) where configured.
  */
 
-export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
+export type { OrderStatus };
 
 /** success/failure from the simulated button or a provider; mismatch: a provider reported money that does not match the order total. */
 type PaymentOutcome = 'success' | 'failure' | 'mismatch';
@@ -611,7 +612,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     },
 
     /** Look up a committed reservation by its exact rider request reference, within one event. */
-    async lookupReservation(eventId: string, clientRequestId: string) {
+    async lookupReservation(eventId: string, clientRequestId: string): Promise<ReservationStatus | null> {
       const row = await db.get<Pick<OrderRow, 'id' | 'published_version' | 'status' | 'hold_expires_at'>>(
         'SELECT id, published_version, status, hold_expires_at FROM orders WHERE event_id = $1 AND client_request_id = $2',
         [eventId, clientRequestId],

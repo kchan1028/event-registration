@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
+import { reservationReferenceSchema } from '../../shared/checkout';
 import { api, type ReservationStatus } from '../api';
 import { formatDateTime, ORDER_STATUS_LABEL } from '../format';
 
@@ -15,7 +16,7 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
     e.preventDefault();
     if (inFlight.current) return;
     // References match exactly: send the text as typed, with checkout's own length rule.
-    if (reference.length < 8 || reference.length > 64) {
+    if (!reservationReferenceSchema.safeParse(reference).success) {
       setInvalid('Enter the reservation reference shown in the rider’s pending checkout.');
       setResult(undefined);
       setError(undefined);
@@ -43,6 +44,8 @@ export function ReservationLookup({ eventId, onFound }: { eventId: string; onFou
   const refuseLineBreaks = (e: SyntheticEvent, text: string) => {
     if (!/[\r\n]/.test(text)) return;
     e.preventDefault();
+    // Clear the earlier reference, or Check would look that one up instead.
+    setReference('');
     setResult(undefined);
     setError(undefined);
     setInvalid('A reservation reference is one line. Copy it again without line breaks.');

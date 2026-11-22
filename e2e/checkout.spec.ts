@@ -585,15 +585,20 @@ test('organizer checks the rider’s pending reservation by exact reference', as
     await expect(staffReference).toHaveAttribute('aria-invalid', 'true');
     await expect(staffReference).toHaveAccessibleDescription('Enter the reservation reference shown in the rider’s pending checkout.');
   }
-  await staffReference.fill('');
-  const pasteRefused = await staffReference.evaluate((field) => {
-    const clipboardData = new DataTransfer();
-    clipboardData.setData('text/plain', 'exact\nreference');
-    return !field.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
-  });
-  expect(pasteRefused).toBe(true);
-  await expect(staffReference).toHaveValue('');
-  await expect(staffReference).toHaveAccessibleDescription('A reservation reference is one line. Copy it again without line breaks.');
+  for (const type of ['paste', 'drop'] as const) {
+    await staffReference.fill(reference);
+    const refused = await staffReference.evaluate((field, kind) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', 'exact\nreference');
+      const event = kind === 'paste' ? new ClipboardEvent(kind, { clipboardData: data, bubbles: true, cancelable: true }) : new DragEvent(kind, { dataTransfer: data, bubbles: true, cancelable: true });
+      return !field.dispatchEvent(event);
+    }, type);
+    expect(refused).toBe(true);
+    await expect(staffReference).toHaveValue('');
+    await expect(staffReference).toHaveAccessibleDescription('A reservation reference is one line. Copy it again without line breaks.');
+    await check.click();
+    await expect(status).not.toContainText(orderNumber!);
+  }
   await staffReference.fill(reference);
   await expect(staffReference).not.toHaveAttribute('aria-invalid');
   await check.click();

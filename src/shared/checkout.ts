@@ -287,6 +287,18 @@ export function awaitsLicenseReview(orderStatus: string, entry: { status: string
 }
 
 /** Accepted account and declared racing age, not proof of legal age or federation approval. */
+/** The rider's request key. Matched exactly, as sent. */
+export const reservationReferenceSchema = z.string().min(8).max(64);
+
+export type OrderStatus = 'held' | 'payment_failed' | 'confirmed' | 'expired' | 'cancelled' | 'needs_attention';
+
+/** What staff see for a reservation reference. */
+export interface ReservationStatus {
+  orderNumber: string;
+  status: OrderStatus;
+  holdExpiresAt: string | null;
+}
+
 export interface WaiverEvidence {
   signerAccountId: string | null;
   riderRacingAge: number;
