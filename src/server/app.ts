@@ -17,7 +17,7 @@ import { type EventConfig, bibNumberSchema, createEventInputSchema, eventConfigS
 import { entriesCsv, ledgerCsv } from '../shared/exports';
 import { reservationLookupSchema, reservationReferenceSchema } from '../shared/checkout';
 import { eventSummary } from '../shared/reports';
-import { riderCorrectionSchema } from '../shared/lookup';
+import { riderCorrectionSchema, staffReleaseReasonSchema } from '../shared/lookup';
 import { changeImpact, waiverChanged, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
 import { reconciliationCsv } from './reconciliation';
@@ -642,10 +642,28 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.post('/api/events/:id/reservation-status', async (req, reply) => {
-    const { id } = await onEvent(req, 'orders.view');
+    const { id, roles } = await onEvent(req, 'orders.view');
     const { reference } = z.object({ reference: reservationLookupSchema }).parse(req.body);
     reply.header('Cache-Control', 'no-store');
-    return { order: await orders.lookupReservation(id, reference) };
+    const result = await orders.lookupReservation(id, reference);
+    return { ...result, releaseEnabled: result.releaseEnabled && can(roles, 'entries.manage') };
+  });
+
+  app.post('/api/events/:id/reservation-release', async (req, reply) => {
+    const { id } = await onEvent(req, 'entries.manage');
+    const { reference, reason } = z.object({
+      reference: reservationLookupSchema,
+      riderRequested: z.literal(true),
+      reason: staffReleaseReasonSchema,
+    }).parse(req.body);
+    reply.header('Cache-Control', 'no-store');
+    const staff = {
+      accountId: me(req).id,
+      reason,
+      // Checked again under the event lock: the role can be removed while this waits.
+      authorize: () => access.requireEvent(me(req), id, 'entries.manage'),
+    };
+    return { order: await orders.releaseReservation(id, reference, staff), releaseEnabled: false };
   });
 
   app.get('/api/events/:id/orders', async (req) => {

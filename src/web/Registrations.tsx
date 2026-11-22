@@ -82,6 +82,7 @@ export function Registrations({ draft }: { draft: Draft }) {
         <ReservationLookup
           key={eventId}
           eventId={eventId}
+          canManage={canManage}
           onFound={() => {
             // The order can commit or change after the list loaded, and staff search that list by its number next.
             setFilter('all');

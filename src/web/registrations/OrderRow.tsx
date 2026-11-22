@@ -7,7 +7,7 @@ import type { Category } from '../../shared/schema';
 import { api, type OrderStatus, type OrderView } from '../api';
 import { href } from '../App';
 import { useSession } from '../auth';
-import { formatDateTime, ORDER_STATUS_LABEL, refundedCents } from '../format';
+import { formatDateTime, ORDER_STATUS_LABEL, RELEASED_BY_STAFF, refundedCents } from '../format';
 import { Field, Icon, ReasonForm } from '../ui';
 import { EmergencyContactLookup } from '../EmergencyContact';
 import { RefundPanel } from './RefundPanel';
@@ -36,7 +36,7 @@ export function OrderRow({ order, categories, canManage, canRefund, onChange }: 
           {order.rider.firstName} {order.rider.lastName}
           {order.rider.team && <span className="muted"> · {order.rider.team}</span>}
         </p>
-        <span className={`status status--${STATUS_TONE[order.status]}`}>{ORDER_STATUS_LABEL[order.status]}</span>
+        <span className={`status status--${STATUS_TONE[order.status]}`}>{order.status === 'cancelled' && order.releasedByStaff ? RELEASED_BY_STAFF : ORDER_STATUS_LABEL[order.status]}</span>
         {refunded > 0 && <span className="status status--muted">{refundableCents(order.totalCents, order.refunds) === 0 ? 'Refunded' : 'Partly refunded'}</span>}
         <span className="num order__total">{formatCents(order.totalCents)}</span>
       </div>

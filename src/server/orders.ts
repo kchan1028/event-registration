@@ -3,7 +3,7 @@ import { randomInt } from 'node:crypto';
 import { canAdmit, remainingForCategory, type LimitUsage } from '../shared/capacity';
 import { evaluateCategory } from '../shared/eligibility';
 import { checkSelection, checkSignature, enforcesWindows, findConflicts, localNow, missingBundleRaces, needsGuardian, profileOf, readiness, riderDetailsSchema, waiverAcceptanceSchema, windowState, type RiderDetails, type WaiverAcceptance, type WaiverEvidence } from '../shared/checkout';
-import type { OrderStatus, ReservationStatus } from '../shared/checkout';
+import type { OrderStatus, ReservationLookupResult, ReservationStatus } from '../shared/checkout';
 import { demoRider } from '../shared/fixtures';
 import { newId } from '../shared/factory';
 import { termsOf } from '../shared/coupons';
@@ -51,6 +51,9 @@ interface OrderRow {
   quote_json: Quote;
   total_cents: number;
   hold_expires_at: string;
+  staff_released_at: string | null;
+  stripe_checkout_started_at: string | null;
+  stripe_checkout_tracked: boolean;
   check_in_code: string | null;
   created_at: string;
   confirmed_at: string | null;
@@ -59,6 +62,8 @@ interface OrderRow {
   account_id: string | null;
   junior_profile_id: string | null;
 }
+
+type ReservationRow = Pick<OrderRow, 'id' | 'published_version' | 'status' | 'hold_expires_at' | 'staff_released_at' | 'stripe_checkout_started_at' | 'stripe_checkout_tracked'>;
 
 interface ChangeRow {
   order_id: string;
@@ -146,6 +151,43 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
   function effectiveStatus(row: Pick<OrderRow, 'status' | 'hold_expires_at'>): OrderStatus {
     if ((row.status === 'held' || row.status === 'payment_failed') && row.hold_expires_at <= nowIso()) return 'expired';
     return row.status;
+  }
+
+  async function reservationOrder(eventId: string, clientRequestId: string) {
+    return db.get<ReservationRow>(
+      'SELECT id, published_version, status, hold_expires_at, staff_released_at, stripe_checkout_started_at, stripe_checkout_tracked FROM orders WHERE event_id = $1 AND client_request_id = $2',
+      [eventId, clientRequestId],
+    );
+  }
+
+  async function reservationStatus(eventId: string, row: ReservationRow): Promise<ReservationStatus> {
+    const config = await repo.getVersion(eventId, row.published_version);
+    const status = effectiveStatus(row);
+    return {
+      orderNumber: formatOrderNumber(row.id, config.event.isDemo),
+      status,
+      holdExpiresAt: status === 'held' || status === 'payment_failed' ? row.hold_expires_at : null,
+      releasedByStaff: row.staff_released_at !== null,
+    };
+  }
+
+  async function hasReservationPaymentEvidence(row: ReservationRow) {
+    if (row.stripe_checkout_started_at) return true;
+    return Boolean(await db.get(`
+      SELECT 1 FROM payment_attempts WHERE order_id = $1 AND (outcome <> 'failure' OR provider <> 'simulated' OR provider_ref IS NOT NULL)
+      UNION ALL SELECT 1 FROM payment_sessions WHERE order_id = $1
+      UNION ALL SELECT 1 FROM provider_events WHERE order_id = $1
+      UNION ALL SELECT 1 FROM refunds WHERE order_id = $1
+      LIMIT 1`, [row.id]));
+  }
+
+  async function releaseHeldPlaces(orderId: string, staff?: { accountId: string; reason: string }) {
+    const releasedAt = nowIso();
+    await db.run(`UPDATE orders SET status = 'cancelled', updated_at = $1,
+      staff_released_at = $3, staff_released_by = $4, staff_release_reason = $5 WHERE id = $2`,
+      [releasedAt, orderId, staff ? releasedAt : null, staff?.accountId ?? null, staff?.reason ?? null]);
+    await db.run(`UPDATE order_entries SET status = 'released' WHERE order_id = $1`, [orderId]);
+    return releasedAt;
   }
 
   /**
@@ -285,6 +327,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       couponCode: q.coupon && q.coupon.discountCents > 0 ? q.coupon.terms.code : null,
       totalCents: row.total_cents,
       holdExpiresAt: row.hold_expires_at,
+      releasedByStaff: row.staff_released_at !== null,
       checkInCode: status === 'confirmed' ? row.check_in_code : null,
       createdAt: row.created_at,
       confirmedAt: row.confirmed_at,
@@ -478,8 +521,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const t = nowIso();
         const expires = new Date(clock().getTime() + holdMinutes * 60_000).toISOString();
         await db.run(
-          `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json, coupon_id, account_id, waiver_evidence_json)
-           VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+          `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json, coupon_id, account_id, waiver_evidence_json, stripe_checkout_tracked)
+           VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true)`,
           [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null, accountId, JSON.stringify({ signerAccountId: accountId, riderRacingAge: rider.racingAge, acceptedAt: t } satisfies WaiverEvidence)],
         );
         // A guardian's junior order links to the explicitly managed profile; placing account and waiver remain provenance.
@@ -531,6 +574,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const row = await orderRow(orderId);
         if (!row) throw new HttpError(404, 'Order not found.');
         const status = effectiveStatus(row);
+        // A stale simulated payment click can display the staff release without recording an attempt.
+        if (status === 'cancelled' && row.staff_released_at && source.provider === 'simulated') return view(orderId);
         const t = nowIso();
         let next: OrderStatus = status;
 
@@ -599,8 +644,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         if (!row) throw new HttpError(404, 'Order not found.');
         const status = effectiveStatus(row);
         if (status === 'held' || status === 'payment_failed' || status === 'expired') {
-          await db.run(`UPDATE orders SET status = 'cancelled', updated_at = $1 WHERE id = $2`, [nowIso(), orderId]);
-          await db.run(`UPDATE order_entries SET status = 'released' WHERE order_id = $1`, [orderId]);
+          await releaseHeldPlaces(orderId);
         }
         return view(orderId);
       });
@@ -617,19 +661,30 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     },
 
     /** Look up a committed reservation by its exact rider request reference, within one event. */
-    async lookupReservation(eventId: string, clientRequestId: string): Promise<ReservationStatus | null> {
-      const row = await db.get<Pick<OrderRow, 'id' | 'published_version' | 'status' | 'hold_expires_at'>>(
-        'SELECT id, published_version, status, hold_expires_at FROM orders WHERE event_id = $1 AND client_request_id = $2',
-        [eventId, clientRequestId],
-      );
-      if (!row) return null;
-      const config = await repo.getVersion(eventId, row.published_version);
-      const status = effectiveStatus(row);
-      return {
-        orderNumber: formatOrderNumber(row.id, config.event.isDemo),
-        status,
-        holdExpiresAt: status === 'held' || status === 'payment_failed' ? row.hold_expires_at : null,
-      };
+    async lookupReservation(eventId: string, clientRequestId: string): Promise<ReservationLookupResult> {
+      const row = await reservationOrder(eventId, clientRequestId);
+      const order = row ? await reservationStatus(eventId, row) : null;
+      const active = order?.status === 'held' || order?.status === 'payment_failed';
+      const releaseEnabled = active && row?.stripe_checkout_tracked === true && !await hasReservationPaymentEvidence(row);
+      return { order, releaseEnabled };
+    },
+
+    async releaseReservation(eventId: string, clientRequestId: string, staff: { accountId: string; reason: string; authorize: () => Promise<unknown> }) {
+      return db.transaction(async () => {
+        await db.lock(eventLock(eventId));
+        await staff.authorize();
+        const row = await reservationOrder(eventId, clientRequestId);
+        if (!row) throw new HttpError(404, 'No saved order matches this reference. Ask the rider to retry the same reservation.');
+        if (row.staff_released_at) return reservationStatus(eventId, row);
+        const status = effectiveStatus(row);
+        if (status !== 'held' && status !== 'payment_failed') {
+          throw new HttpError(409, 'Only an active unpaid hold can be released. Check the order status before continuing.');
+        }
+        if (!row.stripe_checkout_tracked) throw new HttpError(409, 'This hold predates payment tracking. Ask the treasurer to review it.');
+        if (await hasReservationPaymentEvidence(row)) throw new HttpError(409, 'This reservation has payment activity that needs review. Ask the treasurer to check it.');
+        const releasedAt = await releaseHeldPlaces(row.id, staff);
+        return reservationStatus(eventId, { ...row, status: 'cancelled', staff_released_at: releasedAt });
+      });
     },
 
     /** Every order of the event, newest first. With `query`, only registrations it finds (see `matchesRegistration`). */

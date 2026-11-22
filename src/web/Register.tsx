@@ -1575,7 +1575,9 @@ function Review({ orderId, eventId, goTo, paymentMode, onKioskOrder }: {
         </p>
       ) : (
         <p className="note note--warn" role="alert">
-          {cancelled ? 'Your reservation was cancelled. Change your entries to start again.' : stripe
+          {cancelled ? (order.releasedByStaff
+            ? 'The organizer released your hold. Change your entries to start again.'
+            : 'Your reservation was cancelled. Change your entries to start again.') : stripe
             ? 'Your hold has ended and the places were released. Start a new registration to pay.'
             : 'Your hold has ended and the places were released. You can still complete the simulated payment: if every place is still free, your entry is confirmed. Otherwise nothing is charged and the organizer is told.'}
         </p>

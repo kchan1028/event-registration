@@ -4562,6 +4562,8 @@ fieldset:disabled .field label {
   .team__list .link-btn { min-height: 44px; min-width: 44px; }
   .input.reference-input { min-height: 44px; font-size: 16px; }
   .btn.lookup-submit { min-height: 44px; }
+  .lookup-release .btn, .lookup-release .check { min-height: 44px; }
+  .lookup-release .input { min-height: 44px; font-size: 16px; }
 }
 .cancellation-preview summary { cursor: pointer; padding-block: var(--s-2); font-weight: 600; }
 .cancellation-preview .table-wrap { width: 100%; }

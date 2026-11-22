@@ -261,6 +261,8 @@ export function createPayments(
         // An order's total never changes after it is placed, so an open session is always for the right amount.
         if (open) return { kind: 'redirect' as const, url: open.url };
 
+        // Record the possible provider session under the event lock before calling Stripe.
+        await db.run('UPDATE orders SET stripe_checkout_started_at = COALESCE(stripe_checkout_started_at, $2) WHERE id = $1', [orderId, nowIso()]);
         const count = await db.get<{ n: string }>(`SELECT count(*) AS n FROM payment_sessions WHERE order_id = $1`, [orderId]);
         return {
           kind: 'create' as const,

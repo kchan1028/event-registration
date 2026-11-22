@@ -84,6 +84,35 @@ it('never makes an email from before migration 40 an attempt, and withholds a re
   }
 });
 
+it('adds staff hold-release evidence without attributing a historical cancellation', async () => {
+  const url = await testDatabaseUrl({ empty: true });
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+    for (let version = 1; version <= 43; version++) {
+      await client.query(MIGRATIONS[version - 1]);
+      await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
+    }
+    await client.query(`
+      INSERT INTO organizations(id,name,created_at) VALUES ('org_release_upgrade','Fictional club',now());
+      INSERT INTO events(id,organization_id,draft_json,revision,created_at,updated_at)
+        VALUES ('ev_release_upgrade','org_release_upgrade','{}',1,now(),now());
+      INSERT INTO orders(id,event_id,published_version,client_request_id,status,rider_json,waiver_json,quote_json,total_cents,hold_expires_at,created_at,updated_at)
+        VALUES ('ord_release_upgrade','ev_release_upgrade',1,'legacy-request','cancelled','{}','{}','{}',0,now(),now(),now());`);
+  } finally { await client.end(); }
+  const db = openDb(url);
+  try {
+    await db.migrate();
+    await db.migrate();
+    expect(await db.get('SELECT version FROM schema_migrations WHERE version = 44')).toEqual({ version: 44 });
+    expect(await db.get("SELECT status, staff_released_at, staff_released_by, staff_release_reason, stripe_checkout_tracked FROM orders WHERE id='ord_release_upgrade'"))
+      .toEqual({ status: 'cancelled', staff_released_at: null, staff_released_by: null, staff_release_reason: null, stripe_checkout_tracked: false });
+    await expect(db.run("UPDATE orders SET staff_released_at=now() WHERE id='ord_release_upgrade'"))
+      .rejects.toMatchObject({ code: '23514', constraint: 'staff_release_evidence_complete' });
+  } finally { await db.close(); }
+});
+
 describe('migration 36: terminal cancellation request refusals', () => {
   it('enforces matching request identities and supported terminal refusal statuses', async () => {
     const databaseUrl = await testDatabaseUrl(); const { app } = await testApp({ databaseUrl });
