@@ -904,6 +904,12 @@ test('a license correction replaces the volunteer’s stale ready card when chec
     const volunteer = await context.newPage();
     await volunteer.goto(`/#/events/${eventId}/check-in`);
     const search = volunteer.getByRole('searchbox', { name: 'Find a rider' });
+    let codeLookups = 0;
+    volunteer.on('response', (response) => {
+      if (response.request().method() !== 'GET') return;
+      const url = new URL(response.url());
+      if (url.pathname === `${eventUrl}/check-in` && url.searchParams.get('q') === code) codeLookups += 1;
+    });
     await search.fill(code);
     await search.press('Enter');
     const detail = volunteer.getByRole('region', { name: 'Rider check-in' });
@@ -911,6 +917,9 @@ test('a license correction replaces the volunteer’s stale ready card when chec
     const issue = detail.getByRole('button', { name: 'Check in and issue next bib' });
     await expect(result).toContainText('Ready to race');
     await expect(issue).toBeVisible();
+    // Typing schedules a second list read. Let it finish before the license correction,
+    // or that read can replace the open card and remove the check-in button.
+    await expect.poll(() => codeLookups).toBeGreaterThanOrEqual(2);
 
     const correction = await organizer.post(`/api/orders/${ready.orderId}/rider-corrections`, {
       data: { changes: { licenseNumber: 'DEMO-NEW-5678' }, reason: 'Correct the fictional license number' },
