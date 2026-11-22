@@ -379,7 +379,7 @@ Run `npm run test -- tests/health.test.ts`. The test uses a disposable PostgreSQ
 
 ### Pilot payment check rehearsal
 
-**Planned.** With fictional records in the approved Stripe sandbox, use the [proposed payment check](../operations.md#proposed-pilot-payment-check). Include a paid session with no event, a delayed payment whose success never arrived after its completion event, a paid event recorded as `unknown_session`, an older session that settles during a check, a missed check across a shift change, a payment older than the event history, and an unavailable list or export. Include a duplicate charge with no, pending, failed, partial and full refunds. Each must reach the action in the check's table, and an order-level status match alone must not pass one.
+**Planned.** With fictional records in the approved Stripe sandbox, use the [proposed payment check](../operations.md#proposed-pilot-payment-check). Include a paid session with no event, a delayed payment whose success never arrived after its completion event, a delayed failure with and without its event, a failed retry on an order another payment confirmed, `unknown_session` both for an absent session and for a known session with a different order reference, two events sharing one sandbox, an older session that settles during a check, a missed check across a shift change, a payment older than the event history, an operator without a finance role, and an unavailable list or export. Include a duplicate charge with no, requested, pending, failed, canceled, partial and full refunds, and one refunded in Stripe only. Each must reach the action in the check's table, and an order-level status match alone must not pass one.
 
 ### Local logical restore rehearsal
 

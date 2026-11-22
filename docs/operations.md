@@ -133,22 +133,27 @@ Use fictional records. Limit messages to environment, signal, observation time a
 
 ### Proposed pilot payment check
 
-**Proposed, manual.** Finds a payment the application did not apply because a notification was late, missing or not matched. The technical lead with approved Stripe access compares it with the [reconciliation export](../DATA_MODEL.md#provider_events), which an owner or finance account downloads. Run it on a report, at shift start and at an interval the pilot organizer confirms. It changes nothing in either system.
+**Proposed, manual.** Finds a payment the application did not apply because a notification was late, missing or not matched. One person does it only if they hold both approved Stripe access and an owner or finance role. Otherwise the technical lead and an owner or finance user do it together, each reading only what their own access allows, and the export is not handed over. The check leaves payments and registrations unchanged; the export download is recorded in the audit. Run it on a report, at shift start and at an interval the pilot organizer confirms.
 
-1. **Start from payments, not events.** In Stripe, list every payment and Checkout Session created since registration opened, and note each one's current status. Repeat the whole list at each check, so a payment that settles later, or during a check, is seen by the next one. This does not depend on Stripe's event history, which [goes back 30 days](https://docs.stripe.com/api/events/list). For a report, look up that payment however old it is.
-2. **Record the coverage.** Note when the list was taken, then download the export. Recheck a difference once before escalating, because a notification can arrive between the two. If the list or export is unavailable or incomplete, record that period as unverified and escalate.
-3. **Match each payment.** Find its session and payment reference in the export's `provider_event` rows and read `outcome` and `result_status`. An earlier completion event does not stand in for the later success or failure of a delayed payment. A matching order status alone is not a match.
-4. **Act on the result.**
+1. **Start from payments, not events.** In the Stripe environment the application uses, list every Checkout Session created since registration opened. The application writes the order ID on each session (`client_reference_id` and `metadata.order_id`) and on its payment (`metadata.order_id`). Count a session and its payment as one, and also list a payment that carries an order ID but has no listed session. Records without an order ID are not the application's. Repeat the whole list at each check, so a payment that settles later, or during a check, is seen by the next one. This does not depend on Stripe's event history, which [goes back 30 days](https://docs.stripe.com/api/events/list). For a report, look up that payment however old it is.
+2. **Keep to one event.** Check the records whose order ID is in this event's export. An order ID in no event's export is escalated. One that belongs to another event is left to that event's check.
+3. **Record the coverage.** Note when the list was taken, then download the export. Recheck a difference once before escalating, because a notification can arrive between the two. If the list or export is unavailable or incomplete, record that period as unverified and escalate.
+4. **Classify each payment from Stripe.** Paid means the payment succeeded, including one refunded later. Failed means the session completed, the payment did not succeed and it shows a payment error or was canceled. Not settled means it is still processing or its session is still open. Escalate anything else.
+5. **Match it.** Find the session and payment reference in the export's `provider_event` rows and read `outcome` and `result_status`. An earlier completion event does not stand in for a later success or failure. A matching order status alone is not a match. Use the first line below that applies.
 
 | What the check finds | Action |
 |---|---|
-| Paid, with a `paid` event recorded as `confirmed` | None |
-| Paid, with no row for that payment or no `paid` event | Escalate. This includes a payment with no event or delivery, and one recorded as `unknown_session`: that has no order, so no event's export contains it. Inspect the delivery before requesting a resend |
+| Any row for it recorded as `unknown_session` | Escalate, whatever its outcome. A known session with a different order reference keeps its row in the export; an unknown session has none |
+| Paid, with no `paid` row | Escalate, including when no event, delivery or row exists. Inspect the delivery before requesting a resend |
+| Paid, recorded as `duplicate_charge` | Follow the duplicate rule below |
 | Paid, recorded as `needs_attention` | Confirm the exception queue has it |
-| Paid, recorded as `duplicate_charge` | Add up the `refund` rows with that payment reference. No action if succeeded refunds cover the amount. Follow a pending refund. Escalate any amount left or a failed refund to finance |
-| Failed, with a `failed` event recorded | None. The order can correctly stay confirmed by another payment |
-| Failed, with no `failed` event where the session completed first | Escalate |
-| Not yet settled | Leave it for the next check |
+| Paid, recorded as `confirmed` | None |
+| Failed, with no `failed` row | Escalate |
+| Failed, with a `failed` row | None. The order can correctly stay confirmed by another payment |
+| Not settled | Leave it for the next check |
+| Anything else | Escalate |
+
+**Duplicate rule.** Compare the refunds Stripe shows for that payment with the export's `refund` rows for the same payment reference. Escalate a refund that is on one side only, or whose amount or status differs. When they agree, count `succeeded` as returned and `requested` or `pending` as on the way; `failed` and `canceled` count for nothing. Returned covering the charge needs no action. Returned plus on the way covering it is followed until it settles. Any shortfall goes to finance.
 
 Use fictional records in rehearsal, and keep payment references in the approved restricted views. Escalation follows the approved [rehearsal alert routing](#rehearsal-alert-routing).
 
