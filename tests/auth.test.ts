@@ -296,7 +296,7 @@ describe('organizer roles', () => {
   });
 
   it('refuses a stale waiver review even when the newer draft puts the live waiver back', async () => {
-    const { call, eventId } = await twoClubs();
+    const { call, eventId, categoryId } = await twoClubs();
     const url = `/api/events/${eventId}`;
     const save = async (waiverVersion: string | null, name: string) => {
       const { config, revision } = (await call(OWNER, 'GET', url)).json() as { config: EventConfig; revision: number };
@@ -309,6 +309,14 @@ describe('organizer roles', () => {
     await save(null, 'Draft B');
     const refused = await call(OWNER, 'POST', `${url}/publish`, { acknowledgeWarnings: true, waiverChange: { reason: 'Reason for draft A', revision, publishedVersion: 1 } });
     expect(refused.statusCode).toBe(409);
+
+    // It is refused as stale before any other check: here B also needs an impact and a warning acknowledgement.
+    const now = (await call(OWNER, 'GET', url)).json() as { config: EventConfig; revision: number };
+    now.config.categories.find((c) => c.id === categoryId)!.pricing.baseCents += 1000;
+    expect((await call(OWNER, 'PUT', `${url}/config`, now)).statusCode).toBe(200);
+    const first = await call(OWNER, 'POST', `${url}/publish`, { waiverChange: { reason: 'Reason for draft A', revision, publishedVersion: 1 } });
+    expect(first.statusCode).toBe(409);
+    expect(first.json().error).toContain('review the waiver change again');
     expect((await call(OWNER, 'GET', url)).json().publishedVersion).toBe(1);
   });
 

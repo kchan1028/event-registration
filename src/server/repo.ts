@@ -3,7 +3,7 @@ import { requireCancellationOpen, requireCancellationPlacementUnchanged } from '
 import { canAdmit, entryCountsByCategory, type LimitUsage } from '../shared/capacity';
 import { bibSettingsSchema, DEFAULT_BIB_SETTINGS, type BibSettings } from '../shared/checkin';
 import { newId } from '../shared/factory';
-import { waiverChanged, waiverReasonProblem, type WaiverChange } from '../shared/impact';
+import { waiverChanged, waiverReasonProblem } from '../shared/impact';
 import { eventConfigSchema, type EventConfig, type CapacityEntry, type PublicEventSummary } from '../shared/schema';
 import { countIssues, validateConfig, type Issue } from '../shared/validation';
 import type { Db } from './db';
@@ -260,15 +260,10 @@ export function createRepo(db: Db, clock: () => Date) {
       });
     },
 
-    async publish(id: string, acknowledgeWarnings: boolean, audit: { publishedBy?: string; waiverChange?: WaiverChange } = {}): Promise<{ version: number; issues: Issue[] }> {
+    async publish(id: string, acknowledgeWarnings: boolean, audit: { publishedBy?: string; waiverChangeReason?: string } = {}): Promise<{ version: number; issues: Issue[] }> {
       return db.transaction(async () => {
         await db.lock(eventLock(id));
         const current = await requireEvent(id);
-        const given = audit.waiverChange;
-        // A waiver review covers one draft and live version, even if the newer draft no longer changes the waiver.
-        if (given && (given.revision !== current.revision || given.publishedVersion !== current.publishedVersion)) {
-          throw new HttpError(409, 'The draft or the published version changed after this reason was written. Reload, review the waiver change again, then write the reason.');
-        }
         await requireCancellationPlacementUnchanged(db, id, current.config);
         const issues = validateConfig(current.config, await entries(id));
         const { errors, warnings } = countIssues(issues);
@@ -277,9 +272,10 @@ export function createRepo(db: Db, clock: () => Date) {
         await requireWaiverVersionKeepsItsText(id, current.config);
         let reason: string | null = null;
         if (current.publishedVersion !== null && waiverChanged(await getVersion(id, current.publishedVersion), current.config)) {
-          const problem = waiverReasonProblem(given?.reason ?? '');
-          if (!given || problem) throw new HttpError(422, problem ?? 'Write why the waiver changed before publishing.');
-          reason = given.reason.trim();
+          const given = audit.waiverChangeReason ?? '';
+          const problem = waiverReasonProblem(given);
+          if (problem) throw new HttpError(422, problem);
+          reason = given.trim();
         }
         const version = (current.publishedVersion ?? 0) + 1;
         await db.run(

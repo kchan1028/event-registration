@@ -324,13 +324,21 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     // and recorded, with no entry or draft change in between. repo.publish joins it as a savepoint.
     const version = await db.transaction(async () => {
       await db.lock(eventLock(id));
+      // A waiver review covers one draft and live version, even if a newer draft no longer changes the waiver.
+      // Checked first, so a stale review is not asked to acknowledge a draft it never saw.
+      if (body.waiverChange) {
+        const { revision, publishedVersion } = await repo.getEvent(id);
+        if (body.waiverChange.revision !== revision || body.waiverChange.publishedVersion !== publishedVersion) {
+          throw new HttpError(409, 'The draft or the published version changed after this reason was written. Reload, review the waiver change again, then write the reason.');
+        }
+      }
       // A change that touches riders who already entered must be reviewed, like warnings.
       const { impact } = await impactFor(id);
       if (impact && impact.categories.length > 0 && !body.acknowledgeImpact) {
         const n = impact.categories.length;
         throw new HttpError(422, `Review who the ${n} changed ${n === 1 ? 'category' : 'categories'} with entries affect before publishing.`, impact);
       }
-      const result = await repo.publish(id, body.acknowledgeWarnings, { publishedBy: me(req).id, waiverChange: body.waiverChange });
+      const result = await repo.publish(id, body.acknowledgeWarnings, { publishedBy: me(req).id, waiverChangeReason: body.waiverChange?.reason });
       // Paid entries the change touches each get an item in the resolution workflow.
       if (impact && impact.categories.length > 0) await resolutions.record(id, result.version, impact);
       return result.version;
