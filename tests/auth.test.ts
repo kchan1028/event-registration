@@ -102,6 +102,7 @@ describe('organizations are isolated from each other', () => {
       ['publish', 'POST', `/api/events/${eventId}/publish`, { acknowledgeWarnings: true }],
       ['add test entries', 'POST', `/api/events/${eventId}/test-entries`, { categoryId, count: 1 }],
       ['orders', 'GET', `/api/events/${eventId}/orders`],
+      ['reservation status', 'POST', `/api/events/${eventId}/reservation-status`, { reference: 'rider-request-0001' }],
       ['one order', 'GET', `/api/orders/${order.id}`],
       ['transfer', 'POST', `/api/order-entries/${entryId}/transfer`, { toCategoryId: categoryId, reason: 'Moving the rider' }],
       ['withdraw', 'POST', `/api/order-entries/${entryId}/withdraw`, { reason: 'Rider withdrew' }],
@@ -154,6 +155,7 @@ describe('organizer roles', () => {
     const routes: Record<string, [Method, string, unknown?]> = {
       edit: ['PUT', `/api/events/${eventId}/config`, { revision: event.revision, config: event.config }],
       orders: ['GET', `/api/events/${eventId}/orders`],
+      reservation: ['POST', `/api/events/${eventId}/reservation-status`, { reference: 'rider-request-0001' }],
       checkIn: ['GET', `/api/events/${eventId}/check-in`],
       bibPreview: ['POST', `/api/events/${eventId}/bibs/preview`, {}],
       startLists: ['GET', `/api/events/${eventId}/start-lists`],
@@ -162,10 +164,10 @@ describe('organizer roles', () => {
       members: ['GET', `/api/organizations/${valley}/members`],
     };
     const expected: Record<string, Record<string, number>> = {
-      [team.registration_manager]: { edit: 200, orders: 200, checkIn: 200, bibPreview: 400, startLists: 200, entriesCsv: 200, ledgerCsv: 403, members: 403 },
-      [team.check_in_volunteer]: { edit: 403, orders: 403, checkIn: 200, bibPreview: 403, startLists: 403, entriesCsv: 403, ledgerCsv: 403, members: 403 },
-      [team.timer_export]: { edit: 403, orders: 403, checkIn: 403, bibPreview: 403, startLists: 200, entriesCsv: 200, ledgerCsv: 403, members: 403 },
-      [team.finance]: { edit: 403, orders: 200, checkIn: 403, bibPreview: 403, startLists: 403, entriesCsv: 403, ledgerCsv: 200, members: 403 },
+      [team.registration_manager]: { edit: 200, orders: 200, reservation: 200, checkIn: 200, bibPreview: 400, startLists: 200, entriesCsv: 200, ledgerCsv: 403, members: 403 },
+      [team.check_in_volunteer]: { edit: 403, orders: 403, reservation: 403, checkIn: 200, bibPreview: 403, startLists: 403, entriesCsv: 403, ledgerCsv: 403, members: 403 },
+      [team.timer_export]: { edit: 403, orders: 403, reservation: 403, checkIn: 403, bibPreview: 403, startLists: 200, entriesCsv: 200, ledgerCsv: 403, members: 403 },
+      [team.finance]: { edit: 403, orders: 200, reservation: 200, checkIn: 403, bibPreview: 403, startLists: 403, entriesCsv: 403, ledgerCsv: 200, members: 403 },
     };
     for (const [email, outcomes] of Object.entries(expected)) {
       // Every role can open the event itself.

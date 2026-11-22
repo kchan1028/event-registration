@@ -1,3 +1,4 @@
+import type { OrderStatus } from './api';
 import { refundableCents, type RefundStatus } from '../shared/refunds';
 import type { Category, EventConfig } from '../shared/schema';
 
@@ -32,3 +33,12 @@ export function byDisplayGroup(config: EventConfig, cats: Category[], restLabel:
 export function refundedCents(paidCents: number, refunds: readonly { amountCents: number; status: RefundStatus; duplicateCharge?: boolean }[]): number {
   return paidCents - refundableCents(paidCents, refunds.filter((r) => !r.duplicateCharge));
 }
+
+export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+  held: 'Places held, unpaid',
+  payment_failed: 'Payment declined',
+  confirmed: 'Paid',
+  expired: 'Hold expired',
+  cancelled: 'Cancelled by rider',
+  needs_attention: 'Needs attention',
+};
