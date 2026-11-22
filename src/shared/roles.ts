@@ -66,6 +66,12 @@ export const INVITATION_DAYS = 14;
 export type MembershipAction = 'granted' | 'invited' | 'invitation_renewed' | 'invitation_accepted' | 'invitation_expired' | 'removed' | 'invitation_cancelled' | 'ownership_transferred';
 
 /** An invitation still waiting for that person's first sign-in. */
+/** The invitation as the Team screen showed it when Resend was pressed. Resend acts on that invitation only. */
+export interface ShownInvitation {
+  expiresAt: string;
+  attemptId: string | null;
+}
+
 export interface Invitation {
   email: string;
   role: Role;

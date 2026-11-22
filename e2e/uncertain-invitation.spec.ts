@@ -44,3 +44,26 @@ test('an uncertain invitation can be retried without promising extra days', asyn
     expect((await new AxeBuilder({ page }).include('section.team').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   }
 });
+
+test('Resend names the invitation on screen and refreshes when it has changed', async ({ page }) => {
+  const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
+  const members = `/api/organizations/${organizationId}/members`;
+  const invited = { email: 'resend.stale@example.test', role: 'finance' };
+  expect((await page.request.post(members, { data: invited })).ok()).toBe(true);
+  await page.goto('/');
+  const organization = page.getByRole('article').filter({ has: page.locator(`a[href="#/events/${eventId}"]`) });
+  await organization.getByRole('button', { name: 'Team and roles', exact: true }).click();
+  const team = organization.getByRole('region', { name: /^Team and roles for / });
+  const resend = team.getByRole('button', { name: /^Resend invitation to resend\.stale@example\.test/ });
+  await expect(resend).toBeVisible();
+
+  const sent = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/members'));
+  await resend.click();
+  expect((await sent).status()).toBe(200);
+
+  expect((await page.request.post(`${members}/remove`, { data: invited })).ok()).toBe(true);
+  await resend.click();
+  await expect(team.getByRole('alert')).toContainText('This invitation changed');
+  await expect(team.getByText(invited.email, { exact: true }).and(team.locator('.team__email'))).toHaveCount(0);
+  expect((await (await page.request.get(members)).json()).invitations.map((i: { email: string }) => i.email)).not.toContain(invited.email);
+});

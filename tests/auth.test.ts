@@ -931,6 +931,52 @@ describe('organizer roles', () => {
     }
   });
 
+  it.each(['renewed', 'canceled', 'canceled and invited again', 'accepted', 'signed in after cancellation'])('a stale Resend changes nothing once the invitation is %s', async (change) => {
+    const invited = 'treasurer@valley.test';
+    const calls: string[] = [];
+    let now = new Date('2027-04-04T12:00:00.000Z');
+    const { app } = await testApp({ auth: fakeAuth(), now: () => now, email: { mode: 'resend', send: async (_message, key) => (calls.push(key), 'msg-accepted') } });
+    const call = (method: Method, url: string, payload?: object, who = OWNER) => app.inject({ method, url, headers: as(who), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const url = `/api/organizations/${org.id}/members`;
+    const body = { email: invited, role: 'finance' };
+    const shown = (await call('POST', url, body)).json().invitations[0];
+    const stale = { ...body, resend: { expiresAt: shown.expiresAt, attemptId: shown.lastEmail.attemptId } };
+    now = new Date(now.getTime() + 1000);
+    if (change === 'renewed') await call('POST', url, stale);
+    else if (change === 'accepted') await call('GET', '/api/me', undefined, invited);
+    else await call('POST', `${url}/remove`, body);
+    if (change === 'canceled and invited again') await call('POST', url, body);
+    if (change === 'signed in after cancellation') await call('GET', '/api/me', undefined, invited);
+    const before = (await call('GET', url)).json();
+    const sent = calls.length;
+
+    expect((await call('POST', url, stale)).statusCode).toBe(409);
+    expect((await call('GET', url)).json()).toEqual(before);
+    expect(calls).toHaveLength(sent);
+  });
+
+  it('resends an invitation that never had an email, as a seed leaves it', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth() });
+    const call = (method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(OWNER), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const url = `/api/organizations/${org.id}/members`;
+    const db = openDb(databaseUrl);
+    try {
+      await db.run(
+        `INSERT INTO organization_invitations (organization_id, email, role, created_at, expires_at) VALUES ($1, 'seeded@valley.test', 'finance', '2027-04-01T12:00:00Z', '2027-04-15T12:00:00Z')`,
+        [org.id],
+      );
+      const shown = (await call('GET', url)).json().invitations[0];
+      const response = await call('POST', url, { email: shown.email, role: shown.role, resend: { expiresAt: shown.expiresAt, attemptId: null } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().history[0]).toMatchObject({ action: 'invitation_renewed' });
+    } finally {
+      await db.close();
+    }
+  });
+
   it('does not reuse a canceled attempt when a seed re-adds it at the same timestamp', async () => {
     const now = new Date('2027-04-03T12:00:00.000Z');
     const email: EmailSender = {
