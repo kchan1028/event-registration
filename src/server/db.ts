@@ -757,6 +757,10 @@ export const MIGRATIONS: string[] = [
   CREATE TRIGGER organization_invitations_revise BEFORE UPDATE OF expires_at ON organization_invitations
     FOR EACH ROW EXECUTE FUNCTION revise_invitation();
   `,
+  `
+  -- Identifies one grant, so Remove cannot take a role that was granted after the screen loaded.
+  ALTER TABLE organization_members ADD COLUMN revision text NOT NULL DEFAULT gen_random_uuid()::text;
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

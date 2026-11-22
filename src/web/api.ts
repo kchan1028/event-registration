@@ -301,7 +301,7 @@ export async function downloadFile(url: string): Promise<void> {
 }
 
 export interface MemberList {
-  members: { accountId: string; email: string; role: Role }[];
+  members: { accountId: string; email: string; role: Role; revision: string }[];
   invitations: Invitation[];
   /** The most recent role changes, newest first. */
   history: MembershipChange[];
@@ -332,7 +332,8 @@ export const api = {
   addMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role }),
   resendInvitation: (orgId: string, email: string, role: Role, revision: string) => request<MemberList>('POST', `/api/organizations/${orgId}/invitations/resend`, { email, role, revision }),
   retryInvitation: (orgId: string, email: string, role: Role, retryAttempt: string) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role, retryAttempt }),
-  removeMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members/remove`, { email, role }),
+  removeMember: (orgId: string, email: string, role: Role, revision: string) => request<MemberList>('POST', `/api/organizations/${orgId}/members/revoke`, { email, role, revision }),
+  cancelInvitation: (orgId: string, email: string, role: Role, revision: string) => request<MemberList>('POST', `/api/organizations/${orgId}/invitations/cancel`, { email, role, revision }),
   transferOwnership: (orgId: string, email: string) => request<MemberList>('POST', `/api/organizations/${orgId}/ownership-transfer`, { email }),
   organizations: () => request<OrganizationSummary[]>('GET', '/api/organizations'),
   createOrganization: (name: string) => request<{ id: string; name: string }>('POST', '/api/organizations', { name }),

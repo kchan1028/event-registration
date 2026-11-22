@@ -134,6 +134,8 @@ const HISTORY_LIMIT = 50;
 
 /** Accounts, organization roles, and the checks every organizer route makes. `appUrl`: where invitation emails send people to sign in; empty when email is only recorded. */
 const EARLIER_EMAIL = 'An earlier email for this invitation might have been sent, so it cannot be resent. To send a new email, cancel the invitation and invite again.';
+const MEMBER_CHANGED = 'This role changed, so nothing was removed.';
+const INVITATION_NOT_CANCELED = 'This invitation changed, so it was not canceled and no role was removed.';
 const INVITATION_CHANGED = 'This invitation changed, so this request sent no email.';
 
 export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, mailer: Mailer, appUrl: string) {
@@ -271,8 +273,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
   }
 
   async function listMembers(organizationId: string) {
-    const members = await db.all<{ account_id: string; email: string; role: Role }>(
-      `SELECT m.account_id, a.email, m.role FROM organization_members m JOIN accounts a ON a.id = m.account_id WHERE m.organization_id = $1 ORDER BY a.email, m.role`,
+    const members = await db.all<{ account_id: string; email: string; role: Role; revision: string }>(
+      `SELECT m.account_id, a.email, m.role, m.revision FROM organization_members m JOIN accounts a ON a.id = m.account_id WHERE m.organization_id = $1 ORDER BY a.email, m.role`,
       [organizationId],
     );
     const invitations = await db.all<{ email: string; role: Role; expires_at: string; revision: string; earlier_email: boolean; email_id: string | null; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null }>(
@@ -287,7 +289,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       [organizationId],
     );
     return {
-      members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role })),
+      members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role, revision: m.revision })),
       invitations: invitations.map(
         (i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at, revision: i.revision, earlierEmail: i.earlier_email, lastEmail: i.email_id && i.email_status && i.email_at ? { attemptId: i.email_id, status: i.email_status, at: i.email_at } : null }),
       ),
@@ -390,21 +392,36 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     };
   }
 
-  /** Removes one role (or invitation). The last owner cannot be removed, so an organization is never orphaned. */
-  async function removeMember(organizationId: string, email: string, role: Role, by: Account) {
+  /** Removes the one grant shown. The last owner cannot be removed, so an organization is never orphaned. */
+  async function removeMember(organizationId: string, email: string, role: Role, revision: string, by: Account) {
     const normalized = email.trim().toLowerCase();
     return db.transaction(async () => {
       await db.lock(`org-members:${organizationId}`);
-      const target = await db.get<{ id: string }>(`SELECT id FROM accounts WHERE lower(email) = $1`, [normalized]);
-      if (target && role === 'owner') {
+      const shown = await db.get<{ account_id: string }>(
+        `SELECT m.account_id FROM organization_members m JOIN accounts a ON a.id = m.account_id
+         WHERE m.organization_id = $1 AND lower(a.email) = $2 AND m.role = $3 AND m.revision = $4`,
+        [organizationId, normalized, role, revision],
+      );
+      if (!shown) throw new HttpError(409, MEMBER_CHANGED);
+      if (role === 'owner') {
         const owners = await db.all<{ account_id: string }>(`SELECT account_id FROM organization_members WHERE organization_id = $1 AND role = 'owner'`, [organizationId]);
-        if (owners.length === 1 && owners[0].account_id === target.id) throw new HttpError(409, 'An organization needs at least one owner. Add another owner first.');
+        if (owners.length === 1) throw new HttpError(409, 'An organization needs at least one owner. Add another owner first.');
       }
-      const removed = target ? await db.run(`DELETE FROM organization_members WHERE organization_id = $1 AND account_id = $2 AND role = $3`, [organizationId, target.id, role]) : 0;
-      const cancelled = await db.run(`DELETE FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3`, [organizationId, normalized, role]);
-      if (removed + cancelled === 0) throw new HttpError(404, 'That person does not hold this role here.');
-      if (removed) await record(organizationId, 'removed', normalized, role, by.id);
-      if (cancelled) await record(organizationId, 'invitation_cancelled', normalized, role, by.id);
+      const removed = await db.run(`DELETE FROM organization_members WHERE organization_id = $1 AND account_id = $2 AND role = $3 AND revision = $4`, [organizationId, shown.account_id, role, revision]);
+      if (!removed) throw new HttpError(409, MEMBER_CHANGED);
+      await record(organizationId, 'removed', normalized, role, by.id);
+      return listMembers(organizationId);
+    });
+  }
+
+  /** Cancels the one invitation shown. It never removes a role, including one the invitation has since become. */
+  async function cancelInvitation(organizationId: string, email: string, role: Role, revision: string, by: Account) {
+    const normalized = email.trim().toLowerCase();
+    return db.transaction(async () => {
+      await db.lock(`org-members:${organizationId}`);
+      const cancelled = await db.run(`DELETE FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 AND revision = $4`, [organizationId, normalized, role, revision]);
+      if (!cancelled) throw new HttpError(409, INVITATION_NOT_CANCELED);
+      await record(organizationId, 'invitation_cancelled', normalized, role, by.id);
       return listMembers(organizationId);
     });
   }
@@ -444,7 +461,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     );
   }
 
-  return { accountFor, requireOrg, requireEvent, requireOrderAccess, memberships, grant, listMembers, addMember, retryInvitation, removeMember, transferOwnership, expiredInvitations };
+  return { accountFor, requireOrg, requireEvent, requireOrderAccess, memberships, grant, listMembers, addMember, retryInvitation, removeMember, cancelInvitation, transferOwnership, expiredInvitations };
 }
 
 export type Access = ReturnType<typeof createAccess>;

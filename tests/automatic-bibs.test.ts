@@ -5,6 +5,7 @@ import { as } from './support/auth';
 import { eventLock } from '../src/server/repo';
 import type { EventConfig } from '../src/shared/schema';
 import type { AutomaticBibJob, CheckInList } from '../src/shared/checkin';
+import { takeOffTeam } from './support/membership';
 
 async function setup() {
   let now = new Date('2027-03-01T18:00:00Z'); // 10:00 in the event's Los Angeles time zone.
@@ -241,7 +242,7 @@ describe('post-close automatic bib allocation', () => {
     const manager = 'bib-manager@example.test';
     await app.inject({ method: 'POST', url: `/api/organizations/${organizationId}/members`, payload: { email: manager, role: 'registration_manager' } });
     await app.inject({ method: 'POST', url: `/api/events/${eventId}/automatic-bibs`, headers: as(manager), payload: { sort: 'name' } });
-    await app.inject({ method: 'POST', url: `/api/organizations/${organizationId}/members/remove`, payload: { email: manager, role: 'registration_manager' } });
+    await takeOffTeam((method, url, payload) => app.inject({ method, url, payload }), organizationId, manager, 'registration_manager');
     advance('2027-03-01T18:11:00Z');
     await run();
     expect((await jobs())[0]).toMatchObject({ completedAt: null, message: expect.stringContaining('no longer has bib-settings permission') });

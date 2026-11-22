@@ -2,6 +2,7 @@ import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 import { cancellationSetup as setup } from './support/cancellation';
 import { as } from './support/auth';
+import { takeOffTeam } from './support/membership';
 
 describe('cancellation execution financial preflight', () => {
   it('uses the accepted partial-package allocation without moving entries, payments or evidence', async () => {
@@ -102,7 +103,7 @@ describe('cancellation execution financial preflight', () => {
     const other = await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/events`, payload: { name: 'Other Fictional Race', template: 'weekend', startDate: '2027-04-01', timeZone: 'America/Los_Angeles' } });
     expect(other.statusCode, other.body).toBe(201);
     expect((await s.app.inject({ method: 'GET', url: `/api/events/${other.json().id}/cancellation-confirmations/${p.id}/financial-preflight` })).statusCode).toBe(404);
-    expect((await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members/remove`, payload: { email: 'finance@readiness.test', role: 'finance' } })).statusCode).toBe(200);
+    expect((await takeOffTeam((method, url, payload) => s.app.inject({ method, url, payload }), s.organizationId, 'finance@readiness.test', 'finance')).statusCode).toBe(200);
     expect((await s.read(p.id, as('finance@readiness.test'))).statusCode).toBe(404);
   });
 });

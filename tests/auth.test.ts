@@ -10,6 +10,7 @@ import type { EventConfig } from '../src/shared/schema';
 import { INVITATION_DAYS } from '../src/shared/roles';
 import { as, fakeAuth } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
+import { takeOffTeam } from './support/membership';
 
 // Sign-in and organizer roles (ADR 0003 Phase 2, product.md "Sign-in and account security").
 // Sessions are faked: `as(email)` signs a request in as a fictional .test address.
@@ -138,6 +139,9 @@ describe('organizations are isolated from each other', () => {
       ['create coupon', 'POST', `/api/events/${eventId}/coupons`, { code: 'TAKEOVER', kind: 'percent', percent: 100 }],
       ['new event in their org', 'POST', `/api/organizations/${valley}/events`, { name: 'Takeover', template: 'weekend', startDate: '2027-04-24', timeZone: 'America/Los_Angeles' }],
       ['members', 'GET', `/api/organizations/${valley}/members`],
+      ['revoke a role', 'POST', `/api/organizations/${valley}/members/revoke`, { email: OWNER, role: 'owner', revision: 'guess' }],
+      ['cancel an invitation', 'POST', `/api/organizations/${valley}/invitations/cancel`, { email: OWNER, role: 'owner', revision: 'guess' }],
+      ['use the retired route', 'POST', `/api/organizations/${valley}/members/remove`, { email: OWNER, role: 'owner' }],
       ['resend an invitation', 'POST', `/api/organizations/${valley}/invitations/resend`, { email: OTHER_OWNER, role: 'owner', revision: 'guess' }],
       ['grant themselves a role', 'POST', `/api/organizations/${valley}/members`, { email: OTHER_OWNER, role: 'owner' }],
     ];
@@ -232,7 +236,7 @@ describe('organizer roles', () => {
     const members = (await call(OWNER, 'GET', `/api/organizations/${valley}/members`)).json() as { members: { email: string }[]; invitations: unknown[] };
     expect(members.members.map((m) => m.email)).toContain(newcomer);
     expect(members.invitations).toEqual([]);
-    expect((await call(OWNER, 'POST', `/api/organizations/${valley}/members/remove`, { email: newcomer, role: 'check_in_volunteer' })).statusCode).toBe(200);
+    expect((await takeOffTeam((...args) => call(OWNER, ...args), valley, newcomer, 'check_in_volunteer')).statusCode).toBe(200);
     expect((await call(newcomer, 'GET', `/api/events/${eventId}/check-in`)).statusCode).toBe(404);
   });
 
@@ -835,7 +839,7 @@ describe('organizer roles', () => {
     lose = false;
     if (change === 'recovered') await call('POST', url, stale);
     else if (change === 'accepted') await call('GET', '/api/me', undefined, invited);
-    else await call('POST', `${url}/remove`, body);
+    else await takeOffTeam(call, org.id, body.email, body.role);
     if (change === 'signed in after cancellation') await call('GET', '/api/me', undefined, invited);
     const before = (await call('GET', url)).json();
     const sent = calls.length;
@@ -868,7 +872,7 @@ describe('organizer roles', () => {
       expect((await call('POST', url, { ...body, retryAttempt: attemptId })).statusCode).toBe(409);
       expect((await call('GET', url)).json()).toEqual(before);
       expect(calls).toHaveLength(1);
-      await call('POST', `${url}/remove`, body);
+      await takeOffTeam(call, org.id, body.email, body.role);
       expect((await call('POST', url, body)).json().invitations[0]).toMatchObject({ earlierEmail: false, lastEmail: { status: 'sent' } });
       expect(calls).toHaveLength(2);
     } finally {
@@ -947,7 +951,7 @@ describe('organizer roles', () => {
     now = new Date(now.getTime() + 1000);
     if (change === 'renewed') expect((await call('POST', resendUrl, stale)).statusCode).toBe(200);
     else if (change === 'accepted') await call('GET', '/api/me', undefined, invited);
-    else await call('POST', `${url}/remove`, body);
+    else await takeOffTeam(call, org.id, body.email, body.role);
     if (change === 'canceled and invited again') await call('POST', url, body);
     if (change === 'signed in after cancellation') await call('GET', '/api/me', undefined, invited);
     const before = (await call('GET', url)).json();
@@ -973,7 +977,7 @@ describe('organizer roles', () => {
       const shown = (await call('GET', url)).json().invitations[0];
       const resendUrl = `/api/organizations/${org.id}/invitations/resend`;
       const replace = async () => {
-        await call('POST', `${url}/remove`, { email: shown.email, role: shown.role });
+        await takeOffTeam(call, org.id, shown.email, shown.role);
         await db.run(
           `INSERT INTO organization_invitations (organization_id, email, role, created_at, expires_at) VALUES ($1, 'seeded@valley.test', 'finance', '2027-04-01T12:00:00Z', '2027-04-15T12:00:00Z')`,
           [org.id],
@@ -1014,7 +1018,7 @@ describe('organizer roles', () => {
     try {
       expect((await invite()).statusCode).toBe(200);
       const first = (await client.query<{ id: string }>(`SELECT id FROM email_messages`)).rows[0].id;
-      const cancelled = await call('POST', `${members}/remove`, { email: 'treasurer@valley.test', role: 'finance' });
+      const cancelled = await takeOffTeam(call, org.id, 'treasurer@valley.test', 'finance');
       expect(cancelled.statusCode).toBe(200);
       const seeded = await access.addMember(org.id, 'treasurer@valley.test', 'finance', null);
       expect(seeded.invitations).toEqual([expect.objectContaining({ email: 'treasurer@valley.test', lastEmail: null })]);
@@ -1073,7 +1077,7 @@ describe('organizer roles', () => {
     await client.connect();
     try {
       expect((await invite('treasurer@valley.test')).statusCode).toBe(200);
-      const cancelled = await call('POST', `${members}/remove`, { email: 'treasurer@valley.test', role: 'finance' });
+      const cancelled = await takeOffTeam(call, org.id, 'treasurer@valley.test', 'finance');
       expect(cancelled.statusCode).toBe(200);
       expect((cancelled.json() as { invitations: unknown[] }).invitations).toEqual([]);
       const again = await invite('treasurer@valley.test');
@@ -1130,9 +1134,49 @@ describe('organizer roles', () => {
     }
   });
 
+  it.each(['accepted', 'renewed', 'canceled and invited again'])('a stale Cancel changes nothing once the invitation is %s', async (change) => {
+    const invited = 'treasurer@valley.test';
+    const { app } = await testApp({ auth: fakeAuth() });
+    const call = (method: Method, url: string, payload?: object, who = OWNER) => app.inject({ method, url, headers: as(who), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const base = `/api/organizations/${org.id}`;
+    const body = { email: invited, role: 'finance' };
+    const stale = { ...body, revision: (await call('POST', `${base}/members`, body)).json().invitations[0].revision as string };
+    if (change === 'accepted') await call('GET', '/api/me', undefined, invited);
+    if (change === 'renewed') expect((await call('POST', `${base}/invitations/resend`, stale)).statusCode).toBe(200);
+    if (change === 'canceled and invited again') {
+      expect((await call('POST', `${base}/invitations/cancel`, stale)).statusCode).toBe(200);
+      await call('POST', `${base}/members`, body);
+    }
+    const before = (await call('GET', `${base}/members`)).json();
+
+    expect((await call('POST', `${base}/invitations/cancel`, stale)).statusCode).toBe(409);
+    // A screen from before revisions sends this for both buttons.
+    expect((await call('POST', `${base}/members/remove`, body)).statusCode).toBe(409);
+    expect((await call('GET', `${base}/members`)).json()).toEqual(before);
+  });
+
+  it('a stale Remove leaves a role that was granted again', async () => {
+    const { app } = await testApp({ auth: fakeAuth() });
+    const call = (method: Method, url: string, payload?: object, who = OWNER) => app.inject({ method, url, headers: as(who), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const base = `/api/organizations/${org.id}`;
+    const body = { email: 'treasurer@valley.test', role: 'finance' };
+    await call('GET', '/api/me', undefined, body.email);
+    const shown = (await call('POST', `${base}/members`, body)).json().members.find((m: { email: string }) => m.email === body.email);
+    const stale = { ...body, revision: shown.revision };
+    expect((await call('POST', `${base}/members/revoke`, stale)).statusCode).toBe(200);
+    await call('POST', `${base}/members`, body);
+    const before = (await call('GET', `${base}/members`)).json();
+
+    expect((await call('POST', `${base}/members/revoke`, stale)).statusCode).toBe(409);
+    expect((await call('POST', `${base}/members/remove`, body)).statusCode).toBe(409);
+    expect((await call('GET', `${base}/members`)).json()).toEqual(before);
+  });
+
   it('never removes the last owner', async () => {
     const { call, valley } = await twoClubs();
-    const res = await call(OWNER, 'POST', `/api/organizations/${valley}/members/remove`, { email: OWNER, role: 'owner' });
+    const res = await takeOffTeam((...args) => call(OWNER, ...args), valley, OWNER, 'owner');
     expect(res.statusCode).toBe(409);
   });
 
@@ -1144,9 +1188,9 @@ describe('organizer roles', () => {
     await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: manager, role: 'registration_manager' });
     await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: newcomer, role: 'finance' });
     await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: newcomer, role: 'check_in_volunteer' });
-    await call(OWNER, 'POST', `/api/organizations/${valley}/members/remove`, { email: newcomer, role: 'finance' });
+    await takeOffTeam((...args) => call(OWNER, ...args), valley, newcomer, 'finance');
     await call(newcomer, 'GET', '/api/me');
-    await call(OWNER, 'POST', `/api/organizations/${valley}/members/remove`, { email: manager, role: 'registration_manager' });
+    await takeOffTeam((...args) => call(OWNER, ...args), valley, manager, 'registration_manager');
     // Adding a role someone already holds records nothing.
     await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: newcomer, role: 'check_in_volunteer' });
     const { history } = (await call(OWNER, 'GET', `/api/organizations/${valley}/members`)).json() as { history: { action: string; email: string; role: string; by: string | null }[] };
@@ -1172,7 +1216,7 @@ describe('organizer roles', () => {
     const membersUrl = `/api/organizations/${valley}/members`;
     const formerMember = { email: RIDER_EMAIL, role: 'check_in_volunteer' };
     expect((await call(OWNER, 'POST', membersUrl, formerMember)).statusCode).toBe(200);
-    expect((await call(OWNER, 'POST', `${membersUrl}/remove`, formerMember)).statusCode).toBe(200);
+    expect((await takeOffTeam((...args) => call(OWNER, ...args), valley, formerMember.email, formerMember.role)).statusCode).toBe(200);
     const before = (await call(OWNER, 'GET', membersUrl)).json();
     // Signing in, having a different organization's role, or having a removed role is insufficient.
     for (const outsider of [successor, OTHER_OWNER, formerMember.email]) {
@@ -1215,7 +1259,7 @@ describe('organizer roles', () => {
     expect((await call(OWNER, 'POST', membersUrl, predecessorRole)).statusCode).toBe(200);
     // The second owner can remove the role in either ordering.
     expect((await call(OWNER, 'POST', membersUrl, { email: OTHER_OWNER, role: 'owner' })).statusCode).toBe(200);
-    const remove = () => call(OTHER_OWNER, 'POST', `${membersUrl}/remove`, predecessorRole);
+    const remove = () => takeOffTeam((...args) => call(OTHER_OWNER, ...args), valley, predecessorRole.email, predecessorRole.role);
     const transfer = () => call(OWNER, 'POST', `/api/organizations/${valley}/ownership-transfer`, { email: RIDER_EMAIL });
 
     const blocker = new pg.Client({ connectionString: databaseUrl });
