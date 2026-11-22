@@ -1142,11 +1142,14 @@ describe('organizer roles', () => {
     const base = `/api/organizations/${org.id}`;
     const body = { email: invited, role: 'finance' };
     const stale = { ...body, revision: (await call('POST', `${base}/members`, body)).json().invitations[0].revision as string };
-    if (change === 'accepted') await call('GET', '/api/me', undefined, invited);
+    if (change === 'accepted') {
+      await call('GET', '/api/me', undefined, invited);
+      expect((await call('GET', `${base}/members`)).json().members).toEqual(expect.arrayContaining([expect.objectContaining(body)]));
+    }
     if (change === 'renewed') expect((await call('POST', `${base}/invitations/resend`, stale)).statusCode).toBe(200);
     if (change === 'canceled and invited again') {
       expect((await call('POST', `${base}/invitations/cancel`, stale)).statusCode).toBe(200);
-      await call('POST', `${base}/members`, body);
+      expect((await call('POST', `${base}/members`, body)).json().invitations).toEqual([expect.objectContaining(body)]);
     }
     const before = (await call('GET', `${base}/members`)).json();
 
@@ -1166,7 +1169,7 @@ describe('organizer roles', () => {
     const shown = (await call('POST', `${base}/members`, body)).json().members.find((m: { email: string }) => m.email === body.email);
     const stale = { ...body, revision: shown.revision };
     expect((await call('POST', `${base}/members/revoke`, stale)).statusCode).toBe(200);
-    await call('POST', `${base}/members`, body);
+    expect((await call('POST', `${base}/members`, body)).json().members).toEqual(expect.arrayContaining([expect.objectContaining(body)]));
     const before = (await call('GET', `${base}/members`)).json();
 
     expect((await call('POST', `${base}/members/revoke`, stale)).statusCode).toBe(409);
@@ -1176,9 +1179,70 @@ describe('organizer roles', () => {
 
   it('never removes the last owner', async () => {
     const { call, valley } = await twoClubs();
+    const url = `/api/organizations/${valley}/members`;
+    const before = (await call(OWNER, 'GET', url)).json();
+    expect(before.members).toEqual([expect.objectContaining({ email: OWNER, role: 'owner', revision: expect.any(String) })]);
     const res = await takeOffTeam((...args) => call(OWNER, ...args), valley, OWNER, 'owner');
     expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: 'An organization needs at least one owner. Add another owner first.' });
+    expect((await call(OWNER, 'GET', url)).json()).toEqual(before);
   });
+
+  it('gives Cancel and a first sign-in one outcome when they overlap', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth() });
+    const call = (method: Method, url: string, payload?: object, who = OWNER) => app.inject({ method, url, headers: as(who), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const base = `/api/organizations/${org.id}`;
+    const body = { email: 'treasurer@valley.test', role: 'finance' };
+    const { revision } = (await call('POST', `${base}/members`, body)).json().invitations[0];
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    try {
+      // Holds sign-in after it has read the invitation, before it grants the role.
+      await blocker.query('BEGIN');
+      await blocker.query('LOCK TABLE membership_changes IN EXCLUSIVE MODE');
+      const signIn = call('GET', '/api/me', undefined, body.email).then((r) => r.statusCode);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const cancel = call('POST', `${base}/invitations/cancel`, { ...body, revision }).then((r) => r.statusCode);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await blocker.query('ROLLBACK');
+      expect(await signIn).toBe(200);
+      expect(await cancel).toBe(409);
+      const after = (await call('GET', `${base}/members`)).json();
+      expect(after.members).toEqual(expect.arrayContaining([expect.objectContaining(body)]));
+      expect(after.history.map((h: { action: string }) => h.action)).not.toContain('invitation_cancelled');
+    } finally {
+      await blocker.end();
+    }
+  }, 15_000);
+
+  it.each(['members/revoke', 'invitations/cancel'])('refuses %s when the caller stops being an owner while it waits', async (route) => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth() });
+    const call = (method: Method, url: string, payload?: object, who = OWNER) => app.inject({ method, url, headers: as(who), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const base = `/api/organizations/${org.id}`;
+    const body = { email: 'treasurer@valley.test', role: 'finance' };
+    if (route === 'members/revoke') await call('GET', '/api/me', undefined, body.email);
+    const team = (await call('POST', `${base}/members`, body)).json();
+    const row = [...team.members, ...team.invitations].find((r: { email: string }) => r.email === body.email);
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`org-members:${org.id}`]);
+      const waiting = call('POST', `${base}/${route}`, { ...body, revision: row.revision }).then((r) => r.statusCode);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await blocker.query(`UPDATE organization_members SET role = 'timer_export' WHERE organization_id = $1 AND role = 'owner'`, [org.id]);
+      await blocker.query('COMMIT');
+      expect(await waiting).toBe(403);
+      const left = await blocker.query(`SELECT revision FROM organization_members WHERE organization_id = $1 AND revision = $2 UNION ALL SELECT revision FROM organization_invitations WHERE organization_id = $1 AND revision = $2`, [org.id, row.revision]);
+      expect(left.rowCount).toBe(1);
+    } finally {
+      await blocker.end();
+    }
+  }, 15_000);
 
   it('records every role change with who made it, newest first', async () => {
     const { call, valley } = await twoClubs();

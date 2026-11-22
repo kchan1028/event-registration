@@ -92,6 +92,7 @@ test('Cancel on an outdated screen keeps a role the invitation became, and Remov
     await expect(cancel).toHaveCount(0);
     const revoke = team.getByRole('button', { name: new RegExp(`^Remove .* role from ${invited.email}$`) });
     await expect(revoke).toBeVisible();
+    expect((await recipient.request.get(`/api/events/${eventId}/orders`)).status()).toBe(200);
     await revoke.click();
     await expect(revoke).toHaveCount(0);
     expect((await recipient.request.get(`/api/events/${eventId}/orders`)).status()).toBe(404);

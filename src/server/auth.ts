@@ -157,7 +157,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       const t = nowIso();
       await db.run(`INSERT INTO accounts (id, provider_user_id, email, created_at) VALUES ($1, $2, $3, $4)`, [id, signedIn.providerUserId, email, t]);
       const invitations = await db.all<{ organization_id: string; role: Role; open: boolean }>(
-        `SELECT organization_id, role, expires_at > $2 AS open FROM organization_invitations WHERE email = $1`,
+        // The row locks give sign-in and a concurrent Cancel one outcome: whichever is first wins.
+        `SELECT organization_id, role, expires_at > $2 AS open FROM organization_invitations WHERE email = $1 FOR UPDATE`,
         [email, t],
       );
       for (const i of invitations) await record(i.organization_id, i.open ? 'invitation_accepted' : 'invitation_expired', email, i.role, id);
@@ -397,6 +398,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     const normalized = email.trim().toLowerCase();
     return db.transaction(async () => {
       await db.lock(`org-members:${organizationId}`);
+      // Checked again under the lock: the caller can lose ownership while this waits.
+      await requireOrg(by, organizationId, 'members.manage');
       const shown = await db.get<{ account_id: string }>(
         `SELECT m.account_id FROM organization_members m JOIN accounts a ON a.id = m.account_id
          WHERE m.organization_id = $1 AND lower(a.email) = $2 AND m.role = $3 AND m.revision = $4`,
@@ -419,6 +422,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     const normalized = email.trim().toLowerCase();
     return db.transaction(async () => {
       await db.lock(`org-members:${organizationId}`);
+      // Checked again under the lock: the caller can lose ownership while this waits.
+      await requireOrg(by, organizationId, 'members.manage');
       const cancelled = await db.run(`DELETE FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 AND revision = $4`, [organizationId, normalized, role, revision]);
       if (!cancelled) throw new HttpError(409, INVITATION_NOT_CANCELED);
       await record(organizationId, 'invitation_cancelled', normalized, role, by.id);
