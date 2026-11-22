@@ -3,6 +3,7 @@ import { testApp } from './support/db';
 import { applyCorrection, matchesRegistration, normalizeText } from '../src/shared/lookup';
 import { checkSignature, type RiderDetails } from '../src/shared/checkout';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 /* Registration lookup and manual corrections (product.md 4, Organizer workspace). */
 
@@ -105,7 +106,7 @@ type Order = {
 async function setup() {
   const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z'), holdMinutes: 10 });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const ev = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
   const code = (c: string) => ev.config.categories.find((x) => x.timingCode === c)!.id;
   let n = 0;

@@ -21,12 +21,16 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
   const [compared, setCompared] = useState<{ revision: number; publishedVersion: number | null; waiverChanged: boolean } | null>(null);
   const [check, setCheck] = useState(0);
   const [reason, setReason] = useState('');
-  // A reason is for one draft against one live version.
-  useEffect(() => setReason(''), [data.revision, data.publishedVersion]);
-
-  // Recompute after every saved draft revision; the server compares the saved draft with the latest published version.
+  // Acknowledgements and a reason are for one draft against one live version.
   useEffect(() => {
-    if (data.publishedVersion === null || draft.saveState !== 'saved') return;
+    setAck(false);
+    setImpactAck(false);
+    setReason('');
+  }, [data.revision, data.publishedVersion]);
+
+  // Recompute after every saved draft revision. Before a first publication this only confirms that nobody saved or published since the screen loaded.
+  useEffect(() => {
+    if (draft.saveState !== 'saved') return;
     let live = true;
     setImpactError(null);
     api
@@ -47,10 +51,10 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
     };
   }, [data.id, data.revision, data.publishedVersion, draft.saveState, check]);
 
-  // Publishing again waits for a comparison of exactly the draft and live version on this screen.
-  const needsComparison = !upToDate && data.publishedVersion !== null;
+  // Every publish waits for a comparison of exactly the draft and live version on this screen.
   const sameDraft = compared?.revision === data.revision && compared?.publishedVersion === data.publishedVersion;
-  const comparisonReady = !needsComparison || (draft.saveState === 'saved' && sameDraft);
+  const unsaved = draft.saveState !== 'saved';
+  const comparisonReady = upToDate || (!unsaved && sameDraft);
   // The server can only be ahead of this screen, when someone else saved or published.
   const changedElsewhere = compared !== null && (compared.revision > data.revision || (compared.publishedVersion ?? 0) > (data.publishedVersion ?? 0));
   // Ask nothing from, and show nothing of, a comparison of another draft.
@@ -65,8 +69,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
     setBusy(true);
     setMsg(null);
     try {
-      const waiverChange = needsReason && data.publishedVersion !== null ? { reason, revision: data.revision, publishedVersion: data.publishedVersion } : undefined;
-      const v = await draft.publish(ack, impactAck, waiverChange);
+      const v = await draft.publish({ revision: data.revision, publishedVersion: data.publishedVersion }, ack, impactAck, needsReason ? reason : undefined);
       setMsg({ tone: 'ok', text: `Published as version ${v}. The published version is frozen; later edits stay in the draft until you publish again.` });
       setAck(false);
       setImpactAck(false);
@@ -79,6 +82,14 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
       setBusy(false);
     }
   };
+
+  const waitingFor = unsaved
+    ? 'Publishing waits until the draft is saved.'
+    : impactError || changedElsewhere
+      ? 'Publishing waits until the check above succeeds.'
+      : data.publishedVersion === null
+        ? 'Checking the saved draft…'
+        : 'Checking what changed since the published version…';
 
   return (
     <div className="settings">
@@ -112,7 +123,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
         </p>
       )}
 
-      {data.publishedVersion !== null && !upToDate && (
+      {!upToDate && (data.publishedVersion !== null || changedElsewhere || impactError) && (
         <ImpactPanel
           impact={shownImpact}
           error={changedElsewhere ? 'This event was changed or published somewhere else. Reload it and review the changes before publishing.' : impactError}
@@ -139,12 +150,12 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
         </div>
         {warnings > 0 && (
           <label className="check">
-            <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} disabled={errors > 0} />I have reviewed the {warnings} {warnings === 1 ? 'warning' : 'warnings'} above
+            <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} disabled={errors > 0 || unsaved} />I have reviewed the {warnings} {warnings === 1 ? 'warning' : 'warnings'} above
           </label>
         )}
         {needsImpactAck && (
           <label className="check">
-            <input type="checkbox" checked={impactAck} onChange={(e) => setImpactAck(e.target.checked)} disabled={errors > 0} />I have reviewed who these changes affect
+            <input type="checkbox" checked={impactAck} onChange={(e) => setImpactAck(e.target.checked)} disabled={errors > 0 || unsaved} />I have reviewed who these changes affect
           </label>
         )}
         {needsReason && (
@@ -164,7 +175,7 @@ export function Publish({ draft, onOpenIssue }: { draft: Draft; onOpenIssue: (i:
         </button>
         {errors > 0 && <p className="muted small">Fix the errors above to publish.</p>}
         {errors === 0 && !comparisonReady && (
-          <p className="muted small">{impactError || changedElsewhere ? 'Publishing waits until the comparison above succeeds.' : 'Checking what changed since the published version…'}</p>
+          <p className="muted small">{waitingFor}</p>
         )}
         {data.publishedVersion !== null && (
           <a className="btn btn--secondary btn--small" href={href({ page: 'register', eventId: data.id })}>
@@ -227,14 +238,16 @@ interface PanelProps {
   error: string | null;
   recovery: { label: string; run: () => void };
   saving: boolean;
-  publishedVersion: number;
+  publishedVersion: number | null;
 }
 
 function ImpactPanel({ impact, error, recovery, saving, publishedVersion }: PanelProps) {
   return (
     <section className="settings__section impact" aria-labelledby="impact-title">
-      <h3 id="impact-title">Who these changes affect</h3>
-      <p className="muted small">Compared with version {publishedVersion}, for riders who already entered or hold a place. {saving ? 'Updating after the draft saves.' : ''}</p>
+      <h3 id="impact-title">{publishedVersion === null ? 'Check before publishing' : 'Who these changes affect'}</h3>
+      {publishedVersion !== null && (
+        <p className="muted small">Compared with version {publishedVersion}, for riders who already entered or hold a place. {saving ? 'Updating after the draft saves.' : ''}</p>
+      )}
       {error ? (
         <>
           <p className="text-error small" role="alert">

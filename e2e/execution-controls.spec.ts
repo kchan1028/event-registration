@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures';
 import type { CancellationExecutionInput } from '../src/shared/cancellations';
+import { publishReviewed } from './support/publish';
 
 async function setup(page: Page, policy: 'full_refund' | 'credit' | null = 'full_refund', keepTests = false) {
   const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
@@ -8,7 +9,7 @@ async function setup(page: Page, policy: 'full_refund' | 'credit' | null = 'full
   const event = await (await page.request.get(`/api/events/${eventId}`)).json();
   event.config.registration.refundRules = policy ? { tiers: [], returnAs: 'cash', organizerCancellation: policy } : null;
   expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision: event.revision, config: event.config } })).status()).toBe(200);
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
   const cat = event.config.categories.find((c: { timingCode: string }) => c.timingCode === 'RR-M35-34');
   const rider = { firstName: 'Execution', lastName: 'Fictional', email: 'execution@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Fictional Contact', phone: '555-555-0199' } };
   const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: { clientRequestId: `execution-screen-${eventId}`, categoryIds: [cat.id], rider, waiver: { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Execution Fictional', signerRole: 'rider' } } });

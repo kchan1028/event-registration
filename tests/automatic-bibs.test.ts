@@ -6,6 +6,7 @@ import { eventLock } from '../src/server/repo';
 import type { EventConfig } from '../src/shared/schema';
 import type { AutomaticBibJob, CheckInList } from '../src/shared/checkin';
 import { takeOffTeam } from './support/membership';
+import { publishReviewed } from './support/publish';
 
 async function setup() {
   let now = new Date('2027-03-01T18:00:00Z'); // 10:00 in the event's Los Angeles time zone.
@@ -17,7 +18,7 @@ async function setup() {
   event.config.registration.demoIgnoreWindows = false;
   for (const category of event.config.categories) category.registration.closesAt = '2027-03-01T10:05';
   expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { config: event.config, revision: event.revision } })).statusCode).toBe(200);
-  expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+  expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
   expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in-demo-riders` })).statusCode).toBe(201);
   const setBibs = (first: number, last: number) => app.inject({ method: 'PUT', url: `/api/events/${eventId}/bib-settings`, payload: { scope: 'weekend', ranges: [{ scope: 'weekend', first, last }] } });
   await setBibs(100, 199);
@@ -33,7 +34,7 @@ describe('post-close automatic bib allocation', () => {
     for (const c of config.categories) c.bibRange = config.races.find((r) => r.id === c.raceId)!.dayId === config.days[0].id ? { first: 100, last: 180 } : { first: disjoint ? 181 : 150, last: 199 };
     const current = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { revision: number };
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { config, revision: current.revision } })).statusCode).toBe(200);
-    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     await enable();
     advance('2027-03-01T18:11:00Z');
     await run();
@@ -160,14 +161,14 @@ describe('post-close automatic bib allocation', () => {
     const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
     event.config.categories[0].registration.closesAt = null;
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config: event.config } })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
     await run();
     expect((await jobs())[0].message).toContain('Missing closing times');
     const next = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
     next.config.categories[0].registration.closesAt = '2027-03-01T10:05';
     next.config.registration.demoIgnoreWindows = true;
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: next.revision, config: next.config } })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
     await run();
     expect((await jobs())[0].message).toContain('demo registration-window bypass');
     expect((await jobs())[0].completedAt).toBeNull();

@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
 import type { CheckInList } from '../src/shared/checkin';
+import { publishReviewed } from './support/publish';
 
 for (const hasTouch of [false, true]) {
   test.describe(hasTouch ? 'coarse pointer' : 'fine pointer', () => {
@@ -11,7 +12,7 @@ for (const hasTouch of [false, true]) {
       // Short but valid day labels must still provide a usable hit area.
       event.config.days.forEach((day: { label: string }, index: number) => { day.label = String(index + 1); });
       expect((await page.request.put(`/api/events/${eventId}/config`, { data: { config: event.config, revision: event.revision } })).status()).toBe(200);
-      await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+      await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true });
       await page.goto(`/#/events/${eventId}/check-in`);
       const builder = page.getByRole('link', { name: 'Builder', exact: true });
       const days = page.getByRole('radiogroup', { name: 'Race day' });
@@ -65,7 +66,7 @@ for (const { width, delaySave } of [
   test(`volunteer can look up riders and issue a bib with only the keyboard at ${width}px${scenario}`, async ({ page, browser }) => {
     const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
     const checkInUrl = `/api/events/${eventId}/check-in`;
-    expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+    expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
     expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
     expect((await page.request.put(`/api/events/${eventId}/bib-settings`, {
       data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },

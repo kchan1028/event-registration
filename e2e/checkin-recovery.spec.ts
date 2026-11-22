@@ -1,6 +1,7 @@
 import type { Route } from '@playwright/test';
 import { expect, test, type Page } from './fixtures';
 import type { CheckInList, CheckInRider } from '../src/shared/checkin';
+import { publishReviewed } from './support/publish';
 
 async function selectRaceDay(page: Page, label: string) {
   const days = page.getByRole('radiogroup', { name: 'Race day' });
@@ -89,7 +90,7 @@ for (const mobile of [false, true]) {
     const committed = failure !== 'unreceived request';
     test(`check-in recovery (${failure}, ${mobile ? 'phone' : 'desktop'}${reload ? ', after full reload' : ''})`, async ({ page, browser }) => {
       const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
-      expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+      expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
       expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
       expect((await page.request.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } })).ok()).toBe(true);
       const email = 'recovery.volunteer@example.test';
@@ -285,7 +286,7 @@ for (const mobile of [false, true]) {
 
 test('a list read started before check-in does not restore the ready card', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
   expect((await page.request.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } })).ok()).toBe(true);
   const list: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
@@ -344,7 +345,7 @@ test('a list read started before check-in does not restore the ready card', asyn
 
 test('saving bib ranges refreshes the search on screen', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
   const list: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
   const rider = list.riders.find((candidate) => candidate.checkInCode);
@@ -396,7 +397,7 @@ test('saving bib ranges refreshes the search on screen', async ({ page }) => {
 
 test('a failed search does not count the previous riders as matches', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
   await page.goto(`/#/events/${eventId}/check-in`);
   const search = page.getByRole('searchbox', { name: 'Find a rider' });
@@ -411,7 +412,7 @@ test('a failed search does not count the previous riders as matches', async ({ p
 
 test('an explicit lookup started before check-in does not restore the ready card', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
   expect((await page.request.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } })).ok()).toBe(true);
   const list: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
@@ -470,7 +471,7 @@ test('an explicit lookup started before check-in does not restore the ready card
 
 test('a lookup started during check-in still opens that rider after the save', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
   expect((await page.request.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } })).ok()).toBe(true);
   const list: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
@@ -553,7 +554,7 @@ test('a lookup started during check-in still opens that rider after the save', a
 
 test('a failed enter lookup does not present the following empty search as the result', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
   const openedAt = new Date('2026-06-01T12:00:00Z');
   await page.clock.install({ time: openedAt });
@@ -588,7 +589,7 @@ test('a failed enter lookup does not present the following empty search as the r
 
 test('a failed search does not present the previous empty list as the result', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
   await page.goto(`/#/events/${eventId}/check-in`);
   const search = page.getByRole('searchbox', { name: 'Find a rider' });
@@ -619,7 +620,7 @@ test('a failed search does not present the previous empty list as the result', a
 
 test('a failed refresh of an empty day does not say that nobody is registered', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   await page.goto(`/#/events/${eventId}/check-in`);
   const count = page.locator('.ci__count');
   await expect(page.getByText('No registered riders for this day yet.')).toBeVisible();
@@ -636,7 +637,7 @@ test('a failed refresh of an empty day does not say that nobody is registered', 
 
 test('a failed enter and its search show one connection error', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
   const openedAt = new Date('2026-06-01T12:00:00Z');
   await page.clock.install({ time: openedAt });
@@ -670,7 +671,7 @@ test('a failed enter and its search show one connection error', async ({ page })
 
 test('a failed refresh after check-in keeps the saved card', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
   expect((await page.request.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } })).ok()).toBe(true);
   const list: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();

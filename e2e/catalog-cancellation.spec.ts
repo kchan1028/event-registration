@@ -1,11 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
+import { publishReviewed } from './support/publish';
 
 for (const scope of ['event', 'day', 'race'] as const) {
   test(`labels ${scope} cancellation without hiding the event or promising availability`, async ({ page }) => {
     const { eventId } = await (await page.request.post('/api/demo')).json();
     expect((await page.request.delete(`/api/events/${eventId}/test-entries`)).status()).toBe(200);
-    expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+    expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
     const { config } = await (await page.request.get(`/api/events/${eventId}`)).json();
     const selection = scope === 'event' ? { scope } : scope === 'day' ? { scope, dayId: config.days[0].id } : { scope, raceId: config.races[0].id };
     const preview = await (await page.request.post(`/api/events/${eventId}/cancellation-confirmation-preview`, { data: selection })).json();

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { publishReviewed } from './support/publish';
 
 const saved = (page: Page) => expect(page.locator('.save')).toContainText('All changes saved', { timeout: 10_000 });
 
@@ -180,7 +181,7 @@ test('on a phone, the category editor opens as a drawer that takes and returns f
 
 test('changed waiver text needs a new waiver version before it publishes', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   await page.goto(`/#/events/${eventId}/setup`);
   await page.getByLabel('Waiver text', { exact: true }).fill('Changed fictional waiver.');
   await saved(page);
@@ -212,7 +213,7 @@ test('changed waiver text needs a new waiver version before it publishes', async
 
 test('a waiver change fits a phone and a change elsewhere asks for no reason', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   const edit = async (change: (config: { event: { name: string }; registration: { waiverVersion: string } }) => void) => {
     const { config, revision } = await (await page.request.get(`/api/events/${eventId}`)).json();
     change(config);
@@ -239,7 +240,7 @@ test('a waiver change fits a phone and a change elsewhere asks for no reason', a
 test('republishing waits for the comparison, and a reason never moves to another draft', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
   const url = `/api/events/${eventId}`;
-  expect((await page.request.post(`${url}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, url, { acknowledgeWarnings: true })).ok()).toBe(true);
   const changeWaiver = async (waiverVersion: string) => {
     const { config, revision } = await (await page.request.get(url)).json();
     config.registration.waiverVersion = waiverVersion;
@@ -278,7 +279,7 @@ test('republishing waits for the comparison, and a reason never moves to another
   await reason.fill('Reason written for draft A');
   await changeWaiver('sample-b');
   await button.click();
-  await expect(page.locator('.publish-box').getByRole('status')).toContainText('review the waiver change again');
+  await expect(page.locator('.publish-box').getByRole('status')).toContainText('review again before publishing');
   await expect(button).toBeDisabled();
   await page.getByRole('button', { name: 'Reload event' }).click();
   await expect(reason).toHaveValue('');
@@ -292,7 +293,7 @@ test('republishing waits for the comparison, and a reason never moves to another
 test('a comparison of another draft never asks this screen for a reason', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
   const url = `/api/events/${eventId}`;
-  expect((await page.request.post(`${url}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, url, { acknowledgeWarnings: true })).ok()).toBe(true);
   const edit = async (change: (config: { event: { name: string }; registration: { waiverVersion: string } }) => void) => {
     const { config, revision } = await (await page.request.get(url)).json();
     change(config);
@@ -317,6 +318,42 @@ test('a comparison of another draft never asks this screen for a reason', async 
   await reload.click();
   await expect(reason).toBeVisible();
 });
+
+for (const published of [false, true]) {
+  test(`a ${published ? 'later' : 'first'} publish never carries a review to a draft saved afterwards`, async ({ page }) => {
+    const { eventId } = await (await page.request.post('/api/demo')).json();
+    const url = `/api/events/${eventId}`;
+    const edit = async (change: (config: { event: { name: string }; }) => void) => {
+      const { config, revision } = await (await page.request.get(url)).json();
+      change(config);
+      expect((await page.request.put(`${url}/config`, { data: { revision, config } })).ok()).toBe(true);
+    };
+    if (published) expect((await publishReviewed(page.request, url, { acknowledgeWarnings: true })).ok()).toBe(true);
+    await edit((config) => void (config.event.name = 'Reviewed draft A'));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/#/events/${eventId}/publish`);
+    const button = page.getByRole('button', { name: `Publish version ${published ? 2 : 1}` });
+    const ack = page.getByLabel(/I have reviewed the/);
+    if (await ack.count()) await ack.check();
+    await expect(button).toBeEnabled();
+
+    await edit((config) => void (config.event.name = 'Unseen draft B'));
+    await button.click();
+    await expect(page.locator('.publish-box').getByRole('status')).toContainText('review again before publishing');
+    await expect(button).toBeDisabled();
+    expect((await (await page.request.get(url)).json()).publishedVersion).toBe(published ? 1 : null);
+
+    await page.getByRole('button', { name: 'Reload event' }).click();
+    await expect(page.locator('.topbar').getByText('Unseen draft B')).toBeVisible();
+    if (await ack.count()) {
+      await expect(ack).not.toBeChecked();
+      await ack.check();
+    }
+    await button.click();
+    await expect(page.locator('.publish-box').getByRole('status')).toContainText(`Published as version ${published ? 2 : 1}`);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}
 
 test('the refund warning opens refund rules and clears once notes are saved', async ({ page }) => {
   await page.goto('/');

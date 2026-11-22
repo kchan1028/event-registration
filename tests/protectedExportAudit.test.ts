@@ -3,6 +3,7 @@ import { expect, it } from 'vitest';
 import { as } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 const generatedAt = '2027-03-01T18:00:00.000Z';
 
@@ -11,7 +12,7 @@ async function setup() {
   const { app } = await testApp({ databaseUrl, now: () => new Date(generatedAt) });
   const { eventId, organizationId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json();
   const eventUrl = `/api/events/${eventId}`;
-  expect((await app.inject({ method: 'POST', url: `${eventUrl}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+  expect((await publishReviewed(app, eventUrl, { acknowledgeWarnings: true })).statusCode).toBe(200);
   const { config } = (await app.inject({ method: 'GET', url: eventUrl })).json() as { config: EventConfig };
   const raceId = config.races[0].id;
   const client = new pg.Client({ connectionString: databaseUrl });

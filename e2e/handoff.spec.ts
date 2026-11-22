@@ -2,10 +2,11 @@ import { E2E_ORGANIZER, expect, test } from './fixtures';
 import type { CheckInList } from '../src/shared/checkin';
 import { parseCsv } from '../src/shared/csv';
 import type { StartLists } from '../src/server/startlists';
+import { publishReviewed } from './support/publish';
 
 test('successor takes ownership in a separate account while outgoing roles remain scoped', async ({ page, browser }) => {
   const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
-  await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } });
+  await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await page.request.post(`/api/events/${eventId}/check-in-demo-riders`);
   await page.request.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });
   expect((await page.request.post(`/api/organizations/${organizationId}/members`, { data: { email: E2E_ORGANIZER, role: 'registration_manager' } })).status()).toBe(200);
@@ -82,7 +83,7 @@ test('timer role downloads a locked start list and sees the desk revision', asyn
   const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
   const eventUrl = `/api/events/${eventId}`;
   const listsUrl = `${eventUrl}/start-lists`;
-  expect((await page.request.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await page.request.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
   expect((await page.request.put(`${eventUrl}/bib-settings`, {
     data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
@@ -150,7 +151,7 @@ test('timer role downloads a locked start list and sees the desk revision', asyn
 test('incoming desk volunteer sees the existing bib and can check in the next rider', async ({ page, browser, baseURL }) => {
   const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
   const eventUrl = `/api/events/${eventId}`;
-  expect((await page.request.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).ok()).toBe(true);
   expect((await page.request.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
   expect((await page.request.put(`${eventUrl}/bib-settings`, {
     data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },

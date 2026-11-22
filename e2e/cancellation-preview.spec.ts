@@ -1,12 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 test('previews published cancellation impact with recovery and discards older responses', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
   const event = await (await page.request.get(`/api/events/${eventId}`)).json();
   const config = event.config as EventConfig;
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
   const rr = config.categories.find((c) => c.timingCode === 'RR-M35-34')!;
   const cr = config.categories.find((c) => c.timingCode === 'CR-M35-34')!;
   const rider = { firstName: 'Cancellation', lastName: 'Fictional', email: 'cancellation@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Fictional Contact', phone: '555-555-0199' } };
@@ -91,7 +92,7 @@ test('previews published cancellation impact with recovery and discards older re
 
 test('limits the screen to finance and owner and recovers an empty preview', async ({ page, browser }) => {
   const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
   for (const role of ['finance', 'registration_manager'] as const) {
     const email = `cancellation-${role}@example.test`;
     expect((await page.request.post(`/api/organizations/${organizationId}/members`, { data: { email, role } })).status()).toBe(200);
@@ -116,7 +117,7 @@ test('limits the screen to finance and owner and recovers an empty preview', asy
 
 test('rejects a preview that crossed a publication and retries against the new version', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
   let publishDuringRequest = true;
   await page.route(`**/api/events/${eventId}/cancellation-confirmation-preview`, async (route) => {
     if (publishDuringRequest) {
@@ -124,7 +125,7 @@ test('rejects a preview that crossed a publication and retries against the new v
       const event = await (await page.request.get(`/api/events/${eventId}`)).json();
       event.config.event.name = 'New published cancellation schedule';
       expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision: event.revision, config: event.config } })).status()).toBe(200);
-      expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+      expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
     }
     return route.continue();
   });

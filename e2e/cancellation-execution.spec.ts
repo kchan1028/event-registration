@@ -1,11 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
+import { publishReviewed } from './support/publish';
 
 test('shows cancelled entries separately from payment and active race readiness', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
   expect((await page.request.delete(`/api/events/${eventId}/test-entries`)).status()).toBe(200);
   const event = await (await page.request.get(`/api/events/${eventId}`)).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
   const rider = { firstName: 'Cancel', lastName: 'Fictional', email: 'cancel@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Fictional Contact', phone: '555-555-0199' } };
   const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: { clientRequestId: `cancel-screen-${eventId}`, categoryIds: [event.config.categories.find((c: { timingCode: string }) => c.timingCode === 'RR-M35-34').id], rider, waiver: { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Cancel Fictional', signerRole: 'rider' } } });
   expect(created.status()).toBe(201); const order = await created.json();

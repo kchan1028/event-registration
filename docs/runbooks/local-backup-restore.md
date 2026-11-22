@@ -117,7 +117,8 @@ async function download(path: string) {
 try {
   if (mode === 'seed') {
     const { eventId, organizationId } = await request('POST', '/api/demo', 201);
-    await request('POST', `/api/events/${eventId}/publish`, 200, { acknowledgeWarnings: true });
+    const { revision, publishedVersion } = await request('GET', `/api/events/${eventId}`, 200);
+    await request('POST', `/api/events/${eventId}/publish`, 200, { acknowledgeWarnings: true, reviewed: { revision, publishedVersion } });
     await request('POST', `/api/events/${eventId}/check-in-demo-riders`, 201);
     await request('PUT', `/api/events/${eventId}/bib-settings`, 200, { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
     const list = await request('GET', `/api/events/${eventId}/check-in`, 200);

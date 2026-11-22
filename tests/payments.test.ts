@@ -5,6 +5,7 @@ import { paymentsFromEnv, publicAppUrl, stripePayments } from '../src/server/pay
 import { testApp, testDatabaseUrl } from './support/db';
 import { as, fakeAuth } from './support/auth';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 /*
  * Stripe hosted Checkout in test mode (ADR 0002, Phase 2). No network: the Stripe client's
@@ -32,7 +33,7 @@ async function setup(opts: { holdMinutes?: number; client?: Stripe } = {}) {
   const databaseUrl = await testDatabaseUrl();
   const { app } = await testApp({ databaseUrl, now: () => now, holdMinutes: opts.holdMinutes ?? 10, payments, appUrl: 'http://app.test' });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
   const code = (c: string) => event.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };

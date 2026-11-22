@@ -4,6 +4,7 @@ import { parseCsv } from '../src/shared/csv';
 import { entriesCsv, ledgerCsv, type ExportOrder } from '../src/shared/exports';
 import { eventSummary } from '../src/shared/reports';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 /* Organizer exports: entries and a ledger (simulated or Stripe test-mode payments, refunds), from the database. */
 
@@ -12,7 +13,7 @@ const RIDER = { firstName: 'Pat', lastName: 'Demo', email: 'pat.demo@example.tes
 async function setup() {
   const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z'), holdMinutes: 10 });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const ev = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
   const code = (c: string) => ev.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Demo', signerRole: 'rider' };

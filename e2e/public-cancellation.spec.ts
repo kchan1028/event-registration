@@ -1,10 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures';
+import { publishReviewed } from './support/publish';
 
 async function fixture(page: Page) {
   const { eventId } = await (await page.request.post('/api/demo')).json();
   expect((await page.request.delete(`/api/events/${eventId}/test-entries`)).status()).toBe(200);
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
   const { config } = await (await page.request.get(`/api/events/${eventId}`)).json();
   const rr = config.categories.find((c: { timingCode: string }) => c.timingCode === 'RR-M35-34');
   const cr = config.categories.find((c: { timingCode: string }) => c.timingCode === 'CR-M35-34');

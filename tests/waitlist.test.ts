@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
 import { blocksPublicSale, effectiveWaitlistStatus, waitlistJoinSchema } from '../src/shared/waitlist';
+import { publishReviewed } from './support/publish';
 
 /* Organizer-managed waitlists: waitlist first, 24-hour offers, organizer turns it on per category. */
 
@@ -34,7 +35,7 @@ async function setup() {
     config.capacityPools = config.capacityPools.filter((p) => !p.memberCategoryIds.includes(c.id) && !(c.startGroupId && p.memberStartGroupIds.includes(c.startGroupId)));
     const saved = await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: cur.revision, config } });
     expect(saved.statusCode).toBe(200);
-    const pub = await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } });
+    const pub = await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true });
     expect(pub.statusCode).toBe(200);
   };
   await setCap(used);

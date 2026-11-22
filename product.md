@@ -48,7 +48,7 @@ Compete on measured volunteer time saved. Match the practical flexibility organi
 - Templates cover road race, criterium, and a two-day weekend. Copy a previous event without copying participants, payments, or signatures.
 - Configure category labels, age and license requirements, distances, start times, field limits, opening/closing times, and fees.
 - Offer individual-day entries and a weekend bundle. Show exact contents and one transparent total before payment.
-- Flag conflicting schedules and incomplete configuration for organizer review. Publishing requires a preview and checklist.
+- Flag conflicting schedules and incomplete configuration for organizer review. Publishing requires a preview and checklist. It publishes only the saved draft and live version that were reviewed: if either changed, or the request does not say which were reviewed, it is refused until the organizer reviews again. Warning and impact acknowledgements never carry over to another draft.
 - Track the year and source of race requirements so last year's rules are not silently treated as current.
 
 ### 1a. Road race and criterium category builder — P0
@@ -262,7 +262,7 @@ Status: Planned documentation only. The current app does not support time trials
 - Support parent/guardian entry and the applicable minor-signature workflow, subject to federation acceptance.
 - Collect only required profile, contact, emergency contact, team, and license information.
 - A waiver version identifies one text for the life of an event. Publishing refuses different text under a version that event already published: new text needs a new version, and an earlier version can return only with its exact text. A change of live version needs renewed agreement. If older publications already gave the live version two texts, new reservations stop until a version with only one text is published, either a new one or an earlier one with its exact text.
-- Every publication records who published it. One that changes the waiver after the first publication also needs a reason of 3 to 300 characters, kept with that version. A waiver change is a different waiver version or text, or an added, edited or removed category addendum, including one removed with its category (see the [owner decision](#waiver-change-reason-scope)). The reason belongs to the saved draft and live version it was written for: if either changed, publishing is refused until the organizer reviews again, even when the newer draft no longer changes the waiver. Publishing again waits until the screen has compared the current draft with the live version. Only roles that can publish see who and why; riders and public pages never do. Earlier versions show the publisher as not recorded.
+- Every publication records who published it. One that changes the waiver after the first publication also needs a reason of 3 to 300 characters, kept with that version. A waiver change is a different waiver version or text, or an added, edited or removed category addendum, including one removed with its category (see the [owner decision](#waiver-change-reason-scope)). The reason belongs to the saved draft and live version it was written for, like the [other publish acknowledgements](#1-event-and-weekend-setup): if either changed, publishing is refused until the organizer reviews again, even when the newer draft no longer changes the waiver. Every publish waits until the screen has checked the saved draft and the live version. Only roles that can publish see who and why; riders and public pages never do. Earlier versions show the publisher as not recorded.
 - Display waiver version and signature status. Payment success alone does not mean cleared to race.
 - Confirm entries only after authoritative payment confirmation. Handle delayed or failed payments explicitly.
 - Permit organizer-configured changes, withdrawals, and refund requests. Show policy before checkout.
@@ -917,6 +917,10 @@ Decided November 22, 2026; owner: project owner. Told that [#352](https://github
 Resolved November 22, 2026 (raised the same day); owner: project owner. The question was: Should the reason also be required for a new version label on the same text and for category addendum changes? It matters because the [audit rule](docs/coding-guide.md#audit-history) covers every waiver change, while the owner's earlier answer named waiver text. Until this answer, yes to both was a provisional assumption, because riders agree again after either change.
 
 The owner was asked "Keep the wider reason rule? You approved it for changed waiver text. I also require it for a new version label and for addendum changes, marked provisional in `product.md`. I recommend yes." and answered "yes". The reason is required for both.
+
+### Impact acknowledgement scope
+
+Open, raised November 22, 2026; owner: project owner. Should the publish impact acknowledgement cover the affected categories, or every affected rider? It matters because a rider can enter a changed category during review and be published under an acknowledgement that never showed them ([#370](https://github.com/kchan1028/event-registration/issues/370)). Provisional state, not an owner decision: the acknowledgement covers the reviewed draft and live version only. Binding it to riders would refuse a publish whenever anyone enters a changed category during review. Publishing and every other change can proceed; only the #370 fix waits. Revisit when the owner answers or before Phase 2 is marked complete.
 
 ### Waitlist offer status retry
 

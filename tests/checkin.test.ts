@@ -7,6 +7,7 @@ import { bibRangeForEntries, checkInResult, checkInTiming, mergeReadiness, nextF
 import type { CheckInRider } from '../src/shared/checkin';
 import type { EventConfig } from '../src/shared/schema';
 import type { ReadinessItem } from '../src/shared/checkout';
+import { publishReviewed } from './support/publish';
 
 const done = (key: ReadinessItem['key']): ReadinessItem => ({ key, label: key, state: 'done' });
 
@@ -64,7 +65,7 @@ type List = { dayId: string; days: { id: string }[]; riders: (Card & Pick<CheckI
 async function setup(databaseUrl?: string, now = () => new Date('2027-03-01T18:00:00Z')) {
   const { app } = await testApp({ databaseUrl, now });
   const { eventId, organizationId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string; organizationId: string };
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const seeded = await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in-demo-riders` });
   const list = async (q = '', day?: string) =>
     (await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in?${new URLSearchParams({ q, ...(day ? { day } : {}) })}` })).json() as List;
@@ -150,7 +151,7 @@ describe('check-in API', () => {
     const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
     for (const c of event.config.categories) c.bibRange = event.config.races.find((r) => r.id === c.raceId)!.dayId === first.dayId ? { first: 100, last: 180 } : { first: 150, last: 199 };
     await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { config: event.config, revision: event.revision } });
-    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     await setBibs({ scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
     expect((await checkIn(rider('Alex').orderId, 120)).statusCode).toBe(422);
     expect((await checkIn(rider('Alex').orderId)).json()).toMatchObject({ bib: 150 });

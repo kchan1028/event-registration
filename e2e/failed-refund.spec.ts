@@ -7,6 +7,7 @@ import type { PaymentProvider, ProviderEvent } from '../src/server/payments';
 import { HttpError } from '../src/server/repo';
 import { as, fakeAuth } from '../tests/support/auth';
 import { adminUrl, TEST_SERVER_URL } from '../tests/support/server';
+import { publishReviewed } from '../tests/support/publish';
 
 // An isolated local app returns an actual failed refund through its API; the provider is fake.
 for (const storageAvailable of [true, false]) test(`recovers the exact failed refund without another provider call (storage available: ${storageAvailable})`, async ({ page }) => {
@@ -31,7 +32,7 @@ for (const storageAvailable of [true, false]) test(`recovers the exact failed re
     const address = await app.listen({ host: '127.0.0.1', port: 0 });
     const call = (method: 'GET' | 'POST', path: string, payload?: object) => app!.inject({ method, url: path, headers: as(E2E_ORGANIZER), payload });
     const { eventId } = (await call('POST', '/api/demo')).json();
-    expect((await call('POST', `/api/events/${eventId}/publish`, { acknowledgeWarnings: true })).statusCode).toBe(200);
+    expect((await publishReviewed(app!, `/api/events/${eventId}`, { acknowledgeWarnings: true }, as(E2E_ORGANIZER))).statusCode).toBe(200);
     const { config } = (await call('GET', `/api/events/${eventId}`)).json();
     const ordered = await call('POST', `/api/rider/events/${eventId}/orders`, {
       clientRequestId: 'failed-refund-browser-order', categoryIds: [config.categories.find((c: { timingCode: string }) => c.timingCode === 'RR-M35-34').id],

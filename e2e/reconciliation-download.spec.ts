@@ -2,10 +2,11 @@ import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
 import { parseCsv } from '../src/shared/csv';
 import { expect, test, type Page } from './fixtures';
+import { publishReviewed } from './support/publish';
 
 async function fixture(page: Page) {
   const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
   const { config } = await (await page.request.get(`/api/events/${eventId}`)).json();
   const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: {
     clientRequestId: `recon-control-order-${eventId}`, categoryIds: [config.categories.find((c: { timingCode: string }) => c.timingCode === 'RR-M35-34').id],
@@ -122,6 +123,6 @@ test('unpublished events hide the control until publication', async ({ page }) =
   await page.goto(`/#/events/${eventId}/registrations`);
   await expect(page.getByRole('heading', { name: 'Registrations', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Local reconciliation records' })).toHaveCount(0);
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
   await page.reload(); await expect(page.getByRole('region', { name: 'Local reconciliation records' })).toBeVisible();
 });

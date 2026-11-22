@@ -3,6 +3,7 @@ import { describeRefundRules, refundPolicyLines, refundPolicyEntitlement, REFUND
 import type { EventConfig } from '../src/shared/schema';
 import { validateConfig } from '../src/shared/validation';
 import { testApp } from './support/db';
+import { publishReviewed } from './support/publish';
 
 // Refund and credit rules set by the organizer from templates (product.md "Event and race cancellation").
 
@@ -64,7 +65,7 @@ describe('refund rules in an event', () => {
   it('keep the rules a rider bought under after the organizer changes and republishes them', async () => {
     const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z') });
     const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
     const cat = event.config.categories.find((c) => c.timingCode === 'RR-M35-34')!.id;
     const rider = { firstName: 'Pat', lastName: 'Demo', email: 'pat.demo@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Robin Contact', phone: '555-555-0199' } };
@@ -74,7 +75,7 @@ describe('refund rules in an event', () => {
 
     const changed = { ...event.config, registration: { ...event.config.registration, refundRules: REFUND_TEMPLATES.credit_only.rules } };
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config: changed } })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
 
     const after = (await app.inject({ method: 'GET', url: `/api/orders/${order.id}` })).json() as { refundPolicy: string[] };
     expect(after.refundPolicy).toEqual(order.refundPolicy);

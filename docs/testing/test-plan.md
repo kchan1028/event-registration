@@ -218,6 +218,10 @@ Run the post-claim cases in `tests/profileClaims.test.ts` with claims/guardian/a
 
 Run the waiver cases in `tests/auth.test.ts` (publisher; required, ignored, malformed and stale reasons, including a newer draft that restores the live waiver or needs its own acknowledgements; every addendum change, including deleting its category; role and public visibility), the migration 43 case in `tests/migrations.test.ts`, `tests/impact.test.ts`, and the republishing cases in `tests/orders.test.ts` and `tests/categoryExtras.test.ts`. Run `e2e/organizer.spec.ts` for the reason field and its limits, its absence on other changes, a delayed or failed comparison, a draft saved elsewhere before or after the comparison, the versions table and phone width, and `e2e/checkout.spec.ts` for checkout after a waiver change.
 
+### Publish review binding
+
+Run the reviewed-draft cases in `tests/auth.test.ts`: an older draft, another live version, a missing or malformed review, refusal before any acknowledgement, replay, and two simultaneous publishes. Run `e2e/organizer.spec.ts` for a first and a later publish after a draft was saved elsewhere, with acknowledgements cleared on reload. Publishing is shared test setup, so a change to its request also runs every API file and browser spec that publishes, and the [local restore rehearsal](../runbooks/local-backup-restore.md), whose script publishes.
+
 ### Waiver acceptance evidence
 
 Run `tests/orders.test.ts`, `tests/juniors.test.ts` and `tests/migrations.test.ts` for server-derived signer account/declared racing age/time, ignored forged client evidence, identical checkout replay, correction preservation and schema upgrade leaving old evidence unknown. The evidence stays behind existing order authorization. These checks do not establish actual legal age, a valid official waiver, real identity or an approved retention policy. This increment changes data/API behavior, not screens.
