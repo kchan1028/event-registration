@@ -411,7 +411,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         if (waiver.version !== config.registration.waiverVersion) throw new HttpError(409, 'The waiver changed while you were registering. Read the current version and accept it again.');
         // Events published before publishing enforced one text per version: such a signature cannot name its text.
         if (await repo.waiverVersionHasOtherText(eventId, config)) {
-          throw new HttpError(409, 'Registration is paused: this waiver version was published with more than one text. Ask the event organizer to publish a new waiver version.');
+          throw new HttpError(409, 'Registration is paused: this waiver version was published with more than one text. Ask the event organizer to publish a waiver version that has only one text.');
         }
 
         // Registration windows are checked when places are held; a hold taken while open may be paid within its time.

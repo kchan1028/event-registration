@@ -261,7 +261,7 @@ Status: Planned documentation only. The current app does not support time trials
 - Show the published schedule with eligibility guidance; explain uncertain or blocked eligibility and provide a review path, as defined in the category builder requirements.
 - Support parent/guardian entry and the applicable minor-signature workflow, subject to federation acceptance.
 - Collect only required profile, contact, emergency contact, team, and license information.
-- A waiver version identifies one text for the life of an event. Publishing refuses different text under a version that event already published: new text needs a new version, and an earlier version can return only with its exact text. A change of live version needs renewed agreement. If older publications already gave the live version two texts, new reservations stop until a new version is published.
+- A waiver version identifies one text for the life of an event. Publishing refuses different text under a version that event already published: new text needs a new version, and an earlier version can return only with its exact text. A change of live version needs renewed agreement. If older publications already gave the live version two texts, new reservations stop until a version with only one text is published, either a new one or an earlier one with its exact text.
 - Display waiver version and signature status. Payment success alone does not mean cleared to race.
 - Confirm entries only after authoritative payment confirmation. Handle delayed or failed payments explicitly.
 - Permit organizer-configured changes, withdrawals, and refund requests. Show policy before checkout.
