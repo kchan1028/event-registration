@@ -1405,7 +1405,12 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
     <section className="reg__panel" aria-labelledby="waiver-title">
       <ErrorSummary errors={errors} />
       <h2 id="waiver-title">Waiver</h2>
-      {draft.pendingReservation && <p className="note" role="status">Your reservation request is pending. Retry to recover the same order before changing your entries. Your original details, waiver and signature are saved. If retries keep failing, contact the event organizer before starting another registration.</p>}
+      {pending && <>
+        <p className="note" role="status">Your reservation request is pending. Retry to recover the same order before changing your entries. Your original details, waiver and signature are saved.</p>
+        <Field id="reservation-reference" label="Reservation reference" hint="If retries keep failing, share this reference with the event organizer before starting another registration.">
+          {(id, describedBy) => <input id={id} aria-describedby={describedBy} className="input reference-input" readOnly value={pending.request.clientRequestId} />}
+        </Field>
+      </>}
       <p className="muted small">
         Version <code className="code">{(pending?.request.waiver.version ?? config.registration.waiverVersion) || 'none'}</code>.{config.event.isDemo ? ' Sample text for the demo: a signature here has no legal effect.' : ''}
       </p>
