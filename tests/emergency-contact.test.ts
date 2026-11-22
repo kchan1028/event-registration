@@ -202,7 +202,12 @@ describe('emergency contact lookup', () => {
     const registrations = await app.inject({ method: 'GET', url: '/api/rider/registrations', headers: riderHeaders });
     expect(registrations.body).toContain(phone);
 
-    expect((await app.inject({ method: 'POST', url: `/api/orders/${orderId}/rider-corrections`, headers: owner, payload: { changes: { emergencyContactPhone: '' }, reason: 'Blank must not clear the contact' } })).statusCode).toBe(422);
+    expect((await lookupStatus(app, riderHeaders, eventId, orderId))).toBe(404);
+    const kept = await app.inject({ method: 'POST', url: `/api/orders/${orderId}/rider-corrections`, headers: owner, payload: { changes: { team: 'Lookup Wheelers', emergencyContactPhone: '' }, reason: 'Blank phone must not clear the contact' } });
+    expect(kept.statusCode).toBe(200);
+    expect((kept.json() as { rider: { team: string } }).rider.team).toBe('Lookup Wheelers');
+    expect(JSON.stringify((kept.json() as { corrections: unknown }).corrections)).not.toContain('emergencyContactPhone');
+    expect((await app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: riderHeaders })).body).toContain(phone);
     const corrected = await app.inject({ method: 'POST', url: `/api/orders/${orderId}/rider-corrections`, headers: owner, payload: { changes: { emergencyContactPhone: nextPhone }, reason: 'Rider called with a new contact phone' } });
     expect(corrected.statusCode).toBe(200);
     expect(corrected.body).not.toContain(phone);

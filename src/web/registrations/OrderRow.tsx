@@ -188,7 +188,7 @@ function RiderCorrections({ order, canManage, onChange }: { order: OrderView; ca
         <ReasonForm
           variant="block"
           label={`Correct details for ${name}`}
-          intro="Contact and identity details only. Racing age, license category, and race choices decide eligibility, so change those with a transfer or a new registration. The waiver signature and the price paid are never changed."
+          intro="Contact and identity details only. Racing age, license category, and race choices decide eligibility, so change those with a transfer or a new registration. The waiver signature and the price paid are never changed. Leave an emergency-contact field blank to keep what is stored. A new name with a blank phone keeps the stored phone."
           reasonLabel="Reason for the correction (required)"
           hint="For example: rider emailed to fix a misspelled name."
           submitLabel="Save correction"
@@ -232,9 +232,12 @@ function RiderCorrections({ order, canManage, onChange }: { order: OrderView; ca
               <span className="small">
                 <strong>Details corrected</strong> · {formatDateTime(c.at)}{c.by && ` · by ${c.by}`} · Reason: {c.reason}
                 <br />
-                {c.changes.filter((x) => !EMERGENCY_FIELDS.has(x.field)).map((x) => `${x.label}: “${x.before || 'blank'}” to “${x.after || 'blank'}”`).join('; ')}
-                {c.changes.some((x) => EMERGENCY_FIELDS.has(x.field)) && ' Emergency contact was updated. Look it up for the current name and phone.'}
-                {c.licenseReviewsCleared > 0 && ' The license number changed, so the earlier license review was cleared and the license needs review again.'}
+                {[
+                  c.changes.filter((x) => !EMERGENCY_FIELDS.has(x.field)).map((x) => `${x.label}: “${x.before || 'blank'}” to “${x.after || 'blank'}”`).join('; '),
+                ].filter(Boolean).map((sentence) => `${sentence}.`).concat([
+                  c.changes.some((x) => EMERGENCY_FIELDS.has(x.field)) ? 'Emergency contact was updated. Look it up for the current name and phone.' : '',
+                  c.licenseReviewsCleared > 0 ? 'The license number changed, so the earlier license review was cleared and the license needs review again.' : '',
+                ].filter(Boolean)).join(' ')}
               </span>
             </li>
           ))}

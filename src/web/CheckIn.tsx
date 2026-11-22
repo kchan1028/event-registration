@@ -691,9 +691,7 @@ function RiderDetail({ eventId, dayId, rider, recovery, onRecovery, onChange, on
         )}
       </div>}
 
-      {recovery !== 'pending' && (
-        <EmergencyContactLookup key={rider.detailsOrderId} eventId={eventId} riderName={rider.name} orderId={rider.detailsOrderId} />
-      )}
+      <EmergencyContactLookup key={rider.detailsOrderId} eventId={eventId} riderName={rider.name} orderId={rider.detailsOrderId} />
 
       {recovery !== 'pending' && rider.bibHistory.some((h) => h.releasedAt) && (
         <div className="ci-section">
