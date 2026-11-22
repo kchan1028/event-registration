@@ -171,7 +171,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       const id = newId('eml');
       const status = sender.mode === 'local' ? 'recorded' : 'uncertain';
       await db.run(
-        `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at, from_email, keyed) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)`,
+        `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at, from_email) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [id, organizationId, kind, ref, message.to, message.subject, message.text, status, clock().toISOString(), sender.from ?? null],
       );
       return id;
@@ -181,14 +181,14 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
      * Sends one reserved attempt after its row has committed.
      * The caller leases the row and commits `started_at` before the provider call, and holds no connection
      * during it. Other callers wait for the lease, then read the committed status.
-     * `withheld` means the send cannot be repeated safely (local mode, no saved key, or past the 24-hour provider window).
+     * `withheld` means the send cannot be repeated safely (local mode, or past the 24-hour provider window).
      * `changed` means no invitation pointed at the attempt at the last check before the call, so nothing is sent.
      * A cancellation after that check cannot recall the send.
      */
     async dispatch(id: string): Promise<EmailStatus | 'withheld' | 'changed'> {
       for (;;) {
-        const row = await db.get<{ created_at: string; to_email: string; from_email: string | null; subject: string; body_text: string; status: EmailStatus; keyed: boolean; current: boolean; sending: boolean }>(
-          `SELECT created_at, to_email, from_email, subject, body_text, status, keyed,
+        const row = await db.get<{ created_at: string; to_email: string; from_email: string | null; subject: string; body_text: string; status: EmailStatus; current: boolean; sending: boolean }>(
+          `SELECT created_at, to_email, from_email, subject, body_text, status,
              EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = email_messages.id) AS current,
              COALESCE(sending_until > now(), false) AS sending
            FROM email_messages WHERE id = $1`,
@@ -203,7 +203,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
         if (!row.current) return 'changed';
         const created = Date.parse(row.created_at);
         const pastWindow = () => !Number.isFinite(created) || clock().getTime() - created >= RESEND_IDEMPOTENCY_WINDOW_MS;
-        if (sender.mode === 'local' || !row.keyed || pastWindow()) return 'withheld';
+        if (sender.mode === 'local' || pastWindow()) return 'withheld';
         // Checked again in the claim: another caller or a cancellation may have committed since the read.
         const lease = await db.get<Lease>(
           `UPDATE email_messages m

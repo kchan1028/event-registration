@@ -118,6 +118,7 @@ describe('organizations are isolated from each other', () => {
       ['publish', 'POST', `/api/events/${eventId}/publish`, { acknowledgeWarnings: true }],
       ['add test entries', 'POST', `/api/events/${eventId}/test-entries`, { categoryId, count: 1 }],
       ['orders', 'GET', `/api/events/${eventId}/orders`],
+      ['reservation status', 'POST', `/api/events/${eventId}/reservation-status`, { reference: 'rider-request-0001' }],
       ['one order', 'GET', `/api/orders/${order.id}`],
       ['transfer', 'POST', `/api/order-entries/${entryId}/transfer`, { toCategoryId: categoryId, reason: 'Moving the rider' }],
       ['withdraw', 'POST', `/api/order-entries/${entryId}/withdraw`, { reason: 'Rider withdrew' }],
@@ -170,6 +171,7 @@ describe('organizer roles', () => {
     const routes: Record<string, [Method, string, unknown?]> = {
       edit: ['PUT', `/api/events/${eventId}/config`, { revision: event.revision, config: event.config }],
       orders: ['GET', `/api/events/${eventId}/orders`],
+      reservation: ['POST', `/api/events/${eventId}/reservation-status`, { reference: 'rider-request-0001' }],
       checkIn: ['GET', `/api/events/${eventId}/check-in`],
       bibPreview: ['POST', `/api/events/${eventId}/bibs/preview`, {}],
       startLists: ['GET', `/api/events/${eventId}/start-lists`],
@@ -178,10 +180,10 @@ describe('organizer roles', () => {
       members: ['GET', `/api/organizations/${valley}/members`],
     };
     const expected: Record<string, Record<string, number>> = {
-      [team.registration_manager]: { edit: 200, orders: 200, checkIn: 200, bibPreview: 400, startLists: 200, entriesCsv: 200, ledgerCsv: 403, members: 403 },
-      [team.check_in_volunteer]: { edit: 403, orders: 403, checkIn: 200, bibPreview: 403, startLists: 403, entriesCsv: 403, ledgerCsv: 403, members: 403 },
-      [team.timer_export]: { edit: 403, orders: 403, checkIn: 403, bibPreview: 403, startLists: 200, entriesCsv: 200, ledgerCsv: 403, members: 403 },
-      [team.finance]: { edit: 403, orders: 200, checkIn: 403, bibPreview: 403, startLists: 403, entriesCsv: 403, ledgerCsv: 200, members: 403 },
+      [team.registration_manager]: { edit: 200, orders: 200, reservation: 200, checkIn: 200, bibPreview: 400, startLists: 200, entriesCsv: 200, ledgerCsv: 403, members: 403 },
+      [team.check_in_volunteer]: { edit: 403, orders: 403, reservation: 403, checkIn: 200, bibPreview: 403, startLists: 403, entriesCsv: 403, ledgerCsv: 403, members: 403 },
+      [team.timer_export]: { edit: 403, orders: 403, reservation: 403, checkIn: 403, bibPreview: 403, startLists: 200, entriesCsv: 200, ledgerCsv: 403, members: 403 },
+      [team.finance]: { edit: 403, orders: 200, reservation: 200, checkIn: 403, bibPreview: 403, startLists: 403, entriesCsv: 403, ledgerCsv: 200, members: 403 },
     };
     for (const [email, outcomes] of Object.entries(expected)) {
       // Every role can open the event itself.
@@ -224,7 +226,7 @@ describe('organizer roles', () => {
     const invited = (await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: newcomer, role: 'check_in_volunteer' })).json() as {
       invitations: { email: string; role: string; expiresAt: string }[];
     };
-    expect(invited.invitations).toEqual([{ email: newcomer, role: 'check_in_volunteer', expiresAt: expect.any(String), lastEmail: { attemptId: expect.any(String), status: 'recorded', at: expect.any(String) } }]);
+    expect(invited.invitations).toEqual([{ email: newcomer, role: 'check_in_volunteer', expiresAt: expect.any(String), earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'recorded', at: expect.any(String) } }]);
     expect((await call(newcomer, 'GET', `/api/events/${eventId}/check-in`)).statusCode).toBe(200);
     const members = (await call(OWNER, 'GET', `/api/organizations/${valley}/members`)).json() as { members: { email: string }[]; invitations: unknown[] };
     expect(members.members.map((m) => m.email)).toContain(newcomer);
@@ -247,8 +249,8 @@ describe('organizer roles', () => {
     now = new Date(now.getTime() + 13 * DAY);
     const list = (await invite(renewed)).json() as { invitations: unknown[] };
     expect(list.invitations).toEqual([
-      { email: late, role: 'finance', expiresAt: new Date(Date.parse('2027-03-01T18:00:00Z') + INVITATION_DAYS * DAY).toISOString(), lastEmail: { attemptId: expect.any(String), status: 'recorded', at: '2027-03-01T18:00:00.000Z' } },
-      { email: renewed, role: 'finance', expiresAt: new Date(now.getTime() + INVITATION_DAYS * DAY).toISOString(), lastEmail: { attemptId: expect.any(String), status: 'recorded', at: now.toISOString() } },
+      { email: late, role: 'finance', expiresAt: new Date(Date.parse('2027-03-01T18:00:00Z') + INVITATION_DAYS * DAY).toISOString(), earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'recorded', at: '2027-03-01T18:00:00.000Z' } },
+      { email: renewed, role: 'finance', expiresAt: new Date(now.getTime() + INVITATION_DAYS * DAY).toISOString(), earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'recorded', at: now.toISOString() } },
     ]);
     now = new Date(now.getTime() + 2 * DAY);
     // Signing in after the invitation expired gives no role; the renewed one still works.
@@ -352,7 +354,7 @@ describe('organizer roles', () => {
       expect(first.statusCode).toBe(200);
       const opened = await listed();
       const expiresAt = opened.invitations[0].expiresAt;
-      expect(opened.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, lastEmail: { attemptId: expect.any(String), status: 'uncertain', at: now.toISOString() } }]);
+      expect(opened.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'uncertain', at: now.toISOString() } }]);
       expect(opened.history.filter((row) => row.email === 'treasurer@valley.test').map((row) => row.action)).toEqual(['invited']);
       let stored = await client.query<{ status: string; provider_message_id: string | null; error: string | null }>(`SELECT status, provider_message_id, error FROM email_messages ORDER BY created_at, seq`);
       expect(stored.rows).toEqual([{ status: 'uncertain', provider_message_id: null, error: 'Send outcome unknown after a timeout.' }]);
@@ -362,7 +364,7 @@ describe('organizer roles', () => {
       const recovered = await invite('treasurer@valley.test');
       expect(recovered.statusCode).toBe(200);
       const retried = await listed();
-      expect(retried.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, lastEmail: { attemptId: expect.any(String), status: 'sent', at: now.toISOString() } }]);
+      expect(retried.invitations).toEqual([{ email: 'treasurer@valley.test', role: 'finance', expiresAt, earlierEmail: false, lastEmail: { attemptId: expect.any(String), status: 'sent', at: now.toISOString() } }]);
       expect(retried.history.filter((row) => row.email === 'treasurer@valley.test').map((row) => row.action)).toEqual(['invited']);
       expect(calls.map((item) => item.key)).toEqual([calls[0].key, calls[0].key]);
       expect(calls[1].body).toBe(calls[0].body);
@@ -811,7 +813,7 @@ describe('organizer roles', () => {
     }
   });
 
-  it.each(['recovered', 'canceled', 'signed in after cancellation'])('a stale Retry send changes nothing once the invitation is %s', async (change) => {
+  it.each(['recovered', 'canceled', 'accepted', 'signed in after cancellation'])('a stale Retry send changes nothing once the invitation is %s', async (change) => {
     const invited = 'treasurer@valley.test';
     const calls: string[] = [];
     let lose = true;
@@ -831,6 +833,7 @@ describe('organizer roles', () => {
     const stale = { ...body, retryAttempt: (await call('POST', url, body)).json().invitations[0].lastEmail.attemptId as string };
     lose = false;
     if (change === 'recovered') await call('POST', url, stale);
+    else if (change === 'accepted') await call('GET', '/api/me', undefined, invited);
     else await call('POST', `${url}/remove`, body);
     if (change === 'signed in after cancellation') await call('GET', '/api/me', undefined, invited);
     const before = (await call('GET', url)).json();
@@ -839,6 +842,31 @@ describe('organizer roles', () => {
     expect((await call('POST', url, stale)).statusCode).toBe(change === 'recovered' ? 200 : 409);
     expect(calls).toHaveLength(sent);
     expect((await call('GET', url)).json()).toEqual(before);
+  });
+
+  it('refuses to resend where an email from before the upgrade exists, until cancel and invite again', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const calls: string[] = [];
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth(), email: { mode: 'resend', send: async (_message, key) => (calls.push(key), 'msg-accepted') } });
+    const call = (method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(OWNER), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const url = `/api/organizations/${org.id}/members`;
+    const body = { email: 'treasurer@valley.test', role: 'finance' };
+    await call('POST', url, body);
+    const db = openDb(databaseUrl);
+    try {
+      await db.run('UPDATE organization_invitations SET email_attempt_id = NULL, earlier_email = true');
+      const before = (await call('GET', url)).json();
+      expect(before.invitations[0]).toMatchObject({ earlierEmail: true, lastEmail: null });
+      expect((await call('POST', url, body)).statusCode).toBe(409);
+      expect((await call('GET', url)).json()).toEqual(before);
+      expect(calls).toHaveLength(1);
+      await call('POST', `${url}/remove`, body);
+      expect((await call('POST', url, body)).json().invitations[0]).toMatchObject({ earlierEmail: false, lastEmail: { status: 'sent' } });
+      expect(calls).toHaveLength(2);
+    } finally {
+      await db.close();
+    }
   });
 
   it('does not reuse a canceled attempt when a seed re-adds it at the same timestamp', async () => {

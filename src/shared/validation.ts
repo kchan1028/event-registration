@@ -133,7 +133,7 @@ export function validateConfig(config: EventConfig, entries: readonly CapacityEn
 
     if (cat.length.kind === 'unset') add('error', `cat.${cat.id}.length`, `${name} needs a race length (distance, laps, or duration).`, t);
     else if (race?.discipline === 'road_race' && cat.length.kind === 'duration') {
-      add('warning', `cat.${cat.id}.length-kind`, `${name} is a road race measured by time. Check that this is intended.`, t);
+      add('warning', `cat.${cat.id}.length-kind`, `${name} is a road race measured by time, which is unusual.`, t);
     }
 
     const paths = cat.eligibility.paths;
@@ -141,7 +141,7 @@ export function validateConfig(config: EventConfig, entries: readonly CapacityEn
     paths.forEach((p, i) => {
       const pl = paths.length > 1 ? ` (path ${i + 1})` : '';
       if (p.minAge !== null && p.maxAge !== null && p.minAge > p.maxAge) add('error', `cat.${cat.id}.age.${p.id}`, `${name}${pl}: minimum age is above maximum age.`, t);
-      if (p.licenseTypes.length === 0) add('error', `cat.${cat.id}.lictype.${p.id}`, `${name}${pl}: allow at least one license type.`, t);
+      if (p.licenseTypes.length === 0) add('error', `cat.${cat.id}.lictype.${p.id}`, `${name}${pl}: no license type is allowed.`, t);
       if (!p.collegiateRequired && p.collegiateDivisions.length > 0) add('warning', `cat.${cat.id}.coll.${p.id}`, `${name}${pl}: collegiate divisions are set but collegiate eligibility is not required.`, t);
       const empty = p.licenseCategories.length === 0 && p.minAge === null && p.maxAge === null && p.genderClass === 'any' && !p.collegiateRequired && p.licenseTypes.length === 2;
       if (empty) add('warning', `cat.${cat.id}.empty-path.${p.id}`, `${name}${pl}: this eligibility path has no conditions, so every rider qualifies.`, t);

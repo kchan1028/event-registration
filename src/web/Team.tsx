@@ -68,6 +68,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
   async function run(action: () => Promise<MemberList>) {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       setList(await action());
       return true;
@@ -82,11 +83,10 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
   }
 
   async function retry(email: string, role: Role, attemptId: string) {
-    setNotice(null);
     await run(async () => {
       const next = await api.retryInvitation(orgId, email, role, attemptId);
-      const status = next.invitations.find((i) => i.email === email && i.role === role)?.lastEmail?.status;
-      setNotice(status ? `${email}: ${EMAIL_STATUS[status]}.` : `The invitation for ${email} is no longer open.`);
+      const status = next.invitations.find((i) => i.lastEmail?.attemptId === attemptId)?.lastEmail?.status;
+      setNotice(status ? `${email}: ${EMAIL_STATUS[status]}.` : `The invitation for ${email} changed. The list shows where it stands now.`);
       return next;
     });
   }
@@ -128,11 +128,10 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
           {error}
         </p>
       )}
-      {notice && (
-        <p className="note note--ok" role="status">
-          {notice}
-        </p>
-      )}
+      {/* Always mounted, so screen readers hear the text arrive. A retry result is not always good news. */}
+      <p className={notice ? 'note' : 'sr-only'} role="status">
+        {notice}
+      </p>
       {!list && !error && <div className="skeleton" aria-label="Loading team" />}
       {list && (
         <ul className="team__list">
@@ -158,19 +157,22 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
                 {expired && <span className="tag tag--error">Expired</span>}
                 <span className="muted small">
                   {expired ? 'Ended' : 'Not signed in yet, open until'} <time dateTime={i.expiresAt}>{formatDateTime(i.expiresAt)}</time>
-                  {i.lastEmail && (
+                  {i.earlierEmail && ' · An earlier email might have been sent. To send a new one, cancel and invite again.'}
+                  {!i.earlierEmail && i.lastEmail && (
                     <>
                       {' · '}
                       <span className={i.lastEmail.status === 'failed' ? 'team__email-failed' : i.lastEmail.status === 'uncertain' ? 'team__email-uncertain' : undefined}>{EMAIL_STATUS[i.lastEmail.status]}</span>
                     </>
                   )}
                 </span>
-                <button className="link-btn" type="button" disabled={busy} onClick={() => (uncertain ? retry(i.email, i.role, i.lastEmail!.attemptId) : run(() => api.addMember(orgId, i.email, i.role)))}>
-                  {uncertain ? 'Retry send' : 'Resend'}
-                  <span className="sr-only">
-                    {uncertain ? ` of the invitation email to ${i.email} without extending it` : ` invitation to ${i.email}, open for ${INVITATION_DAYS} more days`}
-                  </span>
-                </button>
+                {!i.earlierEmail && (
+                  <button className="link-btn" type="button" disabled={busy} onClick={() => (uncertain ? retry(i.email, i.role, i.lastEmail!.attemptId) : run(() => api.addMember(orgId, i.email, i.role)))}>
+                    {uncertain ? 'Retry send' : 'Resend'}
+                    <span className="sr-only">
+                      {uncertain ? ` of the invitation email to ${i.email} without extending it` : ` invitation to ${i.email}, open for ${INVITATION_DAYS} more days`}
+                    </span>
+                  </button>
+                )}
                 <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.removeMember(orgId, i.email, i.role))}>
                   Cancel<span className="sr-only"> invitation for {i.email}</span>
                 </button>

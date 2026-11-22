@@ -508,6 +508,153 @@ test('lost hold response retries the same reservation across refresh', async ({ 
   await expect(page.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
 });
 
+test('organizer checks the rider’s pending reservation by exact reference', async ({ page, browser }) => {
+  const eventId = await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  const attempts: unknown[] = [];
+  let orderNumber: string | null = null;
+  await page.route('**/api/rider/events/*/orders', async (route) => {
+    attempts.push(route.request().postDataJSON());
+    if (attempts.length === 1) {
+      await route.abort();
+      return;
+    }
+    const response = await route.fetch();
+    if (attempts.length === 2) {
+      orderNumber = (await response.json()).orderNumber;
+      await route.abort();
+      return;
+    }
+    await route.fulfill({ response });
+  });
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.locator('.error-summary')).toContainText('Cannot reach');
+  const riderReference = page.getByRole('textbox', { name: 'Reservation reference' });
+  const reference = await riderReference.inputValue();
+  expect(reference).toMatch(/^[0-9a-f-]{36}$/);
+  await expect(riderReference).toHaveAccessibleDescription('If retries keep failing, share this reference with the event organizer before starting another registration.');
+  await page.reload();
+  await expect(riderReference).toHaveValue(reference);
+
+  const organizations: { id: string; events: { id: string }[] }[] = await (await page.request.get('/api/organizations')).json();
+  const organizationId = organizations.find((org) => org.events.some((event) => event.id === eventId))!.id;
+  const staffEmail = 'reservation.finance@example.test';
+  expect((await page.request.post(`/api/organizations/${organizationId}/members`, { data: { email: staffEmail, role: 'finance' } })).ok()).toBe(true);
+  const staffContext = await browser.newContext({ viewport: { width: 390, height: 844 }, extraHTTPHeaders: {} });
+  await staffContext.addInitScript((email) => sessionStorage.setItem('cyclereg.test-session', email), staffEmail);
+  const staff = await staffContext.newPage();
+  await staff.goto(`/#/events/${eventId}/registrations`);
+  await staff.getByRole('button', { name: /^Refunded/ }).click();
+  await staff.getByText('Check a pending reservation', { exact: true }).click();
+  const lookup = staff.locator('details').filter({ hasText: 'Check a pending reservation' });
+  const check = lookup.getByRole('button', { name: 'Check reservation' });
+  await lookup.getByRole('textbox', { name: 'Reservation reference' }).fill(reference);
+  await check.press('Enter');
+  const status = lookup.getByRole('status');
+  await expect(status).toContainText('No order is visible for this reference yet');
+  await expect(status).toContainText('Check the reference against the rider’s checkout.');
+  await expect(status).toContainText('retry the same reservation');
+  await expect(check).toBeFocused();
+  expect((await new AxeBuilder({ page: staff }).include('details:has(#staff-reservation-reference)').analyze()).violations).toEqual([]);
+  expect(await lookup.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+
+  await page.getByRole('button', { name: 'Retry reservation' }).click();
+  await expect.poll(() => orderNumber).toBeTruthy();
+  await expect(page.locator('.error-summary')).toContainText('Cannot reach');
+  await check.click();
+  await expect(status).toContainText(orderNumber!);
+  await expect(status).toContainText('Places held, unpaid');
+  await expect(status).toContainText('Hold expires');
+  // The order committed after this list loaded: it must be findable by number without a reload.
+  await staff.getByLabel('Find a registration').fill(orderNumber!);
+  await expect(staff.getByText(`1 registration matches “${orderNumber}”.`)).toBeVisible();
+
+  const staffReference = lookup.getByRole('textbox', { name: 'Reservation reference' });
+  await expect(staff.getByRole('list', { name: 'Registrations', exact: true }).getByRole('listitem').first()).toContainText(orderNumber!);
+  await staffReference.fill(`  ${reference} `);
+  await check.click();
+  await expect(status).toContainText('It starts or ends with a space');
+  await expect(status).not.toContainText(orderNumber!);
+  for (const [bad, why] of [['short', 'at least 8 characters'], ['x'.repeat(65), 'at most 64 characters']] as const) {
+    await staffReference.fill(bad);
+    await check.click();
+    await expect(staffReference).toBeFocused();
+    await expect(staffReference).toHaveAttribute('aria-invalid', 'true');
+    await expect(staffReference).toHaveAccessibleDescription(new RegExp(why));
+  }
+  for (const type of ['paste', 'drop'] as const) {
+    await staffReference.fill(reference);
+    const refused = await staffReference.evaluate((field, kind) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', 'exact\nreference');
+      const event = kind === 'paste' ? new ClipboardEvent(kind, { clipboardData: data, bubbles: true, cancelable: true }) : new DragEvent(kind, { dataTransfer: data, bubbles: true, cancelable: true });
+      return !field.dispatchEvent(event);
+    }, type);
+    expect(refused).toBe(true);
+    await expect(staffReference).toHaveValue('');
+    await expect(staffReference).toHaveAccessibleDescription('This field cannot check a reference with a line break. Keep the original unchanged: removing the break makes it a different reference.');
+    await check.click();
+    await expect(status).not.toContainText(orderNumber!);
+    await expect(staffReference).toHaveAccessibleDescription(/^This field cannot check a reference with a line break/);
+  }
+  expect(await lookup.locator('summary').evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  const staffSize = staff.viewportSize()!;
+  const riderSize = page.viewportSize()!;
+  await staff.setViewportSize({ width: 360, height: 800 });
+  for (const control of [staffReference, check]) expect(await control.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  await expect(staffReference).toHaveCSS('font-size', '16px');
+  await staff.setViewportSize(staffSize);
+  await page.setViewportSize({ width: 360, height: 800 });
+  expect(await riderReference.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  await expect(riderReference).toHaveCSS('font-size', '16px');
+  await page.setViewportSize(riderSize);
+  await staffReference.fill(reference);
+  await expect(staffReference).not.toHaveAttribute('aria-invalid');
+  await check.click();
+  await expect(status).toContainText(orderNumber!);
+
+  // A paste during a lookup changes nothing: the answer belongs to the reference on screen.
+  let answer = () => {};
+  const held = new Promise<void>((resolve) => (answer = resolve));
+  await staff.route('**/reservation-status', async (route) => { await held; await route.continue(); });
+  await staffReference.fill(reference);
+  await check.click();
+  await expect(status).toContainText('Checking for a saved order');
+  await staffReference.evaluate((field) => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/plain', 'other\nreference');
+    field.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
+  });
+  await expect(staffReference).toHaveValue(reference);
+  await expect(staffReference).not.toHaveAttribute('aria-invalid');
+  answer();
+  await expect(status).toContainText(orderNumber!);
+  await staff.unroute('**/reservation-status');
+
+  // Keys the checkout API accepts as sent: surrounding spaces are part of the key.
+  for (const [spaced, firstName] of [[' spaced-reference-0001 ', 'Avery'], ['        ', 'Blair']] as const) {
+    const saved = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: { ...(attempts[0] as object), clientRequestId: spaced, rider: { ...(attempts[0] as { rider: object }).rider, firstName }, waiver: { ...(attempts[0] as { waiver: object }).waiver, signatureName: `${firstName} Demo` } } });
+    expect(saved.status()).toBe(201);
+    await staffReference.fill(spaced);
+    await check.click();
+    await expect(status).toContainText((await saved.json()).orderNumber);
+  }
+  await staffReference.fill(reference);
+  await check.click();
+  await expect(status).toContainText(orderNumber!);
+  await lookup.screenshot({ path: 'test-results/reservation-lookup-phone.png' });
+
+  await page.getByRole('button', { name: 'Retry reservation' }).click();
+  await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
+  expect(attempts).toHaveLength(3);
+  expect(attempts[1]).toStrictEqual(attempts[0]);
+  expect(attempts[2]).toStrictEqual(attempts[0]);
+  await staffContext.close();
+});
+
 test('a rejected reservation keeps details editable and rapid submission creates one hold', async ({ page }) => {
   await openEvent(page, 'criterium');
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
@@ -531,14 +678,61 @@ test('a rejected reservation keeps details editable and rapid submission creates
   expect(posts).toBe(1);
 });
 
-for (const committed of [true, false]) {
-  test(`publication changes do not alter uncertain consent (${committed ? 'committed' : 'not committed'})`, async ({ page }) => {
+test('a new reservation omits consent for a removed race addendum', async ({ page }) => {
+  const eventId = await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await expect(page.locator('.addendum-text')).toHaveCount(0);
+  await page.evaluate((id) => {
+    const key = `cyclereg.register.${id}`;
+    const saved = JSON.parse(sessionStorage.getItem(key)!);
+    saved.extras = { ...saved.extras, addenda: [saved.selected[0]] };
+    sessionStorage.setItem(key, JSON.stringify(saved));
+  }, eventId);
+  await page.reload();
+  await page.route('**/api/rider/events/*/orders', async (route) => {
+    expect(route.request().postDataJSON().extras.addenda).toEqual([]);
+    await route.abort('failed');
+  }, { times: 1 });
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.getByRole('button', { name: 'Retry reservation' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Race terms you accepted' })).toHaveCount(0);
+});
+
+const consentRecoveryCases = [
+  { committed: true, legacy: false },
+  { committed: false, legacy: false },
+  { committed: true, legacy: true },
+  { committed: false, legacy: true },
+];
+
+for (const { committed, legacy } of consentRecoveryCases) {
+  const scenario = [committed ? 'committed' : 'not committed', legacy ? 'older draft' : null].filter(Boolean).join(', ');
+  test(`publication changes do not alter uncertain consent (${scenario})`, async ({ page }, testInfo) => {
+    if (!committed) await page.setViewportSize({ width: 390, height: 844 });
     const eventId = await openEvent(page, 'criterium');
+    const eventPath = `/api/events/${eventId}`;
+    const draft = await (await page.request.get(eventPath)).json();
+    const category = draft.config.categories.find((c: { timingCode: string }) => c.timingCode === 'DVC-M45');
+    const originalText = 'Fictional original race condition.\n' + 'LongFictionalTerm'.repeat(30);
+    category.addendum = { title: 'Original sample condition ' + 'W'.repeat(54), text: originalText };
+    expect((await page.request.put(eventPath + '/config', { data: { revision: draft.revision, config: draft.config } })).ok()).toBe(true);
+    expect((await page.request.post(eventPath + '/publish', { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
+    await page.reload();
     await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
     await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
     await page.getByRole('button', { name: 'Continue to racer details' }).click();
     await page.getByRole('button', { name: 'Continue to the waiver' }).click();
-    const bodies: { clientRequestId: string; categoryIds: string[]; waiver: { version: string } }[] = [];
+    await expect(page.locator('.addendum-text')).toHaveText(originalText);
+    await expect(page.locator('.addendum-text')).toHaveCSS('white-space', 'pre-wrap');
+    const wide = page.viewportSize()!;
+    await page.setViewportSize({ width: 360, height: 800 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    await page.setViewportSize(wide);
+    await page.getByLabel('I accept this', { exact: true }).check();
+    const bodies: { clientRequestId: string; categoryIds: string[]; waiver: { version: string }; extras: { addenda: string[] } }[] = [];
     const orderIds: string[] = [];
     await page.route('**/api/rider/events/*/orders', async (route) => {
       bodies.push(route.request().postDataJSON());
@@ -553,6 +747,20 @@ for (const committed of [true, false]) {
     });
     await signAndReview(page, 'Alex Demo');
     await expect(page.locator('.error-summary')).toContainText('Cannot reach');
+    const terms = page.getByRole('region', { name: 'Race terms you accepted', exact: true });
+    await expect(terms.getByRole('heading', { name: /Original sample condition/ })).toBeVisible();
+    expect(await terms.locator('.addendum-text').textContent()).toBe(originalText);
+    await expect(terms.locator('.addendum-text')).toHaveCSS('white-space', 'pre-wrap');
+    await expect(terms.getByRole('checkbox')).toHaveCount(0);
+    expect(bodies[0].extras.addenda).toEqual([category.id]);
+    if (legacy) {
+      await page.evaluate((id) => {
+        const key = `cyclereg.register.${id}`;
+        const stored = JSON.parse(sessionStorage.getItem(key)!);
+        delete stored.pendingReservation.addenda;
+        sessionStorage.setItem(key, JSON.stringify(stored));
+      }, eventId);
+    }
     const current = await (await page.request.get(`/api/events/${eventId}`)).json();
     current.config.registration.waiverVersion = 'CRO-UPDATED-SAMPLE';
     current.config.registration.waiverText = 'New fictional waiver text, not real event policy.';
@@ -560,6 +768,19 @@ for (const committed of [true, false]) {
     expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision: current.revision, config: current.config } })).ok()).toBe(true);
     expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
     await page.reload();
+    await expect(terms).toBeVisible();
+    if (legacy) {
+      await expect(terms).toContainText('Original text for one or more race terms isn’t available in this tab.');
+      await expect(terms.locator('.addendum-text')).toHaveCount(0);
+    } else {
+      await expect(terms.locator('.addendum-text')).toHaveText(originalText);
+    }
+    if (!committed) {
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+      expect((await new AxeBuilder({ page }).include('[aria-labelledby="submitted-race-terms"]').analyze()).violations).toEqual([]);
+      await terms.screenshot({ path: testInfo.outputPath('pending-race-terms-phone.png') });
+    }
+    await expect(page.getByText('Fictional new condition.', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Retry reservation' }).click();
     if (committed) {
       await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
@@ -576,6 +797,8 @@ for (const committed of [true, false]) {
       await expect(page.getByLabel('I have read the whole waiver')).not.toBeChecked();
       await expect(page.getByLabel('I agree to this waiver', { exact: true })).not.toBeChecked();
       expect(orderIds).toHaveLength(0);
+      await expect(terms).toHaveCount(0);
+      await expect(page.getByText('Fictional new condition.', { exact: true })).toBeVisible();
     }
     expect(bodies).toHaveLength(2);
     expect(bodies[1]).toEqual(bodies[0]);

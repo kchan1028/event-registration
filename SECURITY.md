@@ -100,7 +100,9 @@ Under the family lock, one approval row, guardian revocations, pending-invitatio
 
 ## Reservation recovery (Implemented locally)
 
-The existing per-tab registration draft also retains the exact pending reservation payload and displayed waiver text until its outcome is known. Unknown network/server, authentication and rate-limit failures retain that request ID; pending entries and consent cannot be edited. Recovery uses the existing account-protected order endpoint and server idempotency checks. A definitive rejection refreshes published terms and clears agreement if the waiver changed. This adds no route, role, database field, logging or card storage. Browser storage remains best effort; blocked storage or closing the tab cannot guarantee refresh recovery. Use fictional data only.
+The existing per-tab registration draft also retains the exact pending reservation payload, displayed waiver text and public accepted addenda until its outcome is known. The saved text is for review and is separate from the request sent to the server. Older drafts can still retry when this text is unavailable. Unknown network/server, authentication and rate-limit failures retain that request ID; pending entries and consent cannot be edited. Recovery uses the existing account-protected order endpoint and server idempotency checks. A definitive rejection refreshes published terms and clears agreement if the waiver changed. Rider replay adds no route, role, database field, logging or card storage. Browser storage remains best effort; blocked storage or closing the tab cannot guarantee refresh recovery. Use fictional data only.
+
+A separate signed-in route, `POST /api/events/:id/reservation-status`, gives staff an event-scoped reservation lookup. It requires `orders.view` and an exact request reference. Lookup refuses references with NUL or unpaired surrogates, which storage would reject or alter. It returns only the saved order number, effective status and active hold expiry, with `Cache-Control: no-store`.
 
 ## Checkout-session retries (Implemented locally)
 
@@ -203,6 +205,6 @@ Each rule has one home. The links below point to it; this list is a summary, not
 | Audit | Append-only audit history for money, categories, waivers, capacity, permissions, and exceptions | [docs/coding-guide.md](docs/coding-guide.md#audit-history) |
 | Public pages | Private pages are not indexable | [docs/content-guide.md](docs/content-guide.md#keep-private-data-out-of-public-pages) |
 
-Retention and deletion rules are still an open decision and must be defined before the pilot ([product.md](product.md#open-decisions)).
+The emergency-contact lookup record is to be kept 365 days (not yet enforced). Other retention rules and every deletion procedure are still an open decision and must be defined before the pilot ([product.md](product.md#open-decisions)).
 
 Berkeley rider-rate pricing is recalculated on the server from the accepted configuration and parsed rider facts; client totals are not trusted. Declared age, collegiate division and competition class do not constitute federation verification. Existing paid order quotes are preserved when revised prices are published. No live payment configuration or new access route is introduced.
