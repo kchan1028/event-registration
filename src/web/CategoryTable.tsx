@@ -119,8 +119,8 @@ export function CategoryTable({ draft, raceId, selectedId, onSelect }: { draft: 
       )}
       {archived.length > 0 && (
         <p className="muted small">
-          {archived.length} archived {archived.length === 1 ? 'category is' : 'categories are'} hidden. Archived categories keep their entry history and can be restored
-          from the editor.{' '}
+          {archived.length} archived {archived.length === 1 ? 'category is' : 'categories are'} hidden. Archived categories keep their entry history
+          {readOnly ? '.' : ' and can be restored from the editor.'}{' '}
           {archived.map((a) => (
             <button key={a.id} className="link-btn" onClick={() => onSelect(a.id)}>
               {a.name}

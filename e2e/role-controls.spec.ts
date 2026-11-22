@@ -47,8 +47,15 @@ for (const width of [390, 1440]) {
 for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
   test(`schedule shows ${role} details without editing controls`, async ({ page, browser }) => {
     const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
-    const { config } = await (await page.request.get(`/api/events/${eventId}`)).json();
+    const { revision, config } = await (await page.request.get(`/api/events/${eventId}`)).json();
     const category = config.categories.find((c: { raceId: string }) => c.raceId === config.races[0].id);
+    // Every optional part of the editor that carries a hint: a question, a timed length, and no timing code (a problem to fix).
+    Object.assign(category, {
+      questions: [{ id: 'q-role-test', label: '', required: false, options: [] }],
+      length: { kind: 'duration', minutes: 45, plusLaps: 3 },
+      timingCode: '',
+    });
+    expect((await page.request.put(`/api/events/${eventId}/config`, { data: { revision, config } })).ok()).toBe(true);
 
     await asRole(browser, page.request, organizationId, role, async (member) => {
       await member.goto(`/#/events/${eventId}/race/${category.raceId}`);
@@ -60,7 +67,9 @@ for (const role of ['check_in_volunteer', 'timer_export', 'finance'] as const) {
       await expect(details.getByLabel('Category name')).toHaveValue(category.name);
       await expect(details.getByLabel('Category name')).toBeDisabled();
       await expect(details.getByRole('button')).toHaveCount(1);
-      await expect(details.getByText(/Choose how this race is measured|Set a cap, a start group|list each allowed category/)).toHaveCount(0);
+      await expect(details.getByText(/Choose how this race is measured|Set a cap, a start group|list each allowed category|Comma-separated|Leave blank|For example|Cannot go below|you offer freed places/)).toHaveCount(0);
+      await expect(details.getByPlaceholder(/For example/)).toHaveCount(0);
+      await expect(details.getByRole('list', { name: 'Problems in this category' })).toHaveCount(0);
       await details.getByRole('button', { name: 'Close category details' }).click();
       await expect(details).toHaveCount(0);
 

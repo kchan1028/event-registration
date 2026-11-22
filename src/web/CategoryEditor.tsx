@@ -75,7 +75,7 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
           </button>
         </div>
       )}
-      {issues.length > 0 && (
+      {!draft.readOnly && issues.length > 0 && (
         <ul className="editor__issues" aria-label="Problems in this category">
           {issues.map((i) => (
             <li key={i.key} className={`issue issue--${i.level}`}>
@@ -225,12 +225,12 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
 
       <section className="editor__section" aria-labelledby={`${cat.id}-cap`}>
         <h3 id={`${cat.id}-cap`}>Capacity</h3>
-        <Field label="Category cap" hint={`Blank: no cap of its own. Cannot go below the ${entries} ${entries === 1 ? 'place' : 'places'} already taken.`}>
+        <Field label="Category cap" hint={`Blank: no cap of its own.${draft.readOnly ? '' : ` Cannot go below the ${entries} ${entries === 1 ? 'place' : 'places'} already taken.`}`}>
           {(id, d) => <IntInput id={id} describedBy={d} value={cat.cap} min={Math.max(1, entries)} onCommit={(v) => set((c) => ({ ...c, cap: v }))} />}
         </Field>
         <label className="check">
           <input type="checkbox" checked={!!cat.waitlistEnabled} onChange={(e) => set((c) => ({ ...c, waitlistEnabled: e.target.checked }))} />
-          Offer a waitlist when this category is full (you offer freed places in order; each offer holds the place for {OFFER_HOURS} hours)
+          Offer a waitlist when this category is full ({draft.readOnly ? 'freed places are offered in order' : 'you offer freed places in order'}; each offer holds the place for {OFFER_HOURS} hours)
         </label>
         <CapacityUsage draft={draft} categoryId={cat.id} />
         {!draft.readOnly && <TestEntries draft={draft} categoryId={cat.id} disabled={cat.status !== 'active'} />}
@@ -243,10 +243,10 @@ export function CategoryEditor({ draft, categoryId, onClose, onSelect, drawer = 
           <div className="extra-q" key={q.id}>
             <Field label={`Question ${i + 1}`}>
               {(id) => (
-                <input id={id} className="input" value={q.label} maxLength={120} placeholder="For example: Club or school" onChange={(e) => set((c) => ({ ...c, questions: (c.questions ?? []).map((x) => (x.id === q.id ? { ...x, label: e.target.value } : x)) }))} />
+                <input id={id} className="input" value={q.label} maxLength={120} placeholder={draft.readOnly ? undefined : 'For example: Club or school'} onChange={(e) => set((c) => ({ ...c, questions: (c.questions ?? []).map((x) => (x.id === q.id ? { ...x, label: e.target.value } : x)) }))} />
               )}
             </Field>
-            <Field label="Answers to choose from" hint="Comma-separated. Leave blank for a free-text answer.">
+            <Field label="Answers to choose from" hint={draft.readOnly ? 'Blank: a free-text answer.' : 'Comma-separated. Leave blank for a free-text answer.'}>
               {(id, d) => (
                 <input
                   id={id}
@@ -495,7 +495,7 @@ function LengthEditor({ readOnly, length, discipline, onChange }: { readOnly: bo
       {length.kind === 'duration' && (
         <div className="form-row form-row--start">
           <Field label="Minutes">{(id) => <IntInput id={id} value={length.minutes} min={1} max={600} allowEmpty={false} onCommit={(v) => v !== null && onChange({ ...length, minutes: v })} />}</Field>
-          <Field label="Plus laps" hint="For example 45 min + 3 laps">
+          <Field label="Plus laps" hint={readOnly ? undefined : 'For example 45 min + 3 laps'}>
             {(id, d) => <IntInput id={id} describedBy={d} value={length.plusLaps} min={0} max={50} onCommit={(v) => onChange({ ...length, plusLaps: v })} />}
           </Field>
         </div>

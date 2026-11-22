@@ -102,7 +102,7 @@ function Clip({ group, draft, cats, groups, editing, setEditing, onSelect, selec
           </button>
         </div>
       )}
-      {errors.map((e) => (
+      {!draft.readOnly && errors.map((e) => (
         <p key={e.key} className="clip__error">
           <Icon name="error" size={14} /> {e.message}
         </p>
