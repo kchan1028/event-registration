@@ -788,27 +788,8 @@ export async function ensureLocalDatabase(connectionString: string): Promise<boo
   }
 }
 
-/**
- * Takes a client out of the pool. The pool stops listening for its errors until it is released, and an
- * unheard error ends the process, so listen here and destroy a client that had one.
- */
-async function checkOut(pool: pg.Pool, onError?: (err: Error) => void) {
+async function applyMigrations(pool: pg.Pool): Promise<void> {
   const client = await pool.connect();
-  let lost = false;
-  const listen = (err: Error) => {
-    lost = true;
-    onError?.(err);
-  };
-  client.on('error', listen);
-  const release = (broken = false) => {
-    client.off('error', listen);
-    client.release(broken || lost);
-  };
-  return { client, release };
-}
-
-async function applyMigrations(pool: pg.Pool, onError?: (err: Error) => void): Promise<void> {
-  const { client, release } = await checkOut(pool, onError);
   try {
     await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK]);
     await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
@@ -826,15 +807,19 @@ async function applyMigrations(pool: pg.Pool, onError?: (err: Error) => void): P
     }
   } finally {
     await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK]).catch(() => undefined);
-    release();
+    client.release();
   }
 }
 
 export function openDb(connectionString: string, onPoolError?: (err: Error) => void): Db {
   // Fail fast instead of hanging when the database cannot be reached.
   const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 10_000, types });
-  // An idle connection can drop (database restart, test teardown); the pool replaces it.
-  pool.on('error', (err) => onPoolError?.(err));
+  // Any connection can drop (database restart, test teardown), and an unheard error ends the process. The pool
+  // listens only to idle clients, so each client gets a listener for its whole life, including the handoff from
+  // idle to checked out. The pool discards a client that lost its connection when it is released.
+  pool.on('connect', (client) => client.on('error', (err) => onPoolError?.(err)));
+  // An idle client's error also reaches the pool. The listener above has already reported it.
+  pool.on('error', () => {});
   const tx = new AsyncLocalStorage<{ client: pg.PoolClient; depth: number }>();
   let migrated: Promise<void> | null = null;
   let closed: Promise<void> | null = null;
@@ -869,7 +854,7 @@ export function openDb(connectionString: string, onPoolError?: (err: Error) => v
           throw err;
         }
       }
-      const { client, release } = await checkOut(pool, onPoolError);
+      const client = await pool.connect();
       // A connection whose ROLLBACK failed is broken; destroy it instead of returning it to the pool.
       let broken = false;
       try {
@@ -883,7 +868,7 @@ export function openDb(connectionString: string, onPoolError?: (err: Error) => v
         });
         throw err;
       } finally {
-        release(broken);
+        client.release(broken);
       }
     },
 
@@ -893,7 +878,7 @@ export function openDb(connectionString: string, onPoolError?: (err: Error) => v
     },
 
     migrate() {
-      migrated ??= applyMigrations(pool, onPoolError).catch((err) => {
+      migrated ??= applyMigrations(pool).catch((err) => {
         migrated = null;
         throw err;
       });

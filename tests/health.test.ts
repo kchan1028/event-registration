@@ -1,7 +1,7 @@
 import pg from 'pg';
 import { expect, it } from 'vitest';
 import { fakeAuth } from './support/auth';
-import { openDb } from '../src/server/db';
+import { MIGRATIONS, openDb } from '../src/server/db';
 import { testApp, testDatabaseUrl } from './support/db';
 import { adminUrl } from './support/server';
 
@@ -56,10 +56,17 @@ it.each(['between queries', 'during a query', 'between nested queries'])('reject
       const { pid } = (await db.get<{ pid: number }>('SELECT pg_backend_pid() AS pid'))!;
       await db.run('INSERT INTO drop_probe VALUES (1)');
       const waiting = when === 'during a query' ? db.run('SELECT pg_sleep(5)') : null;
-      const refused = waiting?.catch((err: Error) => err);
-      await other.query('SELECT pg_terminate_backend($1, 5000)', [pid]);
+      const outcome = waiting?.then(() => new Error('The query was not interrupted.'), (err: Error) => err);
+      if (waiting) {
+        await expect.poll(async () => (await other.query(`SELECT 1 FROM pg_stat_activity WHERE pid = $1 AND state = 'active' AND query LIKE '%pg_sleep%'`, [pid])).rowCount, { timeout: 4000 }).toBe(1);
+      }
+      expect((await other.query('SELECT pg_terminate_backend($1, 5000) AS stopped', [pid])).rows).toEqual([{ stopped: true }]);
       await new Promise((resolve) => setTimeout(resolve, 100));
-      if (refused) throw await refused;
+      if (outcome) {
+        const err = await outcome;
+        expect(err).toMatchObject({ code: '57P01' });
+        throw err;
+      }
     };
     await expect(db.transaction(() => (when === 'between nested queries' ? db.transaction(drop) : drop()))).rejects.toThrow();
     expect(reported.length).toBeGreaterThan(0);
@@ -73,7 +80,7 @@ it.each(['between queries', 'during a query', 'between nested queries'])('reject
 });
 
 it('rejects a migration whose connection drops and migrates on the next try', async () => {
-  const databaseUrl = await testDatabaseUrl();
+  const databaseUrl = await testDatabaseUrl({ empty: true });
   const db = openDb(databaseUrl);
   const other = new pg.Client({ connectionString: databaseUrl });
   await other.connect();
@@ -88,9 +95,29 @@ it('rejects a migration whose connection drops and migrates on the next try', as
     expect(await outcome).toBeInstanceOf(Error);
     await other.query('SELECT pg_advisory_unlock($1)', [4_241_017]);
     await db.migrate();
-    expect(await db.get('SELECT 1 AS ok')).toEqual({ ok: 1 });
+    expect(await db.get('SELECT max(version) AS version FROM schema_migrations')).toEqual({ version: MIGRATIONS.length });
   } finally {
     await other.end();
+    await db.close();
+  }
+});
+
+it('survives a connection error during the handoff from idle to checked out', async () => {
+  const reported: Error[] = [];
+  const db = openDb(await testDatabaseUrl(), (err) => reported.push(err));
+  const connect = pg.Pool.prototype.connect;
+  try {
+    await db.get('SELECT 1');
+    pg.Pool.prototype.connect = async function (this: pg.Pool) {
+      const client = await (connect as () => Promise<pg.PoolClient>).call(this);
+      // The pool has stopped listening, and the caller has not resumed yet.
+      client.emit('error', new Error('Fictional loss during handoff'));
+      return client;
+    } as typeof connect;
+    await db.transaction(async () => undefined).catch(() => undefined);
+    expect(reported.map((err) => err.message)).toContain('Fictional loss during handoff');
+  } finally {
+    pg.Pool.prototype.connect = connect;
     await db.close();
   }
 });
