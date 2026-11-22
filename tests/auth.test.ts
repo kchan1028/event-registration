@@ -1321,6 +1321,30 @@ describe('organizer roles', () => {
     }
   }, 15_000);
 
+  it('checks the retrying account in the last query itself, not before it', async () => {
+    const db = openDb(await testDatabaseUrl());
+    const now = new Date('2027-04-04T12:00:00.000Z');
+    const calls: string[] = [];
+    const email: EmailSender = { mode: 'resend', send: async (_message, key) => (calls.push(key), 'msg-accepted') };
+    try {
+      const id = await reservedAttempt(db, createMailer(db, email, () => now), 'timer@valley.test', now);
+      await db.run(`INSERT INTO accounts (id, provider_user_id, email, created_at) VALUES ('acct_retrier', 'test|retrier', 'retrier@valley.test', $1)`, [now.toISOString()]);
+      await db.run(`INSERT INTO organization_members (organization_id, account_id, role, created_at) VALUES ('org_send', 'acct_retrier', 'owner', $1)`, [now.toISOString()]);
+      const interleaved: Db = {
+        ...db,
+        async get<T>(sql: string, params?: Parameters<Db['get']>[1]) {
+          // Ownership ends immediately before that query runs, after anything read earlier.
+          if (sql.includes('m.sending_until > now() + make_interval')) await db.run(`UPDATE organization_members SET role = 'timer_export' WHERE account_id = 'acct_retrier'`);
+          return db.get<T>(sql, params);
+        },
+      };
+      expect(await createMailer(interleaved, email, () => now).dispatch(id, 'acct_retrier')).toBe('refused');
+      expect(calls).toEqual([]);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('reads the team for a write only after a waiting ownership change', async () => {
     const databaseUrl = await testDatabaseUrl();
     const blocker = new pg.Client({ connectionString: databaseUrl });

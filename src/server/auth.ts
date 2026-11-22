@@ -377,7 +377,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
   /** The team after a write. A caller who lost ownership meanwhile does not get to read it. */
   async function teamFor(organizationId: string, by: Account | null) {
     return db.transaction(async () => {
-      // Membership changes wait for this lock, so the check and the reads see one team.
+      // Removing an owner and handing over wait for this lock, so ownership cannot end between the check and the reads.
       await db.lock(`org-members:${organizationId}`);
       if (by && !can(await rolesIn(by.id, organizationId), 'members.manage')) throw new HttpError(403, NO_LONGER_OWNER);
       return listMembers(organizationId);
