@@ -304,7 +304,7 @@ Immutable published snapshots. Riders always register against one of these, neve
 | `warnings_acknowledged` | Number of validation warnings the organizer acknowledged |
 | `published_at` | |
 
-Publishing is refused if validation finds errors, or warnings that were not acknowledged. Rows are only inserted, never updated.
+Publishing is refused if validation finds errors, warnings that were not acknowledged, or waiver text that differs from any earlier row of that event with the same `registration.waiverVersion` (blank counts as a version). The check runs under the event lock. Rows published before this rule can already share a version over two texts, so new reservations on such a version get 409 until a version with only one text is live (a new one, or an earlier one with its exact text). For orders accepted under these rules the version in `orders.waiver_json` identifies the text signed. Older orders may be ambiguous. Rows are only inserted, never updated.
 
 ### test_entries
 

@@ -178,6 +178,28 @@ test('on a phone, the category editor opens as a drawer that takes and returns f
   await expect(name).toBeFocused();
 });
 
+test('changed waiver text needs a new waiver version before it publishes', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  await page.goto(`/#/events/${eventId}/setup`);
+  await page.getByLabel('Waiver text', { exact: true }).fill('Changed fictional waiver.');
+  await saved(page);
+  const publish = async () => {
+    await page.getByRole('link', { name: /Review and publish/ }).first().click();
+    const ack = page.getByLabel(/I have reviewed the/);
+    if (await ack.count()) await ack.first().check();
+    await page.getByRole('button', { name: 'Publish version 2' }).click();
+  };
+  await publish();
+  await expect(page.locator('.publish-box').getByRole('status')).toContainText('already published with different text. In Event setup, enter a new waiver version');
+
+  await page.getByRole('link', { name: 'Event setup', exact: true }).click();
+  await page.getByLabel('Waiver version', { exact: true }).fill('sample-changed');
+  await saved(page);
+  await publish();
+  await expect(page.locator('.publish-box').getByRole('status')).toContainText('Published as version 2');
+});
+
 test('the refund warning opens refund rules and clears once notes are saved', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Club or organization name').fill('Refund Warning Club');

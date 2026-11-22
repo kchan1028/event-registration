@@ -249,7 +249,7 @@ export function EventSettings({ draft }: { draft: Draft }) {
           )}
         </Field>
         <div className="form-row">
-          <Field label="Waiver version" hint="Change it whenever the text changes">
+          <Field label="Waiver version" hint="Change it whenever the text changes. A published version cannot be reused with different text.">
             {(id, d) => <input id={id} aria-describedby={d} className="input input--code" value={config.registration.waiverVersion} onChange={(e) => update((c) => ({ ...c, registration: { ...c.registration, waiverVersion: e.target.value } }))} maxLength={40} />}
           </Field>
         </div>
