@@ -74,8 +74,12 @@ it('points an invitation at its current attempt when migration 41 runs', async (
       await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
     }
     await client.query("INSERT INTO organizations(id, name, created_at) VALUES ('org_attempt', 'Fictional club', '2027-04-01T12:00:00Z')");
-    await client.query(`INSERT INTO organization_invitations (organization_id, email, role, created_at, expires_at)
-      VALUES ('org_attempt', 'finance@example.test', 'finance', '2027-04-01T12:00:00Z', '2027-04-15T12:00:00Z')`);
+    await client.query("INSERT INTO accounts(id, provider_user_id, email, created_at) VALUES ('acct_inviter', 'test|inviter', 'owner@example.test', '2027-03-01T12:00:00Z')");
+    await client.query(`INSERT INTO organization_invitations (organization_id, email, role, invited_by, created_at, expires_at)
+      VALUES ('org_attempt', 'finance@example.test', 'finance', 'acct_inviter', '2027-04-01T12:00:00Z', '2027-04-15T12:00:00Z'),
+             ('org_attempt', 'seeded@example.test', 'finance', NULL, '2027-04-01T12:00:00Z', '2027-04-15T12:00:00Z')`);
+    await client.query(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
+      VALUES ('eml_canceled', 'org_attempt', 'organizer_invitation', 'org_attempt:seeded@example.test:finance', 'seeded@example.test', 'Subject', 'Body', 'failed', '2027-04-01T12:00:00Z')`);
     await client.query(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
       VALUES ('eml_old', 'org_attempt', 'organizer_invitation', 'org_attempt:finance@example.test:finance', 'finance@example.test', 'Subject', 'Body', 'uncertain', '2027-03-01T12:00:00Z')`);
     await client.query(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
@@ -88,6 +92,7 @@ it('points an invitation at its current attempt when migration 41 runs', async (
     await db.migrate();
     expect(await db.get('SELECT version FROM schema_migrations WHERE version = 41')).toEqual({ version: 41 });
     expect(await db.get(`SELECT email_attempt_id FROM organization_invitations WHERE email = 'finance@example.test'`)).toEqual({ email_attempt_id: 'eml_current' });
+    expect(await db.get(`SELECT email_attempt_id FROM organization_invitations WHERE email = 'seeded@example.test'`)).toEqual({ email_attempt_id: null });
     expect(await db.get("SELECT status FROM email_messages WHERE id = 'eml_old'")).toEqual({ status: 'uncertain' });
   } finally {
     await db.close();
@@ -124,6 +129,51 @@ it('keeps started_at for a send that already happened when migration 42 runs', a
       { id: 'eml_fresh', started: false },
       { id: 'eml_lost', started: true },
       { id: 'eml_refused', started: true },
+    ]);
+  } finally {
+    await db.close();
+  }
+});
+
+it('does not present an unkeyed ambiguous failure as safe to resend when migration 43 runs', async () => {
+  const url = await testDatabaseUrl({ empty: true });
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  const errors = {
+    blocked: 'Recipient is outside the configured email test list.',
+    refused: 'Resend returned HTTP 403.',
+    busy: 'Resend returned HTTP 429.',
+    server: 'Resend returned HTTP 503.',
+    timeout: 'The operation was aborted due to timeout',
+    unknown: null,
+  };
+  try {
+    await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+    for (let version = 1; version <= 42; version++) {
+      await client.query(MIGRATIONS[version - 1]);
+      await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
+    }
+    await client.query("INSERT INTO organizations(id, name, created_at) VALUES ('org_unkeyed', 'Fictional club', '2027-04-04T12:00:00Z')");
+    for (const [id, error] of Object.entries(errors)) {
+      await client.query(
+        `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, error, created_at)
+         VALUES ($1, 'org_unkeyed', 'organizer_invitation', $1, 'finance@example.test', 'Subject', 'Body', 'failed', $2, '2027-04-04T12:00:00Z')`,
+        [id, error],
+      );
+    }
+  } finally {
+    await client.end();
+  }
+  const db = openDb(url);
+  try {
+    await db.migrate();
+    expect(await db.all('SELECT id, status, keyed FROM email_messages ORDER BY id')).toEqual([
+      { id: 'blocked', status: 'failed', keyed: false },
+      { id: 'busy', status: 'uncertain', keyed: false },
+      { id: 'refused', status: 'failed', keyed: false },
+      { id: 'server', status: 'uncertain', keyed: false },
+      { id: 'timeout', status: 'uncertain', keyed: false },
+      { id: 'unknown', status: 'uncertain', keyed: false },
     ]);
   } finally {
     await db.close();

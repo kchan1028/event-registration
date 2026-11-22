@@ -33,6 +33,7 @@ test('an uncertain invitation can be retried without promising extra days', asyn
     await retry.click();
     expect((await posted).postDataJSON()).toEqual({ email: 'timer@example.test', role: 'finance', retryAttempt: 'eml_lost' });
     await answered;
+    await expect(team.getByRole('status')).toHaveText('timer@example.test: Email might have been sent.');
     await expect(openUntil).toHaveAttribute('datetime', expiresAt);
     expect((await new AxeBuilder({ page }).include('section.team').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   }

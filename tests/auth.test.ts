@@ -392,7 +392,7 @@ describe('organizer roles', () => {
       now = new Date(now.getTime() + RESEND_IDEMPOTENCY_WINDOW_MS);
       const late = await invite('timer@valley.test');
       expect(late.statusCode).toBe(409);
-      expect(late.json()).toEqual({ error: 'The earlier invitation email might have been sent. It was not sent again, and the invitation was not extended.' });
+      expect(late.json()).toEqual({ error: 'The earlier invitation email might have been sent. It was not sent again, and the invitation was not extended. To send a new email, cancel the invitation and invite again.' });
       expect(calls).toHaveLength(4);
       const afterLate = await listed();
       expect(afterLate.invitations.find((row) => row.email === 'timer@valley.test')).toMatchObject({ expiresAt: timerExpires, lastEmail: { status: 'uncertain' } });
@@ -744,6 +744,68 @@ describe('organizer roles', () => {
       expect(await db.get('SELECT started_at FROM email_messages WHERE id = $1', [id])).toEqual({ started_at: null });
       expect(await createMailer(db, resend('Second <second@example.test>'), () => now).dispatch(id)).toBe('failed');
       expect(senders).toEqual(['First <first@example.test>']);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('lets only the lease holder record a refusal', async () => {
+    const db = openDb(await testDatabaseUrl());
+    const now = new Date('2027-04-04T12:00:00.000Z');
+    const releases: (() => void)[] = [];
+    const email: EmailSender = {
+      mode: 'resend',
+      async send() {
+        const turn = releases.length;
+        await new Promise<void>((resolve) => releases.push(resolve));
+        if (turn === 0) throw new EmailRefusal('Resend returned HTTP 403.');
+        return 'msg-accepted';
+      },
+    };
+    const mailer = createMailer(db, email, () => now);
+    let sends: Promise<unknown>[] = [];
+    try {
+      const id = await reservedAttempt(db, mailer, 'timer@valley.test', now);
+      const stale = mailer.dispatch(id);
+      sends = [stale];
+      await expect.poll(() => releases.length, { timeout: 5000 }).toBe(1);
+      await db.run(`UPDATE email_messages SET sending_until = now() - interval '1 second' WHERE id = $1`, [id]);
+      const current = mailer.dispatch(id);
+      sends.push(current);
+      await expect.poll(() => releases.length, { timeout: 5000 }).toBe(2);
+      releases[0]();
+      expect(await stale).toBe('uncertain');
+      expect(await db.get('SELECT status, sending_until > now() AS sending FROM email_messages WHERE id = $1', [id])).toEqual({ status: 'uncertain', sending: true });
+      releases[1]();
+      expect(await current).toBe('sent');
+    } finally {
+      releases.forEach((release) => release());
+      await Promise.allSettled(sends);
+      await db.close();
+    }
+  });
+
+  it.each(['cancellation', 'the 24-hour cutoff'])('does not call the provider when %s lands just after the claim', async (event) => {
+    const db = openDb(await testDatabaseUrl());
+    let now = new Date('2027-04-04T12:00:00.000Z');
+    const calls: string[] = [];
+    const email: EmailSender = { mode: 'resend', send: async (_message, key) => (calls.push(key), 'msg-accepted') };
+    try {
+      const id = await reservedAttempt(db, createMailer(db, email, () => now), 'timer@valley.test', now);
+      const interleaved: Db = {
+        ...db,
+        async get<T>(sql: string, params?: Parameters<Db['get']>[1]) {
+          const row = await db.get<T>(sql, params);
+          if (sql.includes('RETURNING was.started_at')) {
+            if (event === 'cancellation') await db.run('DELETE FROM organization_invitations WHERE email_attempt_id = $1', [id]);
+            else now = new Date(now.getTime() + RESEND_IDEMPOTENCY_WINDOW_MS);
+          }
+          return row;
+        },
+      };
+      expect(await createMailer(interleaved, email, () => now).dispatch(id)).toBe(event === 'cancellation' ? 'changed' : 'withheld');
+      expect(calls).toEqual([]);
+      expect(await db.get('SELECT started_at, sending_until FROM email_messages WHERE id = $1', [id])).toEqual({ started_at: null, sending_until: null });
     } finally {
       await db.close();
     }

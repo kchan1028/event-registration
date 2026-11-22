@@ -723,7 +723,8 @@ export const MIGRATIONS: string[] = [
   `,
   `
   -- The invitation points at its current email attempt. Deleting the email clears the pointer.
-  -- Existing invitations keep the latest attempt created at or after the invitation.
+  -- Existing invitations keep the latest attempt created at or after the invitation. At the same time,
+  -- only a person's invitation has one: a seed re-add must not take a canceled invitation's email.
   ALTER TABLE organization_invitations
     ADD COLUMN email_attempt_id text REFERENCES email_messages(id) ON DELETE SET NULL;
   UPDATE organization_invitations AS i
@@ -732,7 +733,7 @@ export const MIGRATIONS: string[] = [
     FROM email_messages e
     WHERE e.organization_id = i.organization_id
       AND e.ref = i.organization_id || ':' || i.email || ':' || i.role
-      AND e.created_at >= i.created_at
+      AND (e.created_at > i.created_at OR (e.created_at = i.created_at AND i.invited_by IS NOT NULL))
     ORDER BY e.created_at DESC, e.seq DESC
     LIMIT 1
   );
@@ -748,7 +749,15 @@ export const MIGRATIONS: string[] = [
   `,
   `
   -- A send holds a short lease on its row, not a database connection, and a retry keeps the sender it was saved with.
-  ALTER TABLE email_messages ADD COLUMN sending_until timestamptz, ADD COLUMN from_email text;
+  ALTER TABLE email_messages ADD COLUMN sending_until timestamptz, ADD COLUMN from_email text,
+    ADD COLUMN keyed boolean NOT NULL DEFAULT false;
+  -- Older sends had no idempotency key and saved every error as failed. Only a clear refusal or local block
+  -- stays failed; the rest might have been sent and cannot be replayed safely.
+  UPDATE email_messages
+  SET status = 'uncertain'
+  WHERE status = 'failed'
+    AND error IS DISTINCT FROM 'Recipient is outside the configured email test list.'
+    AND (error IS NULL OR error !~ '^Resend returned HTTP 4[0-9][0-9][.]$' OR error ~ 'HTTP (408|409|429)[.]$');
   `,
 ];
 

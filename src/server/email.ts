@@ -127,6 +127,12 @@ export function emailFromEnv(env: Record<string, string | undefined> = process.e
   return resendEmail(from, apiKey, testRecipients);
 }
 
+/** `until` is also the token that proves the caller still holds the lease. */
+interface Lease {
+  first: boolean;
+  until: string;
+}
+
 const UNKNOWN_OUTCOME = 'Send outcome unknown.';
 
 function storedError(err: unknown): string {
@@ -139,23 +145,23 @@ function storedError(err: unknown): string {
  * Call `reserve` inside the invitation transaction. Call `dispatch` only after that transaction commits.
  */
 export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
-  async function finish(id: string, message: OutgoingEmail, mayRecordRefusal: boolean): Promise<EmailStatus> {
+  async function finish(id: string, message: OutgoingEmail, lease: Lease): Promise<EmailStatus> {
     try {
       const providerId = await sender.send(message, id);
+      // An acceptance is final whoever holds the lease by now: every send of an attempt shares one key.
       const saved = await db.run(
         `UPDATE email_messages SET status = 'sent', provider_message_id = $1, sent_at = $2, error = NULL, sending_until = NULL WHERE id = $3 AND status = 'uncertain'`,
         [providerId, clock().toISOString(), id],
       );
       return saved ? 'sent' : 'uncertain';
     } catch (err) {
-      const safe = storedError(err);
-      // Only the call that first committed started_at may record a definite refusal.
-      if (mayRecordRefusal && (err instanceof EmailRefusal || err instanceof EmailNotSent)) {
-        await db.run(`UPDATE email_messages SET status = 'failed', error = $1, sending_until = NULL WHERE id = $2 AND status = 'uncertain'`, [safe, id]);
-        return 'failed';
-      }
-      await db.run(`UPDATE email_messages SET error = $1, sending_until = NULL WHERE id = $2 AND status = 'uncertain'`, [safe, id]);
-      return 'uncertain';
+      // Only the call that first committed started_at may record a definite refusal, and only while it holds the lease.
+      const status = lease.first && (err instanceof EmailRefusal || err instanceof EmailNotSent) ? 'failed' : 'uncertain';
+      const saved = await db.run(
+        `UPDATE email_messages SET status = $1, error = $2, sending_until = NULL WHERE id = $3 AND status = 'uncertain' AND sending_until = $4::timestamptz`,
+        [status, storedError(err), id, lease.until],
+      );
+      return saved ? status : 'uncertain';
     }
   }
 
@@ -165,7 +171,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       const id = newId('eml');
       const status = sender.mode === 'local' ? 'recorded' : 'uncertain';
       await db.run(
-        `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at, from_email) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at, from_email, keyed) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)`,
         [id, organizationId, kind, ref, message.to, message.subject, message.text, status, clock().toISOString(), sender.from ?? null],
       );
       return id;
@@ -175,13 +181,14 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
      * Sends one reserved attempt after its row has committed.
      * The caller leases the row and commits `started_at` before the provider call, and holds no connection
      * during it. Other callers wait for the lease, then read the committed status.
-     * `withheld` means the send cannot be repeated safely (local mode, or past the 24-hour provider window).
-     * `changed` means no invitation points at the attempt any more, so nothing is sent.
+     * `withheld` means the send cannot be repeated safely (local mode, no saved key, or past the 24-hour provider window).
+     * `changed` means no invitation pointed at the attempt at the last check before the call, so nothing is sent.
+     * A cancellation after that check cannot recall the send.
      */
     async dispatch(id: string): Promise<EmailStatus | 'withheld' | 'changed'> {
       for (;;) {
-        const row = await db.get<{ created_at: string; to_email: string; from_email: string | null; subject: string; body_text: string; status: EmailStatus; current: boolean; sending: boolean }>(
-          `SELECT created_at, to_email, from_email, subject, body_text, status,
+        const row = await db.get<{ created_at: string; to_email: string; from_email: string | null; subject: string; body_text: string; status: EmailStatus; keyed: boolean; current: boolean; sending: boolean }>(
+          `SELECT created_at, to_email, from_email, subject, body_text, status, keyed,
              EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = email_messages.id) AS current,
              COALESCE(sending_until > now(), false) AS sending
            FROM email_messages WHERE id = $1`,
@@ -195,18 +202,34 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
         }
         if (!row.current) return 'changed';
         const created = Date.parse(row.created_at);
-        if (sender.mode === 'local' || !Number.isFinite(created) || clock().getTime() - created >= RESEND_IDEMPOTENCY_WINDOW_MS) return 'withheld';
+        const pastWindow = () => !Number.isFinite(created) || clock().getTime() - created >= RESEND_IDEMPOTENCY_WINDOW_MS;
+        if (sender.mode === 'local' || !row.keyed || pastWindow()) return 'withheld';
         // Checked again in the claim: another caller or a cancellation may have committed since the read.
-        const claim = await db.get<{ first: boolean }>(
+        const lease = await db.get<Lease>(
           `UPDATE email_messages m
            SET started_at = COALESCE(m.started_at, $2), sending_until = now() + make_interval(secs => $3)
            FROM (SELECT id, started_at FROM email_messages WHERE id = $1 FOR UPDATE) was
            WHERE m.id = was.id AND m.status = 'uncertain' AND (m.sending_until IS NULL OR m.sending_until <= now())
              AND EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id)
-           RETURNING was.started_at IS NULL AS first`,
+           RETURNING was.started_at IS NULL AS first, m.sending_until::text AS until`,
           [id, clock().toISOString(), SEND_LEASE_SECONDS],
         );
-        if (claim) return finish(id, { to: row.to_email, from: row.from_email ?? undefined, subject: row.subject, text: row.body_text }, claim.first);
+        if (!lease) continue;
+        // The claim took time, so check the lease, the invitation, and the window again with nothing awaited before the call.
+        const ready = await db.get(
+          `SELECT 1 FROM email_messages m
+           WHERE m.id = $1 AND m.status = 'uncertain' AND m.sending_until = $2::timestamptz
+             AND m.sending_until > now() + make_interval(secs => $3)
+             AND EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id)`,
+          [id, lease.until, SEND_TIMEOUT_MS / 1000],
+        );
+        if (ready && !pastWindow()) return finish(id, { to: row.to_email, from: row.from_email ?? undefined, subject: row.subject, text: row.body_text }, lease);
+        // No provider call was made, so give the lease back and let the loop report why.
+        await db.run(
+          `UPDATE email_messages SET sending_until = NULL, started_at = CASE WHEN $3::boolean THEN NULL ELSE started_at END
+           WHERE id = $1 AND status = 'uncertain' AND sending_until = $2::timestamptz`,
+          [id, lease.until, lease.first],
+        );
       }
     },
   };

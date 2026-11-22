@@ -363,7 +363,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
 
   async function dispatchInvitation(attemptId: string) {
     const outcome = await mailer.dispatch(attemptId);
-    if (outcome === 'withheld') throw new HttpError(409, 'The earlier invitation email might have been sent. It was not sent again, and the invitation was not extended.');
+    if (outcome === 'withheld') throw new HttpError(409, 'The earlier invitation email might have been sent. It was not sent again, and the invitation was not extended. To send a new email, cancel the invitation and invite again.');
     if (outcome === 'changed') throw new HttpError(409, INVITATION_CHANGED);
   }
 

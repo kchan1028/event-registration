@@ -81,6 +81,16 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
     }
   }
 
+  async function retry(email: string, role: Role, attemptId: string) {
+    setNotice(null);
+    await run(async () => {
+      const next = await api.retryInvitation(orgId, email, role, attemptId);
+      const status = next.invitations.find((i) => i.email === email && i.role === role)?.lastEmail?.status;
+      setNotice(status ? `${email}: ${EMAIL_STATUS[status]}.` : `The invitation for ${email} is no longer open.`);
+      return next;
+    });
+  }
+
   async function handOver() {
     if (await run(() => api.transferOwnership(orgId, successor))) {
       setNotice(`Ownership handed to ${successor}. You are no longer an owner here; your other roles stay.`);
@@ -155,7 +165,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
                     </>
                   )}
                 </span>
-                <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => (uncertain ? api.retryInvitation(orgId, i.email, i.role, i.lastEmail!.attemptId) : api.addMember(orgId, i.email, i.role)))}>
+                <button className="link-btn" type="button" disabled={busy} onClick={() => (uncertain ? retry(i.email, i.role, i.lastEmail!.attemptId) : run(() => api.addMember(orgId, i.email, i.role)))}>
                   {uncertain ? 'Retry send' : 'Resend'}
                   <span className="sr-only">
                     {uncertain ? ` of the invitation email to ${i.email} without extending it` : ` invitation to ${i.email}, open for ${INVITATION_DAYS} more days`}
