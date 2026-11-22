@@ -570,7 +570,7 @@ for (const { committed, legacy } of consentRecoveryCases) {
     const draft = await (await page.request.get(eventPath)).json();
     const category = draft.config.categories.find((c: { timingCode: string }) => c.timingCode === 'DVC-M45');
     const originalText = 'Fictional original race condition.\n' + 'LongFictionalTerm'.repeat(30);
-    category.addendum = { title: 'Original sample condition', text: originalText };
+    category.addendum = { title: 'Original sample condition ' + 'W'.repeat(54), text: originalText };
     expect((await page.request.put(eventPath + '/config', { data: { revision: draft.revision, config: draft.config } })).ok()).toBe(true);
     expect((await page.request.post(eventPath + '/publish', { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
     await page.reload();
@@ -580,6 +580,10 @@ for (const { committed, legacy } of consentRecoveryCases) {
     await page.getByRole('button', { name: 'Continue to the waiver' }).click();
     await expect(page.locator('.addendum-text')).toHaveText(originalText);
     await expect(page.locator('.addendum-text')).toHaveCSS('white-space', 'pre-wrap');
+    const wide = page.viewportSize()!;
+    await page.setViewportSize({ width: 360, height: 800 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    await page.setViewportSize(wide);
     await page.getByLabel('I accept this', { exact: true }).check();
     const bodies: { clientRequestId: string; categoryIds: string[]; waiver: { version: string }; extras: { addenda: string[] } }[] = [];
     const orderIds: string[] = [];

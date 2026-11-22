@@ -1438,7 +1438,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
       )}
       {currentAddenda.map((terms) => (
         <fieldset className="subfields" key={terms.categoryId}>
-          <legend>
+          <legend className="addendum-title">
             {terms.title} ({terms.categoryName})
           </legend>
           <p className="small addendum-text">{terms.text}</p>
