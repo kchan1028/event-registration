@@ -357,6 +357,12 @@ test('an explicit lookup started before check-in does not restore the ready card
   await expect(detail.getByRole('status')).toContainText('Ready to race');
 
   const held: { route: Route; response: Awaited<ReturnType<Route['fetch']>> }[] = [];
+  let finishedCodeReads = 0;
+  page.on('response', (response) => {
+    if (!response.ok() || response.request().method() !== 'GET') return;
+    const url = new URL(response.url());
+    if (url.pathname === `/api/events/${eventId}/check-in` && url.searchParams.get('q') === rider.checkInCode) finishedCodeReads += 1;
+  });
   await page.route(`**/api/events/${eventId}/check-in?*`, async (route) => {
     const url = new URL(route.request().url());
     if (route.request().method() !== 'GET' || url.searchParams.get('q') !== rider.checkInCode || held.length > 0) {
@@ -369,13 +375,14 @@ test('an explicit lookup started before check-in does not restore the ready card
   await search.fill(rider.checkInCode);
   await search.press('Enter');
   await expect.poll(() => held.length).toBe(1);
+  const readsBeforeSave = finishedCodeReads;
   await page.clock.resume();
 
   await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
   await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
-  // Let the save's list refresh finish before the older lookup can paint over it.
-  await page.waitForTimeout(400);
+  // The debounced search and the check-in refresh both have to finish before the older lookup is delivered.
+  await expect.poll(() => finishedCodeReads).toBeGreaterThanOrEqual(readsBeforeSave + 2);
 
   await held[0].route.fulfill({ response: held[0].response });
   await page.waitForTimeout(400);
@@ -420,29 +427,37 @@ test('a lookup started during check-in still opens that rider after the save', a
   await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
   await expect.poll(() => saveHeld).toBe(true);
 
-  const held: { route: Route; response: Awaited<ReturnType<Route['fetch']>> }[] = [];
+  const queued: { route: Route; response: Awaited<ReturnType<Route['fetch']>> }[] = [];
+  let holdReads = true;
   await page.route(`**/api/events/${eventId}/check-in?*`, async (route) => {
     const url = new URL(route.request().url());
-    if (route.request().method() !== 'GET' || url.searchParams.get('q') !== other.checkInCode || held.length > 0) {
+    if (!holdReads || route.request().method() !== 'GET' || url.searchParams.get('q') !== other.checkInCode) {
       await route.continue();
       return;
     }
-    held.push({ route, response: await route.fetch() });
+    queued.push({ route, response: await route.fetch() });
   });
   await search.fill(other.checkInCode);
   await search.press('Enter');
-  await expect.poll(() => held.length).toBe(1);
+  await expect.poll(() => queued.length).toBeGreaterThanOrEqual(1);
   await page.clock.resume();
   releaseSave?.();
   await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
   await expect(detail.locator('.ci-bib__number')).toHaveText('100');
-  await held[0].route.fulfill({ response: held[0].response });
+  holdReads = false;
+  const explicit = queued.shift();
+  if (!explicit) throw new Error('The explicit lookup was not held');
+  while (queued.length > 0) {
+    const item = queued.shift();
+    if (item) await item.route.fulfill({ response: item.response });
+  }
+  await explicit.route.fulfill({ response: explicit.response });
   await expect(detail.getByRole('heading', { name: other.name, exact: true })).toBeVisible();
   const final: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
   expect(final.riders.find((candidate) => candidate.orderId === ready.orderId)).toMatchObject({ bib: 100, checkedInAt: expect.any(String) });
 });
 
-test('a failed enter lookup does not count the previous riders as matches', async ({ page }) => {
+test('a failed enter lookup does not present the following empty search as the result', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
   expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
   expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
@@ -496,7 +511,14 @@ test('a failed search does not present the previous empty list as the result', a
   await expect(page.getByText('No rider matches. Check the spelling, or try the team or check-in code.')).toHaveCount(0);
   await expect(page.getByText('No registered riders for this day yet.')).toHaveCount(0);
   await expect(count).toHaveText('The list could not be updated.');
+  const cleared = page.waitForEvent('requestfailed', (request) => {
+    if (request.method() !== 'GET') return false;
+    const url = new URL(request.url());
+    return url.pathname === `/api/events/${eventId}/check-in` && url.searchParams.get('q') === '';
+  });
   await search.fill('');
+  await cleared;
+  await page.waitForTimeout(400);
   await expect(count).toHaveText('The list could not be updated.');
   await expect(page.getByText('No registered riders for this day yet.')).toHaveCount(0);
 });
@@ -516,4 +538,48 @@ test('a failed refresh of an empty day does not say that nobody is registered', 
   await expect(count).toHaveText('The list could not be updated.');
   await expect(page.getByText('No registered riders for this day yet.')).toHaveCount(0);
   await expect(page.getByText('No rider matches. Check the spelling, or try the team or check-in code.')).toHaveCount(0);
+});
+
+test('a failed enter and its search show one connection error', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
+  const openedAt = new Date('2026-06-01T12:00:00Z');
+  await page.clock.install({ time: openedAt });
+  await page.goto(`/#/events/${eventId}/check-in`);
+  await expect(page.locator('.ci__count')).toContainText('riders on');
+  await page.clock.pauseAt(new Date(openedAt.getTime() + 2_000));
+  await page.route(`**/api/events/${eventId}/check-in?*`, (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    return route.abort();
+  });
+  const search = page.getByRole('searchbox', { name: 'Find a rider' });
+  await search.fill('Nonexistent Person');
+  await search.press('Enter');
+  await page.clock.runFor(150);
+  await expect(page.getByRole('alert').filter({ hasText: 'Cannot reach the CycleReg server' })).toHaveCount(1);
+});
+
+test('a failed refresh after check-in keeps the saved card', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
+  expect((await page.request.put(`/api/events/${eventId}/bib-settings`, { data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } })).ok()).toBe(true);
+  const list: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
+  const rider = list.riders.find((candidate) => candidate.result.ready && candidate.bib === null && candidate.checkInCode);
+  if (!rider) throw new Error('The fictional fixture needs a ready, unassigned rider');
+  await page.goto(`/#/events/${eventId}/check-in`);
+  const detail = page.getByRole('region', { name: 'Rider check-in' });
+  await expect(page.locator('.ci__count')).toContainText('riders on');
+  await page.getByRole('button', { name: rider.name }).click();
+  await expect(detail.getByRole('status')).toContainText('Ready to race');
+  await page.route(`**/api/events/${eventId}/check-in?*`, (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    return route.abort();
+  });
+  await detail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
+  await expect(detail.getByRole('heading', { name: rider.name, exact: true })).toBeVisible();
+  await expect(detail.getByRole('status')).toContainText('Checked in. Hand over the bib below.');
+  await expect(detail.locator('.ci-bib__number')).toHaveText('100');
+  await expect(page.getByRole('alert').filter({ hasText: 'Cannot reach the CycleReg server' })).toHaveCount(1);
 });

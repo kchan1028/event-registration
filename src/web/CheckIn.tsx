@@ -36,7 +36,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
   // A newer list read drops an older one. An explicit lookup also drops a list read that started before its result.
   const listEpoch = useRef(0);
   const lookupEpoch = useRef(0);
-  // A save bumps this. A lookup that started earlier must not paint over that save or drop its refresh.
+  // Check-in bumps this. A lookup that started earlier must not paint over that check-in or drop its refresh.
   const appliedEpoch = useRef(0);
   const [batchMode, setBatchMode] = useState<BibBatchMode | null>(null);
   const [showBibs, setShowBibs] = useState(false);
