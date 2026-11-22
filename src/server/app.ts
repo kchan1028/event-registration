@@ -253,7 +253,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = idParam.parse(req.params);
     await access.requireOrg(me(req), id, 'members.manage');
     const { email, role, retryAttempt } = memberBody.extend({ retryAttempt: z.string().min(1).max(64).optional() }).parse(req.body);
-    return retryAttempt ? access.retryInvitation(id, email, role, retryAttempt) : access.addMember(id, email, role, me(req));
+    return retryAttempt ? access.retryInvitation(id, email, role, retryAttempt, me(req)) : access.addMember(id, email, role, me(req));
   });
   // Its own route, so a server from before it answers 404 instead of treating Resend as Add.
   app.post('/api/organizations/:id/invitations/resend', async (req) => {
