@@ -1224,6 +1224,38 @@ describe('organizer roles', () => {
     }
   }, 15_000);
 
+  it.each(['sign-in', 'Add'])('records how the role was got when Add overlaps a first sign-in and %s is first', async (first) => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth() });
+    const call = (method: Method, url: string, payload?: object, who = OWNER) => app.inject({ method, url, headers: as(who), payload });
+    const earlier = (await call('POST', '/api/organizations', { name: 'Hills Velo' })).json() as { id: string };
+    const adding = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const body = { email: 'treasurer@valley.test', role: 'finance' };
+    await call('POST', `/api/organizations/${earlier.id}/members`, body);
+    const signIn = () => call('GET', '/api/me', undefined, body.email).then((r) => r.statusCode);
+    const add = () => call('POST', `/api/organizations/${adding.id}/members`, body).then((r) => r.statusCode);
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    try {
+      // Stops whichever goes first at its history or invitation write, after its reads and holding its locks.
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT 1 FROM organizations WHERE id = $1 FOR UPDATE', [first === 'sign-in' ? earlier.id : adding.id]);
+      const leading = first === 'sign-in' ? signIn() : add();
+      await untilWaiting(blocker, 1);
+      const following = first === 'sign-in' ? add() : signIn();
+      await untilWaiting(blocker, 2);
+      await blocker.query('ROLLBACK');
+      expect([await leading, await following]).toEqual([200, 200]);
+      const team = (await call('GET', `/api/organizations/${adding.id}/members`)).json();
+      expect(team.members).toEqual(expect.arrayContaining([expect.objectContaining(body)]));
+      expect(team.invitations).toEqual([]);
+      const actions = team.history.filter((h: { email: string }) => h.email === body.email).map((h: { action: string }) => h.action);
+      expect(actions.sort()).toEqual(first === 'sign-in' ? ['granted'] : ['invitation_accepted', 'invited']);
+    } finally {
+      await blocker.end();
+    }
+  }, 15_000);
+
   it('grants nothing when Cancel reaches the account lock before a first sign-in', async () => {
     const databaseUrl = await testDatabaseUrl();
     const { app } = await testApp({ databaseUrl, auth: fakeAuth() });
