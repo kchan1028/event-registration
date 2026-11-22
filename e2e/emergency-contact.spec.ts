@@ -57,9 +57,15 @@ test('finance and timer staff use the same lookup on their own screens', async (
   expect((await api.post(`/api/organizations/${organizationId}/members`, { data: { email: finance, role: 'finance' } })).ok()).toBe(true);
   expect((await api.post(`/api/organizations/${organizationId}/members`, { data: { email: timer, role: 'timer_export' } })).ok()).toBe(true);
 
+  const registered: { id: string; rider: { firstName: string } }[] = await (await api.get(`/api/events/${eventId}/orders`)).json();
+  const blake = registered.find((order) => order.rider.firstName === 'Blake')!;
+  const typed = 'Call the new contact on 555-555-0188';
+  expect((await api.post(`/api/orders/${blake.id}/rider-corrections`, { data: { changes: { emergencyContactPhone: '555-555-0188' }, reason: typed } })).ok()).toBe(true);
   const financeSession = await rolePage(browser, finance, `/#/events/${eventId}/registrations`);
   try {
     await showAndHide(financeSession.page, 'Alex Demo');
+    await expect(financeSession.page.getByText('Reason: hidden, because it can contain the emergency contact')).toBeVisible();
+    await expect(financeSession.page.getByText(typed)).toHaveCount(0);
   } finally {
     await financeSession.context.close();
   }

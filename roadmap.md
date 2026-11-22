@@ -423,7 +423,7 @@ Early independent build: the local API can preview and atomically assign bibs to
 
 **License-correction rehearsal (November 21, 2026):** A readiness refusal replaces an old ready card with the current blocked card ([#320](https://github.com/kchan1028/event-registration/pull/320)). The local license-correction rehearsal verifies that no bib or check-in is recorded until an organizer reviews the corrected license and the volunteer looks up the rider again.
 
-**Emergency contact lookup (November 21, 2026):** Any organizer role can look up one registration's emergency contact from check-in, Registrations, or start lists. Each lookup is recorded with the account, event, order, and time. The record does not store the contact. Check-in lists, the fallback roster, exports, and organizer order responses omit the contact and its correction values. A rider or guardian still receives their own registration. Paper copies and retention remain unresolved.
+**Emergency contact lookup (November 21, 2026):** Any organizer role can look up one registration's emergency contact from check-in, Registrations, or start lists. Each lookup is recorded with the account, event, order, and time. The record does not store the contact. Check-in lists, the fallback roster, exports, and organizer order responses omit the contact, its correction values, and the reason typed for that correction. A rider or guardian still receives their own registration. Paper copies and retention remain unresolved.
 
 | Work | What remains | Completion evidence |
 |---|---|---|

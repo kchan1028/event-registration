@@ -214,7 +214,19 @@ describe('emergency contact lookup', () => {
     expect(corrected.body).not.toContain(nextPhone);
     expect(corrected.body).not.toContain('Casey Lookup');
     expect(JSON.stringify((corrected.json() as { corrections: unknown }).corrections)).toContain('emergencyContactPhone');
+    const typedPhone = '555-555-0188';
+    const mixedReason = `Team changed; call Morgan on ${typedPhone}`;
+    const mixed = await app.inject({ method: 'POST', url: `/api/orders/${orderId}/rider-corrections`, headers: owner, payload: { changes: { team: 'Reason Wheelers', emergencyContactName: 'Morgan Reason' }, reason: mixedReason } });
+    expect(mixed.statusCode).toBe(200);
+    for (const staff of [mixed, await staffList(owner), await app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: owner })]) {
+      expect(staff.statusCode).toBe(200);
+      expect(staff.body).not.toContain(typedPhone);
+      expect(staff.body).not.toContain('Rider called with a new contact phone');
+      // A correction that left the contact alone keeps its reason.
+      expect(staff.body).toContain('Blank phone must not clear the contact');
+    }
     const after = await app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: riderHeaders });
+    expect(after.body).toContain(mixedReason);
     expect(after.body).toContain(nextPhone);
     expect((await staffList(owner)).body).not.toContain(nextPhone);
     expect((await lookupStatus(app, owner, eventId, orderId))).toBe(200);
