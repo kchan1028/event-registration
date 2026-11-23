@@ -24,6 +24,35 @@ async function untilWaiting(holder: pg.Client): Promise<void> {
   }
 }
 
+it('opens a fresh clone session after the previous one is terminated', async () => {
+  const first = await testDatabaseUrl();
+  const watcher = new pg.Client({ connectionString: adminUrl(serverUrl) });
+  await watcher.connect();
+  try {
+    const { rows } = await watcher.query<{ pid: number }>(
+      'SELECT pid FROM pg_stat_activity WHERE application_name = $1',
+      [templateCloneSessionName()],
+    );
+    expect(rows).toHaveLength(1);
+    const pid = rows[0].pid;
+    await watcher.query('SELECT pg_terminate_backend($1)', [pid]);
+    await expect.poll(async () => {
+      const gone = await watcher.query('SELECT pid FROM pg_stat_activity WHERE pid = $1', [pid]);
+      return gone.rows.length;
+    }).toBe(0);
+    const second = await testDatabaseUrl();
+    expect(new URL(second).pathname).not.toBe(new URL(first).pathname);
+    const { rows: again } = await watcher.query<{ pid: number }>(
+      'SELECT pid FROM pg_stat_activity WHERE application_name = $1',
+      [templateCloneSessionName()],
+    );
+    expect(again).toHaveLength(1);
+    expect(again[0].pid).not.toBe(pid);
+  } finally {
+    await watcher.end();
+  }
+});
+
 it('clones a database after another session releases the template lock', async () => {
   const holder = new pg.Client({ connectionString: adminUrl(serverUrl) });
   await holder.connect();
