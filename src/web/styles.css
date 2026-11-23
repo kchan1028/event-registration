@@ -547,8 +547,8 @@ textarea.input {
   color: var(--body);
   cursor: pointer;
   user-select: none;
+  /* Fill snaps with the label. A background fade lets the label change theme first and fall under 4.5:1. */
   transition:
-    background-color 150ms ease,
     border-color 150ms ease,
     transform 160ms var(--ease-out);
 }
