@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import type { RefundStatus } from '../shared/refunds';
 import type { Db } from './db';
 import type { Orders } from './orders';
-import { HttpError } from './repo';
+import { HttpError, eventLock } from './repo';
 
 /**
  * Payment providers (ADR 0002). Two modes:
@@ -325,6 +325,11 @@ export function createPayments(
             result = (await orders.pay(session.order_id, ev.id, 'failure', source)).status;
           } else {
             // A second paid session for the same order is money taken twice: record it for a refund, never a second entry.
+            // The provider-event lock above is per notification, so two sessions can pass this read together.
+            // The event lock is the same one fulfillment uses, and it is held until this notification is saved.
+            const paidFor = await db.get<{ event_id: string }>(`SELECT event_id FROM orders WHERE id = $1`, [session.order_id]);
+            if (!paidFor) throw new HttpError(404, 'Order not found.');
+            await db.lock(eventLock(paidFor.event_id));
             const otherPaid = await db.get<{ id: string }>(
               `SELECT id FROM provider_events WHERE order_id = $1 AND outcome = 'paid' AND session_id <> $2 LIMIT 1`,
               [session.order_id, session.id],
