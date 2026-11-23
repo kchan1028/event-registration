@@ -343,7 +343,7 @@ export function createPayments(
       const session = await provider.createCheckout(next.request);
       // Recorded even if the order changed meanwhile: the session exists at Stripe, and a payment on it must be recognized.
       // The session lock is taken only after Stripe returns, so no database connection waits on Stripe.
-      await db.transaction(async () => {
+      const sendRider = await db.transaction(async () => {
         await db.lock(`checkout:${orderId}`);
         await db.lock(`payment-session:${session.id}`);
         await db.run(
@@ -352,7 +352,12 @@ export function createPayments(
         );
         const stored = await db.get<SessionRow>(`SELECT * FROM payment_sessions WHERE id = $1`, [session.id]);
         if (stored?.order_id === orderId) await applySavedNotifications(stored);
+        // A payment saved before this row can confirm the order or send it to review. Only a cancellation refuses the page.
+        const order = await orders.getOrder(orderId);
+        return order.status !== 'cancelled';
       });
+      // Cancellation can commit while Stripe is opening the page. Keep the session, and do not send the rider to it.
+      if (!sendRider) throw new HttpError(409, 'Your hold has ended. Start a new registration to pay.');
       return { kind: 'redirect' as const, url: session.url };
     },
 
