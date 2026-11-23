@@ -29,8 +29,19 @@ export function templateCloneSessionName(): string {
 }
 
 async function adminClient(): Promise<pg.Client> {
+  if (admin) {
+    try {
+      await admin.query('SELECT 1');
+    } catch {
+      // A drop while no clone lock is held leaves this client dead. The next clone opens a new session.
+      await admin.end().catch(() => undefined);
+      admin = null;
+    }
+  }
   if (!admin) {
     const client = new pg.Client({ connectionString: adminUrl(serverUrl) });
+    // A terminated backend emits error. Nothing is listening otherwise, and the process would exit.
+    client.on('error', () => undefined);
     await client.connect();
     // SET does not accept a bind parameter. set_config does, and false keeps it for the session.
     await client.query(`SELECT set_config('application_name', $1, false)`, [templateCloneSessionName()]);
