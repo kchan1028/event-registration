@@ -403,6 +403,30 @@ describe('Stripe hosted Checkout (test mode)', () => {
     expect((await get(o.id)).status).toBe('needs_attention');
   });
 
+  it('saves a session that opens after the rider cancelled and does not send the rider to it', async () => {
+    let cancel: (() => Promise<unknown>) | undefined;
+    const { app, order, checkout, get, databaseUrl } = await setup({
+      onSessionCreated: async () => { if (cancel) await cancel(); },
+    });
+    const o = await order(['RR-M35-34']);
+    cancel = () => app.inject({ method: 'POST', url: `/api/orders/${o.id}/cancel` });
+    const res = await checkout(o.id);
+    expect(res.statusCode, res.body).toBe(409);
+    expect(res.json()).toEqual({ error: 'Your hold has ended. Start a new registration to pay.' });
+    const after = await get(o.id);
+    expect(after.status).toBe('cancelled');
+    expect(after.entries.every((e) => e.status === 'released')).toBe(true);
+    const left = new pg.Client({ connectionString: databaseUrl });
+    await left.connect();
+    try {
+      const sessions = await left.query(`SELECT status FROM payment_sessions WHERE order_id = $1`, [o.id]);
+      expect(sessions.rowCount).toBe(1);
+      expect(sessions.rows[0].status).toBe('open');
+    } finally {
+      await left.end();
+    }
+  });
+
   it('payment after the hold ended confirms only while the places are still free', async () => {
     const { order, checkout, webhook, paidSession, get, clock } = await setup();
     const o = await order(['RR-M35-34']);
