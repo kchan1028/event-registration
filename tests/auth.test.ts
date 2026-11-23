@@ -1457,6 +1457,46 @@ describe('organizer roles', () => {
     }
   }, 15_000);
 
+  it('keeps someone on the team list when their first sign-in commits during the read', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, auth: fakeAuth() });
+    const call = (method: Method, url: string, payload?: object, who = OWNER) => app.inject({ method, url, headers: as(who), payload });
+    const org = (await call('POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const base = `/api/organizations/${org.id}`;
+    const body = { email: 'treasurer@valley.test', role: 'finance' };
+    await call('POST', `${base}/members`, body);
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    try {
+      // The invitations query joins email_messages, so this stops the list after the members query and before the invitations query.
+      await blocker.query('BEGIN');
+      await blocker.query('LOCK TABLE email_messages IN ACCESS EXCLUSIVE MODE');
+      const listed = call('GET', `${base}/members`).then((r) => ({ status: r.statusCode, body: r.json() }));
+      await untilWaiting(blocker, 1);
+      let signedIn: number | undefined;
+      const signIn = call('GET', '/api/me', undefined, body.email).then((r) => {
+        signedIn = r.statusCode;
+        return r.statusCode;
+      });
+      const waitingHere = `SELECT count(DISTINCT pid)::int AS n FROM pg_locks WHERE NOT granted AND pid IN (SELECT pid FROM pg_locks WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()))`;
+      await expect
+        .poll(async () => {
+          if (signedIn !== undefined) return 'committed';
+          const waiting = await blocker.query(waitingHere);
+          return Number(waiting.rows[0].n) >= 2 ? 'waiting' : 'pending';
+        }, { timeout: 5000 })
+        .not.toBe('pending');
+      await blocker.query('COMMIT');
+      expect(await signIn).toBe(200);
+      const team = await listed;
+      expect(team.status).toBe(200);
+      const listedEmail = [...team.body.members, ...team.body.invitations].some((row: { email: string }) => row.email === body.email);
+      expect(listedEmail).toBe(true);
+    } finally {
+      await blocker.end();
+    }
+  }, 15_000);
+
   it.each([
     ['invite an owner', 403],
     ['grant an owner', 403],
@@ -1709,7 +1749,10 @@ describe('organizer roles', () => {
     expect((await call(OWNER, 'POST', membersUrl, predecessorRole)).statusCode).toBe(200);
     // The second owner can remove the role in either ordering.
     expect((await call(OWNER, 'POST', membersUrl, { email: OTHER_OWNER, role: 'owner' })).statusCode).toBe(200);
-    const remove = () => takeOffTeam((...args) => call(OTHER_OWNER, ...args), valley, predecessorRole.email, predecessorRole.role);
+    // Read the revision first. The team list takes the membership lock, so the queued request has to be the removal itself.
+    const listed = (await call(OTHER_OWNER, 'GET', membersUrl)).json() as { members: { email: string; role: string; revision: string }[] };
+    const revision = listed.members.find((member) => member.email === predecessorRole.email && member.role === predecessorRole.role)!.revision;
+    const remove = () => call(OTHER_OWNER, 'POST', `${membersUrl}/revoke`, { ...predecessorRole, revision });
     const transfer = () => call(OWNER, 'POST', `/api/organizations/${valley}/ownership-transfer`, { email: RIDER_EMAIL });
 
     const blocker = new pg.Client({ connectionString: databaseUrl });
