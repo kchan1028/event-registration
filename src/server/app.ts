@@ -431,22 +431,24 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   }));
 
   app.post('/api/demo/case-studies', async (req, reply) => {
-    const result = await caseStudies.loadAll();
-    await joinDemo(req, CASE_STUDY_ORG_ID);
+    const result = await caseStudies.loadAll(() => grantCaseStudyOwner(req));
     return reply.status(result.results.some((row) => row.created) ? 201 : 200).send(result);
   });
 
   app.post('/api/demo/case-studies/:key', async (req, reply) => {
     const { key } = z.object({ key: z.enum(['criterium', 'road-shared-field', 'omnium', 'empty-event', 'large-event']) }).parse(req.params);
-    const result = await caseStudies.load(key);
-    await joinDemo(req, CASE_STUDY_ORG_ID);
+    const result = await caseStudies.load(key, () => grantCaseStudyOwner(req));
     return reply.status(result.created ? 201 : 200).send(result);
   });
 
   // Reset removes the case-study organization, so only its owners may run it.
+  // The demo lock is held before the membership check, so the check sees an organization a load commits while this request waits.
   app.delete('/api/demo/case-studies', async (req) => {
-    if (await db.get(`SELECT 1 FROM organizations WHERE id = $1`, [CASE_STUDY_ORG_ID])) await access.requireOrg(me(req), CASE_STUDY_ORG_ID, 'members.manage');
-    return caseStudies.reset();
+    return db.transaction(async () => {
+      await db.lock('demo:case-studies');
+      if (await db.get(`SELECT 1 FROM organizations WHERE id = $1`, [CASE_STUDY_ORG_ID])) await access.requireOrg(me(req), CASE_STUDY_ORG_ID, 'members.manage');
+      return caseStudies.reset();
+    });
   });
 
   app.get('/api/public/events/:id', isPublic, async (req) => ({ ...(await orders.publicEvent(idParam.parse(req.params).id)), paymentMode: payments.mode }));
@@ -881,6 +883,15 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
    */
   async function joinDemo(req: { account?: Account }, organizationId: string) {
     await access.grant(organizationId, me(req), 'owner', me(req).id);
+  }
+
+  /**
+   * Runs inside the case-study load transaction, after any event lock that load took.
+   * Reset takes the demo lock first, so it cannot delete the organization until this grant commits.
+   */
+  async function grantCaseStudyOwner(req: { account?: Account }) {
+    await db.lock(`org-members:${CASE_STUDY_ORG_ID}`);
+    await joinDemo(req, CASE_STUDY_ORG_ID);
   }
 
   async function seed(req: { account?: Account }, orgName: string, { config, entryPlan }: ReturnType<typeof buildDemoEvent>) {
