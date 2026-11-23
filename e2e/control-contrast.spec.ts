@@ -132,6 +132,30 @@ test('input and secondary button boundaries and focus clear 3:1 in both themes',
   }
 });
 
+test('selected chip labels stay at 4.5:1 through a theme switch', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  await page.goto(`/#/events/${eventId}/registrations`);
+  const chip = page.getByRole('group', { name: 'Show registrations' }).getByRole('button', { name: /^All / });
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  const pair = await samples(page, '.filters .chip.is-on', false);
+  const animated = pair.light.transitionProperty.split(',').map((part) => part.trim());
+  expect(animated).not.toContain('background-color');
+  expect(animated).not.toContain('all');
+  const colorMoves = animated.includes('color') || animated.includes('all');
+  const fillMoves = animated.includes('background-color') || animated.includes('all');
+  for (const [from, to] of [
+    ['light', 'dark'],
+    ['dark', 'light'],
+  ] as const) {
+    for (let step = 0; step <= 8; step++) {
+      const t = step / 8;
+      const color = colorMoves ? mix(pair[from].color, pair[to].color, t) : pair[to].color;
+      const background = fillMoves ? mix(pair[from].background, pair[to].background, t) : pair[to].background;
+      expect(contrast(color, background), `selected chip ${from} to ${to} at ${t}`).toBeGreaterThanOrEqual(TEXT);
+    }
+  }
+});
+
 test('button labels stay at 4.5:1 through a theme switch', async ({ page }) => {
   await openHome(page);
   const controls: { selector: string; floor: number }[] = [
