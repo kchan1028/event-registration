@@ -72,6 +72,9 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
       const eventIds = (await db.all<{ id: string }>(`SELECT id FROM events WHERE organization_id = $1`, [CASE_STUDY_ORG_ID])).map((row) => row.id);
       if (eventIds.length === 0) return { removedEvents: 0 };
       for (const id of [...eventIds].sort()) await db.lock(eventLock(id));
+      // First sign-in holds this lock before it writes a membership for an invitation it has read.
+      // Taking it after the event locks lets that sign-in finish before this organization is deleted.
+      await db.lock(`org-members:${CASE_STUDY_ORG_ID}`);
       const ids = eventIds.map((_, index) => `$${index + 1}`).join(', ');
       const orderIds = `SELECT id FROM orders WHERE event_id IN (${ids})`;
       // Children before parents: none of these foreign keys cascade.
