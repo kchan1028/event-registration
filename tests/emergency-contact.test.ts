@@ -248,6 +248,35 @@ describe('emergency contact lookup', () => {
     const juniorId = (juniorOrder.json() as { id: string }).id;
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/emergency-contact`, headers: parent, payload: { orderId: juniorId } })).statusCode).toBe(404);
     expect((await app.inject({ method: 'GET', url: `/api/orders/${juniorId}`, headers: parent })).body).toContain('555-555-0177');
+
+    const entryId = (after.json() as { entries: { id: string }[] }).entries[0].id;
+    const crit = ev.config.categories.find((row) => row.timingCode === 'CR-M35-34')!.id;
+    const hidesContact = async (res: { statusCode: number; body: string }) => {
+      expect(res.statusCode, res.body).toBe(200);
+      expect(res.body).not.toContain(nextPhone);
+      expect(res.body).not.toContain('Morgan Reason');
+      const riderRead = await app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: riderHeaders });
+      expect(riderRead.statusCode).toBe(200);
+      expect(riderRead.body).toContain(nextPhone);
+      expect(riderRead.body).toContain('Morgan Reason');
+    };
+    await hidesContact(await app.inject({ method: 'POST', url: `/api/order-entries/${entryId}/license-review`, headers: owner, payload: { note: 'License card seen' } }));
+    await hidesContact(await app.inject({ method: 'POST', url: `/api/order-entries/${entryId}/transfer`, headers: owner, payload: { toCategoryId: crit, reason: 'Move to the Sunday crit' } }));
+    await hidesContact(await app.inject({ method: 'POST', url: `/api/orders/${orderId}/refunds`, headers: owner, payload: { clientRequestId: 'staff-redact-refund', amountCents: 100, reason: 'Partial refund for the road race' } }));
+    // Requested, with no payment reference, so retry returns the order without calling a provider.
+    const refundId = 'ref_staff_redact_retry';
+    const refundDb = new pg.Client({ connectionString: databaseUrl });
+    await refundDb.connect();
+    try {
+      await refundDb.query(
+        `INSERT INTO refunds (id, order_id, provider, amount_cents, reason, status, created_at, updated_at) VALUES ($1, $2, 'simulated', 100, 'Saved retry', 'requested', now(), now())`,
+        [refundId, orderId],
+      );
+    } finally {
+      await refundDb.end();
+    }
+    await hidesContact(await app.inject({ method: 'POST', url: `/api/refunds/${refundId}/retry`, headers: owner }));
+    await hidesContact(await app.inject({ method: 'POST', url: `/api/order-entries/${entryId}/withdraw`, headers: owner, payload: { reason: 'Rider asked to leave the race' } }));
   });
 });
 
