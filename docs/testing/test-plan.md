@@ -270,7 +270,7 @@ The desk shift in `e2e/handoff.spec.ts` uses separate fictional volunteer accoun
 
 ### Shared control contrast
 
-`e2e/control-contrast.spec.ts` measures the shared input and a secondary button on Home in both themes, and a selected registration filter chip. The input boundary and the secondary button boundary must be at least 3:1 against the control fill and the surface around it. The focus outline must be at least 3:1 against the surface around it. Primary and secondary labels, and the selected chip label, must stay at least 4.5:1 at every step of a theme switch, and the theme icon at least 3:1. The chip must not fade its fill. This Chromium check is not a screen-reader or real-phone pass.
+`e2e/control-contrast.spec.ts` measures the shared input and a secondary button on Home in both themes, a selected registration filter chip, a selected category row, and a selected check-in row. The input boundary and the secondary button boundary must be at least 3:1 against the control fill and the surface around it. The focus outline must be at least 3:1 against the surface around it. Primary and secondary labels, the selected chip label, the selected category name, and the selected check-in name must stay at least 4.5:1 at every step of a theme switch, and the theme icon at least 3:1. The chip and those rows must not fade their fill. This Chromium check is not a screen-reader or real-phone pass.
 
 ### Shared responsive account headers
 

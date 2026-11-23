@@ -1,8 +1,9 @@
 import { expect, test, type Page } from './fixtures';
+import { publishReviewed } from './support/publish';
 
 /**
- * Shared controls on Home. Ratios come from computed colors, the same measurement as the
- * contrast gap: 3:1 for an essential boundary or focus indicator, 4.5:1 for a button label.
+ * Shared controls and selected rows. Ratios come from computed colors, the same measurement as the
+ * contrast gap: 3:1 for an essential boundary or focus indicator, 4.5:1 for a button or row label.
  * A theme switch must stay on those floors for the whole change, not only after it settles.
  */
 
@@ -14,6 +15,7 @@ type Sample = {
   outline: string;
   outlineWidth: string;
   transitionProperty: string;
+  transitionDuration: string;
 };
 
 const TEXT = 4.5;
@@ -93,7 +95,9 @@ async function samples(page: Page, selector: string, focus: boolean): Promise<Re
     }
     function read(theme: 'light' | 'dark'): Sample {
       const root = document.documentElement;
-      const transitionProperty = getComputedStyle(node).transitionProperty;
+      const computed = getComputedStyle(node);
+      const transitionProperty = computed.transitionProperty;
+      const transitionDuration = computed.transitionDuration;
       const previous = node.style.transition;
       node.style.transition = 'none';
       root.dataset.theme = theme;
@@ -108,6 +112,7 @@ async function samples(page: Page, selector: string, focus: boolean): Promise<Re
         outline: cs.outlineColor,
         outlineWidth: cs.outlineWidth,
         transitionProperty,
+        transitionDuration,
       };
       node.style.transition = previous;
       return sample;
@@ -154,6 +159,51 @@ test('selected chip labels stay at 4.5:1 through a theme switch', async ({ page 
       expect(contrast(color, background), `selected chip ${from} to ${to} at ${t}`).toBeGreaterThanOrEqual(TEXT);
     }
   }
+});
+
+function propertyMoves(property: string, duration: string, name: string): boolean {
+  const props = property.split(',').map((part) => part.trim());
+  const durations = duration.split(',').map((part) => part.trim());
+  return props.some((prop, index) => (prop === name || prop === 'all') && (durations[index] ?? durations[durations.length - 1]) !== '0s');
+}
+
+async function expectRowLabel(page: Page, rowSelector: string, labelSelector: string, name: string) {
+  const row = await samples(page, rowSelector, false);
+  const label = await samples(page, labelSelector, false);
+  expect(propertyMoves(row.light.transitionProperty, row.light.transitionDuration, 'background-color')).toBe(false);
+  const colorMoves = propertyMoves(label.light.transitionProperty, label.light.transitionDuration, 'color');
+  const fillMoves = propertyMoves(row.light.transitionProperty, row.light.transitionDuration, 'background-color');
+  for (const [from, to] of [
+    ['light', 'dark'],
+    ['dark', 'light'],
+  ] as const) {
+    for (let step = 0; step <= 8; step++) {
+      const t = step / 8;
+      const color = colorMoves ? mix(label[from].color, label[to].color, t) : label[to].color;
+      const background = fillMoves ? mix(row[from].background, row[to].background, t) : row[to].background;
+      expect(contrast(color, background), `${name} ${from} to ${to} at ${t}`).toBeGreaterThanOrEqual(TEXT);
+    }
+  }
+}
+
+test('selected category and check-in row labels stay at 4.5:1 through a theme switch', async ({ page }) => {
+  const api = page.request;
+  const { eventId } = await (await api.post('/api/demo')).json();
+  await page.goto(`/#/events/${eventId}`);
+  const category = page.locator('.cat-row__name').first();
+  await expect(category).toBeVisible();
+  await category.click();
+  await expect(category).toHaveAttribute('aria-pressed', 'true');
+  await expectRowLabel(page, '.cat-row.is-selected', '.cat-row.is-selected .cat-row__name', 'category row');
+
+  expect((await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
+  expect((await api.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
+  await page.goto(`/#/events/${eventId}/check-in`);
+  const rider = page.locator('.ci-row').first();
+  await expect(rider).toBeVisible();
+  await rider.click();
+  await expect(rider).toHaveAttribute('aria-current', 'true');
+  await expectRowLabel(page, '.ci-row.is-selected', '.ci-row.is-selected .ci-row__name', 'check-in row');
 });
 
 test('button labels stay at 4.5:1 through a theme switch', async ({ page }) => {
