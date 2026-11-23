@@ -171,6 +171,52 @@ describe('generated race case studies', () => {
     }
   }, 15_000);
 
+  it('lets a paid notification take the event lock while reset is still deleting that session', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+    const eventId = 'evt_demo_case_omnium';
+    expect((await app.inject({ method: 'POST', url: '/api/demo/case-studies/omnium' })).statusCode).toBe(201);
+    const seed = new pg.Client({ connectionString: databaseUrl });
+    await seed.connect();
+    try {
+      const order = await seed.query<{ id: string }>(`SELECT id FROM orders WHERE client_request_id = 'case-study-successful'`);
+      expect(order.rowCount).toBe(1);
+      await seed.query(
+        `INSERT INTO payment_sessions (id, order_id, provider, url, amount_cents, status, expires_at, created_at)
+         VALUES ('cs_case_reset_deadlock', $1, 'stripe_test', 'https://checkout.example.test/fictional', 4000, 'open', '2027-03-15T19:00:00Z', '2027-03-15T18:00:00Z')`,
+        [order.rows[0].id],
+      );
+    } finally {
+      await seed.end();
+    }
+    const hold = new pg.Client({ connectionString: databaseUrl });
+    await hold.connect();
+    let reset = Promise.resolve({ statusCode: 0, body: '' });
+    try {
+      await hold.query('BEGIN');
+      // The notification has updated the session row and still holds that row lock.
+      await hold.query(`UPDATE payment_sessions SET status = 'completed' WHERE id = 'cs_case_reset_deadlock'`);
+      reset = app.inject({ method: 'DELETE', url: '/api/demo/case-studies' });
+      await untilWaiting(hold, 1);
+      await hold.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`event:${eventId}`]);
+      await hold.query('COMMIT');
+      const done = await reset;
+      expect(done.statusCode, done.body).toBe(200);
+      const left = new pg.Client({ connectionString: databaseUrl });
+      await left.connect();
+      try {
+        expect((await left.query(`SELECT id FROM payment_sessions WHERE id = 'cs_case_reset_deadlock'`)).rowCount).toBe(0);
+        expect((await left.query(`SELECT id FROM events WHERE id = $1`, [eventId])).rowCount).toBe(0);
+      } finally {
+        await left.end();
+      }
+    } finally {
+      await hold.end();
+      await Promise.allSettled([reset]);
+      await app.close();
+    }
+  }, 15_000);
+
   it('grants case-study ownership when a reset overlaps the load', async () => {
     const databaseUrl = await testDatabaseUrl();
     const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
