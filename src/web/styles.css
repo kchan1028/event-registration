@@ -1339,7 +1339,8 @@ fieldset {
 }
 .cat-row {
   cursor: pointer;
-  transition: background-color 120ms ease;
+  /* Fill snaps with the text. A background fade lets the text change theme first. */
+  transition: none;
 }
 .cat-row.is-selected {
   background: color-mix(in srgb, var(--link) 7%, var(--canvas));
@@ -3554,7 +3555,8 @@ fieldset:disabled .field label {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  /* Fill snaps with the text. A background fade lets the text change theme first. */
+  transition: none;
 }
 .ci-row:focus-visible {
   outline: 2px solid var(--focus);
