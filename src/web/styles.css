@@ -3011,15 +3011,11 @@ button.issue {
 }
 .class-hidden-notice .btn {
   min-height: 44px;
-  /* Match the schedule view buttons: a fading fill lags the new text color when the theme changes. */
-  transition: transform 160ms var(--ease-out);
 }
 .schedule-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-top: var(--s-5); }
 .schedule-tools h2 { font-size: 17px; font-weight: 500; margin: 0; }
 .schedule-tools__views { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 
-/* Keep text and fill in sync when the selected view or theme changes. */
-.schedule-tools__views .btn { transition: transform 160ms var(--ease-out); }
 .schedule-tools__views .btn[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
 
 .bundle-pick {
