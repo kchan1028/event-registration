@@ -159,3 +159,47 @@ test('a late emergency-contact lookup does not take focus from check-in', async 
   await page.keyboard.press('Enter');
   await expect(search).toBeFocused();
 });
+
+test('holding Enter on the emergency-contact lookup records one lookup', async ({ page }) => {
+  const api = page.request;
+  const { eventId } = await (await api.post('/api/demo')).json();
+  await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true });
+  await api.post(`/api/events/${eventId}/check-in-demo-riders`);
+  const list = await (await api.get(`/api/events/${eventId}/check-in`)).json();
+  const alex = list.riders.find((rider: { name: string; checkInCode?: string }) => rider.name.startsWith('Alex'));
+  expect(alex.checkInCode).toBeTruthy();
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/#/events/${eventId}/check-in`);
+  const search = page.getByRole('searchbox', { name: 'Find a rider' });
+  await search.fill(alex.checkInCode);
+  await search.press('Enter');
+  const detail = page.getByRole('region', { name: 'Rider check-in' });
+  await expect(detail).toContainText(alex.name);
+
+  const show = detail.getByRole('button', { name: `Emergency contact for ${alex.name}` });
+  const hide = detail.getByRole('button', { name: `Hide emergency contact for ${alex.name}` });
+  await show.focus();
+  let lookups = 0;
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (request.method() === 'POST' && url.pathname === `/api/events/${eventId}/emergency-contact`) lookups += 1;
+  });
+
+  await page.keyboard.down('Enter');
+  await expect(hide).toBeFocused();
+  // A second keydown while Enter is held represents keyboard auto-repeat.
+  await page.keyboard.down('Enter');
+  await page.keyboard.up('Enter');
+  await expect(hide).toBeFocused();
+  await expect(detail.getByText(PHONE)).toBeVisible();
+  expect(lookups).toBe(1);
+
+  await page.keyboard.down('Enter');
+  await expect(show).toBeFocused();
+  await page.keyboard.down('Enter');
+  await page.keyboard.up('Enter');
+  await expect(show).toBeFocused();
+  await expect(detail.getByText(PHONE)).toHaveCount(0);
+  expect(lookups).toBe(1);
+});
