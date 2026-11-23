@@ -167,6 +167,7 @@ describe('generated race case studies', () => {
     } finally {
       await hold.end();
       await Promise.allSettled([signIn, reset]);
+      await app.close();
     }
   }, 15_000);
 
