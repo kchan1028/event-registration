@@ -525,7 +525,7 @@ Every verified Stripe notification, recorded once by event ID with what it did (
 | `payment_ref` | Stripe PaymentIntent ID the notification was about (migration 18), so a duplicate charge can be found and refunded |
 | `amount_cents` | Amount the notification reported (migration 18) |
 
-Recording a session applies saved notifications for that session in the same transaction. The webhook and that recording take the same session lock, so one of them sees the other's committed row. A saved paid notification is applied only when it was in usd and it names no order or names that session's order. Two paid notifications for different sessions of one order take the event lock before the duplicate-charge read, and hold it until the notification row is saved. A row still `unknown_session` is not counted as the other paid session. Exactly one result is `duplicate_charge`.
+Recording a session applies saved notifications for that session in the same transaction. The webhook and that recording take the same session lock, so one of them sees the other's committed row. A resend that already read `unknown_session` waits for that lock, then reports the committed result as a duplicate. A saved paid notification is applied only when it was in usd and it names no order or names that session's order. Two paid notifications for different sessions of one order take the event lock before the duplicate-charge read, and hold it until the notification row is saved. A row still `unknown_session` is not counted as the other paid session. Exactly one result is `duplicate_charge`.
 
 ### refunds
 

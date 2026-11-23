@@ -366,10 +366,15 @@ export function createPayments(
       return db.transaction(async () => {
         await db.lock(`provider-event:${ev.id}`);
         const seen = await db.get<{ result: string }>(`SELECT result FROM provider_events WHERE id = $1`, [ev.id]);
-        // Recording the session applies a saved unknown_session row. Any other saved result stays as it is.
+        // Recording applies a saved unknown_session row under the session lock and does not take this event lock.
+        // A resend that already read unknown_session waits on the session lock, then reports the committed result.
         const retryUnknown = seen?.result === 'unknown_session';
         if (seen && !retryUnknown) return { result: seen.result, duplicate: true };
         if (ev.sessionId) await db.lock(`payment-session:${ev.sessionId}`);
+        if (retryUnknown) {
+          const again = await db.get<{ result: string }>(`SELECT result FROM provider_events WHERE id = $1`, [ev.id]);
+          if (again && again.result !== 'unknown_session') return { result: again.result, duplicate: true };
+        }
 
         const session = ev.sessionId ? await db.get<SessionRow>(`SELECT * FROM payment_sessions WHERE id = $1`, [ev.sessionId]) : undefined;
         let orderId = session?.order_id ?? null;
