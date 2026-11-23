@@ -52,7 +52,7 @@ When a change touches one of these areas, run that row's tests in addition to th
 | Exports | `tests/exports.test.ts`, `tests/startlists.test.ts`, `tests/csv.test.ts` | `e2e/csv.spec.ts` |
 | Race-day check-in and bibs | `tests/checkin.test.ts`, `tests/automatic-bibs.test.ts`, `tests/bib-reassignment.test.ts`, `tests/roster.test.ts`, `tests/identity.test.ts`, `tests/emergency-contact.test.ts` | `e2e/checkin.spec.ts`, `e2e/emergency-contact.spec.ts` |
 | Published configuration changes | `tests/impact.test.ts`, `tests/resolutions.test.ts`, `tests/bulk.test.ts` | `e2e/organizer.spec.ts` |
-| Screens and themes | none | `e2e/accessibility.spec.ts` and the spec for the changed screen |
+| Screens and themes | none | `e2e/accessibility.spec.ts`, `e2e/control-contrast.spec.ts`, and the spec for the changed screen |
 
 Concurrency and idempotency tests must run requests in parallel or replay events; a single-threaded test does not prove them. Use fictional data only.
 
@@ -267,6 +267,10 @@ The desk shift in `e2e/handoff.spec.ts` uses separate fictional volunteer accoun
 ### Check-in navigation targets
 
 `e2e/checkin-navigation.spec.ts` checks Builder and the clickable race-day labels at 320, 390 and 1440 CSS pixels in both themes with fine/coarse pointer contexts. Require 44px minimum target dimensions even for short day labels, no page overflow, Tab focus into the day group, arrow-key day selection with visible focus, and keyboard activation of Builder into the category workspace. Run existing check-in accessibility scenarios and phone-handoff regressions when changing header target styles. The same spec exercises keyboard-only check-in at 390 and 1440 CSS pixels using a separate fictional volunteer account. Type the code, verify focus reaches the rider, tab to bib issuance, verify focus moves directly to **Next rider** after successful issuance, verify the control has the issued bib as its accessible description, verify that a repeated Enter keydown from the original press leaves the bib visible, then release Enter and verify a fresh press returns focus to search, then verify the blocked rider has no issuance control and the server refuses the action. Hold a successful check-in response until another rider lookup settles, then confirm the refresh uses the newer search and preserves the rider card and its focus. Confirm the first check-in remains recorded. In `e2e/checkin.spec.ts`, delay a successful check-in response at 390 and 1440 CSS pixels. Click the page heading while the response is pending and verify the visible bib and its accessible description update without moving focus to **Next rider**. These Chromium checks do not satisfy manual keyboard, real-phone or screen-reader acceptance.
+
+### Shared control contrast
+
+`e2e/control-contrast.spec.ts` measures the shared input and a secondary button on Home in both themes. The input boundary and the secondary button boundary must be at least 3:1 against the control fill and the surface around it. The focus outline must be at least 3:1 against the surface around it. Primary and secondary labels must stay at least 4.5:1 at every step of a theme switch, and the theme icon at least 3:1. This Chromium check is not a screen-reader or real-phone pass.
 
 ### Shared responsive account headers
 
