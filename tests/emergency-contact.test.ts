@@ -69,12 +69,40 @@ describe('emergency contact lookup', () => {
       expect(JSON.stringify(rows)).not.toContain(NAME);
       expect(JSON.stringify(rows)).not.toContain(PHONE);
       beforeMissing = rows.length;
-      expect((await client.query(
+    } finally {
+      await client.end();
+    }
+
+    const other = await app.inject({ method: 'POST', url: '/api/demo', headers: owner });
+    expect(other.statusCode).toBe(201);
+    const otherId = (other.json() as { eventId: string }).eventId;
+    const notInEvent = async (payload: { orderId: string } | { entryId: string }) => {
+      const res = await lookup(owner, payload, `/api/events/${otherId}/emergency-contact`);
+      expect(res.statusCode, res.body).toBe(404);
+      expect(res.json()).toMatchObject({ error: 'No registration with that id in this event.' });
+      expect(res.body).not.toContain(PHONE);
+      expect(res.body).not.toContain(NAME);
+    };
+    await notInEvent({ orderId: alex.orderId });
+    await notInEvent({ entryId });
+    const crossEvent = new pg.Client({ connectionString: databaseUrl });
+    await crossEvent.connect();
+    try {
+      const counted = await crossEvent.query<{ n: number }>(`SELECT COUNT(*)::int AS n FROM emergency_contact_views WHERE order_id = $1`, [alex.orderId]);
+      expect(counted.rows[0].n).toBe(beforeMissing);
+    } finally {
+      await crossEvent.end();
+    }
+
+    const blank = new pg.Client({ connectionString: databaseUrl });
+    await blank.connect();
+    try {
+      expect((await blank.query(
         `UPDATE orders SET rider_json = jsonb_set(rider_json, '{emergencyContact}', '{"name":"","phone":""}'::jsonb) WHERE id = $1`,
         [alex.orderId],
       )).rowCount).toBe(1);
     } finally {
-      await client.end();
+      await blank.end();
     }
 
     const missing = await lookup(owner, { orderId: alex.orderId });
@@ -88,10 +116,6 @@ describe('emergency contact lookup', () => {
     } finally {
       await afterMissing.end();
     }
-
-    const other = await app.inject({ method: 'POST', url: '/api/demo', headers: owner });
-    const otherId = (other.json() as { eventId: string }).eventId;
-    expect((await lookup(owner, { entryId }, `/api/events/${otherId}/emergency-contact`)).statusCode).toBe(404);
 
     const desk = await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in`, headers: owner });
     expect(desk.body).not.toContain(PHONE);
