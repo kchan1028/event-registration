@@ -281,6 +281,58 @@ describe('Stripe hosted Checkout (test mode)', () => {
     expect((await get(o.id)).status).toBe('confirmed');
   });
 
+  it('records exactly one of two paid sessions that arrive together as a duplicate charge', async () => {
+    const { order, checkout, webhook, paidSession, get, attempts } = await setup({ holdMinutes: 60 });
+    const o = await order(['RR-M35-34']);
+    await checkout(o.id);
+    await webhook('evt_test_initial_expiry', 'checkout.session.expired', paidSession(o, 'cs_test_1', { payment_status: 'unpaid' }));
+    expect((await checkout(o.id)).json()).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/pay/2' });
+    const [first, second] = await Promise.all([
+      webhook('evt_test_first', 'checkout.session.completed', paidSession(o, 'cs_test_1', { payment_intent: 'pi_test_1' })),
+      webhook('evt_test_second', 'checkout.session.completed', paidSession(o, 'cs_test_2', { payment_intent: 'pi_test_2' })),
+    ]);
+    expect([first.json().result, second.json().result].sort()).toEqual(['confirmed', 'duplicate_charge']);
+    expect((await get(o.id)).status).toBe('confirmed');
+    const paid = await attempts(o.id);
+    expect(paid).toHaveLength(1);
+    expect(paid[0]).toMatchObject({ provider: 'stripe_test', result_status: 'confirmed', amount_cents: o.totalCents });
+  });
+
+  it('classifies a paid notification from rows committed while it waited on the event lock', async () => {
+    const { order, checkout, webhook, paidSession, get, eventId, databaseUrl } = await setup();
+    const o = await order(['RR-M35-34']);
+    await checkout(o.id);
+    const side = new pg.Client({ connectionString: databaseUrl });
+    await side.connect();
+    let pending: ReturnType<typeof webhook> | undefined;
+    try {
+      await side.query('BEGIN');
+      await side.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`event:${eventId}`]);
+      pending = webhook('evt_test_waiting', 'checkout.session.completed', paidSession(o, 'cs_test_1'));
+      let waiting = false;
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline) {
+        const seen = await side.query(`SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND pid <> pg_backend_pid() LIMIT 1`);
+        if (seen.rowCount) {
+          waiting = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(waiting).toBe(true);
+      await side.query(
+        `INSERT INTO provider_events (id, provider, type, session_id, order_id, outcome, result, received_at) VALUES ('evt_test_already_paid', 'stripe_test', 'checkout.session.completed', 'cs_test_other', $1, 'paid', 'confirmed', $2)`,
+        [o.id, '2027-03-01T18:01:00Z'],
+      );
+      await side.query('COMMIT');
+      expect((await pending).json()).toMatchObject({ result: 'duplicate_charge', duplicate: false });
+      expect((await get(o.id)).status).toBe('held');
+    } finally {
+      await side.query('ROLLBACK').catch(() => undefined);
+      await side.end();
+    }
+  });
+
   it('marks a refund of the duplicate charge, so it is not read as a refund of the order', async () => {
     const { app, order, checkout, webhook, paidSession, get } = await setup({ holdMinutes: 60 });
     const o = await order(['RR-M35-34']);

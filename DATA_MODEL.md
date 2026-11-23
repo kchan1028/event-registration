@@ -525,6 +525,8 @@ Every verified Stripe notification, recorded once by event ID with what it did (
 | `payment_ref` | Stripe PaymentIntent ID the notification was about (migration 18), so a duplicate charge can be found and refunded |
 | `amount_cents` | Amount the notification reported (migration 18) |
 
+Two paid notifications for different sessions of one order take the event lock before the duplicate-charge read, and hold it until the notification row is saved. Exactly one result is `duplicate_charge`.
+
 ### refunds
 
 Money returned to a rider (migration 18). Each refund returns money from one payment and can name one entry. Entry and payment states are separate: a refund never withdraws an entry, and a withdrawal never refunds.
