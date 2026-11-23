@@ -225,6 +225,68 @@ export function createPayments(
 ) {
   const nowIso = () => clock().toISOString();
 
+  /** Applies one notification to a session this app opened. The caller holds the session lock. */
+  async function fulfillSession(ev: ProviderEvent, session: SessionRow): Promise<{ result: string; orderId: string }> {
+    const orderId = session.order_id;
+    if (ev.orderId && ev.orderId !== orderId) return { result: 'unknown_session', orderId };
+    if (ev.outcome === 'expired') {
+      await db.run(`UPDATE payment_sessions SET status = 'expired' WHERE id = $1 AND status = 'open'`, [session.id]);
+      return { result: 'session_expired', orderId };
+    }
+    if (ev.outcome === 'pending') {
+      await db.run(`UPDATE payment_sessions SET status = 'completed' WHERE id = $1`, [session.id]);
+      return { result: 'awaiting_payment', orderId };
+    }
+    // The session row is updated before the event lock, the same order as a notification that finds the row already there.
+    await db.run(`UPDATE payment_sessions SET status = 'completed' WHERE id = $1`, [session.id]);
+    const source = { provider: provider.mode, ref: ev.paymentRef, amountCents: ev.amountCents };
+    if (ev.outcome === 'failed') return { result: (await orders.pay(orderId, ev.id, 'failure', source)).status, orderId };
+    const paidFor = await db.get<{ event_id: string }>(`SELECT event_id FROM orders WHERE id = $1`, [orderId]);
+    if (!paidFor) throw new HttpError(404, 'Order not found.');
+    await db.lock(eventLock(paidFor.event_id));
+    // A row still unknown_session has not been applied, so it is not the other paid session.
+    const otherPaid = await db.get<{ id: string }>(
+      `SELECT id FROM provider_events WHERE order_id = $1 AND outcome = 'paid' AND result <> 'unknown_session' AND session_id <> $2 LIMIT 1`,
+      [orderId, session.id],
+    );
+    const order = await orders.getOrder(orderId);
+    const exact = ev.currency === 'usd' && ev.amountCents === session.amount_cents && ev.amountCents === order.totalCents;
+    if (otherPaid) return { result: 'duplicate_charge', orderId };
+    return { result: (await orders.pay(orderId, ev.id, exact ? 'success' : 'mismatch', source)).status, orderId };
+  }
+
+  /**
+   * Applies notifications saved before this session row existed. A paid row was stored only when its
+   * currency was usd, which is not a column. A different order reference is left unknown.
+   */
+  async function applySavedNotifications(session: SessionRow): Promise<void> {
+    await db.run(
+      `UPDATE provider_events SET outcome = 'ignored', order_id = $2 WHERE session_id = $1 AND result = 'unknown_session' AND order_id IS NOT NULL AND order_id <> $2`,
+      [session.id, session.order_id],
+    );
+    const pending = await db.all<{ id: string; type: string; outcome: string; order_id: string | null; payment_ref: string | null; amount_cents: number | null }>(
+      `SELECT id, type, outcome, order_id, payment_ref, amount_cents FROM provider_events WHERE session_id = $1 AND result = 'unknown_session' AND outcome <> 'ignored' AND (order_id IS NULL OR order_id = $2) ORDER BY received_at, id`,
+      [session.id, session.order_id],
+    );
+    for (const row of pending) {
+      const applied = await fulfillSession(
+        {
+          id: row.id,
+          type: row.type,
+          outcome: row.outcome as ProviderEvent['outcome'],
+          sessionId: session.id,
+          orderId: row.order_id,
+          amountCents: row.amount_cents,
+          currency: row.outcome === 'paid' ? 'usd' : null,
+          paymentRef: row.payment_ref,
+        },
+        session,
+      );
+      if (applied.result === 'unknown_session') continue;
+      await db.run(`UPDATE provider_events SET order_id = $2, result = $3 WHERE id = $1`, [row.id, applied.orderId, applied.result]);
+    }
+  }
+
   return {
     mode: provider.mode,
 
@@ -280,12 +342,16 @@ export function createPayments(
 
       const session = await provider.createCheckout(next.request);
       // Recorded even if the order changed meanwhile: the session exists at Stripe, and a payment on it must be recognized.
+      // The session lock is taken only after Stripe returns, so no database connection waits on Stripe.
       await db.transaction(async () => {
         await db.lock(`checkout:${orderId}`);
+        await db.lock(`payment-session:${session.id}`);
         await db.run(
           `INSERT INTO payment_sessions (id, order_id, provider, url, amount_cents, status, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, 'open', $6, $7) ON CONFLICT (id) DO NOTHING`,
           [session.id, orderId, provider.mode, session.url, next.request.amountCents, session.expiresAt, nowIso()],
         );
+        const stored = await db.get<SessionRow>(`SELECT * FROM payment_sessions WHERE id = $1`, [session.id]);
+        if (stored?.order_id === orderId) await applySavedNotifications(stored);
       });
       return { kind: 'redirect' as const, url: session.url };
     },
@@ -300,13 +366,14 @@ export function createPayments(
       return db.transaction(async () => {
         await db.lock(`provider-event:${ev.id}`);
         const seen = await db.get<{ result: string }>(`SELECT result FROM provider_events WHERE id = $1`, [ev.id]);
-        // The session row is saved after Stripe returns, so this event can be stored before that row exists.
-        // A later delivery applies it once. Every other saved result stays as it is.
+        // Recording the session applies a saved unknown_session row. Any other saved result stays as it is.
         const retryUnknown = seen?.result === 'unknown_session';
         if (seen && !retryUnknown) return { result: seen.result, duplicate: true };
+        if (ev.sessionId) await db.lock(`payment-session:${ev.sessionId}`);
 
         const session = ev.sessionId ? await db.get<SessionRow>(`SELECT * FROM payment_sessions WHERE id = $1`, [ev.sessionId]) : undefined;
         let orderId = session?.order_id ?? null;
+        let storedOutcome: ProviderEvent['outcome'] = ev.outcome;
         let result: string;
 
         if (ev.outcome === 'refund' && ev.refund) {
@@ -315,33 +382,19 @@ export function createPayments(
           result = 'ignored';
         } else if (!session || (ev.orderId && ev.orderId !== session.order_id)) {
           result = 'unknown_session';
-        } else if (ev.outcome === 'expired') {
-          await db.run(`UPDATE payment_sessions SET status = 'expired' WHERE id = $1 AND status = 'open'`, [session.id]);
-          result = 'session_expired';
-        } else if (ev.outcome === 'pending') {
-          await db.run(`UPDATE payment_sessions SET status = 'completed' WHERE id = $1`, [session.id]);
-          result = 'awaiting_payment';
-        } else {
-          await db.run(`UPDATE payment_sessions SET status = 'completed' WHERE id = $1`, [session.id]);
-          const source = { provider: provider.mode, ref: ev.paymentRef, amountCents: ev.amountCents };
-          if (ev.outcome === 'failed') {
-            result = (await orders.pay(session.order_id, ev.id, 'failure', source)).status;
-          } else {
-            // A second paid session for the same order is money taken twice: record it for a refund, never a second entry.
-            // The provider-event lock above is per notification, so two sessions can pass this read together.
-            // The event lock is the same one fulfillment uses, and it is held until this notification is saved.
-            const paidFor = await db.get<{ event_id: string }>(`SELECT event_id FROM orders WHERE id = $1`, [session.order_id]);
-            if (!paidFor) throw new HttpError(404, 'Order not found.');
-            await db.lock(eventLock(paidFor.event_id));
-            const otherPaid = await db.get<{ id: string }>(
-              `SELECT id FROM provider_events WHERE order_id = $1 AND outcome = 'paid' AND session_id <> $2 LIMIT 1`,
-              [session.order_id, session.id],
-            );
-            const order = await orders.getOrder(session.order_id);
-            const exact = ev.currency === 'usd' && ev.amountCents === session.amount_cents && ev.amountCents === order.totalCents;
-            if (otherPaid) result = 'duplicate_charge';
-            else result = (await orders.pay(session.order_id, ev.id, exact ? 'success' : 'mismatch', source)).status;
+          if (!session) {
+            // Currency and a claim that is not an order are not stored. Leave those rows unapplied.
+            const linked = ev.orderId ? (await db.get<{ id: string }>(`SELECT id FROM orders WHERE id = $1`, [ev.orderId]))?.id ?? null : null;
+            const holdBack = (ev.outcome === 'paid' && ev.currency !== 'usd') || (!!ev.orderId && !linked);
+            if (holdBack) {
+              orderId = null;
+              storedOutcome = 'ignored';
+            } else {
+              orderId = linked;
+            }
           }
+        } else {
+          ({ result, orderId } = await fulfillSession(ev, session));
         }
 
         if (retryUnknown) {
@@ -354,7 +407,7 @@ export function createPayments(
         }
         await db.run(
           `INSERT INTO provider_events (id, provider, type, session_id, order_id, outcome, result, received_at, payment_ref, amount_cents) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-          [ev.id, provider.mode, ev.type, ev.sessionId, orderId, ev.outcome, result, nowIso(), ev.paymentRef, ev.amountCents],
+          [ev.id, provider.mode, ev.type, ev.sessionId, orderId, storedOutcome, result, nowIso(), ev.paymentRef, ev.amountCents],
         );
         return { result, duplicate: false };
       });
