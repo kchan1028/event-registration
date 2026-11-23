@@ -442,9 +442,13 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   // Reset removes the case-study organization, so only its owners may run it.
+  // The demo lock is held before the membership check, so the check sees an organization a load commits while this request waits.
   app.delete('/api/demo/case-studies', async (req) => {
-    if (await db.get(`SELECT 1 FROM organizations WHERE id = $1`, [CASE_STUDY_ORG_ID])) await access.requireOrg(me(req), CASE_STUDY_ORG_ID, 'members.manage');
-    return caseStudies.reset();
+    return db.transaction(async () => {
+      await db.lock('demo:case-studies');
+      if (await db.get(`SELECT 1 FROM organizations WHERE id = $1`, [CASE_STUDY_ORG_ID])) await access.requireOrg(me(req), CASE_STUDY_ORG_ID, 'members.manage');
+      return caseStudies.reset();
+    });
   });
 
   app.get('/api/public/events/:id', isPublic, async (req) => ({ ...(await orders.publicEvent(idParam.parse(req.params).id)), paymentMode: payments.mode }));

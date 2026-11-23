@@ -196,6 +196,35 @@ describe('generated race case studies', () => {
     } finally {
       await hold.end();
       await Promise.allSettled([load, reset]);
+      await app.close();
+    }
+  }, 15_000);
+
+  it('refuses a case-study reset from someone who is not a member when it overlaps the load', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+    const stranger = 'parker@example.test';
+    expect((await app.inject({ method: 'GET', url: '/api/me' })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/me', headers: as(stranger) })).statusCode).toBe(200);
+    const hold = new pg.Client({ connectionString: databaseUrl });
+    await hold.connect();
+    let load = Promise.resolve({ statusCode: 0 });
+    let reset = Promise.resolve({ statusCode: 0 });
+    try {
+      await hold.query('BEGIN');
+      await hold.query('LOCK TABLE accounts IN EXCLUSIVE MODE');
+      load = app.inject({ method: 'POST', url: '/api/demo/case-studies/empty-event' });
+      await untilWaiting(hold, 1);
+      reset = app.inject({ method: 'DELETE', url: '/api/demo/case-studies', headers: as(stranger) });
+      await untilWaiting(hold, 2);
+      await hold.query('COMMIT');
+      expect((await load).statusCode).toBe(201);
+      expect((await reset).statusCode).toBe(404);
+      expect((await app.inject({ method: 'GET', url: '/api/events/evt_demo_case_empty' })).statusCode).toBe(200);
+    } finally {
+      await hold.end();
+      await Promise.allSettled([load, reset]);
+      await app.close();
     }
   }, 15_000);
 });
