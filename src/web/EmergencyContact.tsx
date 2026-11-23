@@ -16,7 +16,10 @@ export function EmergencyContactLookup({ eventId, riderName, orderId, entryId }:
   const [error, setError] = useState<string | null>(null);
   const showButton = useRef<HTMLButtonElement>(null);
   const hideButton = useRef<HTMLButtonElement>(null);
+  const root = useRef<HTMLDivElement>(null);
   const focusAfter = useRef<'show' | 'hide' | null>(null);
+  /** The volunteer pointed or moved focus outside this control while Show was in flight. */
+  const left = useRef(false);
   const contactId = `ec-${orderId ?? entryId ?? 'lookup'}`;
 
   useEffect(() => {
@@ -25,9 +28,33 @@ export function EmergencyContactLookup({ eventId, riderName, orderId, entryId }:
   }, [orderId, entryId]);
 
   useEffect(() => {
+    if (!busy) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || !root.current?.contains(target)) left.current = true;
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target;
+      // Unmounting Show moves focus to the page. That is not the volunteer leaving.
+      if (!(target instanceof Element) || target === document.body) return;
+      if (!root.current?.contains(target)) left.current = true;
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('focusin', onFocusIn, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('focusin', onFocusIn, true);
+    };
+  }, [busy]);
+
+  useEffect(() => {
     const which = focusAfter.current;
     focusAfter.current = null;
     if (!which) return;
+    if (left.current) {
+      left.current = false;
+      return;
+    }
     const active = document.activeElement;
     const stillHere = active === showButton.current || active === hideButton.current || active === document.body || active === null;
     if (!stillHere) return;
@@ -40,6 +67,7 @@ export function EmergencyContactLookup({ eventId, riderName, orderId, entryId }:
   }
 
   async function show() {
+    left.current = false;
     setBusy(true);
     setError(null);
     try {
@@ -63,7 +91,7 @@ export function EmergencyContactLookup({ eventId, riderName, orderId, entryId }:
   }
 
   return (
-    <div className="ec-lookup no-print">
+    <div className="ec-lookup no-print" ref={root}>
       {contact ? (
         <div className="ec-lookup__shown">
           <p id={contactId} className="ec-lookup__contact" role="status">

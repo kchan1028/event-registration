@@ -1,4 +1,4 @@
-import type { Browser, Locator, Page } from '@playwright/test';
+import type { Browser, Locator, Page, Route } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { publishReviewed } from './support/publish';
 
@@ -83,4 +83,79 @@ test('finance and timer staff use the same lookup on their own screens', async (
   } finally {
     await timerSession.context.close();
   }
+});
+
+test('a late emergency-contact lookup does not take focus from check-in', async ({ page }) => {
+  const api = page.request;
+  const { eventId } = await (await api.post('/api/demo')).json();
+  expect((await publishReviewed(api, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
+  expect((await api.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
+  expect((await api.put(`/api/events/${eventId}/bib-settings`, {
+    data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+  })).ok()).toBe(true);
+  const list = await (await api.get(`/api/events/${eventId}/check-in`)).json();
+  const rider = list.riders.find((candidate: { result: { ready: boolean }; bib: number | null; checkInCode?: string; name: string; orderId: string }) => (
+    candidate.result.ready && candidate.bib === null && candidate.checkInCode
+  ));
+  if (!rider?.checkInCode) throw new Error('The fictional fixture needs a ready rider with a check-in code');
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/#/events/${eventId}/check-in`);
+  const search = page.getByRole('searchbox', { name: 'Find a rider' });
+  await search.fill(rider.checkInCode);
+  await search.press('Enter');
+  const detail = page.getByRole('region', { name: 'Rider check-in' });
+  await expect(detail.getByRole('heading', { name: rider.name, exact: true })).toBeVisible();
+
+  const show = detail.getByRole('button', { name: `Emergency contact for ${rider.name}` });
+  const hide = detail.getByRole('button', { name: `Hide emergency contact for ${rider.name}` });
+  await show.click();
+  await expect(hide).toBeFocused();
+  await hide.click();
+  await expect(show).toBeVisible();
+
+  let holdContact = false;
+  let releaseContact: () => void = () => {};
+  const contactHeld = new Promise<void>((resolve) => { releaseContact = resolve; });
+  let contactWaiting = 0;
+  await page.route(`**/api/events/${eventId}/emergency-contact`, async (route: Route) => {
+    if (!holdContact || route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    contactWaiting += 1;
+    await contactHeld;
+    await route.fulfill({ response });
+  });
+  let releaseCheckIn: () => void = () => {};
+  const checkInHeld = new Promise<void>((resolve) => { releaseCheckIn = resolve; });
+  await page.route(`**/api/events/${eventId}/check-in/${rider.orderId}`, async (route: Route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    await checkInHeld;
+    await route.fulfill({ response });
+  });
+
+  holdContact = true;
+  await show.click();
+  await expect.poll(() => contactWaiting).toBe(1);
+  const issue = detail.getByRole('button', { name: 'Check in and issue next bib', exact: true });
+  await issue.click();
+  await expect(detail.getByRole('button', { name: 'Checking in…' })).toBeDisabled();
+
+  releaseContact();
+  await expect(hide).toBeVisible();
+  await expect(hide).not.toBeFocused();
+  await expect(detail.getByText(PHONE)).toBeVisible();
+
+  releaseCheckIn();
+  const nextRider = detail.getByRole('button', { name: 'Next rider', exact: true });
+  await expect(nextRider).toBeFocused();
+  await expect(detail.getByText(PHONE)).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(search).toBeFocused();
 });
