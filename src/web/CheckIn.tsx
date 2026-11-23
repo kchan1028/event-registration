@@ -239,7 +239,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
       {data && batchMode && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId + batchMode} eventId={eventId} dayId={data.dayId} mode={batchMode} onChanged={() => refreshCurrentList.current()} onClose={() => setBatchMode(null)} />}
 
       {data && showBibs && can(data.roles, 'checkin.settings') && <>
-        <BibSettingsPanel data={data} onSaved={() => refreshCurrentList.current()} onClose={() => setShowBibs(false)} />
+        <BibSettingsPanel data={data} onSaved={() => { appliedEpoch.current++; refreshCurrentList.current(); }} onClose={() => setShowBibs(false)} />
         <AutomaticBibs key={eventId} eventId={eventId} />
       </>}
 

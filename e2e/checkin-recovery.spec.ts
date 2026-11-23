@@ -395,6 +395,53 @@ test('saving bib ranges refreshes the search on screen', async ({ page }) => {
   await expect(detail.getByRole('heading', { name: rider.name, exact: true })).toBeVisible();
 });
 
+test('an older check-in lookup does not restore the missing bib-range notice', async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
+  expect((await page.request.post(`/api/events/${eventId}/check-in-demo-riders`)).ok()).toBe(true);
+  const list: CheckInList = await (await page.request.get(`/api/events/${eventId}/check-in`)).json();
+  const rider = list.riders.find((candidate) => candidate.checkInCode);
+  if (!rider?.checkInCode) throw new Error('The fictional fixture needs a rider with a check-in code');
+
+  await page.goto(`/#/events/${eventId}/check-in`);
+  const notice = page.getByText(/No bib range is set/);
+  await expect(notice).toBeVisible();
+
+  let capture = true;
+  const held: { route: Route; response: Awaited<ReturnType<Route['fetch']>> }[] = [];
+  await page.route(`**/api/events/${eventId}/check-in**`, async (route) => {
+    const url = new URL(route.request().url());
+    if (capture && route.request().method() === 'GET' && url.searchParams.get('q') === rider.checkInCode) {
+      const response = await route.fetch();
+      held.push({ route, response });
+      return;
+    }
+    await route.continue();
+  });
+
+  const search = page.getByRole('searchbox', { name: 'Find a rider' });
+  await search.fill(rider.checkInCode);
+  await search.press('Enter');
+  await expect.poll(() => held.length).toBeGreaterThan(0);
+  capture = false;
+
+  await page.getByRole('button', { name: 'Bib ranges', exact: true }).click();
+  const ranges = page.getByRole('form', { name: 'Bib ranges', exact: true });
+  await ranges.getByRole('textbox', { name: 'First', exact: true }).fill('100');
+  await ranges.getByRole('textbox', { name: 'Last', exact: true }).fill('199');
+  const refresh = page.waitForResponse((response) => (
+    response.request().method() === 'GET' && new URL(response.url()).pathname === `/api/events/${eventId}/check-in` && new URL(response.url()).searchParams.get('q') === rider.checkInCode
+  ));
+  await ranges.getByRole('button', { name: 'Save bib ranges', exact: true }).click();
+  await refresh;
+  await expect(notice).toBeHidden();
+
+  for (const pending of held) await pending.route.fulfill({ response: pending.response });
+  await flushPaint(page);
+  await expect(notice).toBeHidden();
+  await expect(page.getByRole('region', { name: 'Rider check-in' }).getByRole('heading', { name: rider.name, exact: true })).toBeVisible();
+});
+
 test('a failed search does not count the previous riders as matches', async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
   expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
