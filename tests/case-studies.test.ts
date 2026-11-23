@@ -169,4 +169,33 @@ describe('generated race case studies', () => {
       await Promise.allSettled([signIn, reset]);
     }
   }, 15_000);
+
+  it('grants case-study ownership when a reset overlaps the load', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+    // The organizer account must exist before the table lock, or sign-in waits on the insert before the load takes the demo lock.
+    expect((await app.inject({ method: 'GET', url: '/api/me' })).statusCode).toBe(200);
+    const hold = new pg.Client({ connectionString: databaseUrl });
+    await hold.connect();
+    let load = Promise.resolve({ statusCode: 0, json: () => ({ removedEvents: 0 }) });
+    let reset = Promise.resolve({ statusCode: 0, json: () => ({ removedEvents: 0 }) });
+    try {
+      // Blocks the membership insert's account foreign key, after the load has locked the demo. Reset does not touch accounts.
+      // Releasing only after reset is waiting avoids a deadlock: the load holds the demo lock and waits on this one.
+      await hold.query('BEGIN');
+      await hold.query('LOCK TABLE accounts IN EXCLUSIVE MODE');
+      load = app.inject({ method: 'POST', url: '/api/demo/case-studies/empty-event' });
+      await untilWaiting(hold, 1);
+      reset = app.inject({ method: 'DELETE', url: '/api/demo/case-studies' });
+      await untilWaiting(hold, 2);
+      await hold.query('COMMIT');
+      expect((await load).statusCode).toBe(201);
+      const removed = await reset;
+      expect(removed.statusCode).toBe(200);
+      expect((removed.json() as { removedEvents: number }).removedEvents).toBe(1);
+    } finally {
+      await hold.end();
+      await Promise.allSettled([load, reset]);
+    }
+  }, 15_000);
 });

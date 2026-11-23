@@ -50,18 +50,22 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
     return { created: true, key, eventId: record.id, published: scenario.publish };
   }
 
-  async function load(key: CaseStudyKey) {
+  async function load(key: CaseStudyKey, afterEvents?: () => Promise<void>) {
     return db.transaction(async () => {
       await db.lock('demo:case-studies');
-      return loadUnlocked(key);
+      const result = await loadUnlocked(key);
+      // The demo lock is still held, and any event lock this load took already ran. The route grants ownership here.
+      if (afterEvents) await afterEvents();
+      return result;
     });
   }
 
-  async function loadAll() {
+  async function loadAll(afterEvents?: () => Promise<void>) {
     return db.transaction(async () => {
       await db.lock('demo:case-studies');
       const results = [];
       for (const scenario of buildCaseStudyScenarios()) results.push(await loadUnlocked(scenario.key));
+      if (afterEvents) await afterEvents();
       return { organizationId: CASE_STUDY_ORG_ID, referenceClock: CASE_STUDY_REFERENCE_NOW, results };
     });
   }
