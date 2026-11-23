@@ -514,7 +514,7 @@ Every verified Stripe notification, recorded once by event ID with what it did (
 
 | Column | Notes |
 |---|---|
-| `id` | Primary key. Stripe's event ID. A repeated delivery is answered from this row and changes nothing |
+| `id` | Primary key. Stripe's event ID. A repeated delivery is answered from this row and changes nothing, except a row whose result is still `unknown_session`: the next delivery applies that event once its session row exists, and updates this row |
 | `provider` | `stripe_test` |
 | `type` | Stripe's event type, for example `checkout.session.completed` |
 | `session_id` | Stripe session ID, when the event has one |
