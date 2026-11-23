@@ -18,7 +18,7 @@ const RIDER = { firstName: 'Test', lastName: 'Rider', email: 'test.rider@example
 
 type Order = { id: string; status: string; totalCents: number; paidWith: string | null; entries: { status: string }[] };
 
-async function setup(opts: { holdMinutes?: number; client?: Stripe } = {}) {
+async function setup(opts: { holdMinutes?: number; client?: Stripe; onSessionCreated?: (session: { id: string }) => Promise<void> } = {}) {
   let now = new Date('2027-03-01T18:00:00Z');
   const clock = { advance: (min: number) => (now = new Date(now.getTime() + min * 60_000)) };
   const client = opts.client ?? new Stripe('sk_test_fictional', { maxNetworkRetries: 0 });
@@ -26,7 +26,9 @@ async function setup(opts: { holdMinutes?: number; client?: Stripe } = {}) {
   const create = vi.spyOn(client.checkout.sessions, 'create');
   if (!opts.client) create.mockImplementation((async (params: Stripe.Checkout.SessionCreateParams) => {
     n++;
-    return { id: `cs_test_${n}`, url: `https://checkout.stripe.test/pay/${n}`, expires_at: params.expires_at!, amount_total: params.line_items![0].price_data!.unit_amount! } as Stripe.Checkout.Session;
+    const session = { id: `cs_test_${n}`, url: `https://checkout.stripe.test/pay/${n}`, expires_at: params.expires_at!, amount_total: params.line_items![0].price_data!.unit_amount! } as Stripe.Checkout.Session;
+    await opts.onSessionCreated?.(session);
+    return session;
   }) as never);
   vi.spyOn(client.refunds, 'create').mockImplementation((async () => ({ id: 're_test_1', status: 'pending', failure_reason: null }) as unknown as Stripe.Refund) as never);
   const payments = stripePayments({ secretKey: 'sk_test_fictional', webhookSecret: WEBHOOK_SECRET, client });
@@ -229,8 +231,47 @@ describe('Stripe hosted Checkout (test mode)', () => {
     const { order, checkout, webhook, paidSession, get } = await setup();
     const o = await order(['RR-M35-34']);
     await checkout(o.id);
-    expect((await webhook('evt_test_other', 'checkout.session.completed', paidSession(o, 'cs_test_not_ours'))).json()).toMatchObject({ result: 'unknown_session' });
+    const unknown = paidSession(o, 'cs_test_not_ours');
+    expect((await webhook('evt_test_other', 'checkout.session.completed', unknown)).json()).toEqual({ result: 'unknown_session', duplicate: false });
+    expect((await webhook('evt_test_other', 'checkout.session.completed', unknown)).json()).toEqual({ result: 'unknown_session', duplicate: true });
     expect((await get(o.id)).status).toBe('held');
+  });
+
+  it('leaves a session that names another order unknown when the same event is delivered again', async () => {
+    const { order, checkout, webhook, paidSession, get } = await setup();
+    const o = await order(['RR-M35-34']);
+    await checkout(o.id);
+    const mismatched = paidSession(o, 'cs_test_1', { metadata: { order_id: 'order_not_this' }, client_reference_id: 'order_not_this' });
+    expect((await webhook('evt_test_mismatch', 'checkout.session.completed', mismatched)).json()).toEqual({ result: 'unknown_session', duplicate: false });
+    expect((await webhook('evt_test_mismatch', 'checkout.session.completed', mismatched)).json()).toEqual({ result: 'unknown_session', duplicate: true });
+    expect((await get(o.id)).status).toBe('held');
+  });
+
+  it('applies a paid notification that was saved before its session row existed', async () => {
+    let deliver: ((sessionId: string) => Promise<void>) | undefined;
+    const { order, checkout, webhook, paidSession, get, attempts, databaseUrl } = await setup({
+      onSessionCreated: async (session) => { if (deliver) await deliver(session.id); },
+    });
+    const o = await order(['RR-M35-34']);
+    let first: Awaited<ReturnType<typeof webhook>> | undefined;
+    deliver = async (sessionId) => {
+      first = await webhook('evt_test_early', 'checkout.session.completed', paidSession(o, sessionId));
+    };
+    expect((await checkout(o.id)).json()).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/pay/1' });
+    expect(first!.json()).toEqual({ result: 'unknown_session', duplicate: false });
+    expect((await get(o.id)).status).toBe('held');
+    expect(await attempts(o.id)).toEqual([]);
+    expect((await webhook('evt_test_early', 'checkout.session.completed', paidSession(o))).json()).toEqual({ result: 'confirmed', duplicate: false });
+    expect((await get(o.id)).status).toBe('confirmed');
+    expect((await webhook('evt_test_early', 'checkout.session.completed', paidSession(o))).json()).toEqual({ result: 'confirmed', duplicate: true });
+    expect(await attempts(o.id)).toEqual([{ provider: 'stripe_test', provider_ref: 'pi_test_1', amount_cents: o.totalCents, result_status: 'confirmed' }]);
+    const saved = new pg.Client({ connectionString: databaseUrl });
+    await saved.connect();
+    try {
+      expect((await saved.query(`SELECT result, order_id FROM provider_events WHERE id = 'evt_test_early'`)).rows).toEqual([{ result: 'confirmed', order_id: o.id }]);
+    } finally {
+      await saved.end();
+    }
   });
 
   it('waits for a delayed payment, then confirms; a late failure after success changes nothing', async () => {

@@ -300,7 +300,10 @@ export function createPayments(
       return db.transaction(async () => {
         await db.lock(`provider-event:${ev.id}`);
         const seen = await db.get<{ result: string }>(`SELECT result FROM provider_events WHERE id = $1`, [ev.id]);
-        if (seen) return { result: seen.result, duplicate: true };
+        // The session row is saved after Stripe returns, so this event can be stored before that row exists.
+        // A later delivery applies it once. Every other saved result stays as it is.
+        const retryUnknown = seen?.result === 'unknown_session';
+        if (seen && !retryUnknown) return { result: seen.result, duplicate: true };
 
         const session = ev.sessionId ? await db.get<SessionRow>(`SELECT * FROM payment_sessions WHERE id = $1`, [ev.sessionId]) : undefined;
         let orderId = session?.order_id ?? null;
@@ -341,6 +344,14 @@ export function createPayments(
           }
         }
 
+        if (retryUnknown) {
+          if (result === 'unknown_session') return { result, duplicate: true };
+          await db.run(
+            `UPDATE provider_events SET session_id = $2, order_id = $3, outcome = $4, result = $5, payment_ref = $6, amount_cents = $7 WHERE id = $1`,
+            [ev.id, ev.sessionId, orderId, ev.outcome, result, ev.paymentRef, ev.amountCents],
+          );
+          return { result, duplicate: false };
+        }
         await db.run(
           `INSERT INTO provider_events (id, provider, type, session_id, order_id, outcome, result, received_at, payment_ref, amount_cents) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [ev.id, provider.mode, ev.type, ev.sessionId, orderId, ev.outcome, result, nowIso(), ev.paymentRef, ev.amountCents],
