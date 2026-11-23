@@ -131,6 +131,55 @@ test('a camera result opens the matching rider and releases the scanner without 
   expect((await saved.json() as CheckInList).riders).toEqual([rider]);
 });
 
+test('a camera scan uses the race day selected while the camera stays open', async ({ page }) => {
+  const api = page.request;
+  const { eventId } = await (await api.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await publishReviewed(api, eventUrl, { acknowledgeWarnings: true })).ok()).toBe(true);
+  expect((await api.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  const list: CheckInList = await (await api.get(`${eventUrl}/check-in`)).json();
+  const rider = list.riders.find((row) => row.checkInCode);
+  const sunday = list.days.find((day) => day.label === 'Sunday');
+  if (!rider?.checkInCode || !sunday) throw new Error('The demo needs a check-in code and a Sunday');
+  expect(list.dayId).not.toBe(sunday.id);
+
+  await page.addInitScript((code) => {
+    class TestBarcodeDetector {
+      async detect(video: HTMLVideoElement) {
+        if (!(video.srcObject instanceof MediaStream)) throw new Error('No stream attached to the scanner');
+        if (document.documentElement.dataset.releaseScan !== 'yes') throw new Error('Hold the frame');
+        return [{ rawValue: code }];
+      }
+    }
+    Object.defineProperty(window, 'BarcodeDetector', { configurable: true, value: TestBarcodeDetector });
+    navigator.mediaDevices.getUserMedia = async () => {
+      const stream = document.createElement('canvas').captureStream();
+      Object.defineProperty(window, 'testCameraTrack', { value: stream.getVideoTracks()[0] });
+      return stream;
+    };
+    HTMLMediaElement.prototype.play = async () => {};
+  }, rider.checkInCode);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/#/events/${eventId}/check-in`);
+  await page.getByRole('button', { name: 'Scan with camera', exact: true }).click();
+  await expect.poll(() => page.evaluate(
+    () => (window as Window & { testCameraTrack?: MediaStreamTrack }).testCameraTrack?.readyState,
+  )).toBe('live');
+
+  await page.getByRole('radio', { name: 'Sunday', exact: true }).click();
+  await expect(page.getByRole('radio', { name: 'Sunday', exact: true })).toBeChecked();
+  await expect(page.getByText(/riders on Sunday/)).toBeVisible();
+
+  const lookup = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return request.method() === 'GET' && url.pathname === `/api/events/${eventId}/check-in` && url.searchParams.get('q') === rider.checkInCode;
+  });
+  await page.evaluate(() => { document.documentElement.dataset.releaseScan = 'yes'; });
+  const request = await lookup;
+  expect(new URL(request.url()).searchParams.get('day')).toBe(sunday.id);
+  await expect(page.getByRole('searchbox', { name: 'Find a rider' })).toHaveValue(rider.checkInCode);
+});
+
 test('a volunteer distinguishes riders with the same name by their details or confirmation code', async ({ page, browser }) => {
   const api = page.request;
   const { eventId, organizationId } = await (await api.post('/api/demo')).json();
