@@ -23,18 +23,27 @@ export const TEMPLATE_CLONE_LOCK = 'cyclereg-test-template-clone';
 /** Stay inside Vitest's 20s test timeout when the template lock is busy. */
 const CLONE_BUDGET_MS = 12_000;
 
+/** Application name of this worker's clone session, so a test can see its own waiter. */
+export function templateCloneSessionName(): string {
+  return `cyclereg-clone-${process.pid}`;
+}
+
 async function adminClient(): Promise<pg.Client> {
   if (!admin) {
-    admin = new pg.Client({ connectionString: adminUrl(serverUrl) });
-    await admin.connect();
+    const client = new pg.Client({ connectionString: adminUrl(serverUrl) });
+    await client.connect();
+    // SET does not accept a bind parameter. set_config does, and false keeps it for the session.
+    await client.query(`SELECT set_config('application_name', $1, false)`, [templateCloneSessionName()]);
+    admin = client;
   }
   return admin;
 }
 
 function cloneWait(err: unknown, deadline: number): boolean {
   const code = (err as { code?: string }).code;
-  // 55006: template is in use. 55P03: lock_timeout while waiting to copy it.
-  return (code === '55006' || code === '55P03') && Date.now() < deadline;
+  // 55006: template is in use. 55P03: lock_timeout. 57014: statement_timeout.
+  // Leave a second so the next attempt cannot run past the budget.
+  return (code === '55006' || code === '55P03' || code === '57014') && deadline - Date.now() > 1_000;
 }
 
 function pause(): Promise<void> {
@@ -50,13 +59,19 @@ export async function testDatabaseUrl(opts: { empty?: boolean } = {}): Promise<s
   let failure: unknown;
   try {
     // One queued wait. A short timeout here would drop the waiter to the back of the line.
+    // statement_timeout must stay off, or it would cancel that wait early.
+    await client.query('SET statement_timeout = 0');
     await client.query(`SET lock_timeout = ${CLONE_BUDGET_MS}`);
     await client.query('SELECT pg_advisory_lock(hashtext($1))', [TEMPLATE_CLONE_LOCK]);
     held = true;
     // A leftover template lock should fail fast enough to retry inside the same budget.
-    await client.query(`SET lock_timeout = 3000`);
+    await client.query('SET lock_timeout = 3000');
     const sql = opts.empty ? `CREATE DATABASE "${name}"` : `CREATE DATABASE "${name}" TEMPLATE "${template}"`;
     for (;;) {
+      const left = deadline - Date.now();
+      if (left < 1_000) throw new Error('template clone exceeded its wait budget');
+      // Caps the copy and PostgreSQL's own wait for sessions to leave the template.
+      await client.query(`SET statement_timeout = ${Math.floor(left)}`);
       try {
         await client.query(sql);
         break;
@@ -71,6 +86,7 @@ export async function testDatabaseUrl(opts: { empty?: boolean } = {}): Promise<s
   } finally {
     if (held) {
       try {
+        await client.query('SET statement_timeout = 0');
         await client.query('SELECT pg_advisory_unlock(hashtext($1))', [TEMPLATE_CLONE_LOCK]);
       } catch (unlockErr) {
         // Ending the session releases the lock if the unlock itself failed.
