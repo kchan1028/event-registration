@@ -75,12 +75,15 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
       await db.lock('demo:case-studies');
       const eventIds = (await db.all<{ id: string }>(`SELECT id FROM events WHERE organization_id = $1`, [CASE_STUDY_ORG_ID])).map((row) => row.id);
       if (eventIds.length === 0) return { removedEvents: 0 };
+      const ids = eventIds.map((_, index) => `$${index + 1}`).join(', ');
+      const orderIds = `SELECT id FROM orders WHERE event_id IN (${ids})`;
+      // A paid notification updates the session row, then waits for the event lock.
+      // Delete those rows first so this reset is not holding the event lock while it waits on the row.
+      await db.run(`DELETE FROM payment_sessions WHERE order_id IN (${orderIds})`, eventIds);
       for (const id of [...eventIds].sort()) await db.lock(eventLock(id));
       // First sign-in holds this lock before it writes a membership for an invitation it has read.
       // Taking it after the event locks lets that sign-in finish before this organization is deleted.
       await db.lock(`org-members:${CASE_STUDY_ORG_ID}`);
-      const ids = eventIds.map((_, index) => `$${index + 1}`).join(', ');
-      const orderIds = `SELECT id FROM orders WHERE event_id IN (${ids})`;
       // Children before parents: none of these foreign keys cascade.
       await db.run(`DELETE FROM emergency_contact_views WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM protected_export_audit WHERE event_id IN (${ids})`, eventIds);
@@ -89,7 +92,6 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
       await db.run(`DELETE FROM cancellation_confirmations WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM refunds WHERE order_id IN (${orderIds})`, eventIds);
       await db.run(`DELETE FROM provider_events WHERE order_id IN (${orderIds})`, eventIds);
-      await db.run(`DELETE FROM payment_sessions WHERE order_id IN (${orderIds})`, eventIds);
       await db.run(`DELETE FROM rider_corrections WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM entry_resolutions WHERE event_id IN (${ids})`, eventIds);
       await db.run(`DELETE FROM rider_link_dismissals WHERE event_id IN (${ids})`, eventIds);
