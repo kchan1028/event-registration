@@ -94,7 +94,7 @@ For routine changes, run typechecking and the affected test files as the [test p
 npm run check
 ```
 
-This runs the TypeScript check, the unit and API tests (Vitest), and a production build. The API tests fake sign-in (`tests/support/auth.ts`), so they need no Clerk keys. The API tests need the PostgreSQL server above: they create one migrated template database per run, clone a fresh database for each test (so tests never see each other's data), and drop them all at the end. Each clone takes one shared lock and stops waiting within twelve seconds, so a busy template fails that test with a database error. Your `cyclereg` database is not touched. Set `TEST_DATABASE_URL` to use another server; its user must be allowed to create databases.
+This runs the TypeScript check, the unit and API tests (Vitest), and a production build. The API tests fake sign-in (`tests/support/auth.ts`), so they need no Clerk keys. The API tests need the PostgreSQL server above: they create one migrated template database per run, clone a fresh database for each test (so tests never see each other's data), and drop them all at the end. Each clone takes one shared lock and waits at most twelve seconds for it, so a busy template fails that test with a database error. Your `cyclereg` database is not touched. Set `TEST_DATABASE_URL` to use another server; its user must be allowed to create databases.
 
 ```bash
 npx playwright install chromium
