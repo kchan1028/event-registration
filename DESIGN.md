@@ -8,6 +8,7 @@ colors:
   hairline: "#dddddd"
   hairline-soft: "#ebebe8"
   border-strong: "#9297a0"
+  control-border: "#888d96"
   canvas: "#ffffff"
   tyvek: "#f7f7f4"
   tyvek-deep: "#efefea"
@@ -189,9 +190,10 @@ A near-neutral ink-on-Tyvek palette where color carries meaning: day identity, s
 - **Tyvek Deep** (tyvek-deep): neutral tags, ghost and icon button hover, the empty tally track, inline code.
 - **Body Graphite** (body): running text.
 - **Muted Slate** (muted): secondary text, column headers, hints, stat labels, icon buttons at rest.
-- **Hairline** (hairline): input, button, table, and tag chip borders.
+- **Hairline** (hairline): table borders, tag chip borders, and separators that are not the edge of a control.
 - **Soft Hairline** (hairline-soft): row dividers, rail and inspector edges, clip borders.
-- **Strong Border** (border-strong): input and secondary button hover borders, and the clip bar on unassigned groups.
+- **Control border** (control-border): the 1px edge of an input or secondary button. It is stronger than the hairline so that edge stays at least 3:1 on canvas and Tyvek in both themes. Hover mixes it toward ink.
+- **Strong Border** (border-strong): the theme toggle hover and the clip bar on unassigned groups.
 
 ### Status
 - **Error** (error on error-bg), **Warning** (warn on warn-bg), **OK** (ok on ok-bg), **Pending integration** (pending on pending-bg). Each pair is used together: the dark tone as text, the pale tone as ground.
@@ -273,7 +275,7 @@ Corners are gently rounded and step with size: 6px for inputs, rail items, icon 
 Quiet and compact; the ink button is the only filled button.
 - **Shape:** gently rounded (8px), 38px high, 14px horizontal padding, 500 weight 14px label, optional 16px stroke icon with a 6px gap.
 - **Primary:** ink fill, white text. Hover darkens to near-black.
-- **Secondary:** canvas fill, ink text, hairline border. Hover strengthens the border.
+- **Secondary:** canvas fill, ink text, control-border. Hover strengthens the border.
 - **Ghost:** no fill or border; hover fills Tyvek Deep. Used for Edit and in-panel actions.
 - **Danger:** ghost with error text.
 - **Small:** 32px high, 10px padding, 13px label.
@@ -293,8 +295,8 @@ The race-day check-in result is the one place status uses a solid fill: white te
 - **Segmented control:** hairline-bordered 8px container with 2px padding; options are 6px-radius 13px labels.
 
 ### Inputs / Fields
-- **Style:** canvas fill, 1px hairline, 6px radius, 38px minimum height, 14px text on desktop, at least 16px on phones. Labels are 13px 500 ink above the input with a 5px gap; hints and errors are 12.5px below.
-- **Hover / Focus:** hover strengthens the border; focus uses a visible 2px outline with at least 3:1 contrast against adjacent colors; a faint blue tint alone is insufficient.
+- **Style:** canvas fill, 1px control-border, 6px radius, 38px minimum height, 14px text on desktop, at least 16px on phones. Labels are 13px 500 ink above the input with a 5px gap; hints and errors are 12.5px below.
+- **Hover / Focus:** hover strengthens the border; focus uses a visible 2px outline in the solid focus color, at least 3:1 against adjacent colors. A faint blue tint alone is insufficient.
 - **Error:** border turns error red and an error line appears below.
 - **Variants:** numeric inputs use the numeral face at 16px; code inputs use monospace uppercase; the title input is 20px 600 at 46px high.
 
