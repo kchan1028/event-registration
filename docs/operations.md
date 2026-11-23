@@ -143,7 +143,7 @@ Use fictional records. Limit messages to environment, signal, observation time a
 
 | What the check finds | Action |
 |---|---|
-| Any row for it recorded as `unknown_session` | Escalate, whatever its outcome. A known session with a different order reference keeps its row in the export; an unknown session has none |
+| Any row for it recorded as `unknown_session` | Escalate, whatever its outcome. A known session with a different order reference keeps its row in the export. A notification saved before its session row stays on the order it names until that row is recorded. Recording the session leaves a different order as `unknown_session` on the session's order. One that names no order has no row |
 | Paid, with no `paid` row | Escalate, including when no event, delivery or row exists. Inspect the delivery before requesting a resend |
 | Paid, recorded as `duplicate_charge` | Follow the duplicate rule below |
 | Paid, recorded as `needs_attention` | Confirm the exception queue has it |

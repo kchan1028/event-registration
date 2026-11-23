@@ -514,18 +514,18 @@ Every verified Stripe notification, recorded once by event ID with what it did (
 
 | Column | Notes |
 |---|---|
-| `id` | Primary key. Stripe's event ID. A repeated delivery is answered from this row and changes nothing, except a row whose result is still `unknown_session`: the next delivery applies that event once its session row exists, and updates this row |
+| `id` | Primary key. Stripe's event ID. A repeated delivery is answered from this row and changes nothing. Recording the session applies a row still `unknown_session` for that session when the saved order matches; a later delivery is then a duplicate. A later delivery also applies a row that recording the session left unknown |
 | `provider` | `stripe_test` |
 | `type` | Stripe's event type, for example `checkout.session.completed` |
 | `session_id` | Stripe session ID, when the event has one |
-| `order_id` | References `orders`. Null when the session is not one this app opened |
-| `outcome` | `paid`, `pending` (completed, delayed method not settled), `failed`, `expired`, or `ignored` (an event type the app does not act on) |
+| `order_id` | References `orders`. Null when the session is not one this app opened and the notification named no order. A notification saved before the session row stores the order it names when that order exists and the saved fields are enough to apply it. Recording the session applies that row only when the order is the session's. A different order is left `unknown_session` on the session's order. A paid notification that is not usd, or a reference that is not an order, stores no order |
+| `outcome` | `paid`, `pending` (completed, delayed method not settled), `failed`, `expired`, or `ignored` (an event type the app does not act on, or a saved notification that recording the session must not apply) |
 | `result` | What happened: the order status after `orders.pay`, or `awaiting_payment`, `session_expired`, `unknown_session`, `duplicate_charge` (a second paid session for an order that already had one: money to refund, never a second entry), or `ignored` |
 | `received_at` | |
 | `payment_ref` | Stripe PaymentIntent ID the notification was about (migration 18), so a duplicate charge can be found and refunded |
 | `amount_cents` | Amount the notification reported (migration 18) |
 
-Two paid notifications for different sessions of one order take the event lock before the duplicate-charge read, and hold it until the notification row is saved. Exactly one result is `duplicate_charge`.
+Recording a session applies saved notifications for that session in the same transaction. The webhook and that recording take the same session lock, so one of them sees the other's committed row. A saved paid notification is applied only when it was in usd and it names no order or names that session's order. Two paid notifications for different sessions of one order take the event lock before the duplicate-charge read, and hold it until the notification row is saved. A row still `unknown_session` is not counted as the other paid session. Exactly one result is `duplicate_charge`.
 
 ### refunds
 

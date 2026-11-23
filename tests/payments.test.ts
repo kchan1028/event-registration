@@ -259,9 +259,6 @@ describe('Stripe hosted Checkout (test mode)', () => {
     };
     expect((await checkout(o.id)).json()).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/pay/1' });
     expect(first!.json()).toEqual({ result: 'unknown_session', duplicate: false });
-    expect((await get(o.id)).status).toBe('held');
-    expect(await attempts(o.id)).toEqual([]);
-    expect((await webhook('evt_test_early', 'checkout.session.completed', paidSession(o))).json()).toEqual({ result: 'confirmed', duplicate: false });
     expect((await get(o.id)).status).toBe('confirmed');
     expect((await webhook('evt_test_early', 'checkout.session.completed', paidSession(o))).json()).toEqual({ result: 'confirmed', duplicate: true });
     expect(await attempts(o.id)).toEqual([{ provider: 'stripe_test', provider_ref: 'pi_test_1', amount_cents: o.totalCents, result_status: 'confirmed' }]);
@@ -272,6 +269,44 @@ describe('Stripe hosted Checkout (test mode)', () => {
     } finally {
       await saved.end();
     }
+  });
+
+  it('leaves a saved notification unknown when it names another order or another currency', async () => {
+    let deliver: ((sessionId: string) => Promise<void>) | undefined;
+    const { order, checkout, webhook, paidSession, get, attempts } = await setup({
+      onSessionCreated: async (session) => { if (deliver) await deliver(session.id); },
+    });
+    const o = await order(['RR-M35-34']);
+    const other = await order(['RR-M35-34']);
+    const missing = paidSession(o, 'cs_test_1', { metadata: { order_id: 'order_not_this' }, client_reference_id: 'order_not_this' });
+    deliver = async (sessionId) => {
+      const namedOther = paidSession(o, sessionId, { metadata: { order_id: other.id }, client_reference_id: other.id });
+      expect((await webhook('evt_test_early_other', 'checkout.session.completed', namedOther)).json()).toEqual({ result: 'unknown_session', duplicate: false });
+      expect((await webhook('evt_test_early_eur', 'checkout.session.completed', paidSession(o, sessionId, { currency: 'eur' }))).json()).toEqual({ result: 'unknown_session', duplicate: false });
+      expect((await webhook('evt_test_early_missing', 'checkout.session.completed', { ...missing, id: sessionId })).json()).toEqual({ result: 'unknown_session', duplicate: false });
+    };
+    expect((await checkout(o.id)).json()).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/pay/1' });
+    expect((await get(o.id)).status).toBe('held');
+    expect((await get(other.id)).status).toBe('held');
+    expect(await attempts(o.id)).toEqual([]);
+    expect(await attempts(other.id)).toEqual([]);
+    expect((await webhook('evt_test_early_missing', 'checkout.session.completed', { ...missing, id: 'cs_test_1' })).json()).toEqual({ result: 'unknown_session', duplicate: true });
+    expect((await webhook('evt_test_early_eur', 'checkout.session.completed', paidSession(o, 'cs_test_1', { currency: 'eur' }))).json()).toMatchObject({ result: 'needs_attention', duplicate: false });
+  });
+
+  it('sends a short payment saved before its session row to the organizer', async () => {
+    let deliver: ((sessionId: string) => Promise<void>) | undefined;
+    const { order, checkout, webhook, paidSession, get } = await setup({
+      onSessionCreated: async (session) => { if (deliver) await deliver(session.id); },
+    });
+    const o = await order(['RR-M35-34']);
+    deliver = async (sessionId) => {
+      expect((await webhook('evt_test_early_short', 'checkout.session.completed', paidSession(o, sessionId, { amount_total: 100 }))).json()).toEqual({ result: 'unknown_session', duplicate: false });
+    };
+    expect((await checkout(o.id)).json()).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/pay/1' });
+    const after = await get(o.id);
+    expect(after.status).toBe('needs_attention');
+    expect(after.entries.every((e) => e.status === 'released')).toBe(true);
   });
 
   it('waits for a delayed payment, then confirms; a late failure after success changes nothing', async () => {
