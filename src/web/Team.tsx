@@ -43,6 +43,18 @@ const EMAIL_STATUS: Record<'recorded' | 'sent' | 'failed' | 'uncertain', string>
   uncertain: 'Email might have been sent',
 };
 
+const DELIVERY_LABEL = {
+  delivered: 'Delivered',
+  bounced: 'Bounced',
+  complained: 'Complaint received',
+} as const;
+
+/** A delivery word only for the three recorded outcomes. Missing or unknown values stay blank. */
+function deliveryLabel(value: string | null | undefined): string | null {
+  if (value === 'delivered' || value === 'bounced' || value === 'complained') return DELIVERY_LABEL[value];
+  return null;
+}
+
 /**
  * People and roles for one organization. Owners only; the server refuses everyone else.
  * Adding an email that has never signed in records an invitation that becomes a role the
@@ -150,6 +162,8 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
           {list.invitations.map((i) => {
             const expired = new Date(i.expiresAt) <= new Date();
             const uncertain = i.lastEmail?.status === 'uncertain';
+            const delivery = deliveryLabel(i.lastEmail?.delivery);
+            const deliveryFailed = i.lastEmail?.delivery === 'bounced' || i.lastEmail?.delivery === 'complained';
             return (
               <li key={`invite-${i.email}-${i.role}`}>
                 <span className="team__email">{i.email}</span>
@@ -162,6 +176,12 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
                     <>
                       {' · '}
                       <span className={i.lastEmail.status === 'failed' ? 'team__email-failed' : i.lastEmail.status === 'uncertain' ? 'team__email-uncertain' : undefined}>{EMAIL_STATUS[i.lastEmail.status]}</span>
+                      {delivery && (
+                        <>
+                          {' · '}
+                          <span className={deliveryFailed ? 'team__email-failed' : undefined}>{delivery}</span>
+                        </>
+                      )}
                     </>
                   )}
                 </span>

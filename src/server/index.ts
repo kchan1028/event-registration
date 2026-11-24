@@ -13,9 +13,10 @@ const databaseUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
 // The built web app is served in production, and by the browser tests (SERVE_WEB=1).
 const serveWeb = process.env.NODE_ENV === 'production' || process.env.SERVE_WEB === '1';
 
-// buildApp reads sign-in (Clerk, or the local test provider) and payments (Stripe test mode when
-// STRIPE_SECRET_KEY is set, otherwise simulated) from the environment, and throws when a setting is
-// missing or refused. It does not connect to the database until the server starts listening.
+// buildApp reads sign-in (Clerk, or the local test provider), payments (Stripe test mode when
+// STRIPE_SECRET_KEY is set, otherwise simulated), and the Resend delivery webhook secret from the
+// environment, and throws when a setting is missing or refused. It does not connect to the database
+// until the server starts listening.
 let app: FastifyInstance;
 try {
   ({ app } = buildApp({ databaseUrl, serveWeb, logger: true }));

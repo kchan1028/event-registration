@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { newId } from '../shared/factory';
 import { can, ROLES } from '../shared/roles';
@@ -248,3 +249,125 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
 }
 
 export type Mailer = ReturnType<typeof createMailer>;
+
+/** What a verified Resend webhook recorded. Independent of whether the send was accepted. */
+export type EmailDelivery = 'delivered' | 'bounced' | 'complained';
+
+const SIGNATURE_REJECTED = 'Resend signature did not verify.';
+const WEBHOOK_UNREADABLE = 'Resend webhook could not be read.';
+const WEBHOOK_TOLERANCE_SECONDS = 300;
+const MAX_WEBHOOK_ID_LENGTH = 256;
+
+const DELIVERY_KINDS: Record<string, EmailDelivery> = {
+  'email.delivered': 'delivered',
+  'email.bounced': 'bounced',
+  'email.complained': 'complained',
+};
+
+/** The webhook was signed, or its body could not be used. The message is safe to show. */
+export class ResendWebhookRejected extends Error {
+  constructor(message: typeof SIGNATURE_REJECTED | typeof WEBHOOK_UNREADABLE) {
+    super(message);
+    this.name = 'ResendWebhookRejected';
+  }
+}
+
+/**
+ * Signing secret for the Resend delivery webhook. Unset leaves the route off.
+ * A secret in production is refused: recording stays test-only until a live launch is approved.
+ */
+export function emailWebhookSecretFromEnv(env: Record<string, string | undefined> = process.env): string | null {
+  const raw = env.RESEND_WEBHOOK_SECRET?.trim() ?? '';
+  if (!raw) return null;
+  return checkedWebhookSecret(raw, env);
+}
+
+/** Checks one secret. Production refuses it even when the caller passes it in directly. */
+export function checkedWebhookSecret(secret: string, env: Record<string, string | undefined> = process.env): string {
+  if (env.NODE_ENV === 'production') {
+    throw new Error('RESEND_WEBHOOK_SECRET is for the test-only beta and cannot run with NODE_ENV=production.');
+  }
+  const trimmed = secret.trim();
+  const encoded = trimmed.startsWith('whsec_') ? trimmed.slice('whsec_'.length) : '';
+  if (!trimmed.startsWith('whsec_') || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 !== 0) {
+    throw new Error('RESEND_WEBHOOK_SECRET must be a whsec_ value with valid base64. See docs/runbooks/local-setup.md.');
+  }
+  const key = Buffer.from(encoded, 'base64');
+  if (key.length === 0 || key.toString('base64') !== encoded) {
+    throw new Error('RESEND_WEBHOOK_SECRET must be a whsec_ value with valid base64. See docs/runbooks/local-setup.md.');
+  }
+  return trimmed;
+}
+
+function headerValue(value: string | string[] | undefined): string {
+  return (Array.isArray(value) ? value[0] : value) ?? '';
+}
+
+/** Svix signatures: `v1,<base64>` over `${id}.${timestamp}.${rawBody}`, key after `whsec_`. */
+export function verifyResendWebhook(secret: string, rawBody: string, headers: { id?: string; timestamp?: string; signature?: string }, now: Date): void {
+  const id = headers.id ?? '';
+  const timestamp = headers.timestamp ?? '';
+  const signature = headers.signature ?? '';
+  const seconds = Number(timestamp);
+  const nowSeconds = Math.floor(now.getTime() / 1000);
+  const fresh = /^\d{1,15}$/.test(timestamp) && Number.isSafeInteger(seconds) && Math.abs(nowSeconds - seconds) <= WEBHOOK_TOLERANCE_SECONDS;
+  const encoded = secret.startsWith('whsec_') ? secret.slice('whsec_'.length) : '';
+  const expected = Buffer.from(createHmac('sha256', Buffer.from(encoded, 'base64')).update(`${id}.${timestamp}.${rawBody}`).digest('base64'));
+  let matches = false;
+  if (id && fresh) {
+    for (const part of signature.split(' ')) {
+      if (!part.startsWith('v1,')) continue;
+      const given = Buffer.from(part.slice('v1,'.length));
+      if (given.length !== expected.length) continue;
+      if (timingSafeEqual(given, expected)) matches = true;
+    }
+  }
+  if (!matches) throw new ResendWebhookRejected(SIGNATURE_REJECTED);
+}
+
+/**
+ * Records one verified delivery, bounce, or complaint for the matching sent message.
+ * An older event does not replace a newer outcome. An unknown or ambiguous provider id is ignored.
+ * Nothing here changes the invitation, the role, the send status, or payment, and nothing is sent.
+ */
+export async function recordResendDelivery(
+  db: Db,
+  secret: string,
+  rawBody: string,
+  headers: { id?: string | string[]; timestamp?: string | string[]; signature?: string | string[] },
+  now: Date,
+): Promise<void> {
+  const id = headerValue(headers.id);
+  verifyResendWebhook(secret, rawBody, { id, timestamp: headerValue(headers.timestamp), signature: headerValue(headers.signature) }, now);
+  if (id.length > MAX_WEBHOOK_ID_LENGTH) throw new ResendWebhookRejected(WEBHOOK_UNREADABLE);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody) as unknown;
+  } catch {
+    throw new ResendWebhookRejected(WEBHOOK_UNREADABLE);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new ResendWebhookRejected(WEBHOOK_UNREADABLE);
+  const body = parsed as { type?: unknown; created_at?: unknown; data?: { email_id?: unknown } | null };
+  if (typeof body.type !== 'string') throw new ResendWebhookRejected(WEBHOOK_UNREADABLE);
+  const kind = DELIVERY_KINDS[body.type];
+  if (!kind) return;
+  const emailId = body.data && typeof body.data === 'object' ? body.data.email_id : undefined;
+  if (typeof emailId !== 'string' || emailId.length < 1 || emailId.length > MAX_WEBHOOK_ID_LENGTH) throw new ResendWebhookRejected(WEBHOOK_UNREADABLE);
+  if (typeof body.created_at !== 'string') throw new ResendWebhookRejected(WEBHOOK_UNREADABLE);
+  const occurred = new Date(body.created_at);
+  if (Number.isNaN(occurred.getTime())) throw new ResendWebhookRejected(WEBHOOK_UNREADABLE);
+  await db.transaction(async () => {
+    const rows = await db.all<{ id: string }>(`SELECT id FROM email_messages WHERE provider_message_id = $1 FOR UPDATE`, [emailId]);
+    if (rows.length !== 1) return;
+    const inserted = await db.run(
+      `INSERT INTO email_delivery_events (id, email_id, kind, occurred_at) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING`,
+      [id, rows[0].id, kind, occurred.toISOString()],
+    );
+    if (!inserted) return;
+    await db.run(
+      `UPDATE email_messages SET delivery_status = $2, delivery_at = $3
+       WHERE id = $1 AND (delivery_at IS NULL OR delivery_at < $3::timestamptz)`,
+      [rows[0].id, kind, occurred.toISOString()],
+    );
+  });
+}
