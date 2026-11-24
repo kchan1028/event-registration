@@ -82,7 +82,7 @@ The collection supplements, rather than replaces, the focused rule tests. Existi
 
 Reviewed November 23, 2026. A rerun of `npm run seed:cases` keeps a case study that is already loaded. Reset the case-study collection before expecting the rows added in this review. Reset drops the case-study organization's finance membership and its role-history row with the organization and leaves the fictional finance account in place. The next omnium load finds that account, grants finance again, and records that grant with no actor.
 
-Morgan Example's three omnium orders share one name, email, team, and racing age, so a name search does not separate the ready order from the blocked one. None of these orders has a configured bib range, a recorded check-in, or a start-list lock. Payments are simulated. No seeded order has a provider checkout session. One paid Saturday order has a simulated partial refund of $10, and that entry stays confirmed.
+Morgan Example's three omnium orders share one name, email, team, and racing age, so a name search does not separate the ready order from the blocked one. None of the omnium orders has a configured bib range, a recorded check-in, or a start-list lock. Payments are simulated. No seeded order has a provider checkout session. One paid Saturday order has a simulated partial refund of $10, and that entry stays confirmed. The Harbor junior is checked in with bib 500 from the event range 500–519. That event has no start-list lock.
 
 | Request id | Event and category | Rider | What it is for |
 |---|---|---|---|
@@ -97,7 +97,7 @@ Morgan Example's three omnium orders share one name, email, team, and racing age
 | `case-study-weekend` | Omnium, Saturday Masters road race and Sunday Masters criterium | Parker Example, Fictional Weekend Club, racing age 47 | Paid weekend package. Both entries are license reviewed. The weekend browser spec still builds its own package order. |
 | `case-study-withdrawn` | Omnium, Saturday Masters road race | Drew Example, Fictional Withdrawal Club, racing age 48 | Paid, then the entry is withdrawn. The order stays confirmed. There is no refund row. |
 | `case-study-refunded` | Omnium, Saturday Masters road race | Reese Example, Fictional Refund Club, racing age 49 | Paid, then a simulated partial refund of $10. The order and the entry stay confirmed. The license is not reviewed. The requester is a fictional finance account on this organization only (`finance-seed@example.test`). That account is not a sign-in identity. |
-| `case-study-junior` | Harbor criterium, Juniors 10-14 | River Example, Fictional Junior Club, racing age 12 | Paid and license reviewed. Guardian Jordan Example signs. The usability task that registers Casey Demo is a separate demo rider, not this row. |
+| `case-study-junior` | Harbor criterium, Juniors 10-14 | River Example, Fictional Junior Club, racing age 12 | Paid and license reviewed, then checked in with bib 500. The event bib range is 500–519. Guardian Jordan Example signs. There is no start-list lock. The usability task that registers Casey Demo is a separate demo rider, not this row. |
 
 These development and rehearsal cases are not in the reusable seed. Automated tests build their own rows where a test is named.
 
@@ -105,7 +105,7 @@ These development and rehearsal cases are not in the reusable seed. Automated te
 |---|---|
 | Missing waiver or missing guardian acceptance | Checkout requires a signed waiver before it creates an order. There is no approved way to store a missing acceptance. |
 | Waitlist offer | Joining requires a full category with the waitlist turned on, and an offer then needs a free place. Harbor Masters is the full field and has no waitlist. Turning one on would change that fixture. An offer on an open omnium category would block later registration there. |
-| Checked-in rider with a bib, a bib range, or a locked start list | The weekend browser spec assigns bib 100 and locks the omnium start lists during its run. The omnium rehearsal still records those steps. |
+| Omnium bib, omnium check-in, or a locked start list | The weekend browser spec assigns bib 100 and locks the omnium start lists during its run. The Harbor junior already has a bib and a check-in. The omnium rehearsal still records its own bib and lock. |
 
 ### Future-requirement cases
 

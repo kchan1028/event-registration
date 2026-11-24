@@ -116,7 +116,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const checkIn = createCheckIn(db, repo, orders, clock, identity, startLists);
   const emergencyContacts = createEmergencyContacts(db, clock);
   const waitlist = createWaitlist(db, repo, clock);
-  const caseStudies = createCaseStudyFixtures(db, repo, orders, refunds);
+  const caseStudies = createCaseStudyFixtures(db, repo, orders, refunds, checkIn);
   const emailSender = opts.email ?? emailFromEnv();
   // Senders need a public URL for the invitation sign-in link.
   const access = createAccess(db, provider, clock, createMailer(db, emailSender, clock), appUrl || (emailSender.mode !== 'local' ? publicAppUrl() : ''));
