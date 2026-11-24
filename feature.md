@@ -126,7 +126,7 @@ Priorities and measurable gates belong in the [roadmap](roadmap.md#berkeley-week
 
 ## Planned features
 
-These are not available in the app. Phase order and dependencies remain in [roadmap.md](roadmap.md).
+The status column says what is Implemented locally and what remains Planned. Phase order and dependencies remain in [roadmap.md](roadmap.md).
 
 | Feature | Status | Requirement reference |
 |---|---|---|
