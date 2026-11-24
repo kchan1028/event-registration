@@ -2,7 +2,7 @@
 
 An architecture decision record (ADR) is a short document that captures one significant decision: the context, the options considered, what was chosen, and the consequences. ADRs let a successor understand why the system looks the way it does without asking the person who built it.
 
-**Current state:** five ADRs are accepted (0001 to 0004 and 0006) and one is Proposed (0005, merchant and settlement model). See the index below. The backlog below lists decisions still open, with known options and tradeoffs. Options listed in the backlog are not recommendations.
+**Current state:** five ADRs are accepted (0001 to 0004 and 0007), one is Proposed (0005, merchant and settlement model), and 0006 is superseded by 0007. See the index below. The backlog below lists decisions still open, with known options and tradeoffs. Options listed in the backlog are not recommendations.
 
 Research reports and source notes live under the [research index](../research/README.md). ADRs retain the options and rationale needed to understand a decision, with an explicit Proposed or Accepted status. Research alone does not accept a decision.
 
