@@ -218,7 +218,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
           payments.mode === 'stripe_test'
             ? 'Payments use Stripe test mode. Only Stripe test cards work and no real money moves.'
             : 'Payments are not connected. Checkout uses a simulated payment and takes no money.',
-        signIn: 'Sign-in is by emailed link or code only. Multi-factor sign-in for organizers is not built yet (Phase 3), so use fictional data only.',
+        signIn: 'Sign-in is by emailed link or code only. Multi-factor sign-in for organizers is not built yet, so use fictional data only.',
       },
     };
   }
