@@ -91,7 +91,7 @@ describe('generated race case studies', () => {
       status: string;
       entries: Array<{ readiness: Array<{ key: string; state: string }> }>;
     }>;
-    expect(orders.map((order) => order.status).sort()).toEqual(['confirmed', 'confirmed', 'confirmed', 'confirmed', 'expired', 'held']);
+    expect(orders.map((order) => order.status).sort()).toEqual(['confirmed', 'confirmed', 'confirmed', 'confirmed', 'confirmed', 'confirmed', 'confirmed', 'expired', 'held', 'held']);
     const confirmed = orders.filter((order) => order.status === 'confirmed');
     expect(confirmed.some((order) => order.entries[0].readiness.some((item) => item.key === 'license' && item.state === 'done'))).toBe(true);
     expect(confirmed.some((order) => order.entries[0].readiness.some((item) => item.key === 'license' && item.state === 'needs_review'))).toBe(true);
@@ -130,6 +130,54 @@ describe('generated race case studies', () => {
       expect(byId['case-study-taylor-ready']).toMatchObject({ status: 'confirmed', first_name: 'Taylor', team: 'Blue Demo Team', racing_age: 41, license_reviewed: true, successes: 1, sessions: 0, checkout_started: false });
       expect(byId['case-study-taylor-blocked']).toMatchObject({ status: 'confirmed', first_name: 'Taylor', team: 'Gold Demo Team', racing_age: 52, license_reviewed: false, successes: 1, sessions: 0, checkout_started: false });
       expect(byId['case-study-active-hold']).toMatchObject({ status: 'held', hold_open: true, first_name: 'Quinn', team: 'Fictional Hold Club', license_reviewed: false, successes: 0, sessions: 0, checkout_started: false });
+    } finally {
+      await seed.end();
+      await app.close();
+    }
+  });
+
+  it('seeds a Sunday entry, a checkout-started hold, a weekend package, a withdrawal, and a junior', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+    expect((await app.inject({ method: 'POST', url: '/api/demo/case-studies/omnium' })).statusCode).toBe(201);
+    expect((await app.inject({ method: 'POST', url: '/api/demo/case-studies/criterium' })).statusCode).toBe(201);
+    const seed = new pg.Client({ connectionString: databaseUrl });
+    await seed.connect();
+    try {
+      const { rows } = await seed.query<{
+        client_request_id: string; event_id: string; order_status: string; entry_status: string; hold_open: boolean;
+        first_name: string; racing_age: number; guardian_name: string | null; signer_role: string; license_reviewed: boolean;
+        successes: number; sessions: number; refunds: number; checkout_started: boolean; bundle_id: string | null; timing_code: string;
+      }>(`
+        SELECT o.client_request_id, o.event_id, o.status AS order_status, oe.status AS entry_status,
+               o.hold_expires_at > $1 AS hold_open,
+               o.rider_json->>'firstName' AS first_name,
+               (o.rider_json->>'racingAge')::int AS racing_age,
+               o.rider_json->'guardian'->>'name' AS guardian_name,
+               o.waiver_json->>'signerRole' AS signer_role,
+               oe.license_reviewed,
+               (SELECT count(*)::int FROM payment_attempts pa WHERE pa.order_id = o.id AND pa.outcome = 'success') AS successes,
+               (SELECT count(*)::int FROM payment_sessions ps WHERE ps.order_id = o.id) AS sessions,
+               (SELECT count(*)::int FROM refunds r WHERE r.order_id = o.id) AS refunds,
+               o.stripe_checkout_started_at IS NOT NULL AS checkout_started,
+               o.quote_json->'bundle'->>'id' AS bundle_id,
+               cat->>'timingCode' AS timing_code
+        FROM orders o
+        JOIN order_entries oe ON oe.order_id = o.id
+        JOIN event_versions ev ON ev.event_id = o.event_id AND ev.version = o.published_version
+        JOIN LATERAL jsonb_array_elements(ev.config_json->'categories') cat ON cat->>'id' = oe.category_id
+        WHERE o.client_request_id IN ('case-study-sunday', 'case-study-checkout-started', 'case-study-weekend', 'case-study-withdrawn', 'case-study-junior')
+        ORDER BY o.client_request_id, cat->>'timingCode'
+      `, [CASE_STUDY_REFERENCE_NOW]);
+      const byId = (id: string) => rows.filter((row) => row.client_request_id === id);
+      expect(byId('case-study-sunday')).toMatchObject([{ order_status: 'confirmed', entry_status: 'confirmed', first_name: 'Robin', timing_code: 'DRW-CR-M35', license_reviewed: true, successes: 1, sessions: 0, checkout_started: false, bundle_id: null, refunds: 0 }]);
+      expect(byId('case-study-checkout-started')).toMatchObject([{ order_status: 'held', entry_status: 'held', hold_open: true, first_name: 'Cameron', timing_code: 'DRW-RR-M35', successes: 0, sessions: 0, checkout_started: true, refunds: 0 }]);
+      const weekend = byId('case-study-weekend');
+      expect(weekend.map((row) => row.timing_code)).toEqual(['DRW-CR-M35', 'DRW-RR-M35']);
+      expect(weekend.every((row) => row.order_status === 'confirmed' && row.entry_status === 'confirmed' && row.first_name === 'Parker' && row.license_reviewed && row.successes === 1 && row.bundle_id && row.refunds === 0)).toBe(true);
+      expect(new Set(weekend.map((row) => row.bundle_id)).size).toBe(1);
+      expect(byId('case-study-withdrawn')).toMatchObject([{ order_status: 'confirmed', entry_status: 'withdrawn', first_name: 'Drew', timing_code: 'DRW-RR-M35', successes: 1, refunds: 0, checkout_started: false }]);
+      expect(byId('case-study-junior')).toMatchObject([{ event_id: 'evt_demo_case_criterium', order_status: 'confirmed', entry_status: 'confirmed', first_name: 'River', racing_age: 12, guardian_name: 'Jordan Example', signer_role: 'guardian', timing_code: 'DVC-J1014', license_reviewed: true, successes: 1, refunds: 0 }]);
     } finally {
       await seed.end();
       await app.close();

@@ -80,31 +80,32 @@ The collection supplements, rather than replaces, the focused rule tests. Existi
 
 ### Reusable rehearsal coverage
 
-Reviewed November 23, 2026. A rerun of `npm run seed:cases` keeps an omnium that is already loaded. Reset the case-study collection before expecting the rows added in this review.
+Reviewed November 23, 2026. A rerun of `npm run seed:cases` keeps a case study that is already loaded. Reset the case-study collection before expecting the rows added in this review.
 
-Every omnium order below is the Saturday Masters road race, the first category whose name contains "Masters 35+". None of them has a configured bib range, a recorded check-in, or a start-list lock. Morgan Example's three orders share one name, email, team, and racing age, so a name search does not separate the ready order from the blocked one.
+Morgan Example's three omnium orders share one name, email, team, and racing age, so a name search does not separate the ready order from the blocked one. None of these orders has a configured bib range, a recorded check-in, or a start-list lock. Payments are simulated. No seeded order has a provider checkout session.
 
-| Request id | Rider | What it is for |
-|---|---|---|
-| `case-study-successful` | Morgan Example, Fictional Wheel Club, racing age 40 | Paid twice with the same simulated attempt id, then the license is reviewed. Ready for check-in once a bib range exists. Emergency contact Riley Example. |
-| `case-study-declined-retried` | Morgan Example, same details | Simulated decline, then a successful retry. Paid, license not reviewed. |
-| `case-study-expired` | Morgan Example, same details | Hold timestamp is year 2000. The stored status stays held and reads as expired, so the place is not reserved. |
-| `case-study-taylor-ready` | Taylor Example, Blue Demo Team, racing age 41 | Paid and license reviewed. Same name as the next row, different team, age, email, and phone. |
-| `case-study-taylor-blocked` | Taylor Example, Gold Demo Team, racing age 52 | Paid, license not reviewed. Use with the ready Taylor when a rehearsal has to tell two matching names apart. |
-| `case-study-active-hold` | Quinn Example, Fictional Hold Club, racing age 44 | Unpaid hold with no payment attempt, no checkout session, and no checkout-started timestamp. The hold stays open through 2027-05-14 18:00 UTC, before the Saturday road race. Staff release can use this hold. |
+| Request id | Event and category | Rider | What it is for |
+|---|---|---|---|
+| `case-study-successful` | Omnium, Saturday Masters road race | Morgan Example, Fictional Wheel Club, racing age 40 | Paid twice with the same simulated attempt id, then the license is reviewed. Ready for check-in once a bib range exists. Emergency contact Riley Example. |
+| `case-study-declined-retried` | Omnium, Saturday Masters road race | Morgan Example, same details | Simulated decline, then a successful retry. Paid, license not reviewed. |
+| `case-study-expired` | Omnium, Saturday Masters road race | Morgan Example, same details | Hold timestamp is year 2000. The stored status stays held and reads as expired, so the place is not reserved. |
+| `case-study-taylor-ready` | Omnium, Saturday Masters road race | Taylor Example, Blue Demo Team, racing age 41 | Paid and license reviewed. Same name as the next row, different team, age, email, and phone. |
+| `case-study-taylor-blocked` | Omnium, Saturday Masters road race | Taylor Example, Gold Demo Team, racing age 52 | Paid, license not reviewed. Use with the ready Taylor when a rehearsal has to tell two matching names apart. |
+| `case-study-active-hold` | Omnium, Saturday Masters road race | Quinn Example, Fictional Hold Club, racing age 44 | Unpaid hold with no payment attempt, no checkout session, and no checkout-started timestamp. The hold stays open through 2027-05-14 18:00 UTC, before the Saturday road race. Staff release can use this hold. |
+| `case-study-sunday` | Omnium, Sunday Masters criterium | Robin Example, Fictional Sunday Club, racing age 43 | Paid and license reviewed. Entered only on Sunday, so a Saturday lookup is the other-day case. |
+| `case-study-checkout-started` | Omnium, Saturday Masters road race | Cameron Example, Fictional Checkout Club, racing age 46 | Unpaid hold with a checkout-started timestamp and no payment session. The hold stays open through the same time as Quinn's. Staff release must refuse it. After 2027-05-14 18:00 UTC a fresh seed no longer has either open hold. |
+| `case-study-weekend` | Omnium, Saturday Masters road race and Sunday Masters criterium | Parker Example, Fictional Weekend Club, racing age 47 | Paid weekend package. Both entries are license reviewed. The weekend browser spec still builds its own package order. |
+| `case-study-withdrawn` | Omnium, Saturday Masters road race | Drew Example, Fictional Withdrawal Club, racing age 48 | Paid, then the entry is withdrawn. The order stays confirmed. There is no refund row. |
+| `case-study-junior` | Harbor criterium, Juniors 10-14 | River Example, Fictional Junior Club, racing age 12 | Paid and license reviewed. Guardian Jordan Example signs. The usability task that registers Casey Demo is a separate demo rider, not this row. |
 
 These development and rehearsal cases are not in the reusable seed. Automated tests build their own rows where a test is named.
 
-| Missing case | What exists instead |
+| Missing case | Why it is not seeded |
 |---|---|
-| Sunday-only paid rider | Sunday lookup of a Saturday order is the other-day case. No seeded rider entered only on Sunday. |
-| Hold where Stripe checkout was started | Staff release must refuse that hold. The active hold above has no checkout evidence. |
-| Weekend package order | The package is on the event. A person registers it during the rehearsal. The weekend browser spec builds its own package order. |
-| Junior with a guardian | The Harbor criterium has the junior field. No seeded junior order. |
-| Missing waiver or missing guardian acceptance | Checkout will not create these. API tests construct them. |
-| Withdrawal and refund | The weekend browser spec creates one during the run. |
-| Waitlist offer | Not seeded. |
-| Checked-in rider with a bib, a bib range, or a locked start list | The rehearsal records those steps. |
+| Missing waiver or missing guardian acceptance | Checkout requires a signed waiver before it creates an order. There is no approved way to store a missing acceptance. |
+| Refund row | A refund records the organizer account that requested it. The seed runs before any account exists. Drew Example is the withdrawn entry without a refund. The weekend browser spec creates a refund during its run. |
+| Waitlist offer | Joining requires a full category with the waitlist turned on, and an offer then needs a free place. Harbor Masters is the full field and has no waitlist. Turning one on would change that fixture. An offer on an open omnium category would block later registration there. |
+| Checked-in rider with a bib, a bib range, or a locked start list | The weekend browser spec assigns bib 100 and locks the omnium start lists during its run. The omnium rehearsal still records those steps. |
 
 ### Future-requirement cases
 
