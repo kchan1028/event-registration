@@ -1,4 +1,5 @@
 import { formatDollars } from '../../shared/format';
+import type { GroupCount } from '../../shared/reports';
 import { api } from '../api';
 import { useLoad } from '../useLoad';
 
@@ -98,6 +99,8 @@ export function Summary({ eventId, refreshKey }: { eventId: string; refreshKey: 
           {m.duplicateChargeRefundedCents > 0 && `${formatDollars(m.duplicateChargeRefundedCents)} of duplicate charges was refunded separately; it is not order money.`}
         </p>
       )}
+      <PlacementTable title="Paid entries by day" column="Day" rows={s.byDay} />
+      <PlacementTable title="Paid entries by race" column="Race" rows={s.byRace} />
       {s.byCategory.length > 0 && (
         <details>
           <summary className="small">Paid entries by category ({s.byCategory.length})</summary>
@@ -108,6 +111,8 @@ export function Summary({ eventId, refreshKey }: { eventId: string; refreshKey: 
                   <th scope="col">Race</th>
                   <th scope="col">Category</th>
                   <th scope="col">Entries</th>
+                  <th scope="col">Riders</th>
+                  <th scope="col">Orders</th>
                 </tr>
               </thead>
               <tbody>
@@ -118,6 +123,8 @@ export function Summary({ eventId, refreshKey }: { eventId: string; refreshKey: 
                       {c.categoryName} <span className="muted small">{c.code}</span>
                     </td>
                     <td className="num">{c.entries}</td>
+                    <td className="num">{c.riders}</td>
+                    <td className="num">{c.orders}</td>
                   </tr>
                 ))}
               </tbody>
@@ -125,6 +132,40 @@ export function Summary({ eventId, refreshKey }: { eventId: string; refreshKey: 
           </div>
         </details>
       )}
+      {(s.byDay.length > 0 || s.byRace.length > 0) && <p className="muted small">Day and race rows count a rider in each group they have a paid entry in. The riders total above still counts that person once.</p>}
     </section>
+  );
+}
+
+function PlacementTable({ title, column, rows }: { title: string; column: string; rows: GroupCount[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <details>
+      <summary className="small">
+        {title} ({rows.length})
+      </summary>
+      <div className="table-wrap" tabIndex={0} role="region" aria-label={title}>
+        <table className="mini-table">
+          <thead>
+            <tr>
+              <th scope="col">{column}</th>
+              <th scope="col">Entries</th>
+              <th scope="col">Riders</th>
+              <th scope="col">Orders</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td>{row.name}</td>
+                <td className="num">{row.entries}</td>
+                <td className="num">{row.riders}</td>
+                <td className="num">{row.orders}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
   );
 }

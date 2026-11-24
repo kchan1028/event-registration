@@ -157,9 +157,24 @@ describe('entries and ledger CSV builders', () => {
   });
 });
 
+/** Puts the helper's two entries on Saturday and Sunday without changing the quote. */
+function placed(source: ExportOrder) {
+  return {
+    ...source,
+    entries: source.entries.map((e, i) => ({
+      ...e,
+      dayId: i === 0 ? 'day_sat' : 'day_sun',
+      dayName: i === 0 ? 'Saturday' : 'Sunday',
+      dayIndex: i,
+      raceId: i === 0 ? 'race_sat' : 'race_sun',
+      raceName: i === 0 ? 'Saturday road race' : 'Sunday criterium',
+    })),
+  };
+}
+
 describe('event summary', () => {
   it('adds up to the ledger rows by kind and counts riders once', () => {
-    const confirmed = order({
+    const confirmed = placed(order({
       quote: { ...order().quote, fees: [{ key: 'processing', label: 'Processing fee', cents: 300 }], totalCents: 8800 },
       totalCents: 8800,
       refunds: [
@@ -167,11 +182,11 @@ describe('event summary', () => {
         { entryId: 'ent_1', amountCents: 900, status: 'failed', at: '2027-03-02T11:00:00.000Z' },
         { entryId: null, amountCents: 8800, status: 'succeeded', at: '2027-03-02T12:00:00.000Z', duplicateCharge: true },
       ],
-    });
-    const sameRider = order({ id: 'ord_2', orderNumber: 'DEMO-BBBB2222' });
-    const withdrawn = order({ id: 'ord_3', orderNumber: 'DEMO-CCCC3333', entries: order().entries.map((e) => ({ ...e, status: 'withdrawn' })) });
-    const late = order({ id: 'ord_4', orderNumber: 'DEMO-DDDD4444', status: 'needs_attention' });
-    const held = order({ id: 'ord_5', orderNumber: 'DEMO-EEEE5555', status: 'held', confirmedAt: null, paidWith: null, entries: order().entries.map((e) => ({ ...e, status: 'held' })) });
+    }));
+    const sameRider = placed(order({ id: 'ord_2', orderNumber: 'DEMO-BBBB2222' }));
+    const withdrawn = placed(order({ id: 'ord_3', orderNumber: 'DEMO-CCCC3333', entries: order().entries.map((e) => ({ ...e, status: 'withdrawn' })) }));
+    const late = placed(order({ id: 'ord_4', orderNumber: 'DEMO-DDDD4444', status: 'needs_attention' }));
+    const held = placed(order({ id: 'ord_5', orderNumber: 'DEMO-EEEE5555', status: 'held', confirmedAt: null, paidWith: null, entries: order().entries.map((e) => ({ ...e, status: 'held' })) }));
     const all = [confirmed, sameRider, withdrawn, late, held];
     // ord_2 is linked to ord_1 as the same rider.
     const s = eventSummary(all, (id) => (id === 'ord_2' ? 'ord_1' : id), ['waiting', 'waiting', 'offered', 'expired', 'accepted'], true);
@@ -182,10 +197,19 @@ describe('event summary', () => {
     // Every paid entry still racing awaits a license review in this fixture; withdrawn and unpaid ones never do.
     expect(s.licenseReviews).toBe(4);
     expect(s.waitlist).toEqual({ waiting: 2, offered: 1, expired: 1, accepted: 1, removed: 0 });
-    expect(s.byCategory.map((c) => [c.code, c.entries])).toEqual([
-      ['CR-B', 2],
-      ['RR-A', 2],
+    expect(s.byCategory.map((c) => [c.code, c.raceName, c.entries, c.riders, c.orders])).toEqual([
+      ['RR-A', 'Saturday road race', 2, 1, 2],
+      ['CR-B', 'Sunday criterium', 2, 1, 2],
     ]);
+    expect(s.byDay).toEqual([
+      { id: 'day_sat', name: 'Saturday', entries: 2, riders: 1, orders: 2 },
+      { id: 'day_sun', name: 'Sunday', entries: 2, riders: 1, orders: 2 },
+    ]);
+    expect(s.byRace).toEqual([
+      { id: 'race_sat', name: 'Saturday road race', entries: 2, riders: 1, orders: 2 },
+      { id: 'race_sun', name: 'Sunday criterium', entries: 2, riders: 1, orders: 2 },
+    ]);
+    expect(entriesCsv([placed(order())], (id) => id).split('\n')[0]).toBe(entriesCsv([order()], (id) => id).split('\n')[0]);
 
     const cents = (kind: string) => table(ledgerCsv(all)).filter((r) => r.kind === kind && r.amount !== '').reduce((t, r) => t + Math.round(Number(r.amount) * 100), 0);
     const m = s.money!;
@@ -197,5 +221,36 @@ describe('event summary', () => {
     expect(m).toMatchObject({ refundedCents: 2000, duplicateChargeRefundedCents: 8800, netCents: m.receivedCents - 2000, needsAttention: { orders: 1, cents: 8500 } });
 
     expect(eventSummary(all, (id) => id, [], false).money).toBeNull();
+  });
+
+  it('counts a paid entry on its current day and race', () => {
+    const base = order();
+    const across = {
+      ...base,
+      quote: { ...base.quote, lines: base.quote.lines.map((line) => ({ ...line, dayId: 'day_old', raceId: 'race_old' })) },
+      entries: [
+        { ...base.entries[0], dayId: 'day_sun', dayName: 'Sunday', dayIndex: 0, raceId: 'race_sun', raceName: 'Road race' },
+        { ...base.entries[1], dayId: 'day_sat', dayName: 'Saturday', dayIndex: 1, raceId: 'race_sat', raceName: 'Road race' },
+      ],
+    };
+    const blankSource = order({ id: 'ord_blank', orderNumber: 'DEMO-BLANK' });
+    const blank = { ...blankSource, entries: [{ ...blankSource.entries[0], raceName: '' }] };
+    const lateSource = order({ id: 'ord_late', orderNumber: 'DEMO-LATE', status: 'needs_attention' });
+    const late = {
+      ...lateSource,
+      entries: lateSource.entries.map((e) => ({ ...e, dayId: 'day_sun', dayName: 'Sunday', dayIndex: 0, raceId: 'race_sun', raceName: 'Road race' })),
+    };
+    const s = eventSummary([across, blank, late], (id) => id, [], false);
+    expect(s.riders).toBe(2);
+    expect(s.byDay).toEqual([
+      { id: 'day_sun', name: 'Sunday', entries: 1, riders: 1, orders: 1 },
+      { id: 'day_sat', name: 'Saturday', entries: 1, riders: 1, orders: 1 },
+      { id: 'name:', name: '', entries: 1, riders: 1, orders: 1 },
+    ]);
+    expect(s.byRace).toEqual([
+      { id: 'race_sun', name: 'Road race', entries: 1, riders: 1, orders: 1 },
+      { id: 'race_sat', name: 'Road race', entries: 1, riders: 1, orders: 1 },
+      { id: 'name:', name: '', entries: 1, riders: 1, orders: 1 },
+    ]);
   });
 });
