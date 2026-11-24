@@ -1,11 +1,13 @@
 import { buildCaseStudyScenarios, CASE_STUDY_ORG_ID, CASE_STUDY_ORG_NAME, CASE_STUDY_REFERENCE_NOW, type CaseStudyKey } from '../shared/caseStudies';
+import { newId } from '../shared/factory';
 import type { Db } from './db';
 import type { Orders } from './orders';
+import type { Refunds } from './refunds';
 import { eventLock, type Repo } from './repo';
 
 const scenarioByKey = () => new Map(buildCaseStudyScenarios().map((scenario) => [scenario.key, scenario]));
 
-export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
+export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders, refunds: Refunds) {
   async function organization() {
     const existing = await db.get<{ id: string }>(`SELECT id FROM organizations WHERE id = $1`, [CASE_STUDY_ORG_ID]);
     return existing ?? repo.createOrganization(CASE_STUDY_ORG_NAME, CASE_STUDY_ORG_ID);
@@ -98,6 +100,37 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
     const drew = await saturdayOnly('withdrawn', { firstName: 'Drew', email: 'drew@example.test', phone: '202-555-0149', team: 'Fictional Withdrawal Club', racingAge: 48, licenseNumber: 'DEMO-CASE-016', contactName: 'Riley Example', contactPhone: '202-555-0183' });
     await orders.pay(drew.id, 'case-attempt-withdrawn', 'success');
     await orders.withdrawEntry(drew.entries[0].id, 'Seeded fictional withdrawal for a freed-place rehearsal.');
+
+    // The refund records who asked. This account has the finance role and is not a sign-in identity.
+    // Publish already holds the event lock. Take the membership lock before the account write, the same order as reset and the owner grant.
+    await db.lock(`org-members:${CASE_STUDY_ORG_ID}`);
+    const accountId = 'acct_demo_case_refund';
+    const accountEmail = 'finance-seed@example.test';
+    if (!(await db.get(`SELECT id FROM accounts WHERE id = $1`, [accountId]))) {
+      await db.run(
+        `INSERT INTO accounts (id, provider_user_id, email, created_at) VALUES ($1, 'seed:case-study-refund', $2, $3)`,
+        [accountId, accountEmail, CASE_STUDY_REFERENCE_NOW],
+      );
+    }
+    const added = await db.run(
+      `INSERT INTO organization_members (organization_id, account_id, role, granted_by, created_at) VALUES ($1, $2, 'finance', NULL, $3) ON CONFLICT DO NOTHING`,
+      [CASE_STUDY_ORG_ID, accountId, CASE_STUDY_REFERENCE_NOW],
+    );
+    // Seed grants record no actor. A repeat of a membership that is already there adds no second history row.
+    if (added) {
+      await db.run(
+        `INSERT INTO membership_changes (id, organization_id, action, email, role, actor_id, created_at) VALUES ($1, $2, 'granted', $3, 'finance', NULL, $4)`,
+        [newId('mch'), CASE_STUDY_ORG_ID, accountEmail, CASE_STUDY_REFERENCE_NOW],
+      );
+    }
+    const reese = await saturdayOnly('refunded', { firstName: 'Reese', email: 'reese@example.test', phone: '202-555-0151', team: 'Fictional Refund Club', racingAge: 49, licenseNumber: 'DEMO-CASE-018', contactName: 'Riley Example', contactPhone: '202-555-0186' });
+    await orders.pay(reese.id, 'case-attempt-refunded', 'success');
+    await refunds.request(reese.id, {
+      clientRequestId: 'case-study-refund',
+      entryId: reese.entries[0].id,
+      amountCents: 1000,
+      reason: 'Seeded fictional partial refund.',
+    }, accountId);
   }
 
   async function loadUnlocked(key: CaseStudyKey) {
