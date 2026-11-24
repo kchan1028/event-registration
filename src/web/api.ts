@@ -149,6 +149,8 @@ export interface OrderView {
   totalCents: number;
   holdExpiresAt: string;
   checkInCode: string | null;
+  /** Active bibs on this order. A released bib is omitted. */
+  bibs: number[];
   createdAt: string;
   confirmedAt: string | null;
   refundPolicy: string[];

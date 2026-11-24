@@ -316,6 +316,59 @@ test('organizer finds a registration by order number and corrects the rider’s 
   await expect(page.locator('.empty')).toContainText('No registration matches “no such rider”');
 });
 
+test('organizer finds a paid registration by the whole license number or an active bib', async ({ page }) => {
+  const eventId = await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-O45E/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await signAndReview(page, 'Alex Demo');
+  await page.getByRole('button', { name: /Complete simulated payment/ }).click();
+  await expect(page.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
+
+  const orders = await (await page.request.get(`/api/events/${eventId}/orders`)).json() as {
+    id: string;
+    entries: { dayId: string }[];
+    rider: { firstName: string; lastName: string };
+  }[];
+  const alex = orders.find((order) => order.rider.firstName === 'Alex' && order.rider.lastName === 'Demo');
+  expect(alex?.entries[0]?.dayId).toBeTruthy();
+  expect((await page.request.put(`/api/events/${eventId}/bib-settings`, {
+    data: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+  })).ok()).toBe(true);
+  const batch = { dayId: alex!.entries[0].dayId, orderIds: [alex!.id] };
+  const preview = await page.request.post(`/api/events/${eventId}/bibs/preview`, { data: batch });
+  expect(preview.ok()).toBe(true);
+  const plan = await preview.json() as { fingerprint: string; assignments: { bib: number }[] };
+  const bib = plan.assignments[0].bib;
+  expect((await page.request.post(`/api/events/${eventId}/bibs/apply`, { data: { ...batch, fingerprint: plan.fingerprint } })).ok()).toBe(true);
+
+  await page.goto(`/#/events/${eventId}/registrations`);
+  const search = page.getByRole('searchbox', { name: 'Find a registration' });
+  await expect(search).toHaveAttribute('placeholder', 'Rider name, email, team, bib, license number, order number, or check-in code');
+  const list = page.getByRole('list', { name: 'Registrations', exact: true });
+  const alexRows = () => list.locator(':scope > .order', { hasText: 'Alex Demo' });
+
+  await search.fill('DEMO-100001');
+  await expect(alexRows()).toHaveCount(1);
+  await expect(page.getByRole('status').filter({ hasText: 'registration matches' })).toHaveText(/^1 registration matches/);
+  await search.fill('100001');
+  await expect(alexRows()).toHaveCount(0);
+  await search.fill(String(bib));
+  await expect(alexRows()).toHaveCount(1);
+  await search.fill(`0${bib}`);
+  await expect(alexRows()).toHaveCount(1);
+  await search.fill(String(bib).slice(0, -1));
+  await expect(alexRows()).toHaveCount(0);
+  await search.fill('100');
+  await expect(alexRows()).toHaveCount(bib === 100 ? 1 : 0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await search.fill('DEMO-100001');
+  await expect(alexRows()).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
 test('Berkeley package recalculates when rider age changes between junior and standard rates', async ({ page }) => {
   const seeded = await page.request.post('/api/demo/berkeley-events');
   expect(seeded.ok()).toBe(true);

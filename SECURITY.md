@@ -191,6 +191,8 @@ The Burlingame historical demo loader requires sign-in and grants its caller dem
 
 The retired purchase-flow fixture loader is removed. The home-page rider action only browses existing events; generated case studies and Berkeley demos still require their explicit loaders. No role or private-data access is added by fixture removal.
 
+Organizer order lists (`orders.view`: owner, registration manager, and finance) and a rider's own order include that order's current bib numbers so registration search can match them. License numbers were already on the rider payload for anyone who can view orders. Check-in volunteers and the timer/export role do not receive the order list. The check-in card still omits the license number. A released bib is not included.
+
 ## Protected bib reassignment (Implemented locally)
 
 Bulk bib changes require `checkin.settings` (owner or registration manager). Individual corrections retain the existing `checkin` permission for check-in staff. Both paths require a reason and a fresh server-verified before/after preview. Changes to checked-in riders also require an explicit acknowledgement bound to that preview; the former direct individual-change endpoint refuses requests without a preview fingerprint. Linked orders resolve to the canonical rider key. Individual corrections may retain an issued bib after refund, withdrawal, or cancellation; authorized lookup includes inactive riders only while they retain an active bib in the selected collision scope. Bulk changes still require confirmed entrants. No financial or entry state is restored.

@@ -98,7 +98,7 @@ export function Registrations({ draft }: { draft: Draft }) {
           type="search"
           autoComplete="off"
           spellCheck={false}
-          placeholder="Rider name, email, team, order number, or check-in code"
+          placeholder="Rider name, email, team, bib, license number, order number, or check-in code"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -125,7 +125,7 @@ export function Registrations({ draft }: { draft: Draft }) {
             {orders.length === 0
               ? 'No registrations yet.'
               : found.length === 0
-                ? `No registration matches “${query.trim()}”. Try the rider’s email, last name, or the order number.`
+                ? `No registration matches “${query.trim()}”. Try the rider’s email, last name, order number, bib, or license number.`
                 : 'Nothing here. Every registration in this view is handled.'}
           </p>
         </div>
