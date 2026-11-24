@@ -13,46 +13,91 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
 
   async function seedOrders(eventId: string) {
     const event = await repo.getEvent(eventId);
-    if (event.config.event.name !== 'Demo Redwood Omnium Weekend') return;
-    // The first Masters category is the Saturday road race. Every seeded order is that one day.
-    const category = event.config.categories.find((row) => row.name.includes('Masters 35+'))!;
-    const place = (suffix: string, person: {
+    const title = event.config.event.name;
+    const omnium = title === 'Demo Redwood Omnium Weekend';
+    const criterium = title === 'Demo Harbor Criterium: pricing and eligibility lab';
+    if (!omnium && !criterium) return;
+    const byCode = (code: string) => event.config.categories.find((row) => row.timingCode === code);
+    const place = (suffix: string, categoryIds: string[], person: {
       firstName: string; email: string; phone: string; team: string; racingAge: number; licenseNumber: string; contactName: string; contactPhone: string;
-    }) => orders.createOrder(eventId, {
-      clientRequestId: `case-study-${suffix}`,
-      categoryIds: [category.id],
-      // No account: seeded fictional orders belong to nobody.
-      rider: {
-        firstName: person.firstName, lastName: 'Example', email: person.email, phone: person.phone, team: person.team, racingAge: person.racingAge,
-        licenseCategory: '3' as const, licenseType: 'annual' as const, licenseNumber: person.licenseNumber, competitionClass: 'men' as const,
-        collegiateDivision: null, guardian: null, emergencyContact: { name: person.contactName, phone: person.contactPhone },
-      },
-      waiver: { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: `${person.firstName} Example`, signerRole: 'rider' as const },
-      extras: {},
-    }, null);
+      licenseCategory?: '3' | '5'; guardian?: { name: string; email: string; phone: string };
+    }, bundleIntent: string | null = null) => {
+      const guardian = person.guardian ? { name: person.guardian.name, relationship: 'Parent', email: person.guardian.email, phone: person.guardian.phone } : null;
+      return orders.createOrder(eventId, {
+        clientRequestId: `case-study-${suffix}`,
+        categoryIds,
+        bundleIntent,
+        // No account: seeded fictional orders belong to nobody.
+        rider: {
+          firstName: person.firstName, lastName: 'Example', email: person.email, phone: person.phone, team: person.team, racingAge: person.racingAge,
+          licenseCategory: person.licenseCategory ?? '3', licenseType: 'annual' as const, licenseNumber: person.licenseNumber, competitionClass: 'men' as const,
+          collegiateDivision: null, guardian, emergencyContact: { name: person.contactName, phone: person.contactPhone },
+        },
+        waiver: {
+          version: event.config.registration.waiverVersion, read: true, agreed: true,
+          signatureName: guardian ? guardian.name : `${person.firstName} Example`, signerRole: guardian ? 'guardian' as const : 'rider' as const,
+        },
+        extras: {},
+      }, null);
+    };
+    const payAndReview = async (order: Awaited<ReturnType<typeof place>>, attemptId: string, note: string) => {
+      await orders.pay(order.id, attemptId, 'success');
+      for (const entry of order.entries) await orders.reviewLicense(entry.id, note);
+    };
+
+    if (criterium) {
+      const junior = byCode('DVC-J1014')!;
+      const river = await place('junior', [junior.id], {
+        firstName: 'River', email: 'river@example.test', phone: '202-555-0150', team: 'Fictional Junior Club', racingAge: 12, licenseNumber: 'DEMO-CASE-017', licenseCategory: '5',
+        contactName: 'Jordan Example', contactPhone: '202-555-0185', guardian: { name: 'Jordan Example', email: 'jordan-guardian@example.test', phone: '202-555-0184' },
+      });
+      await payAndReview(river, 'case-attempt-junior', 'Seeded fictional license review for the junior rider');
+      return;
+    }
+
+    // DRW-RR-M35 is the Saturday road race. DRW-CR-M35 is the Sunday criterium.
+    const saturday = byCode('DRW-RR-M35')!;
+    const sunday = byCode('DRW-CR-M35')!;
+    const saturdayOnly = (suffix: string, person: Parameters<typeof place>[2]) => place(suffix, [saturday.id], person);
 
     const morgan = { firstName: 'Morgan', email: 'morgan@example.test', phone: '202-555-0142', team: 'Fictional Wheel Club', racingAge: 40, licenseNumber: 'DEMO-CASE-001', contactName: 'Riley Example', contactPhone: '202-555-0176' };
-    const successful = await place('successful', morgan);
+    const successful = await saturdayOnly('successful', morgan);
     await orders.pay(successful.id, 'case-attempt-success', 'success');
     await orders.pay(successful.id, 'case-attempt-success', 'success');
     for (const entry of successful.entries) await orders.reviewLicense(entry.id, 'Seeded fictional license review for check-in rehearsal');
 
-    const retried = await place('declined-retried', morgan);
+    const retried = await saturdayOnly('declined-retried', morgan);
     await orders.pay(retried.id, 'case-attempt-declined', 'failure');
     await orders.pay(retried.id, 'case-attempt-retry', 'success');
 
-    await place('expired', morgan);
+    await saturdayOnly('expired', morgan);
     await db.run(`UPDATE orders SET hold_expires_at = '2000-01-01T00:00:00.000Z' WHERE event_id = $1 AND client_request_id = 'case-study-expired'`, [eventId]);
 
-    const ready = await place('taylor-ready', { firstName: 'Taylor', email: 'taylor-ready@example.test', phone: '202-555-0143', team: 'Blue Demo Team', racingAge: 41, licenseNumber: 'DEMO-CASE-010', contactName: 'Casey Example', contactPhone: '202-555-0177' });
-    await orders.pay(ready.id, 'case-attempt-taylor-ready', 'success');
-    for (const entry of ready.entries) await orders.reviewLicense(entry.id, 'Seeded fictional license review for the distinguishable ready rider');
+    const ready = await saturdayOnly('taylor-ready', { firstName: 'Taylor', email: 'taylor-ready@example.test', phone: '202-555-0143', team: 'Blue Demo Team', racingAge: 41, licenseNumber: 'DEMO-CASE-010', contactName: 'Casey Example', contactPhone: '202-555-0177' });
+    await payAndReview(ready, 'case-attempt-taylor-ready', 'Seeded fictional license review for the distinguishable ready rider');
 
-    const blocked = await place('taylor-blocked', { firstName: 'Taylor', email: 'taylor-blocked@example.test', phone: '202-555-0144', team: 'Gold Demo Team', racingAge: 52, licenseNumber: 'DEMO-CASE-011', contactName: 'Jordan Example', contactPhone: '202-555-0178' });
+    const blocked = await saturdayOnly('taylor-blocked', { firstName: 'Taylor', email: 'taylor-blocked@example.test', phone: '202-555-0144', team: 'Gold Demo Team', racingAge: 52, licenseNumber: 'DEMO-CASE-011', contactName: 'Jordan Example', contactPhone: '202-555-0178' });
     await orders.pay(blocked.id, 'case-attempt-taylor-blocked', 'success');
 
-    await place('active-hold', { firstName: 'Quinn', email: 'quinn@example.test', phone: '202-555-0145', team: 'Fictional Hold Club', racingAge: 44, licenseNumber: 'DEMO-CASE-012', contactName: 'Avery Example', contactPhone: '202-555-0179' });
+    await saturdayOnly('active-hold', { firstName: 'Quinn', email: 'quinn@example.test', phone: '202-555-0145', team: 'Fictional Hold Club', racingAge: 44, licenseNumber: 'DEMO-CASE-012', contactName: 'Avery Example', contactPhone: '202-555-0179' });
     await db.run(`UPDATE orders SET hold_expires_at = '2027-05-14T18:00:00.000Z' WHERE event_id = $1 AND client_request_id = 'case-study-active-hold'`, [eventId]);
+
+    const robin = await place('sunday', [sunday.id], { firstName: 'Robin', email: 'robin@example.test', phone: '202-555-0147', team: 'Fictional Sunday Club', racingAge: 43, licenseNumber: 'DEMO-CASE-014', contactName: 'Riley Example', contactPhone: '202-555-0181' });
+    await payAndReview(robin, 'case-attempt-sunday', 'Seeded fictional license review for the Sunday-only rider');
+
+    await saturdayOnly('checkout-started', { firstName: 'Cameron', email: 'cameron@example.test', phone: '202-555-0146', team: 'Fictional Checkout Club', racingAge: 46, licenseNumber: 'DEMO-CASE-013', contactName: 'Sam Example', contactPhone: '202-555-0180' });
+    await db.run(
+      `UPDATE orders SET hold_expires_at = '2027-05-14T18:00:00.000Z', stripe_checkout_started_at = $2 WHERE event_id = $1 AND client_request_id = 'case-study-checkout-started'`,
+      [eventId, CASE_STUDY_REFERENCE_NOW],
+    );
+
+    const bundle = event.config.registration.bundles[0]!;
+    const parker = await place('weekend', [saturday.id, sunday.id], { firstName: 'Parker', email: 'parker@example.test', phone: '202-555-0148', team: 'Fictional Weekend Club', racingAge: 47, licenseNumber: 'DEMO-CASE-015', contactName: 'Riley Example', contactPhone: '202-555-0182' }, bundle.id);
+    await payAndReview(parker, 'case-attempt-weekend', 'Seeded fictional license review for the weekend package');
+
+    const drew = await saturdayOnly('withdrawn', { firstName: 'Drew', email: 'drew@example.test', phone: '202-555-0149', team: 'Fictional Withdrawal Club', racingAge: 48, licenseNumber: 'DEMO-CASE-016', contactName: 'Riley Example', contactPhone: '202-555-0183' });
+    await orders.pay(drew.id, 'case-attempt-withdrawn', 'success');
+    await orders.withdrawEntry(drew.entries[0].id, 'Seeded fictional withdrawal for a freed-place rehearsal.');
   }
 
   async function loadUnlocked(key: CaseStudyKey) {
