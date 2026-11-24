@@ -72,21 +72,49 @@ Set `DATABASE_URL` on every command to use a dedicated database. A rerun preserv
 |---|---|---|---|---|---|
 | `criterium` | Rider finds an eligible field, adds a second race, or registers a junior; organizer explains unavailable fields | One day, several fields, a same-day $10 discount, one full field, one field with one place left, one explicitly closed field, junior guardian rules, and several eligibility paths | Full and closed entries cannot be held; the nearly full field takes one more rider; the discount applies once; a junior needs a matching guardian signature | Eligibility, capacity, discount precedence, schedule conflicts, guardian validation, accented and long-text browser input | Clickable demo and automated tests |
 | `road-shared-field` | Organizer checks whether separate categories sharing a start or capacity pool can accept another rider | Saturday road race categories, shared starts, classification codes, category caps, capacity pools, scheduled price change, and day-of surcharge | A rider counts once in each applicable shared limit; final-place reservations are atomic; early, standard, late, and race-day prices are deterministic | Shared capacity, classifications, pricing boundaries, unknown-license review | Clickable demo and automated tests |
-| `omnium` | Rider compares individual entries with a two-day package, recovers from a decline, and reaches confirmation; organizer resolves a license review | Saturday road race, Sunday criterium, one same-event package, seeded successful, duplicate, declined/retried, and expired simulated payment examples; one ready rider and one paid rider awaiting fictional license review | Both package races are required; the package total and fees remain itemized; duplicate attempt IDs do not duplicate entries; expired holds release capacity; paid entries can remain blocked by license review; the ready control can be used for check-in rehearsal | Package pricing, all-or-none holds, payment recovery, separate payment/readiness states, check-in, organizer CSV exports | Clickable demo and automated tests |
+| `omnium` | Rider compares individual entries with a two-day package, recovers from a decline, and reaches confirmation; organizer resolves a license review | Saturday road race, Sunday criterium, one same-event package, and the orders in [Reusable rehearsal coverage](#reusable-rehearsal-coverage) | Both package races are required; the package total and fees remain itemized; duplicate attempt IDs do not duplicate entries; expired holds release capacity; paid entries can remain blocked by license review; Taylor Example is two riders with different teams and ages | Package pricing, all-or-none holds, payment recovery, separate payment/readiness states, check-in, organizer CSV exports | Clickable demo and automated tests |
 | `empty-event` | Organizer starts with no categories and needs a clear first action | Valid draft shell with one day and race, no categories, starts, or entries | The event stays draft-only and never appears as rider-ready; organizer can add the first category | Empty states and first-run setup | Clickable organizer demo and browser test |
 | `large-event` | Organizer reviews layout and response time under substantial but valid data | 120 categories, 1,000 deterministic simulated entries, long labels, accented characters, and valid maximum-shaped records | Schedule renders all categories without losing actions or relationships; IDs and counts remain stable | Dense tables, long text, bulk data, performance smoke coverage | Clickable demo and browser test |
 
 The collection supplements, rather than replaces, the focused rule tests. Existing tests still cover simultaneous last-place requests, all-or-none package reservation, duplicate client requests, repeated payment notifications, late payment after expiry, transfers, withdrawals, waitlist offers, check-in transitions, and CSV output.
 
+### Reusable rehearsal coverage
+
+Reviewed November 23, 2026. A rerun of `npm run seed:cases` keeps an omnium that is already loaded. Reset the case-study collection before expecting the rows added in this review.
+
+Every omnium order below is the Saturday Masters road race, the first category whose name contains "Masters 35+". None of them has a configured bib range, a recorded check-in, or a start-list lock. Morgan Example's three orders share one name, email, team, and racing age, so a name search does not separate the ready order from the blocked one.
+
+| Request id | Rider | What it is for |
+|---|---|---|
+| `case-study-successful` | Morgan Example, Fictional Wheel Club, racing age 40 | Paid twice with the same simulated attempt id, then the license is reviewed. Ready for check-in once a bib range exists. Emergency contact Riley Example. |
+| `case-study-declined-retried` | Morgan Example, same details | Simulated decline, then a successful retry. Paid, license not reviewed. |
+| `case-study-expired` | Morgan Example, same details | Hold timestamp is year 2000. The stored status stays held and reads as expired, so the place is not reserved. |
+| `case-study-taylor-ready` | Taylor Example, Blue Demo Team, racing age 41 | Paid and license reviewed. Same name as the next row, different team, age, email, and phone. |
+| `case-study-taylor-blocked` | Taylor Example, Gold Demo Team, racing age 52 | Paid, license not reviewed. Use with the ready Taylor when a rehearsal has to tell two matching names apart. |
+| `case-study-active-hold` | Quinn Example, Fictional Hold Club, racing age 44 | Unpaid hold with no payment attempt, no checkout session, and no checkout-started timestamp. The hold stays open through 2027-05-14 18:00 UTC, before the Saturday road race. Staff release can use this hold. |
+
+These development and rehearsal cases are not in the reusable seed. Automated tests build their own rows where a test is named.
+
+| Missing case | What exists instead |
+|---|---|
+| Sunday-only paid rider | Sunday lookup of a Saturday order is the other-day case. No seeded rider entered only on Sunday. |
+| Hold where Stripe checkout was started | Staff release must refuse that hold. The active hold above has no checkout evidence. |
+| Weekend package order | The package is on the event. A person registers it during the rehearsal. The weekend browser spec builds its own package order. |
+| Junior with a guardian | The Harbor criterium has the junior field. No seeded junior order. |
+| Missing waiver or missing guardian acceptance | Checkout will not create these. API tests construct them. |
+| Withdrawal and refund | The weekend browser spec creates one during the run. |
+| Waitlist offer | Not seeded. |
+| Checked-in rider with a bib, a bib range, or a locked start list | The rehearsal records those steps. |
+
 ### Future-requirement cases
 
-These workflows are not represented as working fixtures:
+These workflows are not represented as reusable seeded fixtures:
 
 | Case | Expected future behavior | Why it is not clickable now |
 |---|---|---|
 | Series package spanning separate events or organizations | Reserve every component atomically, preserve each accepted version, obtain organizer approvals, and reconcile revenue and refunds per organization | Current packages and orders belong to one event; multi-organization Stripe and authorization decisions are unresolved |
 | Automated waitlist fulfillment | Notify the next rider, protect offer priority, expire safely, and retry delivery without duplicate offers or charges | Organizer-managed waitlists and offer links exist, but automated delivery and charging do not |
-| Real refund | Update provider, ledger, receipt, entry, capacity, and package allocation exactly once | Payments are simulated and Stripe refunds are not connected |
+| Real refund | Update provider, ledger, receipt, entry, capacity, and package allocation exactly once | Local test-mode organizer refunds exist. The reusable seed has no refund row. Live settlement and provider reconciliation remain Planned |
 | Rider-to-rider transfer | Obtain recipient consent, recheck eligibility and capacity, collect a new waiver, and preserve audit history | Current transfer means an organizer moving an entry between categories, not changing the participant |
 | Cancelled event | Stop new sales, preserve paid records, communicate next steps, and reconcile refunds or credits | Simulation-only atomic cancellation API and organizer controls close scopes and preserve audit evidence; provider/credit fulfillment and message delivery remain Planned (see [product rules](../../product.md#event-and-race-cancellation)) |
 | Outstanding post-order waiver resolution | Block check-in until an approved electronic or paper acceptance records version, signer, source, and time | Checkout requires the sample waiver before an order is created; no approved external waiver workflow exists |

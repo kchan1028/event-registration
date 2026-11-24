@@ -578,7 +578,7 @@ The [November 16 prelaunch readiness assessment](docs/research/prelaunch-readine
 
 ## Next actions
 
-**Immediate local build priority (project-owner decision, November 15, 2026): testing data first.** Review and prepare fictional testing data before starting further feature work. Reuse the existing [fixtures](docs/fixtures/README.md) and generated race case studies, identify missing development and rehearsal cases, and keep this work Planned until checked. Organizer MFA and sensitive-action re-verification remain the final pre-launch security gate.
+**Immediate local build priority (project-owner decision, November 15, 2026): testing data first.** Reviewed November 23, 2026. The existing fixtures and generated race case studies stay the source. [Reusable rehearsal coverage](docs/fixtures/README.md#reusable-rehearsal-coverage) lists the cases those seeds provide and the development and rehearsal cases still missing. The omnium seed now includes a distinguishable same-name pair and one active unpaid hold. This work stays Planned until the missing cases are added and checked, or a rehearsal record shows the current seeds were used for those tasks. Organizer MFA and sensitive-action re-verification remain the final pre-launch security gate.
 
 1. Done (2026-11-15): the project owner is the product owner and registration lead, and owns the USAC and payment questions ([decision memo](docs/discovery/decision-memo.md#team-and-owners)). Still open: a technical lead, a pilot accountable organizer, and a pilot support owner, at least one of them someone other than the project owner.
 2. Partly done: category setups are public on BikeReg and berkeleyomnium.com. Still needed, anonymized: an exception list and a reconciliation example.

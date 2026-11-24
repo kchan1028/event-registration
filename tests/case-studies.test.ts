@@ -91,11 +91,49 @@ describe('generated race case studies', () => {
       status: string;
       entries: Array<{ readiness: Array<{ key: string; state: string }> }>;
     }>;
-    expect(orders.map((order) => order.status).sort()).toEqual(['confirmed', 'confirmed', 'expired']);
+    expect(orders.map((order) => order.status).sort()).toEqual(['confirmed', 'confirmed', 'confirmed', 'confirmed', 'expired', 'held']);
     const confirmed = orders.filter((order) => order.status === 'confirmed');
     expect(confirmed.some((order) => order.entries[0].readiness.some((item) => item.key === 'license' && item.state === 'done'))).toBe(true);
     expect(confirmed.some((order) => order.entries[0].readiness.some((item) => item.key === 'license' && item.state === 'needs_review'))).toBe(true);
     await app.close();
+  });
+
+  it('seeds a distinguishable same-name pair and an active unpaid hold on the omnium', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+    expect((await app.inject({ method: 'POST', url: '/api/demo/case-studies/omnium' })).statusCode).toBe(201);
+    const seed = new pg.Client({ connectionString: databaseUrl });
+    await seed.connect();
+    try {
+      const { rows } = await seed.query<{
+        client_request_id: string; status: string; hold_open: boolean; first_name: string; team: string; racing_age: number;
+        license_reviewed: boolean; successes: number; sessions: number; checkout_started: boolean; category_id: string;
+      }>(`
+        SELECT o.client_request_id, o.status,
+               o.hold_expires_at > '2027-03-15T18:00:00.000Z' AS hold_open,
+               o.rider_json->>'firstName' AS first_name,
+               o.rider_json->>'team' AS team,
+               (o.rider_json->>'racingAge')::int AS racing_age,
+               oe.license_reviewed,
+               (SELECT count(*)::int FROM payment_attempts pa WHERE pa.order_id = o.id AND pa.outcome = 'success') AS successes,
+               (SELECT count(*)::int FROM payment_sessions ps WHERE ps.order_id = o.id) AS sessions,
+               o.stripe_checkout_started_at IS NOT NULL AS checkout_started,
+               oe.category_id
+        FROM orders o
+        JOIN order_entries oe ON oe.order_id = o.id
+        WHERE o.client_request_id IN ('case-study-successful', 'case-study-taylor-ready', 'case-study-taylor-blocked', 'case-study-active-hold')
+        ORDER BY o.client_request_id
+      `);
+      const byId = Object.fromEntries(rows.map((row) => [row.client_request_id, row]));
+      expect(rows).toHaveLength(4);
+      expect(new Set(rows.map((row) => row.category_id)).size).toBe(1);
+      expect(byId['case-study-taylor-ready']).toMatchObject({ status: 'confirmed', first_name: 'Taylor', team: 'Blue Demo Team', racing_age: 41, license_reviewed: true, successes: 1, sessions: 0, checkout_started: false });
+      expect(byId['case-study-taylor-blocked']).toMatchObject({ status: 'confirmed', first_name: 'Taylor', team: 'Gold Demo Team', racing_age: 52, license_reviewed: false, successes: 1, sessions: 0, checkout_started: false });
+      expect(byId['case-study-active-hold']).toMatchObject({ status: 'held', hold_open: true, first_name: 'Quinn', team: 'Fictional Hold Club', license_reviewed: false, successes: 0, sessions: 0, checkout_started: false });
+    } finally {
+      await seed.end();
+      await app.close();
+    }
   });
 
   it('resets a generated event with orders, refunds and export history without deleting unrelated audit rows', async () => {
