@@ -37,13 +37,23 @@ function withoutOrderPrefix(compacted: string): string {
 export interface Searchable {
   orderNumber: string;
   checkInCode: string | null;
-  rider: { firstName: string; lastName: string; email: string; team: string; guardian?: { name: string; email: string } | null };
+  /** Active bibs on this order. Omitted when the caller has none to compare. */
+  bibs?: readonly number[];
+  rider: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    team: string;
+    licenseNumber?: string;
+    guardian?: { name: string; email: string } | null;
+  };
 }
 
 /**
  * True when the query finds this registration by rider name (every word, any order),
- * email, team, order number (with or without its DEMO- or CR- prefix), or check-in code
- * (hyphens and case ignored). An empty query matches everything.
+ * email, team, order number (with or without its DEMO- or CR- prefix), check-in code
+ * (hyphens and case ignored), the whole license number (case, spaces, and hyphens ignored),
+ * or an active bib (the exact number, the same rule as check-in). An empty query matches everything.
  */
 export function matchesRegistration(o: Searchable, query: string): boolean {
   const q = normalizeText(query);
@@ -59,6 +69,10 @@ export function matchesRegistration(o: Searchable, query: string): boolean {
   const code = withoutOrderPrefix(typed);
   if (code.length >= 4 && withoutOrderPrefix(compact(o.orderNumber)).includes(code)) return true;
   if (typed.length >= 4 && o.checkInCode && compact(o.checkInCode).includes(typed)) return true;
+  const license = compact(normalizeText(r.licenseNumber ?? ''));
+  if (license && typed === license) return true;
+  const bibQuery = query.trim();
+  if (/^\d+$/.test(bibQuery) && (o.bibs ?? []).some((bib) => bib === Number(bibQuery))) return true;
   return false;
 }
 

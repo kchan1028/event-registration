@@ -55,6 +55,26 @@ describe('matching a registration', () => {
     expect(matchesRegistration(junior, 'jordan.parent@')).toBe(true);
   });
 
+  it('finds the whole license number, ignoring case and hyphens, and not a shorter piece of it', () => {
+    const licensed = { ...reg, rider: { ...reg.rider, licenseNumber: 'DEMO-555' } };
+    expect(matchesRegistration(licensed, 'demo-555')).toBe(true);
+    expect(matchesRegistration(licensed, 'DEMO 555')).toBe(true);
+    expect(matchesRegistration(licensed, '555')).toBe(false);
+    expect(matchesRegistration(licensed, 'demo')).toBe(false);
+    expect(matchesRegistration({ ...reg, rider: { ...reg.rider, licenseNumber: '' } }, '555')).toBe(false);
+  });
+
+  it('finds an active bib only when the query is that exact number', () => {
+    const bibbed = { ...reg, bibs: [100, 240] };
+    expect(matchesRegistration(bibbed, '100')).toBe(true);
+    expect(matchesRegistration(bibbed, '0100')).toBe(true);
+    expect(matchesRegistration(bibbed, '240')).toBe(true);
+    expect(matchesRegistration(bibbed, '10')).toBe(false);
+    expect(matchesRegistration(bibbed, '1000')).toBe(false);
+    expect(matchesRegistration({ ...reg, bibs: [] }, '100')).toBe(false);
+    expect(matchesRegistration(reg, '100')).toBe(false);
+  });
+
   it('normalizes text', () => {
     expect(normalizeText('  Ñandú   RIDER ')).toBe('nandu rider');
   });
@@ -95,11 +115,12 @@ type Order = {
   id: string;
   orderNumber: string;
   checkInCode: string | null;
+  bibs: number[];
   totalCents: number;
   rider: typeof RIDER;
   waiver: { signatureName: string };
   quote: unknown;
-  entries: { id: string; licenseReviewed: boolean; amountPaidCents: number }[];
+  entries: { id: string; dayId: string; licenseReviewed: boolean; amountPaidCents: number }[];
   corrections: { changes: { field: string; before: string; after: string }[]; licenseReviewsCleared: number; reason: string; by: string | null; at: string }[];
 };
 
@@ -131,6 +152,38 @@ describe('registration lookup and corrections API', () => {
     expect(await s.search(lee.orderNumber.toLowerCase())).toEqual(['Sample']);
     expect(await s.search(lee.checkInCode!.replace('-', ''))).toEqual(['Sample']);
     expect(await s.search('nobody')).toEqual([]);
+    expect(lee.bibs).toEqual([]);
+  });
+
+  it('finds a registration by the whole license number or an active bib, and drops a bib once it is released', async () => {
+    const s = await setup();
+    const lee = await s.buy(RIDER, ['RR-M35-34']);
+    await s.buy({ ...RIDER, firstName: 'Kim', lastName: 'Other', email: 'kim.other@example.test', licenseNumber: 'OTHER-9' }, ['RR-D23']);
+    expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/bib-settings`, payload: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } })).statusCode).toBe(200);
+    const dayId = lee.entries[0].dayId;
+    const batch = { dayId, orderIds: [lee.id] };
+    const plan = (await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/bibs/preview`, payload: batch })).json() as { fingerprint: string; assignments: { bib: number }[] };
+    const applied = await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/bibs/apply`, payload: { ...batch, fingerprint: plan.fingerprint } });
+    expect(applied.statusCode).toBe(200);
+    const bib = plan.assignments[0].bib;
+
+    expect(await s.search('DEMO-555')).toEqual(['Sample']);
+    expect(await s.search('demo555')).toEqual(['Sample']);
+    expect(await s.search('555')).toEqual([]);
+    expect(await s.search('OTHER-9')).toEqual(['Other']);
+    expect(await s.search('9')).toEqual([]);
+    expect(await s.search(String(bib))).toEqual(['Sample']);
+    expect(await s.search(String(bib).slice(0, -1))).toEqual([]);
+    const listed = (await s.app.inject({ method: 'GET', url: `/api/events/${s.eventId}/orders` })).json() as Order[];
+    expect(listed.find((o) => o.id === lee.id)?.bibs).toEqual([bib]);
+    expect(listed.find((o) => o.rider.lastName === 'Other')?.bibs).toEqual([]);
+
+    const next = bib === 100 ? 120 : 100;
+    const change = { dayId, bib: next, reason: 'Bib torn', acknowledgeCheckedIn: false };
+    const changePlan = (await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/check-in/${lee.id}/bib/preview`, payload: change })).json() as { fingerprint: string };
+    expect((await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/check-in/${lee.id}/bib`, payload: { ...change, fingerprint: changePlan.fingerprint } })).statusCode).toBe(200);
+    expect(await s.search(String(bib))).toEqual([]);
+    expect(await s.search(String(next))).toEqual(['Sample']);
   });
 
   it('corrects rider details with a reason, keeps every correction, and never changes the price or the signature', async () => {

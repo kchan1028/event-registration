@@ -238,6 +238,13 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         [ids],
       ),
     );
+    // Active bibs only. Registration search matches these numbers; a released bib stays in history.
+    const activeBibs = groupByOrder(
+      await db.all<{ order_id: string; bib: number }>(
+        `SELECT order_id, bib FROM bib_assignments WHERE order_id = ANY($1) AND released_at IS NULL ORDER BY bib, seq`,
+        [ids],
+      ),
+    );
     return rows.map((row) => {
       const config = configs.get(`${row.event_id}:${row.published_version}`)!;
       // A transfer can move an entry to a category added in a later published version.
@@ -245,6 +252,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       const latest = latestVersion ? configs.get(`${row.event_id}:${latestVersion}`)! : config;
       return { ...buildView(row, config, latest, entries.get(row.id) ?? [], changes.get(row.id) ?? [], corrections.get(row.id) ?? []), paidWith: paidWith.get(row.id) ?? null,
         refunds: (refunds.get(row.id) ?? []).map((r) => ({ id: r.id, entryId: r.entry_id, amountCents: r.amount_cents, status: r.status, at: r.created_at, duplicateCharge: r.duplicate_charge })),
+        bibs: [...new Set((activeBibs.get(row.id) ?? []).map((b) => b.bib))],
       };
     });
   }
