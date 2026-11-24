@@ -142,7 +142,7 @@ Open `http://127.0.0.1:5273/`, sign in with your email, and select **Load Berkel
 
 ## How it is meant to work
 
-The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented with **simulated** payment; real payment confirmation and the race-day scan are planned. In the organizer workflow, the "Before registration opens" steps are implemented except category questions; the exception queue, check-in, start-list snapshots, and sample timer export are implemented; QR scanning and the after-event stages are planned.
+The diagrams below describe behavior from [product.md](product.md). The rider journey is implemented with **simulated** payment; real payment confirmation is planned. In the organizer workflow, the "Before registration opens" steps are implemented, including category questions. The exception queue, check-in, start-list snapshots, sample timer export, and QR scanning are implemented. A live camera scan has not been checked. The after-event stages remain planned.
 
 ### 1. Rider registration journey
 
