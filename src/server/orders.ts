@@ -267,6 +267,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       const cat = findCat(e.category_id);
       const cfg = config.categories.some((c) => c.id === e.category_id) ? config : latest;
       const race = cfg.races.find((r) => r.id === cat?.raceId);
+      const dayIndex = race ? cfg.days.findIndex((d) => d.id === race.dayId) : -1;
+      const day = dayIndex >= 0 ? cfg.days[dayIndex] : undefined;
       const sg = cfg.startGroups.find((g) => g.id === cat?.startGroupId);
       const paid = paidLine(q, e);
       return {
@@ -275,7 +277,12 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         categoryName: cat?.name ?? 'Removed category',
         code: cat?.classifications[0]?.code || cat?.timingCode || '',
         raceName: race?.name ?? '',
+        raceId: race?.id ?? '',
         dayId: race?.dayId ?? '',
+        /** Published day label. Blank when that day is no longer in this configuration. */
+        dayName: day?.label ?? '',
+        /** Position in the published day list. A missing day sorts after the days that remain. */
+        dayIndex: dayIndex >= 0 ? dayIndex : cfg.days.length,
         startTime: sg?.startTime ?? null,
         status: e.status === 'held' && status === 'expired' ? 'released' : e.status,
         licenseReviewed: e.license_reviewed,
