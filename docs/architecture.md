@@ -1,6 +1,6 @@
 # Architecture
 
-**Status: partly implemented.** The [local category builder](#what-exists-today-implemented) is built on the stack in [ADR 0001](decisions/0001-stack-for-category-builder-milestone.md). Everything under [Proposed logical components](#proposed-logical-components) beyond that build is still proposed. Components become decided only through accepted [architecture decision records](decisions/README.md).
+**Status: partly implemented.** The [local category builder](#what-exists-today-implemented) is built on the stack in [ADR 0001](decisions/0001-stack-for-category-builder-milestone.md). Rider checkout, check-in, and simulated and Stripe test-mode payment are also implemented locally. Live payments, USA Cycling checks, and organizer MFA remain not built, and the app is not deployed. Components become decided only through accepted [architecture decision records](decisions/README.md).
 
 The short version: CycleReg needs one source of truth with strong consistency for capacity and money, a clear boundary between public schedule pages and private organizer and rider data, and replaceable connections to Stripe (selected in [ADR 0002](decisions/0002-stripe-payments.md), integration Planned), an email provider, timer files, and (if approved) USA Cycling. The production stack stays open until Phase 0 answers the federation and payment questions, as [roadmap.md](../roadmap.md#next-actions) requires.
 
@@ -104,7 +104,7 @@ These come from [product.md](../product.md) and apply whatever stack is chosen.
 
 ## Proposed logical components
 
-This is the target shape for the hosted product. Only the registration core rules and the organizer workspace exist today, running locally on one computer. Accepted for the hosted product: sign-in through Clerk (email sign-in on the free plan; MFA on Clerk Pro with SMS off for organizer roles, required before the live pilot) ([ADR 0003](decisions/0003-sign-in-and-mfa.md)), and the existing TypeScript app on Render with Render Postgres ([ADR 0004](decisions/0004-hosted-stack-and-database.md)).
+This is the target shape for the hosted product. The local build on one computer includes the registration core, the organizer workspace, rider checkout, check-in, and simulated and Stripe test-mode payment. Live payments, USA Cycling checks, and organizer MFA remain not built, and the app is not deployed. Accepted for the hosted product: sign-in through Clerk (email sign-in on the free plan; MFA on Clerk Pro with SMS off for organizer roles, required before the live pilot) ([ADR 0003](decisions/0003-sign-in-and-mfa.md)), and the existing TypeScript app on Render with Render Postgres ([ADR 0004](decisions/0004-hosted-stack-and-database.md)).
 
 ```mermaid
 flowchart LR
