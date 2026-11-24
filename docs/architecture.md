@@ -2,7 +2,7 @@
 
 **Status: partly implemented.** The [local category builder](#what-exists-today-implemented) is built on the stack in [ADR 0001](decisions/0001-stack-for-category-builder-milestone.md). Rider checkout, check-in, and simulated and Stripe test-mode payment are also implemented locally. Live payments, USA Cycling checks, and organizer MFA remain not built, and the app is not deployed. Components become decided only through accepted [architecture decision records](decisions/README.md).
 
-The short version: CycleReg needs one source of truth with strong consistency for capacity and money, a clear boundary between public schedule pages and private organizer and rider data, and replaceable connections to Stripe (selected in [ADR 0002](decisions/0002-stripe-payments.md), integration Planned), an email provider, timer files, and (if approved) USA Cycling. The production stack stays open until Phase 0 answers the federation and payment questions, as [roadmap.md](../roadmap.md#next-actions) requires.
+The short version: CycleReg needs one source of truth with strong consistency for capacity and money, a clear boundary between public schedule pages and private organizer and rider data, and replaceable connections to Stripe (selected in [ADR 0002](decisions/0002-stripe-payments.md), local test-mode Checkout implemented, live integration Planned), an email provider, timer files, and (if approved) USA Cycling. The production stack stays open until Phase 0 answers the federation and payment questions, as [roadmap.md](../roadmap.md#next-actions) requires.
 
 ## What exists today (implemented)
 
