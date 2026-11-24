@@ -34,6 +34,8 @@ export function refundedCents(paidCents: number, refunds: readonly { amountCents
   return paidCents - refundableCents(paidCents, refunds.filter((r) => !r.duplicateCharge));
 }
 
+export const RELEASED_BY_STAFF = 'Released by organizer';
+
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   held: 'Places held, unpaid',
   payment_failed: 'Payment declined',

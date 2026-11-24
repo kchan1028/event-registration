@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AuthProvider } from '../src/server/auth';
 import { authProviderFromEnv } from '../src/server/auth';
 import { openDb, type Db } from '../src/server/db';
+import { eventLock } from '../src/server/repo';
 import { EmailNotSent, EmailRefusal, EmailUncertain, RESEND_IDEMPOTENCY_WINDOW_MS, createMailer, emailFromEnv, type EmailSender, type Mailer } from '../src/server/email';
 import type { EventConfig } from '../src/shared/schema';
 import { INVITATION_DAYS } from '../src/shared/roles';
@@ -128,6 +129,7 @@ describe('organizations are isolated from each other', () => {
       ['add test entries', 'POST', `/api/events/${eventId}/test-entries`, { categoryId, count: 1 }],
       ['orders', 'GET', `/api/events/${eventId}/orders`],
       ['reservation status', 'POST', `/api/events/${eventId}/reservation-status`, { reference: 'rider-request-0001' }],
+      ['staff release', 'POST', `/api/events/${eventId}/reservation-release`, { reference: 'rider-request-0001', riderRequested: true, reason: 'Fictional request' }],
       ['one order', 'GET', `/api/orders/${order.id}`],
       ['transfer', 'POST', `/api/order-entries/${entryId}/transfer`, { toCategoryId: categoryId, reason: 'Moving the rider' }],
       ['withdraw', 'POST', `/api/order-entries/${entryId}/withdraw`, { reason: 'Rider withdrew' }],
@@ -164,8 +166,8 @@ describe('organizations are isolated from each other', () => {
 });
 
 describe('organizer roles', () => {
-  async function withRoles() {
-    const ctx = await twoClubs();
+  async function withRoles(databaseUrl?: string) {
+    const ctx = await twoClubs(databaseUrl);
     const team = {
       registration_manager: 'manager@valley.test',
       check_in_volunteer: 'volunteer@valley.test',
@@ -179,12 +181,60 @@ describe('organizer roles', () => {
     return { ...ctx, team };
   }
 
+  it.each([[403, "UPDATE organization_members SET role = 'finance'"], [404, 'DELETE FROM organization_members']] as const)('refuses a waiting hold release with %i when the role is removed', async (status, change) => {
+    const databaseUrl = await testDatabaseUrl();
+    const { call, eventId, order, valley, team } = await withRoles(databaseUrl);
+    expect((await call(team.registration_manager, 'GET', '/api/me')).statusCode).toBe(200);
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [eventLock(eventId)]);
+      const waiting = call(team.registration_manager, 'POST', `/api/events/${eventId}/reservation-release`, { reference: 'rider-request-0001', riderRequested: true, reason: 'Fictional request' }).then((r) => r.statusCode);
+      await untilWaiting(blocker, 1);
+      await blocker.query(`${change} WHERE organization_id = $1 AND role = 'registration_manager'`, [valley]);
+      await blocker.query('COMMIT');
+      expect(await waiting).toBe(status);
+      expect((await blocker.query('SELECT status, staff_released_at FROM orders WHERE id = $1', [order.id])).rows).toEqual([{ status: 'held', staff_released_at: null }]);
+    } finally {
+      await blocker.end();
+    }
+  }, 15_000);
+
+  it('makes a role removal wait for a release that already passed its check', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { call, eventId, order, valley, team } = await withRoles(databaseUrl);
+    await call(team.registration_manager, 'GET', '/api/me');
+    const { members } = (await call(OWNER, 'GET', `/api/organizations/${valley}/members`)).json() as { members: { email: string; role: string; revision: string }[] };
+    const shown = members.find((m) => m.email === team.registration_manager && m.role === 'registration_manager')!;
+    const blocker = new pg.Client({ connectionString: databaseUrl });
+    await blocker.connect();
+    try {
+      await blocker.query('BEGIN');
+      // Holds the release at its write, after its permission check.
+      await blocker.query('SELECT 1 FROM orders WHERE id = $1 FOR UPDATE', [order.id]);
+      const release = call(team.registration_manager, 'POST', `/api/events/${eventId}/reservation-release`, { reference: 'rider-request-0001', riderRequested: true, reason: 'Fictional request' }).then((r) => r.statusCode);
+      await untilWaiting(blocker, 1);
+      let removed = false;
+      const removal = call(OWNER, 'POST', `/api/organizations/${valley}/members/revoke`, { email: shown.email, role: shown.role, revision: shown.revision }).then((r) => ((removed = true), r.statusCode));
+      await untilWaiting(blocker, 2);
+      expect(removed).toBe(false);
+      await blocker.query('COMMIT');
+      expect(await release).toBe(200);
+      expect(await removal).toBe(200);
+      expect((await call(team.registration_manager, 'POST', `/api/events/${eventId}/reservation-release`, { reference: 'rider-request-0001', riderRequested: true, reason: 'Fictional request' })).statusCode).toBe(404);
+    } finally {
+      await blocker.end();
+    }
+  }, 15_000);
+
   it('gives each role only its own tools', async () => {
     const { call, eventId, event, valley, team } = await withRoles();
     const routes: Record<string, [Method, string, unknown?]> = {
       edit: ['PUT', `/api/events/${eventId}/config`, { revision: event.revision, config: event.config }],
       orders: ['GET', `/api/events/${eventId}/orders`],
       reservation: ['POST', `/api/events/${eventId}/reservation-status`, { reference: 'rider-request-0001' }],
+      release: ['POST', `/api/events/${eventId}/reservation-release`, { reference: 'rider-request-0001', riderRequested: true, reason: 'Fictional request' }],
       checkIn: ['GET', `/api/events/${eventId}/check-in`],
       bibPreview: ['POST', `/api/events/${eventId}/bibs/preview`, {}],
       startLists: ['GET', `/api/events/${eventId}/start-lists`],
@@ -193,11 +243,14 @@ describe('organizer roles', () => {
       members: ['GET', `/api/organizations/${valley}/members`],
     };
     const expected: Record<string, Record<string, number>> = {
-      [team.registration_manager]: { edit: 200, orders: 200, reservation: 200, checkIn: 200, bibPreview: 400, startLists: 200, entriesCsv: 200, ledgerCsv: 403, members: 403 },
-      [team.check_in_volunteer]: { edit: 403, orders: 403, reservation: 403, checkIn: 200, bibPreview: 403, startLists: 403, entriesCsv: 403, ledgerCsv: 403, members: 403 },
-      [team.timer_export]: { edit: 403, orders: 403, reservation: 403, checkIn: 403, bibPreview: 403, startLists: 200, entriesCsv: 200, ledgerCsv: 403, members: 403 },
-      [team.finance]: { edit: 403, orders: 200, reservation: 200, checkIn: 403, bibPreview: 403, startLists: 403, entriesCsv: 403, ledgerCsv: 200, members: 403 },
+      [team.registration_manager]: { edit: 200, orders: 200, reservation: 200, release: 200, checkIn: 200, bibPreview: 400, startLists: 200, entriesCsv: 200, ledgerCsv: 403, members: 403 },
+      [team.check_in_volunteer]: { edit: 403, orders: 403, reservation: 403, release: 403, checkIn: 200, bibPreview: 403, startLists: 403, entriesCsv: 403, ledgerCsv: 403, members: 403 },
+      [team.timer_export]: { edit: 403, orders: 403, reservation: 403, release: 403, checkIn: 403, bibPreview: 403, startLists: 200, entriesCsv: 200, ledgerCsv: 403, members: 403 },
+      [team.finance]: { edit: 403, orders: 200, reservation: 200, release: 403, checkIn: 403, bibPreview: 403, startLists: 403, entriesCsv: 403, ledgerCsv: 200, members: 403 },
     };
+    const financeLookup = await call(team.finance, ...routes.reservation);
+    expect(financeLookup.statusCode).toBe(200);
+    expect(financeLookup.json()).toMatchObject({ order: { status: 'held' }, releaseEnabled: false });
     for (const [email, outcomes] of Object.entries(expected)) {
       // Every role can open the event itself.
       expect((await call(email, 'GET', `/api/events/${eventId}`)).statusCode, `${email} view`).toBe(200);

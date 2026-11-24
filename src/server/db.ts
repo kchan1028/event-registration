@@ -766,6 +766,19 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE event_versions ADD COLUMN published_by text REFERENCES accounts(id) ON DELETE RESTRICT;
   ALTER TABLE event_versions ADD COLUMN waiver_change_reason text CHECK (btrim(waiver_change_reason) <> '');
   `,
+  `
+  -- Staff release of an unpaid hold, and whether a provider checkout may exist. Earlier orders are untracked, so never released.
+  ALTER TABLE orders
+    ADD COLUMN staff_released_at timestamptz,
+    ADD COLUMN staff_released_by text REFERENCES accounts(id) ON DELETE RESTRICT,
+    ADD COLUMN staff_release_reason text,
+    ADD COLUMN stripe_checkout_started_at timestamptz,
+    ADD COLUMN stripe_checkout_tracked boolean NOT NULL DEFAULT false,
+    ADD CONSTRAINT staff_release_evidence_complete CHECK (
+      (staff_released_at IS NULL AND staff_released_by IS NULL AND staff_release_reason IS NULL)
+      OR (staff_released_at IS NOT NULL AND staff_released_by IS NOT NULL AND staff_release_reason IS NOT NULL
+        AND char_length(btrim(staff_release_reason)) BETWEEN 3 AND 280)
+    );`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

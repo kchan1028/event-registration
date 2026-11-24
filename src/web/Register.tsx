@@ -1558,6 +1558,8 @@ function Review({ orderId, eventId, goTo, paymentMode, onKioskOrder }: {
       else setOrder(await api.order(order.id));
     } catch (e) {
       setErr((e as ApiError).message);
+      // A refusal can mean the order changed, for example a staff release: show it as it is now.
+      if ((e as ApiError).status === 409) await api.order(order.id).then(setOrder).catch(() => undefined);
       setBusy(false);
     }
   };
@@ -1575,7 +1577,9 @@ function Review({ orderId, eventId, goTo, paymentMode, onKioskOrder }: {
         </p>
       ) : (
         <p className="note note--warn" role="alert">
-          {cancelled ? 'Your reservation was cancelled. Change your entries to start again.' : stripe
+          {cancelled ? (order.releasedByStaff
+            ? 'The organizer released your hold. Change your entries to start again.'
+            : 'Your reservation was cancelled. Change your entries to start again.') : stripe
             ? 'Your hold has ended and the places were released. Start a new registration to pay.'
             : 'Your hold has ended and the places were released. You can still complete the simulated payment: if every place is still free, your entry is confirmed. Otherwise nothing is charged and the organizer is told.'}
         </p>
@@ -1713,7 +1717,7 @@ export function OrderPage({ orderId, kiosk = false }: { orderId: string; kiosk?:
         ) : (
           <>
             <h1 className="done__title">Registration not finished</h1>
-            <p className="note">This order is {order.status.replace('_', ' ')}.</p>
+            <p className="note">{order.status === 'cancelled' && order.releasedByStaff ? 'The organizer released this hold.' : `This order is ${order.status.replace('_', ' ')}.`}</p>
             {!kiosk && <a className="btn btn--secondary" href={href({ page: 'register', eventId: order.eventId })}>Back to registration</a>}
           </>
         )}

@@ -57,6 +57,26 @@ Last verified: November 15, 2026 with Docker 27.4 and PostgreSQL 17, before sign
 5. Before the pilot, [rehearse and measure a hosted restore](../testing/test-plan.md#measure-hosted-recovery-before-the-pilot) using a fictional source with the backup configuration intended for the pilot and a separate restore target. Repoint and redeploy an isolated application copy, reconcile its records and capture timing and results in the rehearsal record or pull request. Render documents a ten-minute minimum age for a requested recovery point. An immediate request may therefore require an older point than the approved gap permits. Wait for a suitable point and include that wait in the time to safe reopening. If none will become available, record a recovery hold. The rehearsal fails once the approved reopening limit passes, even if no restore has started. [Render Postgres recovery and backups](https://render.com/docs/postgresql-backups#perform-a-recovery)
 6. Update this runbook's status, [roadmap.md](../../roadmap.md#phase-2--build-the-registration-core), and [SECURITY.md](../../SECURITY.md).
 
+## Upgrades and rollbacks across migration 44
+
+Status: Planned. Not exercised, because nothing is deployed.
+
+A server from before migration 44 can start Stripe checkout without recording it. Normal deploys overlap old and new instances, so production and staging keep staff hold release off unless `STAFF_HOLD_RELEASE` is `on`.
+
+To turn it on, after the first upgrade or after upgrading again from a rollback:
+
+1. Deploy with `STAFF_HOLD_RELEASE` unset or `off`.
+2. Confirm that every instance from before migration 44 has stopped, including its shutdown grace period.
+3. Mark the holds those instances could have sent to checkout. They then expire or go to the treasurer:
+
+```sql
+UPDATE orders SET stripe_checkout_tracked = false WHERE status IN ('held', 'payment_failed');
+```
+
+4. Set `STAFF_HOLD_RELEASE=on` and deploy.
+
+Before rolling back to a version from before migration 44, set `STAFF_HOLD_RELEASE=off`, deploy, and confirm every instance that had it on has stopped. Only then deploy the older version. Rehearse both directions on staging before production uses staff release.
+
 ## Notes
 
 - The image includes dev dependencies (Vite and tsx), about 390 MB. A smaller image that compiles the server ahead of time is possible later; it is not needed for correctness.

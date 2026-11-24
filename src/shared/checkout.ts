@@ -302,6 +302,13 @@ export interface ReservationStatus {
   orderNumber: string;
   status: OrderStatus;
   holdExpiresAt: string | null;
+  releasedByStaff: boolean;
+}
+
+export interface ReservationLookupResult {
+  order: ReservationStatus | null;
+  /** The hold can be released and the caller's role may release it. */
+  releaseEnabled: boolean;
 }
 
 /** Accepted account and declared racing age, not proof of legal age or federation approval. */

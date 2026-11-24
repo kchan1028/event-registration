@@ -656,6 +656,106 @@ test('organizer checks the rider’s pending reservation by exact reference', as
   await staffContext.close();
 });
 
+test('a registration manager releases a hold the rider asked to release', async ({ page, browser }) => {
+  const eventId = await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  // The hold commits, but the rider never sees the response.
+  await page.route('**/api/rider/events/*/orders', async (route) => {
+    await route.fetch();
+    await route.abort();
+  }, { times: 1 });
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.locator('.error-summary')).toContainText('Cannot reach');
+  const reference = await page.getByRole('textbox', { name: 'Reservation reference' }).inputValue();
+
+  const organizations: { id: string; events: { id: string }[] }[] = await (await page.request.get('/api/organizations')).json();
+  const organizationId = organizations.find((org) => org.events.some((event) => event.id === eventId))!.id;
+  const find = async (role: 'finance' | 'registration_manager') => {
+    const email = `release.${role}@example.test`;
+    expect((await page.request.post(`/api/organizations/${organizationId}/members`, { data: { email, role } })).ok()).toBe(true);
+    const context = await browser.newContext({ viewport: { width: 360, height: 800 }, extraHTTPHeaders: {} });
+    await context.addInitScript((user) => sessionStorage.setItem('cyclereg.test-session', user), email);
+    const staff = await context.newPage();
+    await staff.goto(`/#/events/${eventId}/registrations`);
+    await staff.getByText('Check a pending reservation', { exact: true }).click();
+    const lookup = staff.locator('details').filter({ hasText: 'Check a pending reservation' });
+    await lookup.getByRole('textbox', { name: 'Reservation reference' }).fill(reference);
+    await lookup.getByRole('button', { name: 'Check reservation' }).click();
+    await expect(lookup.getByRole('status')).toContainText('Places held, unpaid');
+    return { context, staff, lookup };
+  };
+
+  const finance = await find('finance');
+  await expect(finance.lookup.getByRole('button', { name: 'Release unpaid hold' })).toHaveCount(0);
+  await expect(finance.lookup).not.toContainText('cannot be released here');
+  await finance.context.close();
+
+  const { context, staff, lookup } = await find('registration_manager');
+  const open = lookup.getByRole('button', { name: 'Release unpaid hold' });
+  await open.click();
+  const form = lookup.getByRole('form', { name: 'Release unpaid hold' });
+  const acknowledge = form.getByRole('checkbox', { name: 'The rider asked me to release this hold' });
+  const confirm = form.getByRole('button', { name: 'Confirm hold release' });
+  await expect(acknowledge).toBeFocused();
+  await expect(confirm).toBeDisabled();
+  await expect(lookup.getByRole('textbox', { name: 'Reservation reference' })).toHaveAttribute('readonly', '');
+  await form.getByRole('button', { name: 'Cancel' }).click();
+  await expect(lookup.getByRole('button', { name: 'Check reservation' })).toBeFocused();
+  await open.click();
+  await acknowledge.check();
+  await confirm.click();
+  await expect(form.getByRole('alert')).toContainText('Enter a reason');
+  const reason = form.getByRole('textbox', { name: 'Reason for release' });
+  await reason.fill('Rider requested release');
+  for (const control of [reason, confirm, form.getByRole('button', { name: 'Cancel' })]) {
+    expect(await control.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  }
+  await expect(reason).toHaveCSS('font-size', '16px');
+  await expect(reason).toHaveAccessibleDescription('Leave out names and contact details.');
+  expect(await staff.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  expect((await new AxeBuilder({ page: staff }).include('details:has(#staff-reservation-reference)').analyze()).violations).toEqual([]);
+  await lookup.screenshot({ path: 'test-results/staff-release-phone.png' });
+  await confirm.click();
+  await expect(lookup.getByRole('status')).toContainText('Released by organizer');
+  await expect(lookup.getByRole('button', { name: 'Check reservation' })).toBeFocused();
+  await expect(staff.getByRole('list', { name: 'Registrations', exact: true })).toContainText('Released by organizer');
+  await context.close();
+
+  await page.getByRole('button', { name: 'Retry reservation' }).click();
+  await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('The organizer released your hold');
+  await expect(page.getByRole('button', { name: /Complete simulated payment/ })).toBeDisabled();
+});
+
+test('a rider already on Stripe review sees a staff release', async ({ page }) => {
+  // The screen is in Stripe mode; the simulated test server refuses checkout with the same 409 a release causes.
+  await page.route('**/api/public/events/*', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...(await response.json()), paymentMode: 'stripe_test' } });
+  });
+  const eventId = await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  const sent = page.waitForRequest((request) => request.method() === 'POST' && /\/api\/rider\/events\/[^/]+\/orders$/.test(request.url()));
+  await signAndReview(page, 'Alex Demo');
+  const request = await sent;
+  const { id } = await (await request.response())!.json();
+  const payOnStripe = page.getByRole('button', { name: /on Stripe/ });
+  await expect(payOnStripe).toBeEnabled();
+  const released = await page.request.post(`/api/events/${eventId}/reservation-release`, { data: { reference: request.postDataJSON().clientRequestId, riderRequested: true, reason: 'Rider requested release' } });
+  expect(released.status()).toBe(200);
+  await payOnStripe.click();
+  await expect(page.getByRole('alert').filter({ hasText: 'The organizer released your hold' })).toBeVisible();
+  await expect(payOnStripe).toBeDisabled();
+  await page.goto(`/#/orders/${id}`);
+  await expect(page.getByText('The organizer released this hold.')).toBeVisible();
+});
+
 test('a rejected reservation keeps details editable and rapid submission creates one hold', async ({ page }) => {
   await openEvent(page, 'criterium');
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');

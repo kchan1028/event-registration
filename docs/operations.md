@@ -162,7 +162,11 @@ Use fictional records in rehearsal, and keep payment references in the approved 
 
 This lookup is available in the local build. An owner, registration manager or finance user opens the correct event’s **Registrations**, expands **Check a pending reservation**, and enters the reference from the rider’s pending checkout. The result shows the saved order number, status and, for an active hold, its expiry. The reference matches exactly as entered, including any spaces. Checkout generates it as a single-line UUID. A result switches the list to **All** and refreshes it, so staff can use the order number in **Find a registration** to see the order under normal permissions. If the list shows a loading error, select **Check reservation** again.
 
-If the result says no order is visible yet, have the rider keep that tab and retry the same reservation. The original request may still be processing. If lookup fails or recovery remains stuck, follow the event’s escalation contact when one is assigned. Operator cancellation authority and escalation coverage remain open for the pilot.
+If the result says no order is visible yet, have the rider keep that tab and retry the same reservation. The original request may still be processing.
+
+Approved routing (November 19, 2026, project owner). The primary contact is the event's registration lead. The backup is the event owner or a designated deputy. After two failed retries of the same reservation, the rider contacts the registration lead, and goes to the backup if the lead is unavailable. If several riders are affected or a payment may have gone through, escalate immediately to the technical lead, and involve the treasurer for payment questions. The owner still needs to name those people before the rehearsal.
+
+A registration manager or owner can choose **Release unpaid hold** after finding the exact saved hold. Confirm that the rider asked for release and enter a reason without names or contact details. The app rechecks the hold and payment evidence and records the staff account, time and reason. Ask the rider to retry once from the original checkout to see that the hold was released. If the payment is uncertain or the hold is too old to verify its payment history, route it to the treasurer. [Verification and permission rules](../product.md#uncertain-reservation-support-decision).
 
 ## Backups and recovery
 

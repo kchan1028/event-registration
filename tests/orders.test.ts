@@ -1,3 +1,4 @@
+import { staffHoldReleaseFromEnv } from '../src/server/app';
 import { reservationLookupSchema, reservationReferenceSchema } from '../src/shared/checkout';
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../src/server/db';
@@ -134,7 +135,7 @@ describe('rider checkout: holds and simulated payment', () => {
 
     const unknown = await check(reference);
     expect(unknown.statusCode).toBe(200);
-    expect(unknown.json()).toEqual({ order: null });
+    expect(unknown.json()).toEqual({ order: null, releaseEnabled: false });
     expect(unknown.headers['cache-control']).toBe('no-store');
     expect(await entriesCount()).toBe(before);
     expect((await check('short')).statusCode).toBe(400);
@@ -143,18 +144,129 @@ describe('rider checkout: holds and simulated payment', () => {
     expect(response.statusCode).toBe(201);
     const saved = response.json<{ orderNumber: string; holdExpiresAt: string }>();
     expect((await check(reference)).json()).toEqual({
-      order: { orderNumber: saved.orderNumber, status: 'held', holdExpiresAt: saved.holdExpiresAt },
+      order: { orderNumber: saved.orderNumber, status: 'held', holdExpiresAt: saved.holdExpiresAt, releasedByStaff: false },
+      releaseEnabled: true,
     });
-    expect((await check(reference.toUpperCase())).json()).toEqual({ order: null });
+    expect((await check(reference.toUpperCase())).json()).toEqual({ order: null, releaseEnabled: false });
     const other = (await app.inject({ method: 'POST', url: '/api/demo' })).json<{ eventId: string }>();
-    expect((await app.inject({ method: 'POST', url: `/api/events/${other.eventId}/reservation-status`, payload: { reference } })).json()).toEqual({ order: null });
+    expect((await app.inject({ method: 'POST', url: `/api/events/${other.eventId}/reservation-status`, payload: { reference } })).json()).toEqual({ order: null, releaseEnabled: false });
     expect(await entriesCount()).toBe(before + 1);
     clock.advance(10);
     expect((await check(reference)).json()).toEqual({
-      order: { orderNumber: saved.orderNumber, status: 'expired', holdExpiresAt: null },
+      order: { orderNumber: saved.orderNumber, status: 'expired', holdExpiresAt: null, releasedByStaff: false },
+      releaseEnabled: false,
     });
     expect(await entriesCount()).toBe(before);
     expect((await app.inject({ method: 'GET', url: `/api/events/${eventId}/orders` })).json()).toHaveLength(1);
+  });
+
+  it('releases an unpaid hold once with staff evidence and keeps checkout replay terminal', async () => {
+    const { app, eventId, order, code, entriesCount, databaseUrl, pay } = await setup();
+    const reference = 'staff-release-reference';
+    const url = `/api/events/${eventId}/reservation-release`;
+    const release = (extra: object = {}) => app.inject({
+      method: 'POST', url, payload: { reference, riderRequested: true, reason: 'Rider requested release', ...extra },
+    });
+    const before = await entriesCount();
+    expect((await release()).statusCode).toBe(404);
+    const create = () => order([code('RR-M35-34')], { clientRequestId: reference });
+    const created = (await create()).json<{ id: string; orderNumber: string }>();
+    expect(await entriesCount()).toBe(before + 1);
+    expect((await release({ riderRequested: false })).statusCode).toBe(400);
+    expect((await release({ reason: ' ' })).statusCode).toBe(400);
+    expect((await release({ reason: '😀a' })).statusCode).toBe(400);
+    await pay(created.id, 'failure');
+    const released = await release();
+    expect(released.statusCode).toBe(200);
+    expect(released.json()).toEqual({
+      order: { orderNumber: created.orderNumber, status: 'cancelled', holdExpiresAt: null, releasedByStaff: true },
+      releaseEnabled: false,
+    });
+    expect(await entriesCount()).toBe(before);
+    const lookup = await app.inject({
+      method: 'POST', url: `/api/events/${eventId}/reservation-status`, payload: { reference },
+    });
+    expect(lookup.json()).toEqual(released.json());
+    const retried = await release({ reason: 'Changed reason on retry' });
+    expect(retried.json()).toEqual(released.json());
+    expect((await create()).json()).toMatchObject({ id: created.id, status: 'cancelled', releasedByStaff: true, entries: [{ status: 'released' }] });
+    expect((await pay(created.id, 'success')).json()).toMatchObject({ status: 'cancelled', releasedByStaff: true });
+    const actor = (await app.inject({ method: 'GET', url: '/api/me' })).json().account.id;
+    const db = openDb(databaseUrl);
+    try {
+      expect(await db.get('SELECT staff_released_by, staff_released_at, staff_release_reason FROM orders WHERE id=$1', [created.id]))
+        .toEqual({ staff_released_by: actor, staff_released_at: '2027-03-01T18:00:00.000Z', staff_release_reason: 'Rider requested release' });
+      expect(await db.get('SELECT count(*)::int AS count FROM payment_attempts WHERE order_id=$1', [created.id])).toEqual({ count: 1 });
+    } finally { await db.close(); }
+  });
+
+  it('refuses every release while staff release is off, as production is by default', async () => {
+    expect([{}, { STAFF_HOLD_RELEASE: 'off' }, { NODE_ENV: 'production' }, { NODE_ENV: 'production', STAFF_HOLD_RELEASE: 'yes' }, { NODE_ENV: 'production', STAFF_HOLD_RELEASE: 'on' }].map(staffHoldReleaseFromEnv))
+      .toEqual([true, false, false, false, true]);
+    const { eventId, order, code, databaseUrl } = await setup();
+    const { app } = await testApp({ databaseUrl, staffHoldRelease: false, now: () => new Date('2027-03-01T18:00:00Z') });
+    const reference = 'staff-release-turned-off';
+    await order([code('RR-M35-34')], { clientRequestId: reference });
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/reservation-status`, payload: { reference } })).json()).toMatchObject({ order: { status: 'held' }, releaseEnabled: false });
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/reservation-release`, payload: { reference, riderRequested: true, reason: 'Fictional request' } })).statusCode).toBe(409);
+  });
+
+  it('refuses expired holds, confirmed orders and holds with provider activity', async () => {
+    const { app, eventId, order, code, clock, databaseUrl, pay } = await setup();
+    const makeOrder = async (reference: string) => (await order([code('RR-M35-34')], { clientRequestId: reference })).json<{ id: string }>();
+    const release = (reference: string) => app.inject({
+      method: 'POST', url: `/api/events/${eventId}/reservation-release`, payload: { reference, riderRequested: true, reason: 'Fictional request' },
+    });
+    const paid = await makeOrder('staff-release-paid');
+    expect((await pay(paid.id, 'success')).json().status).toBe('confirmed');
+    const paidStatus = await app.inject({
+      method: 'POST', url: `/api/events/${eventId}/reservation-status`, payload: { reference: 'staff-release-paid' },
+    });
+    expect(paidStatus.json()).toMatchObject({ order: { status: 'confirmed' }, releaseEnabled: false });
+    expect((await release('staff-release-paid')).statusCode).toBe(409);
+
+    const pending = await makeOrder('staff-release-awaiting');
+    const db = openDb(databaseUrl);
+    try {
+      await db.run(`INSERT INTO payment_sessions(id,order_id,provider,url,amount_cents,status,expires_at,created_at)
+        VALUES ('cs_test_release_guard',$1,'stripe_test','https://example.test/checkout',1000,'open','2027-03-01T18:50Z','2027-03-01T18:00Z')`, [pending.id]);
+      const pendingStatus = await app.inject({
+        method: 'POST', url: `/api/events/${eventId}/reservation-status`, payload: { reference: 'staff-release-awaiting' },
+      });
+      expect(pendingStatus.json()).toMatchObject({ order: { status: 'held' }, releaseEnabled: false });
+      const blocked = await release('staff-release-awaiting');
+      expect(blocked.statusCode).toBe(409);
+      expect(blocked.json().error).toContain('needs review');
+      expect(await db.get('SELECT status, staff_released_at FROM orders WHERE id=$1', [pending.id])).toEqual({ status: 'held', staff_released_at: null });
+      const legacy = await makeOrder('staff-release-untracked');
+      await db.run('UPDATE orders SET stripe_checkout_tracked=false WHERE id=$1', [legacy.id]);
+      const untracked = await release('staff-release-untracked');
+      expect(untracked.statusCode).toBe(409);
+      expect(untracked.json().error).toContain('predates payment tracking');
+    } finally { await db.close(); }
+
+    await makeOrder('staff-release-expired');
+    clock.advance(10);
+    expect((await release('staff-release-expired')).statusCode).toBe(409);
+  });
+
+  it('serializes a simulated payment with a simultaneous staff release', async () => {
+    const { app, eventId, order, code, pay } = await setup();
+    const reference = 'staff-release-concurrent';
+    const created = (await order([code('RR-M35-34')], { clientRequestId: reference })).json<{ id: string }>();
+    const [paid, released] = await Promise.all([
+      pay(created.id, 'success'),
+      app.inject({ method: 'POST', url: `/api/events/${eventId}/reservation-release`, payload: { reference, riderRequested: true, reason: 'Fictional request' } }),
+    ]);
+    const final = (await app.inject({ method: 'GET', url: `/api/orders/${created.id}` })).json();
+    if (released.statusCode === 200) {
+      expect(paid.json().status).toBe('cancelled');
+      expect(final).toMatchObject({ status: 'cancelled', releasedByStaff: true });
+    } else {
+      expect(released.statusCode).toBe(409);
+      expect(paid.json().status).toBe('confirmed');
+      expect(final).toMatchObject({ status: 'confirmed', releasedByStaff: false });
+    }
   });
 
   it('refuses ineligible entries, missing guardians, and a stale waiver', async () => {

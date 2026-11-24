@@ -234,6 +234,16 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
   }
 
   /**
+   * For a write inside a transaction: the same check under the membership lock, so a removal either
+   * finishes before the check or waits until the write commits. Take any event lock first.
+   */
+  async function requireEventUntilSaved(account: Account, eventId: string, permission: Permission): Promise<Role[]> {
+    const organizationId = await orgOfEvent(eventId);
+    await db.lock(`org-members:${organizationId}`);
+    return requireOrg(account, organizationId, permission, 'Event not found.');
+  }
+
+  /**
    * The one check for routes that act on an order or on one of its entries.
    * `rider`: the placing account for an adult order, or an active guardian/approved claimed rider for a linked profile order. `juniorViewer`: so may the junior's own
    * login, when the order is a junior's and the guardian named that email. `permission`: so may a member of the
@@ -510,7 +520,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     );
   }
 
-  return { accountFor, requireOrg, requireEvent, requireOrderAccess, memberships, grant, listMembers, addMember, retryInvitation, removeMember, cancelInvitation, transferOwnership, expiredInvitations };
+  return { accountFor, requireOrg, requireEvent, requireEventUntilSaved, requireOrderAccess, memberships, grant, listMembers, addMember, retryInvitation, removeMember, cancelInvitation, transferOwnership, expiredInvitations };
 }
 
 export type Access = ReturnType<typeof createAccess>;

@@ -4,7 +4,7 @@ import type { RefundStatus, RefundRequest, RefundRequestResult } from '../shared
 import type { RefundPolicyPreview } from '../shared/refundPolicy';
 import type { CreateEventInput, EventConfig, CapacityEntry, PublicEventSummary } from '../shared/schema';
 import type { Issue } from '../shared/validation';
-import type { OrderStatus, ReadinessItem, ReservationStatus, RiderDetails, WaiverAcceptance, WaiverEvidence } from '../shared/checkout';
+import type { OrderStatus, ReadinessItem, ReservationLookupResult, ReservationStatus, RiderDetails, WaiverAcceptance, WaiverEvidence } from '../shared/checkout';
 import type { Quote } from '../shared/pricing';
 import type { z } from 'zod';
 import type { couponInputSchema, CouponTerms } from '../shared/coupons';
@@ -97,7 +97,7 @@ export interface WaitlistOffer {
   rider: Omit<WaitlistJoin, 'categoryId'>;
 }
 
-export type { OrderStatus, ReservationStatus };
+export type { OrderStatus, ReservationLookupResult, ReservationStatus };
 
 export type { PublicEventSummary } from '../shared/schema';
 
@@ -139,6 +139,7 @@ export interface OrderView {
   isDemo: boolean;
   publishedVersion: number;
   status: OrderStatus;
+  releasedByStaff: boolean;
   rider: RiderDetails;
   waiver: WaiverAcceptance;
   waiverEvidence: WaiverEvidence | null;
@@ -370,7 +371,9 @@ export const api = {
   offerWaitlistPlace: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer`),
   removeFromWaitlist: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/remove`),
   reservationStatus: (eventId: string, reference: string) =>
-    request<{ order: ReservationStatus | null }>('POST', `/api/events/${eventId}/reservation-status`, { reference }),
+    request<ReservationLookupResult>('POST', `/api/events/${eventId}/reservation-status`, { reference }),
+  releaseReservation: (eventId: string, input: { reference: string; reason: string; riderRequested: true }) =>
+    request<ReservationLookupResult>('POST', `/api/events/${eventId}/reservation-release`, input),
   publicEvent: (id: string) => request<PublicEvent>('GET', `/api/public/events/${id}`),
   createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; bundleIntent?: string | null; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null; extras?: OrderExtras; couponCode?: string | null }) =>
     request<OrderView>('POST', `/api/rider/events/${eventId}/orders`, body),

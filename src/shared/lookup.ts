@@ -20,6 +20,11 @@ export function normalizeText(s: string): string {
 /** Letters and digits only, upper case: `demo-ab12` and `AB12` compare equal to the stored forms. */
 const compact = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
+export const staffReleaseReasonSchema = z.string().trim().refine((reason) => {
+  const length = [...reason].length;
+  return length >= 3 && length <= 280 && !/[\0\p{Cs}]/u.test(reason);
+}, 'Enter a reason of 3 to 280 characters.');
+
 /** Order numbers start with one of these: DEMO- for demo events, CR- for real ones. */
 export const ORDER_NUMBER_PREFIXES = ['DEMO-', 'CR-'] as const;
 

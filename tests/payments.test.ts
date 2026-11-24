@@ -86,6 +86,48 @@ describe('payment configuration', () => {
 });
 
 describe('Stripe hosted Checkout (test mode)', () => {
+  it('releases a new Stripe test hold before checkout starts without a provider call', async () => {
+    const { app, order, get, checkout, create, eventId } = await setup();
+    const held = await order(['RR-M35-34']);
+    const reference = 'req-1-xxxxxxxx';
+    const lookup = await app.inject({ method: 'POST', url: `/api/events/${eventId}/reservation-status`, payload: { reference } });
+    expect(lookup.json()).toMatchObject({ releaseEnabled: true, order: { status: 'held' } });
+    const result = await app.inject({
+      method: 'POST', url: `/api/events/${eventId}/reservation-release`, payload: { reference, riderRequested: true, reason: 'Fictional request' },
+    });
+    expect(result.statusCode).toBe(200);
+    expect((await get(held.id)).status).toBe('cancelled');
+    expect((await checkout(held.id)).statusCode).toBe(409);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('blocks release from a simulated app while a Stripe test session is being created', async () => {
+    const { databaseUrl, order, checkout, create, eventId } = await setup();
+    const { app: simulated } = await testApp({ databaseUrl, now: () => new Date('2027-03-01T18:00:00Z') });
+    let providerStarted!: () => void;
+    let finishProvider!: () => void;
+    const started = new Promise<void>((resolve) => { providerStarted = resolve; });
+    const finish = new Promise<void>((resolve) => { finishProvider = resolve; });
+    create.mockImplementationOnce((async (params: Stripe.Checkout.SessionCreateParams) => {
+      providerStarted();
+      await finish;
+      return { id: 'cs_test_concurrent_release', url: 'https://checkout.stripe.test/concurrent', expires_at: params.expires_at! } as Stripe.Checkout.Session;
+    }) as never);
+
+    const hold = await order(['RR-M35-34']);
+    const opening = checkout(hold.id);
+    try {
+      await Promise.race([started, opening.then(() => { throw new Error('Checkout ended before it called the stubbed provider.'); })]);
+      const release = await simulated.inject({
+        method: 'POST', url: `/api/events/${eventId}/reservation-release`,
+        payload: { reference: 'req-1-xxxxxxxx', riderRequested: true, reason: 'Fictional request' },
+      });
+      expect(release.statusCode).toBe(409);
+      expect(release.json().error).toContain('needs review');
+    } finally { finishProvider(); }
+    expect((await opening).statusCode).toBe(200);
+  });
+
   it('opens one session per held order for the exact total and reuses it', async () => {
     const { order, checkout, create, eventId } = await setup();
     const o = await order(['RR-M35-34', 'CR-M35-34']);

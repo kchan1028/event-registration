@@ -4,7 +4,7 @@ import { api, ApiError } from './api';
 import { AccountMenu } from './auth';
 import { GuardianInvitations } from './GuardianInvitations';
 import { href } from './App';
-import { formatDateTime } from './format';
+import { formatDateTime, RELEASED_BY_STAFF } from './format';
 import { Field, ThemeToggle } from './ui';
 import { useLoad } from './useLoad';
 import { GuardianManagement } from './GuardianManagement';
@@ -60,7 +60,7 @@ export function MyRegistrations() {
                     {o.rider.firstName} {o.rider.lastName} · {o.orderNumber} · <time dateTime={o.createdAt}>{formatDateTime(o.createdAt)}</time>
                   </span>
                 </a>
-                <span className="tag">{STATUS_LABEL[o.status] ?? o.status}</span>
+                <span className="tag">{o.status === 'cancelled' && o.releasedByStaff ? RELEASED_BY_STAFF : STATUS_LABEL[o.status] ?? o.status}</span>
                 {!o.placedByYou && <span className="muted small">{o.canManage ? 'Registered by another account' : 'Registered by your guardian'}</span>}
               </li>
             ))}
