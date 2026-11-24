@@ -4,6 +4,7 @@ import { parseCsv } from '../src/shared/csv';
 import { blankPath } from '../src/shared/factory';
 import type { EventConfig } from '../src/shared/schema';
 import type { StartLists } from '../src/server/startlists';
+import { publishReviewed } from './support/publish';
 
 /* Organizer transfers and withdrawals (product.md acceptance: "Category change"). */
 
@@ -17,7 +18,7 @@ async function setup() {
   const now = new Date('2027-03-01T18:00:00Z');
   const { app } = await testApp({ now: () => now, holdMinutes: 10 });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const get = async () => (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number; entries: { categoryId: string }[] };
   const ev = await get();
   const code = (c: string) => ev.config.categories.find((x) => x.timingCode === c)!.id;
@@ -95,7 +96,7 @@ describe('organizer transfers', () => {
     const ev = await s.get();
     ev.config.registration.riderRates = [{ eligibility: blankPath(), categoryGenderClass: 'any', racePrices: [{ raceId: ev.config.races[0].id, cents: 3000, extraEntryCents: 1000 }], bundlePriceCents: 4000 }];
     expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/config`, payload: { config: ev.config, revision: ev.revision } })).statusCode).toBe(200);
-    expect((await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(s.app, `/api/events/${s.eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).statusCode).toBe(200);
     const order = await s.buy(['RR-M35-34']);
     const res = await s.transfer(order.entries[0].id, 'RR-D23');
     expect(res.statusCode).toBe(200);
@@ -143,7 +144,7 @@ describe('organizer transfers', () => {
     const target = config.categories.find((c) => c.id === s.code('RR-D23'))!;
     target.cap = ev.entries.filter((e) => e.categoryId === target.id).length;
     expect((await s.app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/config`, payload: { revision: ev.revision, config } })).statusCode).toBe(200);
-    expect((await s.app.inject({ method: 'POST', url: `/api/events/${s.eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(s.app, `/api/events/${s.eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).statusCode).toBe(200);
     const res = await s.transfer(order.entries[0].id, 'RR-D23');
     expect(res.statusCode).toBe(409);
     expect((res.json() as { error: string }).error).toContain('full');

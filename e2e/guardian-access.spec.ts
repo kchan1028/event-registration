@@ -1,11 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 // Separate fictional sessions exercise recipient acceptance through the screen and actual local API.
 for (const recoveryAction of ['retry', 'refresh'] as const) test(`guardian acceptance recovers by ${recoveryAction} with accurate shared access on desktop and phone`, async ({ page, browser }, testInfo) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
   const { config } = await (await page.request.get(`/api/events/${eventId}`)).json() as { config: EventConfig };
   const categoryId = config.categories.find((c) => c.timingCode === 'RR-J1516')!.id;
   const parent = `parent-${recoveryAction}@guardian-browser.test`;

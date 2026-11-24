@@ -1,3 +1,4 @@
+import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 import { buildCaseStudyScenarios, CASE_STUDY_ORG_ID, CASE_STUDY_REFERENCE_NOW } from '../src/shared/caseStudies';
 import { canAdmit } from '../src/shared/capacity';
@@ -5,7 +6,15 @@ import { checkSelection, findConflicts, profileOf } from '../src/shared/checkout
 import { categoryPrice, quote } from '../src/shared/pricing';
 import type { EventConfig } from '../src/shared/schema';
 import { openDb } from '../src/server/db';
+import { as } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
+
+/** Waits until this many requests are blocked on a lock in the test's database. */
+async function untilWaiting(client: pg.Client, count: number) {
+  await expect
+    .poll(async () => (await client.query(`SELECT DISTINCT pid FROM pg_locks WHERE NOT granted AND pid IN (SELECT pid FROM pg_locks WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()))`)).rowCount, { timeout: 5000 })
+    .toBe(count);
+}
 
 describe('generated race case studies', () => {
   it('is deterministic, distinct, schema-backed, and explicitly separates draft-only empty data', () => {
@@ -132,4 +141,137 @@ describe('generated race case studies', () => {
     expect(((await app.inject({ method: 'GET', url: `/api/events/${eventId}/coupons` })).json() as unknown[]).length).toBe(0);
     await app.close();
   });
+
+  it('finishes a first sign-in when the case-study reset overlaps the invitation it already read', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+    const invitee = 'casey@example.test';
+    expect((await app.inject({ method: 'POST', url: '/api/demo/case-studies/empty-event' })).statusCode).toBe(201);
+    expect((await app.inject({ method: 'POST', url: `/api/organizations/${CASE_STUDY_ORG_ID}/members`, payload: { email: invitee, role: 'finance' } })).statusCode).toBe(200);
+    const hold = new pg.Client({ connectionString: databaseUrl });
+    await hold.connect();
+    let signIn = Promise.resolve({ statusCode: 0 });
+    let reset = Promise.resolve({ statusCode: 0 });
+    try {
+      // Blocks the account insert, which is the next statement after the invitation read. Reset does not touch accounts.
+      // Releasing only after reset is waiting avoids a deadlock: sign-in holds the membership lock and waits on this one.
+      await hold.query('BEGIN');
+      await hold.query('LOCK TABLE accounts IN EXCLUSIVE MODE');
+      signIn = app.inject({ method: 'GET', url: '/api/me', headers: as(invitee) });
+      await untilWaiting(hold, 1);
+      reset = app.inject({ method: 'DELETE', url: '/api/demo/case-studies' });
+      await untilWaiting(hold, 2);
+      await hold.query('COMMIT');
+      expect((await signIn).statusCode).toBe(200);
+      expect((await reset).statusCode).toBe(200);
+    } finally {
+      await hold.end();
+      await Promise.allSettled([signIn, reset]);
+      await app.close();
+    }
+  }, 15_000);
+
+  it('lets a paid notification take the event lock while reset is still deleting that session', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+    const eventId = 'evt_demo_case_omnium';
+    expect((await app.inject({ method: 'POST', url: '/api/demo/case-studies/omnium' })).statusCode).toBe(201);
+    const seed = new pg.Client({ connectionString: databaseUrl });
+    await seed.connect();
+    try {
+      const order = await seed.query<{ id: string }>(`SELECT id FROM orders WHERE client_request_id = 'case-study-successful'`);
+      expect(order.rowCount).toBe(1);
+      await seed.query(
+        `INSERT INTO payment_sessions (id, order_id, provider, url, amount_cents, status, expires_at, created_at)
+         VALUES ('cs_case_reset_deadlock', $1, 'stripe_test', 'https://checkout.example.test/fictional', 4000, 'open', '2027-03-15T19:00:00Z', '2027-03-15T18:00:00Z')`,
+        [order.rows[0].id],
+      );
+    } finally {
+      await seed.end();
+    }
+    const hold = new pg.Client({ connectionString: databaseUrl });
+    await hold.connect();
+    let reset = Promise.resolve({ statusCode: 0, body: '' });
+    try {
+      await hold.query('BEGIN');
+      // The notification has updated the session row and still holds that row lock.
+      await hold.query(`UPDATE payment_sessions SET status = 'completed' WHERE id = 'cs_case_reset_deadlock'`);
+      reset = app.inject({ method: 'DELETE', url: '/api/demo/case-studies' });
+      await untilWaiting(hold, 1);
+      await hold.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`event:${eventId}`]);
+      await hold.query('COMMIT');
+      const done = await reset;
+      expect(done.statusCode, done.body).toBe(200);
+      const left = new pg.Client({ connectionString: databaseUrl });
+      await left.connect();
+      try {
+        expect((await left.query(`SELECT id FROM payment_sessions WHERE id = 'cs_case_reset_deadlock'`)).rowCount).toBe(0);
+        expect((await left.query(`SELECT id FROM events WHERE id = $1`, [eventId])).rowCount).toBe(0);
+      } finally {
+        await left.end();
+      }
+    } finally {
+      await hold.end();
+      await Promise.allSettled([reset]);
+      await app.close();
+    }
+  }, 15_000);
+
+  it('grants case-study ownership when a reset overlaps the load', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+    // The organizer account must exist before the table lock, or sign-in waits on the insert before the load takes the demo lock.
+    expect((await app.inject({ method: 'GET', url: '/api/me' })).statusCode).toBe(200);
+    const hold = new pg.Client({ connectionString: databaseUrl });
+    await hold.connect();
+    let load = Promise.resolve({ statusCode: 0, json: () => ({ removedEvents: 0 }) });
+    let reset = Promise.resolve({ statusCode: 0, json: () => ({ removedEvents: 0 }) });
+    try {
+      // Blocks the membership insert's account foreign key, after the load has locked the demo. Reset does not touch accounts.
+      // Releasing only after reset is waiting avoids a deadlock: the load holds the demo lock and waits on this one.
+      await hold.query('BEGIN');
+      await hold.query('LOCK TABLE accounts IN EXCLUSIVE MODE');
+      load = app.inject({ method: 'POST', url: '/api/demo/case-studies/empty-event' });
+      await untilWaiting(hold, 1);
+      reset = app.inject({ method: 'DELETE', url: '/api/demo/case-studies' });
+      await untilWaiting(hold, 2);
+      await hold.query('COMMIT');
+      expect((await load).statusCode).toBe(201);
+      const removed = await reset;
+      expect(removed.statusCode).toBe(200);
+      expect((removed.json() as { removedEvents: number }).removedEvents).toBe(1);
+    } finally {
+      await hold.end();
+      await Promise.allSettled([load, reset]);
+      await app.close();
+    }
+  }, 15_000);
+
+  it('refuses a case-study reset from someone who is not a member when it overlaps the load', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+    const stranger = 'parker@example.test';
+    expect((await app.inject({ method: 'GET', url: '/api/me' })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/me', headers: as(stranger) })).statusCode).toBe(200);
+    const hold = new pg.Client({ connectionString: databaseUrl });
+    await hold.connect();
+    let load = Promise.resolve({ statusCode: 0 });
+    let reset = Promise.resolve({ statusCode: 0 });
+    try {
+      await hold.query('BEGIN');
+      await hold.query('LOCK TABLE accounts IN EXCLUSIVE MODE');
+      load = app.inject({ method: 'POST', url: '/api/demo/case-studies/empty-event' });
+      await untilWaiting(hold, 1);
+      reset = app.inject({ method: 'DELETE', url: '/api/demo/case-studies', headers: as(stranger) });
+      await untilWaiting(hold, 2);
+      await hold.query('COMMIT');
+      expect((await load).statusCode).toBe(201);
+      expect((await reset).statusCode).toBe(404);
+      expect((await app.inject({ method: 'GET', url: '/api/events/evt_demo_case_empty' })).statusCode).toBe(200);
+    } finally {
+      await hold.end();
+      await Promise.allSettled([load, reset]);
+      await app.close();
+    }
+  }, 15_000);
 });

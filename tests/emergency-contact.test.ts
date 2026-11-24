@@ -2,6 +2,7 @@ import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 import { as, DEFAULT_TEST_ORGANIZER, fakeAuth } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
+import { publishReviewed } from './support/publish';
 
 const PHONE = '555-555-0199';
 const NAME = 'Robin Demo';
@@ -15,7 +16,7 @@ describe('emergency contact lookup', () => {
     const demo = await app.inject({ method: 'POST', url: '/api/demo', headers: owner });
     expect(demo.statusCode).toBe(201);
     const { eventId, organizationId } = demo.json() as { eventId: string; organizationId: string };
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, headers: owner, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true }, owner)).statusCode).toBe(200);
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in-demo-riders`, headers: owner })).statusCode).toBe(201);
 
     const list = (await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in`, headers: owner })).json() as {
@@ -68,12 +69,40 @@ describe('emergency contact lookup', () => {
       expect(JSON.stringify(rows)).not.toContain(NAME);
       expect(JSON.stringify(rows)).not.toContain(PHONE);
       beforeMissing = rows.length;
-      expect((await client.query(
+    } finally {
+      await client.end();
+    }
+
+    const other = await app.inject({ method: 'POST', url: '/api/demo', headers: owner });
+    expect(other.statusCode).toBe(201);
+    const otherId = (other.json() as { eventId: string }).eventId;
+    const notInEvent = async (payload: { orderId: string } | { entryId: string }) => {
+      const res = await lookup(owner, payload, `/api/events/${otherId}/emergency-contact`);
+      expect(res.statusCode, res.body).toBe(404);
+      expect(res.json()).toMatchObject({ error: 'No registration with that id in this event.' });
+      expect(res.body).not.toContain(PHONE);
+      expect(res.body).not.toContain(NAME);
+    };
+    await notInEvent({ orderId: alex.orderId });
+    await notInEvent({ entryId });
+    const crossEvent = new pg.Client({ connectionString: databaseUrl });
+    await crossEvent.connect();
+    try {
+      const counted = await crossEvent.query<{ n: number }>(`SELECT COUNT(*)::int AS n FROM emergency_contact_views WHERE order_id = $1`, [alex.orderId]);
+      expect(counted.rows[0].n).toBe(beforeMissing);
+    } finally {
+      await crossEvent.end();
+    }
+
+    const blank = new pg.Client({ connectionString: databaseUrl });
+    await blank.connect();
+    try {
+      expect((await blank.query(
         `UPDATE orders SET rider_json = jsonb_set(rider_json, '{emergencyContact}', '{"name":"","phone":""}'::jsonb) WHERE id = $1`,
         [alex.orderId],
       )).rowCount).toBe(1);
     } finally {
-      await client.end();
+      await blank.end();
     }
 
     const missing = await lookup(owner, { orderId: alex.orderId });
@@ -87,10 +116,6 @@ describe('emergency contact lookup', () => {
     } finally {
       await afterMissing.end();
     }
-
-    const other = await app.inject({ method: 'POST', url: '/api/demo', headers: owner });
-    const otherId = (other.json() as { eventId: string }).eventId;
-    expect((await lookup(owner, { entryId }, `/api/events/${otherId}/emergency-contact`)).statusCode).toBe(404);
 
     const desk = await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in`, headers: owner });
     expect(desk.body).not.toContain(PHONE);
@@ -119,7 +144,7 @@ describe('emergency contact lookup', () => {
     const owner = as(DEFAULT_TEST_ORGANIZER);
     const demo = await app.inject({ method: 'POST', url: '/api/demo', headers: owner });
     const { eventId } = demo.json() as { eventId: string };
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, headers: owner, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true }, owner)).statusCode).toBe(200);
     const ev = (await app.inject({ method: 'GET', url: `/api/events/${eventId}`, headers: owner })).json() as { config: { categories: { id: string; timingCode: string }[]; registration: { waiverVersion: string }; days: { id: string }[] } };
     const category = (code: string) => ev.config.categories.find((row) => row.timingCode === code)!.id;
     const buy = async (firstName: string, contact: string, code: string) => {
@@ -166,7 +191,7 @@ describe('emergency contact lookup', () => {
     const owner = as(DEFAULT_TEST_ORGANIZER);
     const demo = await app.inject({ method: 'POST', url: '/api/demo', headers: owner });
     const { eventId, organizationId } = demo.json() as { eventId: string; organizationId: string };
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, headers: owner, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true }, owner)).statusCode).toBe(200);
     for (const role of ['registration_manager', 'finance'] as const) {
       expect((await app.inject({ method: 'POST', url: `/api/organizations/${organizationId}/members`, headers: owner, payload: { email: `${role}.desk@example.test`, role } })).statusCode).toBe(200);
     }
@@ -203,11 +228,15 @@ describe('emergency contact lookup', () => {
     expect(registrations.body).toContain(phone);
 
     expect((await lookupStatus(app, riderHeaders, eventId, orderId))).toBe(404);
-    const kept = await app.inject({ method: 'POST', url: `/api/orders/${orderId}/rider-corrections`, headers: owner, payload: { changes: { team: 'Lookup Wheelers', emergencyContactPhone: '' }, reason: 'Blank phone must not clear the contact' } });
+    const kept = await app.inject({ method: 'POST', url: `/api/orders/${orderId}/rider-corrections`, headers: owner, payload: { changes: { team: 'Lookup Wheelers', emergencyContactName: '', emergencyContactPhone: '' }, reason: 'Blank phone must not clear the contact' } });
     expect(kept.statusCode).toBe(200);
     expect((kept.json() as { rider: { team: string } }).rider.team).toBe('Lookup Wheelers');
-    expect(JSON.stringify((kept.json() as { corrections: unknown }).corrections)).not.toContain('emergencyContactPhone');
-    expect((await app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: riderHeaders })).body).toContain(phone);
+    const keptChanges = JSON.stringify((kept.json() as { corrections: unknown }).corrections);
+    expect(keptChanges).not.toContain('emergencyContactPhone');
+    expect(keptChanges).not.toContain('emergencyContactName');
+    const keptOrder = await app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: riderHeaders });
+    expect(keptOrder.body).toContain(phone);
+    expect(keptOrder.body).toContain('Casey Lookup');
     const corrected = await app.inject({ method: 'POST', url: `/api/orders/${orderId}/rider-corrections`, headers: owner, payload: { changes: { emergencyContactPhone: nextPhone }, reason: 'Rider called with a new contact phone' } });
     expect(corrected.statusCode).toBe(200);
     expect(corrected.body).not.toContain(phone);
@@ -243,6 +272,35 @@ describe('emergency contact lookup', () => {
     const juniorId = (juniorOrder.json() as { id: string }).id;
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/emergency-contact`, headers: parent, payload: { orderId: juniorId } })).statusCode).toBe(404);
     expect((await app.inject({ method: 'GET', url: `/api/orders/${juniorId}`, headers: parent })).body).toContain('555-555-0177');
+
+    const entryId = (after.json() as { entries: { id: string }[] }).entries[0].id;
+    const crit = ev.config.categories.find((row) => row.timingCode === 'CR-M35-34')!.id;
+    const hidesContact = async (res: { statusCode: number; body: string }) => {
+      expect(res.statusCode, res.body).toBe(200);
+      expect(res.body).not.toContain(nextPhone);
+      expect(res.body).not.toContain('Morgan Reason');
+      const riderRead = await app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: riderHeaders });
+      expect(riderRead.statusCode).toBe(200);
+      expect(riderRead.body).toContain(nextPhone);
+      expect(riderRead.body).toContain('Morgan Reason');
+    };
+    await hidesContact(await app.inject({ method: 'POST', url: `/api/order-entries/${entryId}/license-review`, headers: owner, payload: { note: 'License card seen' } }));
+    await hidesContact(await app.inject({ method: 'POST', url: `/api/order-entries/${entryId}/transfer`, headers: owner, payload: { toCategoryId: crit, reason: 'Move to the Sunday crit' } }));
+    await hidesContact(await app.inject({ method: 'POST', url: `/api/orders/${orderId}/refunds`, headers: owner, payload: { clientRequestId: 'staff-redact-refund', amountCents: 100, reason: 'Partial refund for the road race' } }));
+    // Requested, with no payment reference, so retry returns the order without calling a provider.
+    const refundId = 'ref_staff_redact_retry';
+    const refundDb = new pg.Client({ connectionString: databaseUrl });
+    await refundDb.connect();
+    try {
+      await refundDb.query(
+        `INSERT INTO refunds (id, order_id, provider, amount_cents, reason, status, created_at, updated_at) VALUES ($1, $2, 'simulated', 100, 'Saved retry', 'requested', now(), now())`,
+        [refundId, orderId],
+      );
+    } finally {
+      await refundDb.end();
+    }
+    await hidesContact(await app.inject({ method: 'POST', url: `/api/refunds/${refundId}/retry`, headers: owner }));
+    await hidesContact(await app.inject({ method: 'POST', url: `/api/order-entries/${entryId}/withdraw`, headers: owner, payload: { reason: 'Rider asked to leave the race' } }));
   });
 });
 

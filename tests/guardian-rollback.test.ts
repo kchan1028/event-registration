@@ -3,6 +3,7 @@ import { expect, it } from 'vitest';
 import type { EventConfig } from '../src/shared/schema';
 import { as, fakeAuth } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
+import { publishReviewed } from './support/publish';
 
 const owner = 'owner@rollback.test';
 const parent = 'parent@rollback.test';
@@ -13,7 +14,7 @@ async function setup() {
   const { app } = await testApp({ auth: fakeAuth(), databaseUrl });
   const call = (who: string, method: 'GET' | 'POST', url: string, payload?: object) => app.inject({ method, url, headers: as(who), payload });
   const { eventId } = (await call(owner, 'POST', '/api/demo')).json();
-  expect((await call(owner, 'POST', `/api/events/${eventId}/publish`, { acknowledgeWarnings: true })).statusCode).toBe(200);
+  expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true }, as(owner))).statusCode).toBe(200);
   const { config } = (await call(owner, 'GET', `/api/events/${eventId}`)).json() as { config: EventConfig };
   const register = () => call(parent, 'POST', `/api/rider/events/${eventId}/orders`, {
     clientRequestId: 'guardian-rollback-order', categoryIds: [config.categories.find((c) => c.timingCode === 'RR-J1516')!.id],

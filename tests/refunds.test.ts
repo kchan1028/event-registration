@@ -7,6 +7,7 @@ import { REFUND_TEMPLATES } from '../src/shared/refundPolicy';
 import type { EventConfig } from '../src/shared/schema';
 import { as, DEFAULT_TEST_ORGANIZER } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
+import { publishReviewed } from './support/publish';
 
 /* Refunds (product.md "Money and reporting"; ADR 0002). Stripe calls are stubbed; webhooks are signed locally. */
 
@@ -25,7 +26,7 @@ async function setup(opts: { stripe?: boolean } = {}) {
   const payments = opts.stripe ? stripePayments({ secretKey: 'sk_test_fictional', webhookSecret: WEBHOOK_SECRET, client }) : undefined;
   const { app } = await testApp({ databaseUrl: await testDatabaseUrl(), now: () => now, payments, appUrl: 'http://app.test' });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; organizationId: string };
   const code = (c: string) => event.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
@@ -71,7 +72,7 @@ describe('whole-order policy preview', () => {
     const event = (await s.app.inject({ method: 'GET', url: `/api/events/${before.eventId}` })).json();
     event.config.registration.refundRules = REFUND_TEMPLATES.credit_only.rules;
     expect((await s.app.inject({ method: 'PUT', url: `/api/events/${before.eventId}/config`, payload: { revision: event.revision, config: event.config } })).statusCode).toBe(200);
-    expect((await s.app.inject({ method: 'POST', url: `/api/events/${before.eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(s.app, `/api/events/${before.eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
     for (const reason of ['withdrawal', 'organizer_cancellation']) {
       const res = await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}/refund-policy-preview?reason=${reason}` });
       expect(res.statusCode).toBe(200);
@@ -118,7 +119,7 @@ describe('whole-order policy preview', () => {
     const event = (await s.app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json();
     event.config.registration.refundRules = mode === null ? null : { ...REFUND_TEMPLATES.tiered.rules, organizerCancellation: mode };
     expect((await s.app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config: event.config } })).statusCode).toBe(200);
-    await s.app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    await publishReviewed(s.app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     const o = await s.order(['RR-M35-34']); await s.paySimulated(o.id);
     const res = await s.app.inject({ method: 'GET', url: `/api/orders/${o.id}/refund-policy-preview?reason=organizer_cancellation` });
     expect(res.statusCode).toBe(200);

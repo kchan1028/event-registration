@@ -4,6 +4,7 @@ import { blankPath } from '../src/shared/factory';
 import { buildDemoEvent } from '../src/shared/demo';
 import { changeImpact, type ChangeImpact, type ImpactEntry } from '../src/shared/impact';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 const clone = (c: EventConfig): EventConfig => JSON.parse(JSON.stringify(c));
 
@@ -86,7 +87,7 @@ describe('change impact API', () => {
     const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
     expect((await app.inject({ method: 'GET', url: `/api/events/${eventId}/impact` })).json()).toEqual({ revision: expect.any(Number), publishedVersion: null, impact: null, waiverChanged: false });
 
-    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
     const cat = event.config.categories.find((c) => c.timingCode === 'RR-M35-34')!;
     const rider = { firstName: 'Test', lastName: 'Rider', email: 'test.rider@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Test Contact', phone: '555-555-0199' } };
@@ -108,10 +109,10 @@ describe('change impact API', () => {
     expect(res.impact.categories[0]).toMatchObject({ categoryId: cat.id, kinds: ['price'], held: 1, confirmed: 0, riders: ['Test Rider'] });
 
     // Publishing a change that touches entered riders needs an explicit acknowledgement, like warnings.
-    const refused = await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    const refused = await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     expect(refused.statusCode).toBe(422);
     expect((refused.json() as { error: string }).error).toContain('Review who the 1 changed category');
-    const ok = await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } });
+    const ok = await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true });
     expect(ok.statusCode).toBe(200);
     expect((ok.json() as { publishedVersion: number }).publishedVersion).toBe(2);
   });

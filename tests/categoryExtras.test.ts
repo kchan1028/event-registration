@@ -4,7 +4,7 @@ import { categoryBibRange, checkExtras, orderExtrasSchema, pruneExtras } from '.
 import { buildDemoEvent } from '../src/shared/demo';
 import type { EventConfig } from '../src/shared/schema';
 import { validateConfig } from '../src/shared/validation';
-import { waiverChangeFor } from './support/waiver';
+import { publishReviewed } from './support/publish';
 
 /* Per-category rider questions, waiver addenda, and bib ranges. */
 
@@ -72,7 +72,7 @@ describe('category extras API', () => {
     cat.addendum = { title: 'Masters rules', text: 'Riders agree to the masters gear rules.' };
     cat.bibRange = { first: 500, last: 599 };
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: ev.revision, config } })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
     const waiver = { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Demo', signerRole: 'rider' };
     const order = (extras: Record<string, unknown>, n: number) =>
       app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `extras-${n}-xxxxxx`, categoryIds: [cat.id], rider: RIDER, waiver, extras } });
@@ -113,7 +113,7 @@ describe('category extras API', () => {
       change(cat);
       const saved = await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision, config } });
       expect(saved.statusCode).toBe(200);
-      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChange: waiverChangeFor(saved.json()) } })).statusCode).toBe(200);
+      expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true, waiverChangeReason: 'Fictional waiver update' })).statusCode).toBe(200);
       return { config, cat };
     };
     const { config, cat } = await publish((c) => { c.addendum = { title: 'Masters rules', text: 'Original fictional rules.' }; });

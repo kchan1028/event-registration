@@ -142,35 +142,55 @@ const INVITATION_CHANGED = 'This invitation changed, so this request sent no ema
 export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, mailer: Mailer, appUrl: string) {
   const nowIso = () => clock().toISOString();
 
+  /** An invitation arrived for an organization this attempt has not locked. The transaction rolls back and sign-in starts over. */
+  class UnlockedInvitation extends Error {}
+
   /** Finds or creates the caller's account, then turns any open invitations for their email into roles and drops expired ones. */
   async function accountFor(signedIn: SignedIn): Promise<Account> {
     const existing = await db.get<Account>(`SELECT id, email FROM accounts WHERE provider_user_id = $1`, [signedIn.providerUserId]);
     if (existing) return existing;
     const email = (signedIn.email ?? (await provider.email(signedIn.providerUserId))).trim().toLowerCase();
-    return db.transaction(async () => {
-      await db.lock(`account:${email}`);
-      const raced = await db.get<Account>(`SELECT id, email FROM accounts WHERE provider_user_id = $1`, [signedIn.providerUserId]);
-      if (raced) return raced;
-      // One account per person: an email already tied to another sign-in identity is refused.
-      const taken = await db.get(`SELECT 1 FROM accounts WHERE lower(email) = $1`, [email]);
-      if (taken) throw new HttpError(409, 'This email already belongs to another account. Sign in with that account instead.');
-      const id = newId('acct');
-      const t = nowIso();
-      await db.run(`INSERT INTO accounts (id, provider_user_id, email, created_at) VALUES ($1, $2, $3, $4)`, [id, signedIn.providerUserId, email, t]);
-      const invitations = await db.all<{ organization_id: string; role: Role; open: boolean }>(
-        `SELECT organization_id, role, expires_at > $2 AS open FROM organization_invitations WHERE email = $1`,
-        [email, t],
-      );
-      for (const i of invitations) await record(i.organization_id, i.open ? 'invitation_accepted' : 'invitation_expired', email, i.role, id);
-      await db.run(
-        `INSERT INTO organization_members (organization_id, account_id, role, granted_by, created_at)
-         SELECT organization_id, $1, role, invited_by, $2 FROM organization_invitations WHERE email = $3 AND expires_at > $2 ON CONFLICT DO NOTHING`,
-        [id, t, email],
-      );
-      // Every invitation for this email goes: the person now has an account, so an owner adds them directly.
-      await db.run(`DELETE FROM organization_invitations WHERE email = $1`, [email]);
-      return { id, email };
-    });
+    // Add holds an organization's membership lock and then this account lock. Taking a new membership lock after the
+    // account lock would deadlock with it, so an invitation that appears in that window writes nothing and starts over.
+    // Once the account lock is held, Add cannot insert another invitation for this email.
+    for (;;) {
+      try {
+        return await db.transaction(async () => {
+          const planned = new Set(
+            (
+              await db.all<{ organization_id: string }>(`SELECT DISTINCT organization_id FROM organization_invitations WHERE email = $1`, [email])
+            ).map((row) => row.organization_id),
+          );
+          for (const organizationId of [...planned].sort()) await db.lock(`org-members:${organizationId}`);
+          await db.lock(`account:${email}`);
+          const raced = await db.get<Account>(`SELECT id, email FROM accounts WHERE provider_user_id = $1`, [signedIn.providerUserId]);
+          if (raced) return raced;
+          // One account per person: an email already tied to another sign-in identity is refused.
+          const taken = await db.get(`SELECT 1 FROM accounts WHERE lower(email) = $1`, [email]);
+          if (taken) throw new HttpError(409, 'This email already belongs to another account. Sign in with that account instead.');
+          const t = nowIso();
+          const invitations = await db.all<{ organization_id: string; role: Role; open: boolean }>(
+            `SELECT organization_id, role, expires_at > $2 AS open FROM organization_invitations WHERE email = $1`,
+            [email, t],
+          );
+          if (invitations.some((invitation) => !planned.has(invitation.organization_id))) throw new UnlockedInvitation();
+          const id = newId('acct');
+          await db.run(`INSERT INTO accounts (id, provider_user_id, email, created_at) VALUES ($1, $2, $3, $4)`, [id, signedIn.providerUserId, email, t]);
+          for (const i of invitations) await record(i.organization_id, i.open ? 'invitation_accepted' : 'invitation_expired', email, i.role, id);
+          await db.run(
+            `INSERT INTO organization_members (organization_id, account_id, role, granted_by, created_at)
+             SELECT organization_id, $1, role, invited_by, $2 FROM organization_invitations WHERE email = $3 AND expires_at > $2 ON CONFLICT DO NOTHING`,
+            [id, t, email],
+          );
+          // Every invitation for this email goes: the person now has an account, so an owner adds them directly.
+          await db.run(`DELETE FROM organization_invitations WHERE email = $1`, [email]);
+          return { id, email };
+        });
+      } catch (err) {
+        if (err instanceof UnlockedInvitation) continue;
+        throw err;
+      }
+    }
   }
 
   /** Appends one row to the organization's role history. */
@@ -284,28 +304,32 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
   }
 
   async function listMembers(organizationId: string) {
-    const members = await db.all<{ account_id: string; email: string; role: Role; revision: string }>(
-      `SELECT m.account_id, a.email, m.role, m.revision FROM organization_members m JOIN accounts a ON a.id = m.account_id WHERE m.organization_id = $1 ORDER BY a.email, m.role`,
-      [organizationId],
-    );
-    const invitations = await db.all<{ email: string; role: Role; expires_at: string; revision: string; earlier_email: boolean; email_id: string | null; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null }>(
-      `SELECT i.email, i.role, i.expires_at, i.revision, i.earlier_email, m.id AS email_id, m.status AS email_status, m.created_at AS email_at FROM organization_invitations i
-       LEFT JOIN email_messages m ON m.id = i.email_attempt_id
-       WHERE i.organization_id = $1 ORDER BY i.email, i.role`,
-      [organizationId],
-    );
-    const history = await db.all<{ action: MembershipAction; email: string; role: Role; actor_email: string | null; created_at: string }>(
-      `SELECT c.action, c.email, c.role, a.email AS actor_email, c.created_at FROM membership_changes c LEFT JOIN accounts a ON a.id = c.actor_id
-       WHERE c.organization_id = $1 ORDER BY c.created_at DESC, c.seq DESC LIMIT ${HISTORY_LIMIT}`,
-      [organizationId],
-    );
-    return {
-      members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role, revision: m.revision })),
-      invitations: invitations.map(
-        (i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at, revision: i.revision, earlierEmail: i.earlier_email, lastEmail: i.email_id && i.email_status && i.email_at ? { attemptId: i.email_id, status: i.email_status, at: i.email_at } : null }),
-      ),
-      history: history.map((h): MembershipChange => ({ action: h.action, email: h.email, role: h.role, by: h.actor_email, at: h.created_at })),
-    };
+    return db.transaction(async () => {
+      // Held across members, invitations, and history. First sign-in takes the same lock, so it cannot commit between the queries and leave the person off both lists.
+      await db.lock(`org-members:${organizationId}`);
+      const members = await db.all<{ account_id: string; email: string; role: Role; revision: string }>(
+        `SELECT m.account_id, a.email, m.role, m.revision FROM organization_members m JOIN accounts a ON a.id = m.account_id WHERE m.organization_id = $1 ORDER BY a.email, m.role`,
+        [organizationId],
+      );
+      const invitations = await db.all<{ email: string; role: Role; expires_at: string; revision: string; earlier_email: boolean; email_id: string | null; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null }>(
+        `SELECT i.email, i.role, i.expires_at, i.revision, i.earlier_email, m.id AS email_id, m.status AS email_status, m.created_at AS email_at FROM organization_invitations i
+         LEFT JOIN email_messages m ON m.id = i.email_attempt_id
+         WHERE i.organization_id = $1 ORDER BY i.email, i.role`,
+        [organizationId],
+      );
+      const history = await db.all<{ action: MembershipAction; email: string; role: Role; actor_email: string | null; created_at: string }>(
+        `SELECT c.action, c.email, c.role, a.email AS actor_email, c.created_at FROM membership_changes c LEFT JOIN accounts a ON a.id = c.actor_id
+         WHERE c.organization_id = $1 ORDER BY c.created_at DESC, c.seq DESC LIMIT ${HISTORY_LIMIT}`,
+        [organizationId],
+      );
+      return {
+        members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role, revision: m.revision })),
+        invitations: invitations.map(
+          (i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at, revision: i.revision, earlierEmail: i.earlier_email, lastEmail: i.email_id && i.email_status && i.email_at ? { attemptId: i.email_id, status: i.email_status, at: i.email_at } : null }),
+        ),
+        history: history.map((h): MembershipChange => ({ action: h.action, email: h.email, role: h.role, by: h.actor_email, at: h.created_at })),
+      };
+    });
   }
 
   /**

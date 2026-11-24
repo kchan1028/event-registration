@@ -117,7 +117,8 @@ async function download(path: string) {
 try {
   if (mode === 'seed') {
     const { eventId, organizationId } = await request('POST', '/api/demo', 201);
-    await request('POST', `/api/events/${eventId}/publish`, 200, { acknowledgeWarnings: true });
+    const { revision, publishedVersion } = await request('GET', `/api/events/${eventId}`, 200);
+    await request('POST', `/api/events/${eventId}/publish`, 200, { acknowledgeWarnings: true, reviewed: { revision, publishedVersion } });
     await request('POST', `/api/events/${eventId}/check-in-demo-riders`, 201);
     await request('PUT', `/api/events/${eventId}/bib-settings`, 200, { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] });
     const list = await request('GET', `/api/events/${eventId}/check-in`, 200);
@@ -148,7 +149,8 @@ try {
     await request('GET', `${organization}/members`, 403);
     actor = successor;
     const team = await request('GET', `${organization}/members`, 200);
-    assert.deepEqual(team.members, [
+    // Each grant's revision is random (migration 42), so compare everything else.
+    assert.deepEqual(team.members.map(({ revision, ...member }: { revision: string }) => member), [
       { accountId: account.id, email: formerOwner, role: 'finance' },
       { accountId: incoming.id, email: successor, role: 'check_in_volunteer' },
       { accountId: incoming.id, email: successor, role: 'owner' },

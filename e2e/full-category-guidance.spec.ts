@@ -1,6 +1,7 @@
 import { E2E_ORGANIZER, expect, test, type Page } from './fixtures';
 import { seedRegistrationCase } from './support/registration-case';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 const CLOSED = 'There is no online waitlist for this category. Choose another category.';
 const OPEN_WAITLIST = 'Join the waitlist on this category. Joining is not an entry and is not a charge. It does not hold a place or reserve a package.';
@@ -21,7 +22,7 @@ async function publishCategory(page: Page, eventId: string, change: (category: E
   expect(category).toBeTruthy();
   change(category!);
   expect((await page.request.put(`${eventUrl}/config`, { data: { config: event.config, revision: event.revision } })).ok()).toBe(true);
-  expect((await page.request.post(`${eventUrl}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true, acknowledgeImpact: true })).ok()).toBe(true);
   return category!;
 }
 

@@ -6,13 +6,14 @@ import { localEmail } from '../src/server/email';
 import type { EventConfig } from '../src/shared/schema';
 import { CANCELLATION_PLAN_NOT_RECORDED, type CancellationConfirmationInput, CancellationConfirmationPreview, CancellationSelection } from '../src/shared/cancellations';
 import { takeOffTeam } from './support/membership';
+import { publishReviewed } from './support/publish';
 
 async function setup() {
   let instant = new Date('2027-03-01T18:00:00Z');
   const databaseUrl = await testDatabaseUrl(); const now = () => instant;
   const { app } = await testApp({ databaseUrl, now, holdMinutes: 30, email: localEmail() });
   const { eventId, organizationId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json();
-  const publish = () => app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } });
+  const publish = () => publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true });
   expect((await publish()).statusCode).toBe(200);
   const config = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json().config as EventConfig;
   const cat = (code: string) => config.categories.find((c) => c.timingCode === code)!;

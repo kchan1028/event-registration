@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
 import { csvField } from '../src/shared/csv';
 import { diffRows, sortRows, toCsv, type StartListRow } from '../src/shared/startlist';
+import { publishReviewed } from './support/publish';
 
 const row = (o: Partial<StartListRow>): StartListRow => ({
   entryId: 'e1',
@@ -57,7 +58,7 @@ type Overview = { races: { raceId: string; raceName: string; rows: StartListRow[
 async function setup() {
   const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z') });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in-demo-riders` });
   await app.inject({ method: 'PUT', url: `/api/events/${eventId}/bib-settings`, payload: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 299 }] } });
   const overview = async () => (await app.inject({ method: 'GET', url: `/api/events/${eventId}/start-lists` })).json() as Overview;

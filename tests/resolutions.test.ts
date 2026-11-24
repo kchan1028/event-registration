@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 /* Resolution workflow for paid entries affected by a published change. */
 
@@ -12,7 +13,7 @@ async function setup() {
   const start = new Date('2027-03-01T18:00:00Z').getTime();
   const { app } = await testApp({ now: () => new Date(start + tick++ * 1000), holdMinutes: 10 });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const get = async () => (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number };
   const ev = await get();
   const code = (c: string) => ev.config.categories.find((x) => x.timingCode === c)!.id;
@@ -26,7 +27,7 @@ async function setup() {
     const config = structuredClone(cur.config);
     config.categories.find((c) => c.id === code('RR-M35-34'))!.pricing.baseCents = cents;
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: cur.revision, config } })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true, acknowledgeImpact: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).statusCode).toBe(200);
   };
   const list = async () => (await app.inject({ method: 'GET', url: `/api/events/${eventId}/resolutions` })).json() as Item[];
   const resolve = (id: string, body: Record<string, unknown>) => app.inject({ method: 'POST', url: `/api/events/${eventId}/resolutions/${id}`, payload: body });

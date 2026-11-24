@@ -11,6 +11,8 @@
   --muted: #5b616b;
   --hairline: #dddddd;
   --hairline-soft: #ebebe8;
+  /* 1px control edge. Hairline is below 3:1 on canvas and Tyvek. */
+  --control-border: #888d96;
   --border-strong: #9297a0;
   --canvas: #ffffff;
   --tyvek: #f7f7f4;
@@ -78,6 +80,7 @@
     --muted: #a19f97;
     --hairline: #30343c;
     --hairline-soft: #262a31;
+    --control-border: #6b717b;
     --border-strong: #6b717b;
     --canvas: #15181d;
     --tyvek: #1b1f25;
@@ -125,10 +128,8 @@
   background: var(--canvas);
   color: var(--ink);
   cursor: pointer;
-  transition:
-    border-color 150ms ease,
-    background-color 150ms ease,
-    transform 120ms var(--ease-out);
+  /* Transform only, same as .btn: the icon color changes with the theme in one frame. */
+  transition: transform 120ms var(--ease-out);
 }
 .theme-toggle:active {
   transform: scale(0.94);
@@ -283,10 +284,8 @@ a {
   text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
-  transition:
-    transform 160ms var(--ease-out),
-    background-color 150ms ease,
-    border-color 150ms ease;
+  /* Transform only. A background fade lets the label change theme first and fall under 4.5:1. */
+  transition: transform 160ms var(--ease-out);
 }
 .btn:active:not(:disabled) {
   transform: scale(0.97);
@@ -302,7 +301,7 @@ a {
 .btn--secondary {
   background: var(--canvas);
   color: var(--ink);
-  border-color: var(--hairline);
+  border-color: var(--control-border);
 }
 .btn--ghost {
   background: transparent;
@@ -321,7 +320,7 @@ a {
     background: var(--ink-hover);
   }
   .btn--secondary:hover:not(:disabled) {
-    border-color: var(--border-strong);
+    border-color: color-mix(in srgb, var(--control-border) 72%, var(--ink));
   }
   .btn--ghost:hover:not(:disabled) {
     background: var(--tyvek-deep);
@@ -416,7 +415,7 @@ a {
   width: 100%;
   min-height: 38px;
   padding: 7px 10px;
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--control-border);
   border-radius: var(--r-sm);
   background: var(--canvas);
   color: var(--ink);
@@ -424,11 +423,11 @@ a {
   transition: border-color 150ms ease;
 }
 .input:hover {
-  border-color: var(--border-strong);
+  border-color: color-mix(in srgb, var(--control-border) 72%, var(--ink));
 }
 .input:focus {
   border-color: var(--focus);
-  outline: 2px solid color-mix(in srgb, var(--focus) 25%, transparent);
+  outline: 2px solid var(--focus);
   outline-offset: 0;
 }
 .input[aria-invalid='true'] {
@@ -548,8 +547,8 @@ textarea.input {
   color: var(--body);
   cursor: pointer;
   user-select: none;
+  /* Fill snaps with the label. A background fade lets the label change theme first and fall under 4.5:1. */
   transition:
-    background-color 150ms ease,
     border-color 150ms ease,
     transform 160ms var(--ease-out);
 }
@@ -1340,7 +1339,8 @@ fieldset {
 }
 .cat-row {
   cursor: pointer;
-  transition: background-color 120ms ease;
+  /* Fill snaps with the text. A background fade lets the text change theme first. */
+  transition: none;
 }
 .cat-row.is-selected {
   background: color-mix(in srgb, var(--link) 7%, var(--canvas));
@@ -1940,6 +1940,10 @@ button.issue {
   border: 1px solid var(--ink);
   border-radius: var(--r-lg);
 }
+.publish-box:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
 .publish-box__reason {
   justify-self: stretch;
   max-width: 560px;
@@ -1949,7 +1953,8 @@ button.issue {
   .publish-box__reason .input {
     font-size: 16px;
   }
-  .impact__recover {
+  .impact__recover,
+  .publish-box__recover {
     min-height: 44px;
   }
 }
@@ -3007,15 +3012,11 @@ button.issue {
 }
 .class-hidden-notice .btn {
   min-height: 44px;
-  /* Match the schedule view buttons: a fading fill lags the new text color when the theme changes. */
-  transition: transform 160ms var(--ease-out);
 }
 .schedule-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-top: var(--s-5); }
 .schedule-tools h2 { font-size: 17px; font-weight: 500; margin: 0; }
 .schedule-tools__views { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 
-/* Keep text and fill in sync when the selected view or theme changes. */
-.schedule-tools__views .btn { transition: transform 160ms var(--ease-out); }
 .schedule-tools__views .btn[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
 
 .bundle-pick {
@@ -3554,7 +3555,8 @@ fieldset:disabled .field label {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  /* Fill snaps with the text. A background fade lets the text change theme first. */
+  transition: none;
 }
 .ci-row:focus-visible {
   outline: 2px solid var(--focus);

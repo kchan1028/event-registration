@@ -44,11 +44,10 @@ const STATUS: Record<Category['status'], string> = { active: 'open', closed: 'cl
 export const WAIVER_REASON_MIN = 3;
 export const WAIVER_REASON_MAX = 300;
 
-/** A reason and what it was written for: the saved draft and the live version it was compared with. */
-export interface WaiverChange {
-  reason: string;
+/** What an organizer reviewed before publishing: one saved draft against one live version, or none yet. */
+export interface PublishReview {
   revision: number;
-  publishedVersion: number;
+  publishedVersion: number | null;
 }
 
 /** What is wrong with a reason, or null. Counts code points, as PostgreSQL does, so an emoji is one character. */

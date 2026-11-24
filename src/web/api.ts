@@ -13,7 +13,7 @@ import type { FieldChange, RiderCorrection } from '../shared/lookup';
 import type { BibChange, BibReassignment, BibReassignmentPlan, BibReassignmentResult, AutomaticBibInput, AutomaticBibJob, BibSettings, BibBatch, BibPlan, CheckInRider, CheckInList } from '../shared/checkin';
 import type { WaitlistJoin, WaitlistStatus } from '../shared/waitlist';
 import type { StartListDiff, StartListRow } from '../shared/startlist';
-import type { ChangeImpact, WaiverChange } from '../shared/impact';
+import type { ChangeImpact, PublishReview } from '../shared/impact';
 import type { EventSummary } from '../shared/reports';
 import type { Invitation, MembershipChange, Role, ExpiredInvitationNotice } from '../shared/roles';
 import type { GuardianAccess, GuardianInvitation, GuardianRelationship, JuniorProfile, ReceivedGuardianInvitation, RegistrationAccess } from '../shared/juniors';
@@ -351,8 +351,8 @@ export const api = {
   createOmnium: () => request<{ organizationId: string; eventId: string }>('POST', '/api/demo/berkeley-omnium'),
   event: (id: string) => request<EventPayload>('GET', `/api/events/${id}`),
   saveConfig: (id: string, revision: number, config: EventConfig) => request<EventPayload>('PUT', `/api/events/${id}/config`, { revision, config }),
-  publish: (id: string, acknowledgeWarnings: boolean, acknowledgeImpact = false, waiverChange?: WaiverChange) =>
-    request<EventPayload & { publishedVersion: number }>('POST', `/api/events/${id}/publish`, { acknowledgeWarnings, acknowledgeImpact, waiverChange }),
+  publish: (id: string, reviewed: PublishReview, acknowledgeWarnings: boolean, acknowledgeImpact = false, waiverChangeReason?: string) =>
+    request<EventPayload & { publishedVersion: number }>('POST', `/api/events/${id}/publish`, { reviewed, acknowledgeWarnings, acknowledgeImpact, waiverChangeReason }),
   addTestEntries: (id: string, categoryId: string, count: number) =>
     request<{ result: TestEntryResult; event: EventPayload }>('POST', `/api/events/${id}/test-entries`, { categoryId, count }),
   clearTestEntries: (id: string) => request<{ removed: number; event: EventPayload }>('DELETE', `/api/events/${id}/test-entries`),

@@ -1,9 +1,15 @@
 # Product brief: cycling race registration
 
+<!-- impeccable:product-schema 1 -->
+
 Status: Draft for discovery and implementation planning  
 Working name: CycleReg (name availability not checked)  
 Date: November 14, 2026  
 First design partner: Berkeley Omnium / Berkeley Bicycle Club (proposed)
+
+## Platform
+
+web
 
 ## Product decision
 
@@ -48,7 +54,7 @@ Compete on measured volunteer time saved. Match the practical flexibility organi
 - Templates cover road race, criterium, and a two-day weekend. Copy a previous event without copying participants, payments, or signatures.
 - Configure category labels, age and license requirements, distances, start times, field limits, opening/closing times, and fees.
 - Offer individual-day entries and a weekend bundle. Show exact contents and one transparent total before payment.
-- Flag conflicting schedules and incomplete configuration for organizer review. Publishing requires a preview and checklist.
+- Flag conflicting schedules and incomplete configuration for organizer review. Publishing requires a preview and checklist. An organizer's publish goes through only for the saved draft and live version that were reviewed: if either changed, or the request does not say which were reviewed, it is refused until the organizer reviews again. The screen reviews the draft it shows, waits until that draft is saved and checked, and offers to save again or reload when it cannot be. Warning and impact acknowledgements never carry over to another draft.
 - Track the year and source of race requirements so last year's rules are not silently treated as current.
 
 ### 1a. Road race and criterium category builder — P0
@@ -262,7 +268,7 @@ Status: Planned documentation only. The current app does not support time trials
 - Support parent/guardian entry and the applicable minor-signature workflow, subject to federation acceptance.
 - Collect only required profile, contact, emergency contact, team, and license information.
 - A waiver version identifies one text for the life of an event. Publishing refuses different text under a version that event already published: new text needs a new version, and an earlier version can return only with its exact text. A change of live version needs renewed agreement. If older publications already gave the live version two texts, new reservations stop until a version with only one text is published, either a new one or an earlier one with its exact text.
-- Every publication records who published it. One that changes the waiver after the first publication also needs a reason of 3 to 300 characters, kept with that version. A waiver change is a different waiver version or text, or an added, edited or removed category addendum, including one removed with its category (provisional scope: see the [recorded question](#waiver-change-reason-scope)). The reason belongs to the saved draft and live version it was written for: if either changed, publishing is refused until the organizer reviews again, even when the newer draft no longer changes the waiver. Publishing again waits until the screen has compared the current draft with the live version. Only roles that can publish see who and why; riders and public pages never do. Earlier versions show the publisher as not recorded.
+- Every publication records who published it. One that changes the waiver after the first publication also needs a reason of 3 to 300 characters, kept with that version. A waiver change is a different waiver version or text, or an added, edited or removed category addendum, including one removed with its category (see the [owner decision](#waiver-change-reason-scope)). The reason belongs to the saved draft and live version it was written for, like the [other publish acknowledgements](#1-event-and-weekend-setup): if either changed, publishing is refused until the organizer reviews again, even when the newer draft no longer changes the waiver. Every publish waits until the screen has checked the saved draft and the live version. Only roles that can publish see who and why; riders and public pages never do. Earlier versions show the publisher as not recorded.
 - Display waiver version and signature status. Payment success alone does not mean cleared to race.
 - Confirm entries only after authoritative payment confirmation. Handle delayed or failed payments explicitly.
 - Permit organizer-configured changes, withdrawals, and refund requests. Show policy before checkout.
@@ -356,7 +362,7 @@ Acceptance: two independent builds produce equal configurations and stable IDs; 
 - Search by rider, team, bib, license number, or order.
 - Filter incomplete signatures, license review, failed payments, duplicate entries, and pending changes. Authorized staff confirm a license review without writing a note. The review time is recorded.
 - Allow authorized corrections with a reason and an audit trail.
-  - Status (November 15, 2026): Implemented in the local build for one event's registrations (see [roadmap.md](roadmap.md#rider-checkout)). **Registrations** searches by rider or guardian name, email, team, order number, or check-in code. An organizer corrects a rider's name, email, phone, team, license number, or emergency contact with a required reason; every correction is kept with before and after values. Eligibility fields (racing age, license category and type, competition class, collegiate division) are not correctable there; changing them goes through a transfer or a new registration so eligibility is rechecked. Corrections never change the price, entries, or waiver signature. A new license number clears earlier license reviews on the order (product decision, November 15, 2026). Not built: bib and license-number search on Registrations (bib search exists at check-in), and guardian corrections. Since November 15, 2026 each new correction records and shows the signed-in organizer who made it; earlier corrections show no actor.
+  - Status (November 15, 2026): Implemented in the local build for one event's registrations (see [roadmap.md](roadmap.md#rider-checkout)). **Registrations** searches by rider or guardian name, email, team, order number, or check-in code. An organizer corrects a rider's name, email, phone, team, license number, or emergency contact with a required reason; every correction is kept with before and after values. A blank emergency-contact name or phone keeps the stored value and is not recorded as a change, because staff cannot see the current contact. Eligibility fields (racing age, license category and type, competition class, collegiate division) are not correctable there; changing them goes through a transfer or a new registration so eligibility is rechecked. Corrections never change the price, entries, or waiver signature. A new license number clears earlier license reviews on the order (product decision, November 15, 2026). Not built: bib and license-number search on Registrations (bib search exists at check-in), and guardian corrections. Since November 15, 2026 each new correction records and shows the signed-in organizer who made it; earlier corrections show no actor.
 - Record race-specific status separately from order/payment status.
 - Provide transactional confirmations and targeted operational messages. Marketing consent is separate.
 - Support owner, registration manager, check-in volunteer, timer/export, and finance roles. Owners can transfer responsibility to a successor.
@@ -411,7 +417,8 @@ Acceptance: allocate a full confirmed field in stable order, repeat without chan
 ### 6. Money and reporting
 
 - Use Stripe hosted Checkout for the payment integration, selected by the product owner November 14, 2026 ([ADR 0002](docs/decisions/0002-stripe-payments.md)). Implemented locally in test mode only (November 15, 2026): with Stripe test keys set, the rider pays on Stripe's hosted page and only a signature-verified Stripe notification confirms the order; live keys are refused until the merchant and settlement model ([ADR 0005](docs/decisions/0005-merchant-and-settlement-model.md)) is accepted. Without keys, the demo stays simulated. No Stripe account is configured by the project yet. Never store card details.
-- A Stripe payment confirms an order only if it comes from a session the app opened for that order and matches the order total exactly. A mismatch, a payment after the rider cancelled, or a late payment for places no longer free goes to the organizer's exception queue. A second paid session for one order is recorded as a duplicate charge for refund and never creates a second entry.
+- A Stripe payment confirms an order only if it comes from a session the app opened for that order and matches the order total exactly. A mismatch, a payment after the rider cancelled, or a late payment for places no longer free goes to the organizer's exception queue. A second paid session for one order is recorded as a duplicate charge for refund and never creates a second entry. If the rider cancels while Stripe is opening the payment page, that session is saved and the rider is not sent to it. A payment on a page that was already open still goes to the exception queue.
+- Open, raised November 23, 2026; owner: project owner ([issue #367](https://github.com/kchan1028/event-registration/issues/367)). Should an already open Stripe Checkout session be expired at the provider when the rider cancels, so the rider cannot pay for places that were released? A payment that arrives is already sent to the organizer's exception queue. Provisional assumption: do not expire the provider session, because that call is not a decided rule. Not sending the rider to a page that finishes opening after cancellation can proceed. Expiring the session at Stripe stays blocked. Revisit before live payments.
 - Establish who collects funds, who is merchant of record, who handles payouts, and who bears disputes before taking live payments.
 - Record order totals, line items, discounts, processing/platform fees, refunds, and settlement references.
 - Support partial refunds against specific entries with an explicit effect on capacity and bundle pricing. New refund creation uses a stable client request ID: identical replay reuses the saved refund, while changed payment/entry/amount/reason is refused. The finance screen retains an unresolved original request in the current tab (account/order scoped) for lookup or exact retry; ordinary submission progress is distinct from an unknown response. Historical evidence is not reconstructed. Existing permission and payment/entry caps still apply. Implemented locally; verification belongs to the focused refund-recovery PR. Provider-unknown requests remain reserved and need reconciliation before alternative reimbursement.
@@ -918,7 +925,15 @@ Read-only support lookup (implemented locally November 19, 2026). Pending checko
 
 Decided November 22, 2026; owner: project owner. Told that [#352](https://github.com/kchan1028/event-registration/issues/352) "will add a 'reason' field when an organizer publishes changed waiver text", the owner answered "okay".
 
-Open, raised November 22, 2026; owner: project owner. Should the reason also be required for a new version label on the same text and for category addendum changes? It matters because the [audit rule](docs/coding-guide.md#audit-history) covers every waiver change, while the owner's answer named waiver text. Provisional assumption, not an owner decision: yes to both, because riders agree again after either change. Publishing works under that assumption and nothing is blocked. Revisit when the owner answers or organizer rehearsal finds the prompt unnecessary.
+Resolved November 22, 2026 (raised the same day); owner: project owner. The question was: Should the reason also be required for a new version label on the same text and for category addendum changes? It matters because the [audit rule](docs/coding-guide.md#audit-history) covers every waiver change, while the owner's earlier answer named waiver text. Until this answer, yes to both was a provisional assumption, because riders agree again after either change.
+
+The owner was asked "Keep the wider reason rule? You approved it for changed waiver text. I also require it for a new version label and for addendum changes, marked provisional in `product.md`. I recommend yes." and answered "yes". The reason is required for both.
+
+### Impact acknowledgement scope
+
+Answered November 22, 2026 (raised the same day); owner: project owner. The question was whether the publish impact acknowledgement should cover the affected categories or every affected rider. It matters because a rider can enter a changed category during review and be published under an acknowledgement that never showed them ([#370](https://github.com/kchan1028/event-registration/issues/370)).
+
+The owner was asked "Should the impact acknowledgement cover each affected category, or every affected rider? This decides how #370 gets fixed. Covering every rider would refuse your publish whenever anyone enters a changed category during your review, so I recommend covering categories." and answered "leave it alone". Reading, not a broader decision: the acknowledgement stays as it is, covering the reviewed draft and live version only, and #370 stays open and unfixed. Ask the owner again before changing that or closing #370.
 
 ### Waitlist offer status retry
 

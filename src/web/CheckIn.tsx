@@ -239,7 +239,7 @@ export function CheckIn({ eventId }: { eventId: string }) {
       {data && batchMode && can(data.roles, 'checkin.settings') && <BibBatchPanel key={eventId + data.dayId + batchMode} eventId={eventId} dayId={data.dayId} mode={batchMode} onChanged={() => refreshCurrentList.current()} onClose={() => setBatchMode(null)} />}
 
       {data && showBibs && can(data.roles, 'checkin.settings') && <>
-        <BibSettingsPanel data={data} onSaved={() => refreshCurrentList.current()} onClose={() => setShowBibs(false)} />
+        <BibSettingsPanel data={data} onSaved={() => { appliedEpoch.current++; refreshCurrentList.current(); }} onClose={() => setShowBibs(false)} />
         <AutomaticBibs key={eventId} eventId={eventId} />
       </>}
 
@@ -897,6 +897,8 @@ type BarcodeDetectorCtor = new (opts: { formats: string[] }) => BarcodeDetectorL
  */
 function CameraScan({ onCode, onClose }: { onCode: (code: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const onCodeRef = useRef(onCode);
+  onCodeRef.current = onCode;
   const [error, setError] = useState<string | null>(null);
   const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
 
@@ -925,7 +927,7 @@ function CameraScan({ onCode, onClose }: { onCode: (code: string) => void; onClo
             const value = found[0]?.rawValue?.trim();
             if (value && !done) {
               done = true;
-              onCode(value);
+              onCodeRef.current(value);
             }
           } catch {
             /* frame not ready yet */
@@ -941,6 +943,7 @@ function CameraScan({ onCode, onClose }: { onCode: (code: string) => void; onClo
       if (timer !== null) window.clearInterval(timer);
       stream?.getTracks().forEach((t) => t.stop());
     };
+    // The camera stays open for this visit. The callback ref follows a race-day change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

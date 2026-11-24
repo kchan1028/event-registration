@@ -12,7 +12,7 @@ import { IssuesPanel } from './IssuesPanel';
 import { Pools } from './Pools';
 import { Preview } from './Preview';
 import { Publish } from './Publish';
-import type { WaiverChange } from '../shared/impact';
+import type { PublishReview } from '../shared/impact';
 import { StartLists } from './StartLists';
 import { Registrations } from './Registrations';
 import { CsvImport } from './CsvImport';
@@ -32,10 +32,14 @@ export interface Draft {
   issues: Issue[];
   saveState: SaveState;
   saveError: string | null;
+  /** The server revision of the saved copy `config` was last loaded or saved as. `data.revision` can be newer, from replies that read after another save. */
+  savedRevision: number;
+  /** Saves pending edits now. False when the save failed or conflicted. */
+  save: () => Promise<boolean>;
   update: (fn: (c: EventConfig) => EventConfig) => void;
   addTestEntries: (categoryId: string, count: number) => Promise<TestEntryResult>;
   clearTestEntries: () => Promise<number>;
-  publish: (acknowledgeWarnings: boolean, acknowledgeImpact?: boolean, waiverChange?: WaiverChange) => Promise<number>;
+  publish: (reviewed: PublishReview, acknowledgeWarnings: boolean, acknowledgeImpact?: boolean, waiverChangeReason?: string) => Promise<number>;
   reload: () => void;
 }
 
@@ -57,6 +61,7 @@ function useDraft(eventId: string) {
   const configRef = useRef<EventConfig | null>(null);
   const savedJson = useRef('');
   const revision = useRef(0);
+  const [savedRevision, setSavedRevision] = useState(0);
   const inflight = useRef<Promise<void> | null>(null);
   const timer = useRef<number | undefined>(undefined);
 
@@ -70,6 +75,7 @@ function useDraft(eventId: string) {
         configRef.current = payload.config;
         savedJson.current = JSON.stringify(payload.config);
         revision.current = payload.revision;
+        setSavedRevision(payload.revision);
         setSaveState('saved');
         setSaveError(null);
       })
@@ -83,13 +89,20 @@ function useDraft(eventId: string) {
     const cfg = configRef.current;
     if (!cfg) return true;
     const json = JSON.stringify(cfg);
-    if (json === savedJson.current) return true;
+    if (json === savedJson.current) {
+      // An edit put back before autosave, or a failed save of a copy that matches the saved one, leaves nothing to save.
+      setSaveState((s) => (s === 'conflict' ? s : 'saved'));
+      return true;
+    }
     setSaveState('saving');
     let ok = false;
+    const sent = revision.current;
     const p = api
-      .saveConfig(eventId, revision.current, cfg)
+      .saveConfig(eventId, sent, cfg)
       .then((payload) => {
-        revision.current = payload.revision;
+        // This save made the next revision. The reply can show a later one if someone else saved in between.
+        revision.current = sent + 1;
+        setSavedRevision(sent + 1);
         savedJson.current = json;
         setData(payload);
         setSaveError(null);
@@ -148,9 +161,9 @@ function useDraft(eventId: string) {
   }, [eventId, setData]);
 
   const publish = useCallback(
-    async (acknowledgeWarnings: boolean, acknowledgeImpact = false, waiverChange?: WaiverChange) => {
+    async (reviewed: PublishReview, acknowledgeWarnings: boolean, acknowledgeImpact = false, waiverChangeReason?: string) => {
       if (!(await flush())) throw new ApiError(409, 'The latest changes could not be saved, so nothing was published.');
-      const payload = await api.publish(eventId, acknowledgeWarnings, acknowledgeImpact, waiverChange);
+      const payload = await api.publish(eventId, reviewed, acknowledgeWarnings, acknowledgeImpact, waiverChangeReason);
       setData(payload);
       return payload.publishedVersion;
     },
@@ -160,7 +173,7 @@ function useDraft(eventId: string) {
   const issues = useMemo(() => (config && data ? validateConfig(config, data.entries) : []), [config, data]);
 
   const draft: Draft | null =
-    data && config ? { data, readOnly, config, issues, saveState, saveError, update, addTestEntries, clearTestEntries, publish, reload: load } : null;
+    data && config ? { data, readOnly, config, issues, saveState, saveError, savedRevision, save: flush, update, addTestEntries, clearTestEntries, publish, reload: load } : null;
   return { draft, loadError };
 }
 

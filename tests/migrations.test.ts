@@ -2,6 +2,7 @@ import pg from 'pg';
 import { describe, expect, inject, it } from 'vitest';
 import { ensureLocalDatabase, MIGRATIONS, openDb } from '../src/server/db';
 import { testApp, testDatabaseUrl } from './support/db';
+import { publishReviewed } from './support/publish';
 
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const TEXT_TIMESTAMPS = `SELECT table_name, column_name FROM information_schema.columns
@@ -273,7 +274,7 @@ describe('migration 13: timestamps become timestamptz', () => {
     const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
     const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { updatedAt: string };
     expect(event.updatedAt).toMatch(ISO);
-    await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     const versions = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { versions: { publishedAt: string }[] };
     expect(versions.versions[0].publishedAt).toMatch(ISO);
   });

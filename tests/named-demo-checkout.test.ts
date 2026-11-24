@@ -3,6 +3,7 @@ import { regionalHistoricalDemos } from '../src/shared/regionalHistoricalEvents'
 import { teamTimeTrialResearchDemos } from '../src/shared/teamTimeTrialResearch';
 import { testApp } from './support/db';
 import { as } from './support/auth';
+import { publishReviewed } from './support/publish';
 
 const published = [
   { key: 'berkeley-events', organizationName: 'Berkeley Omnium (local demo)' },
@@ -83,7 +84,7 @@ describe('named demo checkout and workspace isolation', () => {
     let event = (await app.inject({ method: 'GET', url })).json();
     event.config.event.isDemo = false;
     expect((await app.inject({ method: 'PUT', url: `${url}/config`, payload: { revision: event.revision, config: event.config } })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'POST', url: `${url}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, url, { acknowledgeWarnings: true })).statusCode).toBe(200);
     event = (await app.inject({ method: 'GET', url })).json();
     event.config.event.isDemo = true;
     expect((await app.inject({ method: 'PUT', url: `${url}/config`, payload: { revision: event.revision, config: event.config } })).statusCode).toBe(200);

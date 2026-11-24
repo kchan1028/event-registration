@@ -4,12 +4,13 @@ import { testApp, testDatabaseUrl } from './support/db';
 import { as } from './support/auth';
 import { parseCsv } from '../src/shared/csv';
 import { takeOffTeam } from './support/membership';
+import { publishReviewed } from './support/publish';
 
 async function setup() {
   const databaseUrl = await testDatabaseUrl();
   const { app } = await testApp({ databaseUrl, now: () => new Date('2027-03-01T18:00:00Z') });
   const { eventId, organizationId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json();
-  expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+  expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
   const { config } = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json();
   const categoryId = config.categories.find((c: { timingCode: string }) => c.timingCode === 'RR-M35-34').id;
   let nonce = 0;

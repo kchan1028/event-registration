@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
 import { pairKey, suggestMatches, type IdentityOrder } from '../src/shared/riderIdentity';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 /* Rider identity across orders: suggested matches, organizer-confirmed links. */
 
@@ -39,7 +40,7 @@ async function setup() {
   let tick = 0;
   const { app } = await testApp({ now: () => new Date(start + tick++ * 1000), holdMinutes: 10 });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await app.inject({ method: 'PUT', url: `/api/events/${eventId}/bib-settings`, payload: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });
   const ev = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
   const code = (c: string) => ev.config.categories.find((x) => x.timingCode === c)!.id;
@@ -140,7 +141,7 @@ describe('linked riders and shared limits', () => {
     expect(collegiate.startGroupId).toBe(domestic.startGroupId);
     const config = { ...ev.config, startGroups: ev.config.startGroups.map((g) => (g.id === domestic.startGroupId ? { ...g, fieldLimit: 2 } : g)) };
     expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: ev.revision, config } })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true })).statusCode).toBe(200);
 
     let n = 0;
     const order = (categoryId: string, rider: Record<string, unknown>) =>

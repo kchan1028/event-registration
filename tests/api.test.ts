@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { testApp, testDatabaseUrl } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 type Payload = { id: string; revision: number; config: EventConfig; entries: { categoryId: string }[]; issues: { level: string; key: string }[]; publishedVersion: number | null };
 
@@ -132,17 +133,17 @@ describe('publishing', () => {
     const broken = structuredClone(event.config);
     broken.categories[0].timingCode = '';
     const saved = (await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: event.revision, config: broken } })).json() as Payload;
-    const blocked = await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    const blocked = await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     expect(blocked.statusCode).toBe(422);
     expect(blocked.json().error).toMatch(/Fix 1 error/);
 
     const fixed = (await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { revision: saved.revision, config: event.config } })).json() as Payload;
     const hasWarnings = fixed.issues.some((i) => i.level === 'warning');
     if (hasWarnings) {
-      const needAck = await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: false } });
+      const needAck = await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: false });
       expect(needAck.statusCode).toBe(422);
     }
-    const ok = await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+    const ok = await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
     expect(ok.statusCode).toBe(200);
     expect(ok.json().publishedVersion).toBe(1);
 

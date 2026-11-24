@@ -1,11 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
+import { publishReviewed } from './support/publish';
 
 for (const scope of ['event', 'day', 'race'] as const) {
   test(`prints ${scope} cancellation notices with day-specific safety instructions`, async ({ page }) => {
     const { eventId } = await (await page.request.post('/api/demo')).json();
     expect((await page.request.delete(`/api/events/${eventId}/test-entries`)).status()).toBe(200);
-    expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+    expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
     const { config } = await (await page.request.get(`/api/events/${eventId}`)).json();
     const race = config.races[0]; const day = config.days.find((d: { id: string }) => d.id === race.dayId);
     const selection = scope === 'event' ? { scope } : scope === 'day' ? { scope, dayId: day.id } : { scope, raceId: race.id };

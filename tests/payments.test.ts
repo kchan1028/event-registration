@@ -5,6 +5,7 @@ import { paymentsFromEnv, publicAppUrl, stripePayments } from '../src/server/pay
 import { testApp, testDatabaseUrl } from './support/db';
 import { as, fakeAuth } from './support/auth';
 import type { EventConfig } from '../src/shared/schema';
+import { publishReviewed } from './support/publish';
 
 /*
  * Stripe hosted Checkout in test mode (ADR 0002, Phase 2). No network: the Stripe client's
@@ -17,7 +18,7 @@ const RIDER = { firstName: 'Test', lastName: 'Rider', email: 'test.rider@example
 
 type Order = { id: string; status: string; totalCents: number; paidWith: string | null; entries: { status: string }[] };
 
-async function setup(opts: { holdMinutes?: number; client?: Stripe } = {}) {
+async function setup(opts: { holdMinutes?: number; client?: Stripe; onSessionCreated?: (session: { id: string }) => Promise<void> } = {}) {
   let now = new Date('2027-03-01T18:00:00Z');
   const clock = { advance: (min: number) => (now = new Date(now.getTime() + min * 60_000)) };
   const client = opts.client ?? new Stripe('sk_test_fictional', { maxNetworkRetries: 0 });
@@ -25,14 +26,16 @@ async function setup(opts: { holdMinutes?: number; client?: Stripe } = {}) {
   const create = vi.spyOn(client.checkout.sessions, 'create');
   if (!opts.client) create.mockImplementation((async (params: Stripe.Checkout.SessionCreateParams) => {
     n++;
-    return { id: `cs_test_${n}`, url: `https://checkout.stripe.test/pay/${n}`, expires_at: params.expires_at!, amount_total: params.line_items![0].price_data!.unit_amount! } as Stripe.Checkout.Session;
+    const session = { id: `cs_test_${n}`, url: `https://checkout.stripe.test/pay/${n}`, expires_at: params.expires_at!, amount_total: params.line_items![0].price_data!.unit_amount! } as Stripe.Checkout.Session;
+    await opts.onSessionCreated?.(session);
+    return session;
   }) as never);
   vi.spyOn(client.refunds, 'create').mockImplementation((async () => ({ id: 're_test_1', status: 'pending', failure_reason: null }) as unknown as Stripe.Refund) as never);
   const payments = stripePayments({ secretKey: 'sk_test_fictional', webhookSecret: WEBHOOK_SECRET, client });
   const databaseUrl = await testDatabaseUrl();
   const { app } = await testApp({ databaseUrl, now: () => now, holdMinutes: opts.holdMinutes ?? 10, payments, appUrl: 'http://app.test' });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/publish`, payload: { acknowledgeWarnings: true } });
+  await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
   const code = (c: string) => event.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
@@ -42,10 +45,15 @@ async function setup(opts: { holdMinutes?: number; client?: Stripe } = {}) {
   const checkout = (orderId: string, headers: Record<string, string> = {}) => app.inject({ method: 'POST', url: `/api/orders/${orderId}/checkout-session`, headers });
   const get = async (orderId: string) => (await app.inject({ method: 'GET', url: `/api/orders/${orderId}` })).json() as Order;
 
-  /** Sends a Stripe-signed checkout.session.* event. */
-  const webhook = (id: string, type: string, session: Record<string, unknown>, secret = WEBHOOK_SECRET) => {
+  /** Signs one checkout.session.* event the same way Stripe does. */
+  const sign = (id: string, type: string, session: Record<string, unknown>, secret = WEBHOOK_SECRET) => {
     const payload = JSON.stringify({ id, object: 'event', type, livemode: false, data: { object: { object: 'checkout.session', currency: 'usd', payment_status: 'paid', payment_intent: 'pi_test_1', ...session } } });
     const header = client.webhooks.generateTestHeaderString({ payload, secret });
+    return { payload, header };
+  };
+  /** Sends a Stripe-signed checkout.session.* event. */
+  const webhook = (id: string, type: string, session: Record<string, unknown>, secret = WEBHOOK_SECRET) => {
+    const { payload, header } = sign(id, type, session, secret);
     return app.inject({ method: 'POST', url: '/api/payments/stripe/webhook', headers: { 'content-type': 'application/json; charset=utf-8', 'stripe-signature': header }, payload });
   };
   /** A paid session event for an order, as Stripe would send it. */
@@ -59,7 +67,7 @@ async function setup(opts: { holdMinutes?: number; client?: Stripe } = {}) {
       await c.end();
     }
   };
-  return { app, clock, create, order, checkout, get, webhook, paidSession, attempts, eventId, databaseUrl };
+  return { app, clock, create, order, checkout, get, webhook, sign, paidSession, attempts, eventId, databaseUrl };
 }
 
 describe('payment configuration', () => {
@@ -270,8 +278,143 @@ describe('Stripe hosted Checkout (test mode)', () => {
     const { order, checkout, webhook, paidSession, get } = await setup();
     const o = await order(['RR-M35-34']);
     await checkout(o.id);
-    expect((await webhook('evt_test_other', 'checkout.session.completed', paidSession(o, 'cs_test_not_ours'))).json()).toMatchObject({ result: 'unknown_session' });
+    const unknown = paidSession(o, 'cs_test_not_ours');
+    expect((await webhook('evt_test_other', 'checkout.session.completed', unknown)).json()).toEqual({ result: 'unknown_session', duplicate: false });
+    expect((await webhook('evt_test_other', 'checkout.session.completed', unknown)).json()).toEqual({ result: 'unknown_session', duplicate: true });
     expect((await get(o.id)).status).toBe('held');
+  });
+
+  it('leaves a session that names another order unknown when the same event is delivered again', async () => {
+    const { order, checkout, webhook, paidSession, get } = await setup();
+    const o = await order(['RR-M35-34']);
+    await checkout(o.id);
+    const mismatched = paidSession(o, 'cs_test_1', { metadata: { order_id: 'order_not_this' }, client_reference_id: 'order_not_this' });
+    expect((await webhook('evt_test_mismatch', 'checkout.session.completed', mismatched)).json()).toEqual({ result: 'unknown_session', duplicate: false });
+    expect((await webhook('evt_test_mismatch', 'checkout.session.completed', mismatched)).json()).toEqual({ result: 'unknown_session', duplicate: true });
+    expect((await get(o.id)).status).toBe('held');
+  });
+
+  it('applies a paid notification that was saved before its session row existed', async () => {
+    let deliver: ((sessionId: string) => Promise<void>) | undefined;
+    const { order, checkout, webhook, paidSession, get, attempts, databaseUrl } = await setup({
+      onSessionCreated: async (session) => { if (deliver) await deliver(session.id); },
+    });
+    const o = await order(['RR-M35-34']);
+    let first: Awaited<ReturnType<typeof webhook>> | undefined;
+    deliver = async (sessionId) => {
+      first = await webhook('evt_test_early', 'checkout.session.completed', paidSession(o, sessionId));
+    };
+    expect((await checkout(o.id)).json()).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/pay/1' });
+    expect(first!.json()).toEqual({ result: 'unknown_session', duplicate: false });
+    expect((await get(o.id)).status).toBe('confirmed');
+    expect((await webhook('evt_test_early', 'checkout.session.completed', paidSession(o))).json()).toEqual({ result: 'confirmed', duplicate: true });
+    expect(await attempts(o.id)).toEqual([{ provider: 'stripe_test', provider_ref: 'pi_test_1', amount_cents: o.totalCents, result_status: 'confirmed' }]);
+    const saved = new pg.Client({ connectionString: databaseUrl });
+    await saved.connect();
+    try {
+      expect((await saved.query(`SELECT result, order_id FROM provider_events WHERE id = 'evt_test_early'`)).rows).toEqual([{ result: 'confirmed', order_id: o.id }]);
+    } finally {
+      await saved.end();
+    }
+  });
+
+  it('reports a resent payment notification as a duplicate when it overlaps recording the session', async () => {
+    let deliver: ((sessionId: string) => Promise<void>) | undefined;
+    const { app, order, checkout, webhook, sign, paidSession, get, attempts, eventId, databaseUrl } = await setup({
+      onSessionCreated: async (session) => { if (deliver) await deliver(session.id); },
+    });
+    // A second app.inject does not enter the route while the checkout inject is still running.
+    const address = await app.listen({ host: '127.0.0.1', port: 0 });
+    const o = await order(['RR-M35-34']);
+    const side = new pg.Client({ connectionString: databaseUrl });
+    await side.connect();
+    let sessionId = '';
+    let first: Awaited<ReturnType<typeof webhook>> | undefined;
+    let holding: () => void = () => undefined;
+    const lockHeld = new Promise<void>((resolve) => { holding = resolve; });
+    deliver = async (id) => {
+      sessionId = id;
+      first = await webhook('evt_test_overlap', 'checkout.session.completed', paidSession(o, id));
+      await side.query('BEGIN');
+      await side.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`event:${eventId}`]);
+      holding();
+    };
+    const checkoutDone = checkout(o.id);
+    const count = async (sql: string) => Number((await side.query<{ n: string }>(sql)).rows[0].n);
+    const waitFor = async (ready: () => Promise<boolean>, label: string) => {
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline) {
+        if (await ready()) return;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      const activity = await side.query(`SELECT pid, state, wait_event_type, left(query, 80) AS query, pg_blocking_pids(pid) AS blocked_by FROM pg_stat_activity WHERE datname = current_database()`);
+      throw new Error(`timed out waiting for ${label}; activity=${JSON.stringify(activity.rows)}`);
+    };
+    let resend: Promise<{ result: string; duplicate: boolean }> | undefined;
+    try {
+      await lockHeld;
+      await waitFor(
+        async () => (await count(`SELECT count(*) AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid() AND pg_backend_pid() = ANY(pg_blocking_pids(pid))`)) >= 1,
+        'recording to wait on the event lock',
+      );
+      const signed = sign('evt_test_overlap', 'checkout.session.completed', paidSession(o, sessionId));
+      resend = fetch(`${address}/api/payments/stripe/webhook`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json; charset=utf-8', 'stripe-signature': signed.header },
+        body: signed.payload,
+      }).then(async (response) => response.json() as Promise<{ result: string; duplicate: boolean }>);
+      await waitFor(
+        async () => (await count(`SELECT count(*) AS n FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid WHERE a.datname = current_database() AND l.locktype = 'advisory' AND NOT l.granted`)) >= 2,
+        'the resend to wait on the session lock',
+      );
+      await side.query('COMMIT');
+      expect((await checkoutDone).json()).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/pay/1' });
+      expect(first!.json()).toEqual({ result: 'unknown_session', duplicate: false });
+      expect(await resend).toEqual({ result: 'confirmed', duplicate: true });
+      expect((await get(o.id)).status).toBe('confirmed');
+      expect(await attempts(o.id)).toEqual([{ provider: 'stripe_test', provider_ref: 'pi_test_1', amount_cents: o.totalCents, result_status: 'confirmed' }]);
+    } finally {
+      await side.query('ROLLBACK').catch(() => undefined);
+      await side.end();
+    }
+  });
+
+  it('leaves a saved notification unknown when it names another order or another currency', async () => {
+    let deliver: ((sessionId: string) => Promise<void>) | undefined;
+    const { order, checkout, webhook, paidSession, get, attempts } = await setup({
+      onSessionCreated: async (session) => { if (deliver) await deliver(session.id); },
+    });
+    const o = await order(['RR-M35-34']);
+    const other = await order(['RR-M35-34']);
+    const missing = paidSession(o, 'cs_test_1', { metadata: { order_id: 'order_not_this' }, client_reference_id: 'order_not_this' });
+    deliver = async (sessionId) => {
+      const namedOther = paidSession(o, sessionId, { metadata: { order_id: other.id }, client_reference_id: other.id });
+      expect((await webhook('evt_test_early_other', 'checkout.session.completed', namedOther)).json()).toEqual({ result: 'unknown_session', duplicate: false });
+      expect((await webhook('evt_test_early_eur', 'checkout.session.completed', paidSession(o, sessionId, { currency: 'eur' }))).json()).toEqual({ result: 'unknown_session', duplicate: false });
+      expect((await webhook('evt_test_early_missing', 'checkout.session.completed', { ...missing, id: sessionId })).json()).toEqual({ result: 'unknown_session', duplicate: false });
+    };
+    expect((await checkout(o.id)).json()).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/pay/1' });
+    expect((await get(o.id)).status).toBe('held');
+    expect((await get(other.id)).status).toBe('held');
+    expect(await attempts(o.id)).toEqual([]);
+    expect(await attempts(other.id)).toEqual([]);
+    expect((await webhook('evt_test_early_missing', 'checkout.session.completed', { ...missing, id: 'cs_test_1' })).json()).toEqual({ result: 'unknown_session', duplicate: true });
+    expect((await webhook('evt_test_early_eur', 'checkout.session.completed', paidSession(o, 'cs_test_1', { currency: 'eur' }))).json()).toMatchObject({ result: 'needs_attention', duplicate: false });
+  });
+
+  it('sends a short payment saved before its session row to the organizer', async () => {
+    let deliver: ((sessionId: string) => Promise<void>) | undefined;
+    const { order, checkout, webhook, paidSession, get } = await setup({
+      onSessionCreated: async (session) => { if (deliver) await deliver(session.id); },
+    });
+    const o = await order(['RR-M35-34']);
+    deliver = async (sessionId) => {
+      expect((await webhook('evt_test_early_short', 'checkout.session.completed', paidSession(o, sessionId, { amount_total: 100 }))).json()).toEqual({ result: 'unknown_session', duplicate: false });
+    };
+    expect((await checkout(o.id)).json()).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/pay/1' });
+    const after = await get(o.id);
+    expect(after.status).toBe('needs_attention');
+    expect(after.entries.every((e) => e.status === 'released')).toBe(true);
   });
 
   it('waits for a delayed payment, then confirms; a late failure after success changes nothing', async () => {
@@ -302,6 +445,30 @@ describe('Stripe hosted Checkout (test mode)', () => {
     expect((await get(o.id)).status).toBe('needs_attention');
   });
 
+  it('saves a session that opens after the rider cancelled and does not send the rider to it', async () => {
+    let cancel: (() => Promise<unknown>) | undefined;
+    const { app, order, checkout, get, databaseUrl } = await setup({
+      onSessionCreated: async () => { if (cancel) await cancel(); },
+    });
+    const o = await order(['RR-M35-34']);
+    cancel = () => app.inject({ method: 'POST', url: `/api/orders/${o.id}/cancel` });
+    const res = await checkout(o.id);
+    expect(res.statusCode, res.body).toBe(409);
+    expect(res.json()).toEqual({ error: 'Your hold has ended. Start a new registration to pay.' });
+    const after = await get(o.id);
+    expect(after.status).toBe('cancelled');
+    expect(after.entries.every((e) => e.status === 'released')).toBe(true);
+    const left = new pg.Client({ connectionString: databaseUrl });
+    await left.connect();
+    try {
+      const sessions = await left.query(`SELECT status FROM payment_sessions WHERE order_id = $1`, [o.id]);
+      expect(sessions.rowCount).toBe(1);
+      expect(sessions.rows[0].status).toBe('open');
+    } finally {
+      await left.end();
+    }
+  });
+
   it('payment after the hold ended confirms only while the places are still free', async () => {
     const { order, checkout, webhook, paidSession, get, clock } = await setup();
     const o = await order(['RR-M35-34']);
@@ -320,6 +487,58 @@ describe('Stripe hosted Checkout (test mode)', () => {
     expect((await webhook('evt_test_first', 'checkout.session.completed', paidSession(o, 'cs_test_1'))).json()).toMatchObject({ result: 'confirmed' });
     expect((await webhook('evt_test_second', 'checkout.session.completed', paidSession(o, 'cs_test_2'))).json()).toMatchObject({ result: 'duplicate_charge' });
     expect((await get(o.id)).status).toBe('confirmed');
+  });
+
+  it('records exactly one of two paid sessions that arrive together as a duplicate charge', async () => {
+    const { order, checkout, webhook, paidSession, get, attempts } = await setup({ holdMinutes: 60 });
+    const o = await order(['RR-M35-34']);
+    await checkout(o.id);
+    await webhook('evt_test_initial_expiry', 'checkout.session.expired', paidSession(o, 'cs_test_1', { payment_status: 'unpaid' }));
+    expect((await checkout(o.id)).json()).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/pay/2' });
+    const [first, second] = await Promise.all([
+      webhook('evt_test_first', 'checkout.session.completed', paidSession(o, 'cs_test_1', { payment_intent: 'pi_test_1' })),
+      webhook('evt_test_second', 'checkout.session.completed', paidSession(o, 'cs_test_2', { payment_intent: 'pi_test_2' })),
+    ]);
+    expect([first.json().result, second.json().result].sort()).toEqual(['confirmed', 'duplicate_charge']);
+    expect((await get(o.id)).status).toBe('confirmed');
+    const paid = await attempts(o.id);
+    expect(paid).toHaveLength(1);
+    expect(paid[0]).toMatchObject({ provider: 'stripe_test', result_status: 'confirmed', amount_cents: o.totalCents });
+  });
+
+  it('classifies a paid notification from rows committed while it waited on the event lock', async () => {
+    const { order, checkout, webhook, paidSession, get, eventId, databaseUrl } = await setup();
+    const o = await order(['RR-M35-34']);
+    await checkout(o.id);
+    const side = new pg.Client({ connectionString: databaseUrl });
+    await side.connect();
+    let pending: ReturnType<typeof webhook> | undefined;
+    try {
+      await side.query('BEGIN');
+      await side.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`event:${eventId}`]);
+      pending = webhook('evt_test_waiting', 'checkout.session.completed', paidSession(o, 'cs_test_1'));
+      let waiting = false;
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline) {
+        const seen = await side.query(`SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND pid <> pg_backend_pid() LIMIT 1`);
+        if (seen.rowCount) {
+          waiting = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(waiting).toBe(true);
+      await side.query(
+        `INSERT INTO provider_events (id, provider, type, session_id, order_id, outcome, result, received_at) VALUES ('evt_test_already_paid', 'stripe_test', 'checkout.session.completed', 'cs_test_other', $1, 'paid', 'confirmed', $2)`,
+        [o.id, '2027-03-01T18:01:00Z'],
+      );
+      await side.query('COMMIT');
+      expect((await pending).json()).toMatchObject({ result: 'duplicate_charge', duplicate: false });
+      expect((await get(o.id)).status).toBe('held');
+    } finally {
+      await side.query('ROLLBACK').catch(() => undefined);
+      await side.end();
+    }
   });
 
   it('marks a refund of the duplicate charge, so it is not read as a refund of the order', async () => {

@@ -2,11 +2,12 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Locator } from '@playwright/test';
 import { expect, test, type Page } from './fixtures';
 import type { CancellationConfirmation, CancellationConfirmationInput } from '../src/shared/cancellations';
+import { publishReviewed } from './support/publish';
 
 async function setup(page: Page, pay = true) {
   const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
   const event = await (await page.request.get(`/api/events/${eventId}`)).json();
-  expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).status()).toBe(200);
+  expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
   let order: { id: string } | null = null;
   if (pay) {
     const rider = { firstName: 'Review', lastName: 'Fictional', email: 'review@plan.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Fictional Contact', phone: '555-555-0199' } };
@@ -216,7 +217,7 @@ test('unlocks a refused request only when the server proves the vanished scope w
     record.config.days = record.config.days.filter((d: { id: string }) => d.id !== 'day_confirmation_temporary');
     if (include) record.config.days.push({ id: 'day_confirmation_temporary', label: 'Temporary published confirmation day', date: date.toISOString().slice(0, 10) });
     expect((await page.request.put(`/api/events/${s.eventId}/config`, { data: { revision: record.revision, config: record.config } })).status()).toBe(200);
-    expect((await page.request.post(`/api/events/${s.eventId}/publish`, { data: { acknowledgeWarnings: true, acknowledgeImpact: true } })).status()).toBe(200);
+    expect((await publishReviewed(page.request, `/api/events/${s.eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).status()).toBe(200);
   };
   await changeDay(true); await page.reload(); await s.load(); await expect(s.confirmation.getByLabel('Reason for the reviewed plan')).toBeVisible();
   await s.preview.getByLabel('Cancellation scope', { exact: true }).selectOption('day'); await s.preview.getByLabel('Published day').selectOption('day_confirmation_temporary');

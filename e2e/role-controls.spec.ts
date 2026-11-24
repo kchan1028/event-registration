@@ -1,5 +1,6 @@
 import type { APIRequestContext, Browser } from '@playwright/test';
 import { expect, test, type Page } from './fixtures';
+import { publishReviewed } from './support/publish';
 
 /*
  * Role-aware organizer screens: a control or instruction appears only for a role that can act on it.
@@ -30,7 +31,7 @@ for (const width of [375, 1440]) {
       await volunteer.getByRole('button', { name: 'Register a walk-up' }).click();
       await expect(volunteer.getByText('A registration manager or owner must publish this event before you share rider registration.')).toBeVisible();
 
-      expect((await page.request.post(`/api/events/${eventId}/publish`, { data: { acknowledgeWarnings: true } })).ok()).toBe(true);
+      expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
       await volunteer.reload();
       await expect(volunteer.getByText('No registered riders for this day yet.')).toBeVisible();
       await expect(volunteer.getByRole('button', { name: 'Add fictional demo riders' })).toHaveCount(0);
