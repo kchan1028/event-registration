@@ -120,7 +120,7 @@ flowchart LR
         AUD["Audit history"]
         DB[("Single primary datastore")]
     end
-    subgraph External["External services (none chosen)"]
+    subgraph External["External services (Stripe and Resend chosen, USA Cycling and timer files not chosen)"]
         PAY["Stripe hosted Checkout, Planned"]
         MAIL["Transactional email provider"]
         FED["USA Cycling, if access is approved"]
