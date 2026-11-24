@@ -80,7 +80,7 @@ The collection supplements, rather than replaces, the focused rule tests. Existi
 
 ### Reusable rehearsal coverage
 
-Reviewed November 23, 2026. A rerun of `npm run seed:cases` keeps a case study that is already loaded. Reset the case-study collection before expecting the rows added in this review. Reset drops the case-study organization's finance membership with the organization and leaves the fictional finance account in place. The next omnium load finds that account and grants finance again.
+Reviewed November 23, 2026. A rerun of `npm run seed:cases` keeps a case study that is already loaded. Reset the case-study collection before expecting the rows added in this review. Reset drops the case-study organization's finance membership and its role-history row with the organization and leaves the fictional finance account in place. The next omnium load finds that account, grants finance again, and records that grant with no actor.
 
 Morgan Example's three omnium orders share one name, email, team, and racing age, so a name search does not separate the ready order from the blocked one. None of these orders has a configured bib range, a recorded check-in, or a start-list lock. Payments are simulated. No seeded order has a provider checkout session. One paid Saturday order has a simulated partial refund of $10, and that entry stays confirmed.
 

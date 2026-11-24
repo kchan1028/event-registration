@@ -187,6 +187,11 @@ describe('generated race case studies', () => {
         WHERE a.id = 'acct_demo_case_refund'
       `);
       expect(finance.rows).toEqual([{ provider_user_id: 'seed:case-study-refund', organization_id: CASE_STUDY_ORG_ID, role: 'finance' }]);
+      const history = await seed.query<{ action: string; role: string; actor_id: string | null }>(`
+        SELECT action, role, actor_id FROM membership_changes
+        WHERE organization_id = $1 AND email = 'finance-seed@example.test'
+      `, [CASE_STUDY_ORG_ID]);
+      expect(history.rows).toEqual([{ action: 'granted', role: 'finance', actor_id: null }]);
       expect(byId('case-study-junior')).toMatchObject([{ event_id: 'evt_demo_case_criterium', order_status: 'confirmed', entry_status: 'confirmed', first_name: 'River', racing_age: 12, guardian_name: 'Jordan Example', signer_role: 'guardian', timing_code: 'DVC-J1014', license_reviewed: true, successes: 1, refunds: 0 }]);
     } finally {
       await seed.end();
@@ -231,6 +236,7 @@ describe('generated race case studies', () => {
       expect(await db.all('SELECT event_id FROM emergency_contact_views')).toEqual([]);
       expect(await db.all(`SELECT id FROM accounts WHERE id = 'acct_demo_case_refund'`)).toEqual([{ id: 'acct_demo_case_refund' }]);
       expect(await db.all(`SELECT role FROM organization_members WHERE account_id = 'acct_demo_case_refund'`)).toEqual([]);
+      expect(await db.all(`SELECT action FROM membership_changes WHERE email = 'finance-seed@example.test'`)).toEqual([]);
     } finally {
       await db.close();
     }
@@ -240,6 +246,7 @@ describe('generated race case studies', () => {
     const reloaded = openDb(databaseUrl);
     try {
       expect(await reloaded.all(`SELECT organization_id, role FROM organization_members WHERE account_id = 'acct_demo_case_refund'`)).toEqual([{ organization_id: CASE_STUDY_ORG_ID, role: 'finance' }]);
+      expect(await reloaded.all(`SELECT action, role, actor_id FROM membership_changes WHERE email = 'finance-seed@example.test'`)).toEqual([{ action: 'granted', role: 'finance', actor_id: null }]);
     } finally {
       await reloaded.close();
     }
