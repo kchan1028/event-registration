@@ -118,7 +118,7 @@ export async function testDatabaseUrl(opts: { empty?: boolean } = {}): Promise<s
  * (tests/support/auth.ts), who owns every organization they create or load.
  */
 export async function testApp(opts: Partial<AppOptions> = {}) {
-  const built = buildApp({ ...opts, auth: opts.auth ?? fakeAuth({ defaultEmail: DEFAULT_TEST_ORGANIZER }), databaseUrl: opts.databaseUrl ?? (await testDatabaseUrl()) });
+  const built = buildApp({ emailWebhookSecret: null, ...opts, auth: opts.auth ?? fakeAuth({ defaultEmail: DEFAULT_TEST_ORGANIZER }), databaseUrl: opts.databaseUrl ?? (await testDatabaseUrl()) });
   open.add(built.app);
   built.app.addHook('onClose', async () => {
     open.delete(built.app);

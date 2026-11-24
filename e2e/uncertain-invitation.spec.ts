@@ -8,7 +8,10 @@ test('an uncertain invitation can be retried without promising extra days', asyn
     json: {
       members: [{ accountId: 'acct_owner', email: 'organizer@example.test', role: 'owner' }],
       invitations: [{ email: 'timer@example.test', role: 'finance', expiresAt, revision: 'rev_lost', earlierEmail: false, lastEmail: { attemptId: 'eml_lost', status: 'uncertain', at: '2027-05-01T12:00:00.000Z' } },
-        { email: 'earlier@example.test', role: 'finance', expiresAt, revision: 'rev_earlier', earlierEmail: true, lastEmail: null }],
+        { email: 'earlier@example.test', role: 'finance', expiresAt, revision: 'rev_earlier', earlierEmail: true, lastEmail: null },
+        { email: 'delivered@example.test', role: 'finance', expiresAt, revision: 'rev_delivered', earlierEmail: false, lastEmail: { attemptId: 'eml_delivered', status: 'sent', at: '2027-05-01T12:00:00.000Z', delivery: 'delivered' } },
+        { email: 'bounced@example.test', role: 'finance', expiresAt, revision: 'rev_bounced', earlierEmail: false, lastEmail: { attemptId: 'eml_bounced', status: 'sent', at: '2027-05-01T12:00:00.000Z', delivery: 'bounced' } },
+        { email: 'complained@example.test', role: 'finance', expiresAt, revision: 'rev_complained', earlierEmail: false, lastEmail: { attemptId: 'eml_complained', status: 'sent', at: '2027-05-01T12:00:00.000Z', delivery: 'complained' } }],
       history: [],
     },
   }));
@@ -20,6 +23,10 @@ test('an uncertain invitation can be retried without promising extra days', asyn
     await organization.getByRole('button', { name: 'Team and roles', exact: true }).click();
     const team = organization.getByRole('region', { name: /^Team and roles for / });
     await expect(team.getByText('Email might have been sent', { exact: true })).toBeVisible();
+    await expect(team.getByText('Delivered', { exact: true })).toBeVisible();
+    await expect(team.getByText('Bounced', { exact: true })).toBeVisible();
+    await expect(team.getByText('Complaint received', { exact: true })).toBeVisible();
+    await expect(team.getByRole('button', { name: /Resend invitation to bounced@example.test/ })).toBeVisible();
     const retry = team.getByRole('button', { name: /Retry send/ });
     await expect(retry).toHaveAccessibleName('Retry send of the invitation email to timer@example.test without extending it');
     const earlier = team.getByRole('listitem').filter({ hasText: 'earlier@example.test' });

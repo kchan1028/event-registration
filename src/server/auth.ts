@@ -3,7 +3,7 @@ import type { FastifyRequest } from 'fastify';
 import { newId } from '../shared/factory';
 import { can, INVITATION_DAYS, ROLE_LABELS, type Invitation, type MembershipAction, type MembershipChange, type Permission, type Role, type ExpiredInvitationNotice } from '../shared/roles';
 import type { Db } from './db';
-import type { Mailer } from './email';
+import type { EmailDelivery, Mailer } from './email';
 import { listenHost } from './listen';
 import { HttpError } from './repo';
 import { juniorViewerSql, orderManagerSql } from './juniors';
@@ -303,6 +303,10 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     if (added) await record(organizationId, 'granted', target.email, role, grantedBy);
   }
 
+  function knownDelivery(value: string | null): EmailDelivery | null {
+    return value === 'delivered' || value === 'bounced' || value === 'complained' ? value : null;
+  }
+
   async function listMembers(organizationId: string) {
     return db.transaction(async () => {
       // Held across members, invitations, and history. First sign-in takes the same lock, so it cannot commit between the queries and leave the person off both lists.
@@ -311,8 +315,9 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         `SELECT m.account_id, a.email, m.role, m.revision FROM organization_members m JOIN accounts a ON a.id = m.account_id WHERE m.organization_id = $1 ORDER BY a.email, m.role`,
         [organizationId],
       );
-      const invitations = await db.all<{ email: string; role: Role; expires_at: string; revision: string; earlier_email: boolean; email_id: string | null; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null }>(
-        `SELECT i.email, i.role, i.expires_at, i.revision, i.earlier_email, m.id AS email_id, m.status AS email_status, m.created_at AS email_at FROM organization_invitations i
+      const invitations = await db.all<{ email: string; role: Role; expires_at: string; revision: string; earlier_email: boolean; email_id: string | null; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null; email_delivery: string | null }>(
+        `SELECT i.email, i.role, i.expires_at, i.revision, i.earlier_email, m.id AS email_id, m.status AS email_status, m.created_at AS email_at, m.delivery_status AS email_delivery
+         FROM organization_invitations i
          LEFT JOIN email_messages m ON m.id = i.email_attempt_id
          WHERE i.organization_id = $1 ORDER BY i.email, i.role`,
         [organizationId],
@@ -325,7 +330,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       return {
         members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role, revision: m.revision })),
         invitations: invitations.map(
-          (i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at, revision: i.revision, earlierEmail: i.earlier_email, lastEmail: i.email_id && i.email_status && i.email_at ? { attemptId: i.email_id, status: i.email_status, at: i.email_at } : null }),
+          (i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at, revision: i.revision, earlierEmail: i.earlier_email, lastEmail: i.email_id && i.email_status && i.email_at ? { attemptId: i.email_id, status: i.email_status, at: i.email_at, delivery: knownDelivery(i.email_delivery) } : null }),
         ),
         history: history.map((h): MembershipChange => ({ action: h.action, email: h.email, role: h.role, by: h.actor_email, at: h.created_at })),
       };

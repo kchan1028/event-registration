@@ -36,7 +36,7 @@ import { createPayments, paymentsFromEnv, publicAppUrl, type PaymentProvider } f
 import { createRefunds } from './refunds';
 import { createWaitlist } from './waitlist';
 import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
-import { createMailer, emailFromEnv, type EmailSender } from './email';
+import { checkedWebhookSecret, createMailer, emailFromEnv, emailWebhookSecretFromEnv, recordResendDelivery, ResendWebhookRejected, type EmailSender } from './email';
 import { createJuniors } from './juniors';
 import { createCancellationConfirmations } from './cancellationConfirmations';
 import { createCancellationFinancialPreflight } from './cancellationFinancialPreflight';
@@ -57,7 +57,7 @@ declare module 'fastify' {
     account?: Account;
   }
   interface FastifyContextConfig {
-    /** Routes open without sign-in: health, the public event list and event pages, and the Stripe webhook (trusted only by its signature). */
+    /** Routes open without sign-in: health, the public event list and event pages, the Stripe webhook, and, outside production when its secret is set, the Resend delivery webhook. Each webhook is trusted only by its signature. */
     public?: boolean;
   }
 }
@@ -79,6 +79,11 @@ export interface AppOptions {
   appUrl?: string;
   /** Outgoing email (ADR 0007). Defaults to local (recorded, never sent) unless EMAIL_MODE=resend. */
   email?: EmailSender;
+  /**
+   * Resend delivery webhook secret. Undefined reads RESEND_WEBHOOK_SECRET (unset leaves the route off).
+   * Null forces the route off. A string registers it after the same checks as the environment.
+   */
+  emailWebhookSecret?: string | null;
   /** Disabled unless age18 and explicit support account IDs are configured. */
   profileClaims?: ProfileClaimSettings;
   /** Staff release of unpaid holds. Defaults to staffHoldReleaseFromEnv. */
@@ -94,8 +99,9 @@ export function staffHoldReleaseFromEnv(env: Record<string, string | undefined> 
 }
 
 export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; orders: Orders; access: Access; automaticBibs: AutomaticBibs } {
-  // Sign-in, payments, and the app URL are resolved from the environment here and nowhere else.
+  // Sign-in, payments, the webhook secret, and the app URL are resolved from the environment here and nowhere else.
   // A missing or refused setting throws before anything is opened; src/server/index.ts prints it and exits.
+  const emailWebhookSecret = opts.emailWebhookSecret === undefined ? emailWebhookSecretFromEnv() : opts.emailWebhookSecret === null ? null : checkedWebhookSecret(opts.emailWebhookSecret);
   const provider = opts.auth ?? authProviderFromEnv();
   const paymentProvider = opts.payments ?? paymentsFromEnv();
   const appUrl = opts.appUrl ?? (paymentProvider.mode === 'simulated' ? '' : publicAppUrl());
@@ -647,6 +653,28 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       return payments.handleWebhook(String(req.body ?? ''), Array.isArray(signature) ? signature[0] : signature);
     });
   });
+
+  // Resend delivery notifications. Registered only when the signing secret is set, and never in production.
+  // Public, because Resend calls it; trusted only after the signature on the raw body verifies. It sends nothing.
+  if (emailWebhookSecret) {
+    const webhookSecret = emailWebhookSecret;
+    app.register(async (scope) => {
+      scope.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => done(null, body));
+      scope.post('/api/email/resend/webhook', isPublic, async (req) => {
+        try {
+          await recordResendDelivery(db, webhookSecret, String(req.body ?? ''), {
+            id: req.headers['svix-id'],
+            timestamp: req.headers['svix-timestamp'],
+            signature: req.headers['svix-signature'],
+          }, clock());
+        } catch (err) {
+          if (err instanceof ResendWebhookRejected) throw new HttpError(400, err.message);
+          throw err;
+        }
+        return { received: true };
+      });
+    });
+  }
 
   app.post('/api/orders/:id/cancel', async (req) => {
     const { id } = idParam.parse(req.params);

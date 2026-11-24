@@ -779,6 +779,23 @@ export const MIGRATIONS: string[] = [
       OR (staff_released_at IS NOT NULL AND staff_released_by IS NOT NULL AND staff_release_reason IS NOT NULL
         AND char_length(btrim(staff_release_reason)) BETWEEN 3 AND 280)
     );`,
+  `
+  -- Delivery outcome from a verified Resend webhook. Separate from send status. No bounce text, subject, or addresses.
+  ALTER TABLE email_messages
+    ADD COLUMN delivery_status text,
+    ADD COLUMN delivery_at timestamptz,
+    ADD CONSTRAINT email_messages_delivery_status_check
+      CHECK (delivery_status IS NULL OR delivery_status IN ('delivered', 'bounced', 'complained'));
+  CREATE INDEX email_messages_provider_message_id ON email_messages (provider_message_id) WHERE provider_message_id IS NOT NULL;
+  CREATE TABLE email_delivery_events (
+    id text PRIMARY KEY,
+    email_id text NOT NULL REFERENCES email_messages(id) ON DELETE CASCADE,
+    kind text NOT NULL CHECK (kind IN ('delivered', 'bounced', 'complained')),
+    occurred_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX email_delivery_events_email_occurred ON email_delivery_events (email_id, occurred_at);
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

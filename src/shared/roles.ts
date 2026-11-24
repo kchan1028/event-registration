@@ -75,7 +75,13 @@ export interface Invitation {
   /** An email from before attempts were tracked might have been sent, so there is no resend. */
   earlierEmail: boolean;
   /** The latest invitation email. `uncertain` means the provider may have accepted it. Null when none was made (seed scripts). */
-  lastEmail: { attemptId: string; status: 'recorded' | 'sent' | 'failed' | 'uncertain'; at: string } | null;
+  lastEmail: {
+    attemptId: string;
+    status: 'recorded' | 'sent' | 'failed' | 'uncertain';
+    at: string;
+    /** Provider delivery outcome. Null until a verified webhook records one. Independent of send status. */
+    delivery: 'delivered' | 'bounced' | 'complained' | null;
+  } | null;
 }
 
 export interface MembershipChange {
