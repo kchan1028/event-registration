@@ -68,7 +68,7 @@ The category schedule lists what riders buy, grouped under display headers that 
 | Category builder: copy a day's races to another day, bulk edit with before/after preview | Implemented; automated tests in CI |
 | Same-rider suggestions across orders, linked only when the organizer confirms | Implemented; automated tests in CI |
 | Organizer CSV exports: entries and a simulated ledger, without contact details | Implemented; automated tests in CI |
-| Registration lookup (name, email, team, order number, check-in code, whole license number, or active bib) and audited corrections of rider details with a required reason | Implemented; automated tests in CI. Each new correction records the signed-in organizer |
+| Registration lookup (name, email, team, order number, check-in code, whole license number, or active bib) and audited corrections of rider details with a required reason. Guardian fields on the order are not correctable yet ([open decision](product.md#guardian-correction-fields)) | Implemented; automated tests in CI. Each new correction records the signed-in organizer |
 | Coupon codes: percentage or fixed, validity window, eligible categories, total cap held atomically, one per order and never stacked on another discount | Implemented; automated tests in CI. Per-rider limits Implemented (same-rider rule); combinability Planned |
 | Per-category rider questions, waiver addenda, and bib ranges | Implemented; automated tests in CI |
 | QR check-in code on the rider confirmation; camera scanning at check-in in Chrome and Edge | Implemented; live camera scan not yet checked |
