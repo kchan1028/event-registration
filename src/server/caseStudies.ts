@@ -14,27 +14,45 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders) {
   async function seedOrders(eventId: string) {
     const event = await repo.getEvent(eventId);
     if (event.config.event.name !== 'Demo Redwood Omnium Weekend') return;
+    // The first Masters category is the Saturday road race. Every seeded order is that one day.
     const category = event.config.categories.find((row) => row.name.includes('Masters 35+'))!;
-    const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Morgan Example', signerRole: 'rider' as const };
-    const rider = {
-      firstName: 'Morgan', lastName: 'Example', email: 'morgan@example.test', phone: '202-555-0142', team: 'Fictional Wheel Club', racingAge: 40,
-      licenseCategory: '3' as const, licenseType: 'annual' as const, licenseNumber: 'DEMO-CASE-001', competitionClass: 'men' as const,
-      collegiateDivision: null, guardian: null, emergencyContact: { name: 'Riley Example', phone: '202-555-0176' },
-    };
-    // No account: seeded fictional orders belong to nobody.
-    const create = (suffix: string) => orders.createOrder(eventId, { clientRequestId: `case-study-${suffix}`, categoryIds: [category.id], rider, waiver, extras: {} }, null);
+    const place = (suffix: string, person: {
+      firstName: string; email: string; phone: string; team: string; racingAge: number; licenseNumber: string; contactName: string; contactPhone: string;
+    }) => orders.createOrder(eventId, {
+      clientRequestId: `case-study-${suffix}`,
+      categoryIds: [category.id],
+      // No account: seeded fictional orders belong to nobody.
+      rider: {
+        firstName: person.firstName, lastName: 'Example', email: person.email, phone: person.phone, team: person.team, racingAge: person.racingAge,
+        licenseCategory: '3' as const, licenseType: 'annual' as const, licenseNumber: person.licenseNumber, competitionClass: 'men' as const,
+        collegiateDivision: null, guardian: null, emergencyContact: { name: person.contactName, phone: person.contactPhone },
+      },
+      waiver: { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: `${person.firstName} Example`, signerRole: 'rider' as const },
+      extras: {},
+    }, null);
 
-    const successful = await create('successful');
+    const morgan = { firstName: 'Morgan', email: 'morgan@example.test', phone: '202-555-0142', team: 'Fictional Wheel Club', racingAge: 40, licenseNumber: 'DEMO-CASE-001', contactName: 'Riley Example', contactPhone: '202-555-0176' };
+    const successful = await place('successful', morgan);
     await orders.pay(successful.id, 'case-attempt-success', 'success');
     await orders.pay(successful.id, 'case-attempt-success', 'success');
     for (const entry of successful.entries) await orders.reviewLicense(entry.id, 'Seeded fictional license review for check-in rehearsal');
 
-    const retried = await create('declined-retried');
+    const retried = await place('declined-retried', morgan);
     await orders.pay(retried.id, 'case-attempt-declined', 'failure');
     await orders.pay(retried.id, 'case-attempt-retry', 'success');
 
-    await create('expired');
+    await place('expired', morgan);
     await db.run(`UPDATE orders SET hold_expires_at = '2000-01-01T00:00:00.000Z' WHERE event_id = $1 AND client_request_id = 'case-study-expired'`, [eventId]);
+
+    const ready = await place('taylor-ready', { firstName: 'Taylor', email: 'taylor-ready@example.test', phone: '202-555-0143', team: 'Blue Demo Team', racingAge: 41, licenseNumber: 'DEMO-CASE-010', contactName: 'Casey Example', contactPhone: '202-555-0177' });
+    await orders.pay(ready.id, 'case-attempt-taylor-ready', 'success');
+    for (const entry of ready.entries) await orders.reviewLicense(entry.id, 'Seeded fictional license review for the distinguishable ready rider');
+
+    const blocked = await place('taylor-blocked', { firstName: 'Taylor', email: 'taylor-blocked@example.test', phone: '202-555-0144', team: 'Gold Demo Team', racingAge: 52, licenseNumber: 'DEMO-CASE-011', contactName: 'Jordan Example', contactPhone: '202-555-0178' });
+    await orders.pay(blocked.id, 'case-attempt-taylor-blocked', 'success');
+
+    await place('active-hold', { firstName: 'Quinn', email: 'quinn@example.test', phone: '202-555-0145', team: 'Fictional Hold Club', racingAge: 44, licenseNumber: 'DEMO-CASE-012', contactName: 'Avery Example', contactPhone: '202-555-0179' });
+    await db.run(`UPDATE orders SET hold_expires_at = '2027-05-14T18:00:00.000Z' WHERE event_id = $1 AND client_request_id = 'case-study-active-hold'`, [eventId]);
   }
 
   async function loadUnlocked(key: CaseStudyKey) {
