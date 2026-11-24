@@ -121,7 +121,7 @@ flowchart LR
         DB[("Single primary datastore")]
     end
     subgraph External["External services (Stripe and Resend chosen, USA Cycling and timer files not chosen)"]
-        PAY["Stripe hosted Checkout, Planned"]
+        PAY["Stripe test-mode Checkout implemented, live Checkout Planned"]
         MAIL["Transactional email provider"]
         FED["USA Cycling, if access is approved"]
         TIMER["Timer software, via agreed files"]
