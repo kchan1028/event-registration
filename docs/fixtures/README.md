@@ -80,9 +80,9 @@ The collection supplements, rather than replaces, the focused rule tests. Existi
 
 ### Reusable rehearsal coverage
 
-Reviewed November 23, 2026. A rerun of `npm run seed:cases` keeps a case study that is already loaded. Reset the case-study collection before expecting the rows added in this review.
+Reviewed November 23, 2026. A rerun of `npm run seed:cases` keeps a case study that is already loaded. Reset the case-study collection before expecting the rows added in this review. Reset drops the case-study organization's finance membership with the organization and leaves the fictional finance account in place. The next omnium load finds that account and grants finance again.
 
-Morgan Example's three omnium orders share one name, email, team, and racing age, so a name search does not separate the ready order from the blocked one. None of these orders has a configured bib range, a recorded check-in, or a start-list lock. Payments are simulated. No seeded order has a provider checkout session.
+Morgan Example's three omnium orders share one name, email, team, and racing age, so a name search does not separate the ready order from the blocked one. None of these orders has a configured bib range, a recorded check-in, or a start-list lock. Payments are simulated. No seeded order has a provider checkout session. One paid Saturday order has a simulated partial refund of $10, and that entry stays confirmed.
 
 | Request id | Event and category | Rider | What it is for |
 |---|---|---|---|
@@ -96,6 +96,7 @@ Morgan Example's three omnium orders share one name, email, team, and racing age
 | `case-study-checkout-started` | Omnium, Saturday Masters road race | Cameron Example, Fictional Checkout Club, racing age 46 | Unpaid hold with a checkout-started timestamp and no payment session. The hold stays open through the same time as Quinn's. Staff release must refuse it. After 2027-05-14 18:00 UTC a fresh seed no longer has either open hold. |
 | `case-study-weekend` | Omnium, Saturday Masters road race and Sunday Masters criterium | Parker Example, Fictional Weekend Club, racing age 47 | Paid weekend package. Both entries are license reviewed. The weekend browser spec still builds its own package order. |
 | `case-study-withdrawn` | Omnium, Saturday Masters road race | Drew Example, Fictional Withdrawal Club, racing age 48 | Paid, then the entry is withdrawn. The order stays confirmed. There is no refund row. |
+| `case-study-refunded` | Omnium, Saturday Masters road race | Reese Example, Fictional Refund Club, racing age 49 | Paid, then a simulated partial refund of $10. The order and the entry stay confirmed. The license is not reviewed. The requester is a fictional finance account on this organization only (`finance-seed@example.test`). That account is not a sign-in identity. |
 | `case-study-junior` | Harbor criterium, Juniors 10-14 | River Example, Fictional Junior Club, racing age 12 | Paid and license reviewed. Guardian Jordan Example signs. The usability task that registers Casey Demo is a separate demo rider, not this row. |
 
 These development and rehearsal cases are not in the reusable seed. Automated tests build their own rows where a test is named.
@@ -103,19 +104,18 @@ These development and rehearsal cases are not in the reusable seed. Automated te
 | Missing case | Why it is not seeded |
 |---|---|
 | Missing waiver or missing guardian acceptance | Checkout requires a signed waiver before it creates an order. There is no approved way to store a missing acceptance. |
-| Refund row | A refund records the organizer account that requested it. The seed runs before any account exists. Drew Example is the withdrawn entry without a refund. The weekend browser spec creates a refund during its run. |
 | Waitlist offer | Joining requires a full category with the waitlist turned on, and an offer then needs a free place. Harbor Masters is the full field and has no waitlist. Turning one on would change that fixture. An offer on an open omnium category would block later registration there. |
 | Checked-in rider with a bib, a bib range, or a locked start list | The weekend browser spec assigns bib 100 and locks the omnium start lists during its run. The omnium rehearsal still records those steps. |
 
 ### Future-requirement cases
 
-These workflows are not represented as reusable seeded fixtures:
+These workflows are not clickable as completed product behavior:
 
 | Case | Expected future behavior | Why it is not clickable now |
 |---|---|---|
 | Series package spanning separate events or organizations | Reserve every component atomically, preserve each accepted version, obtain organizer approvals, and reconcile revenue and refunds per organization | Current packages and orders belong to one event; multi-organization Stripe and authorization decisions are unresolved |
 | Automated waitlist fulfillment | Notify the next rider, protect offer priority, expire safely, and retry delivery without duplicate offers or charges | Organizer-managed waitlists and offer links exist, but automated delivery and charging do not |
-| Real refund | Update provider, ledger, receipt, entry, capacity, and package allocation exactly once | Local test-mode organizer refunds exist. The reusable seed has no refund row. Live settlement and provider reconciliation remain Planned |
+| Real refund | Update provider, ledger, receipt, entry, capacity, and package allocation exactly once | Local test-mode organizer refunds exist. The reusable seed records one simulated partial refund on Reese Example. Live settlement and provider reconciliation remain Planned |
 | Rider-to-rider transfer | Obtain recipient consent, recheck eligibility and capacity, collect a new waiver, and preserve audit history | Current transfer means an organizer moving an entry between categories, not changing the participant |
 | Cancelled event | Stop new sales, preserve paid records, communicate next steps, and reconcile refunds or credits | Simulation-only atomic cancellation API and organizer controls close scopes and preserve audit evidence; provider/credit fulfillment and message delivery remain Planned (see [product rules](../../product.md#event-and-race-cancellation)) |
 | Outstanding post-order waiver resolution | Block check-in until an approved electronic or paper acceptance records version, signer, source, and time | Checkout requires the sample waiver before an order is created; no approved external waiver workflow exists |

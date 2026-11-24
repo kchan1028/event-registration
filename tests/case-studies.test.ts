@@ -91,7 +91,7 @@ describe('generated race case studies', () => {
       status: string;
       entries: Array<{ readiness: Array<{ key: string; state: string }> }>;
     }>;
-    expect(orders.map((order) => order.status).sort()).toEqual(['confirmed', 'confirmed', 'confirmed', 'confirmed', 'confirmed', 'confirmed', 'confirmed', 'expired', 'held', 'held']);
+    expect(orders.map((order) => order.status).sort()).toEqual(['confirmed', 'confirmed', 'confirmed', 'confirmed', 'confirmed', 'confirmed', 'confirmed', 'confirmed', 'expired', 'held', 'held']);
     const confirmed = orders.filter((order) => order.status === 'confirmed');
     expect(confirmed.some((order) => order.entries[0].readiness.some((item) => item.key === 'license' && item.state === 'done'))).toBe(true);
     expect(confirmed.some((order) => order.entries[0].readiness.some((item) => item.key === 'license' && item.state === 'needs_review'))).toBe(true);
@@ -136,7 +136,7 @@ describe('generated race case studies', () => {
     }
   });
 
-  it('seeds a Sunday entry, a checkout-started hold, a weekend package, a withdrawal, and a junior', async () => {
+  it('seeds a Sunday entry, a checkout-started hold, a weekend package, a withdrawal, a refund, and a junior', async () => {
     const databaseUrl = await testDatabaseUrl();
     const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
     expect((await app.inject({ method: 'POST', url: '/api/demo/case-studies/omnium' })).statusCode).toBe(201);
@@ -147,7 +147,7 @@ describe('generated race case studies', () => {
       const { rows } = await seed.query<{
         client_request_id: string; event_id: string; order_status: string; entry_status: string; hold_open: boolean;
         first_name: string; racing_age: number; guardian_name: string | null; signer_role: string; license_reviewed: boolean;
-        successes: number; sessions: number; refunds: number; checkout_started: boolean; bundle_id: string | null; timing_code: string;
+        successes: number; sessions: number; refunds: number; refund_cents: number; refund_by: string | null; checkout_started: boolean; bundle_id: string | null; timing_code: string;
       }>(`
         SELECT o.client_request_id, o.event_id, o.status AS order_status, oe.status AS entry_status,
                o.hold_expires_at > $1 AS hold_open,
@@ -158,7 +158,9 @@ describe('generated race case studies', () => {
                oe.license_reviewed,
                (SELECT count(*)::int FROM payment_attempts pa WHERE pa.order_id = o.id AND pa.outcome = 'success') AS successes,
                (SELECT count(*)::int FROM payment_sessions ps WHERE ps.order_id = o.id) AS sessions,
-               (SELECT count(*)::int FROM refunds r WHERE r.order_id = o.id) AS refunds,
+               (SELECT count(*)::int FROM refunds r WHERE r.order_id = o.id AND r.status = 'succeeded') AS refunds,
+               (SELECT COALESCE(sum(r.amount_cents), 0)::int FROM refunds r WHERE r.order_id = o.id) AS refund_cents,
+               (SELECT a.email FROM refunds r JOIN accounts a ON a.id = r.requested_by WHERE r.order_id = o.id LIMIT 1) AS refund_by,
                o.stripe_checkout_started_at IS NOT NULL AS checkout_started,
                o.quote_json->'bundle'->>'id' AS bundle_id,
                cat->>'timingCode' AS timing_code
@@ -166,7 +168,7 @@ describe('generated race case studies', () => {
         JOIN order_entries oe ON oe.order_id = o.id
         JOIN event_versions ev ON ev.event_id = o.event_id AND ev.version = o.published_version
         JOIN LATERAL jsonb_array_elements(ev.config_json->'categories') cat ON cat->>'id' = oe.category_id
-        WHERE o.client_request_id IN ('case-study-sunday', 'case-study-checkout-started', 'case-study-weekend', 'case-study-withdrawn', 'case-study-junior')
+        WHERE o.client_request_id IN ('case-study-sunday', 'case-study-checkout-started', 'case-study-weekend', 'case-study-withdrawn', 'case-study-refunded', 'case-study-junior')
         ORDER BY o.client_request_id, cat->>'timingCode'
       `, [CASE_STUDY_REFERENCE_NOW]);
       const byId = (id: string) => rows.filter((row) => row.client_request_id === id);
@@ -177,6 +179,14 @@ describe('generated race case studies', () => {
       expect(weekend.every((row) => row.order_status === 'confirmed' && row.entry_status === 'confirmed' && row.first_name === 'Parker' && row.license_reviewed && row.successes === 1 && row.bundle_id && row.refunds === 0)).toBe(true);
       expect(new Set(weekend.map((row) => row.bundle_id)).size).toBe(1);
       expect(byId('case-study-withdrawn')).toMatchObject([{ order_status: 'confirmed', entry_status: 'withdrawn', first_name: 'Drew', timing_code: 'DRW-RR-M35', successes: 1, refunds: 0, checkout_started: false }]);
+      expect(byId('case-study-refunded')).toMatchObject([{ order_status: 'confirmed', entry_status: 'confirmed', first_name: 'Reese', timing_code: 'DRW-RR-M35', successes: 1, sessions: 0, checkout_started: false, license_reviewed: false, refunds: 1, refund_cents: 1000, refund_by: 'finance-seed@example.test' }]);
+      const finance = await seed.query<{ provider_user_id: string; organization_id: string; role: string }>(`
+        SELECT a.provider_user_id, m.organization_id, m.role
+        FROM accounts a
+        JOIN organization_members m ON m.account_id = a.id
+        WHERE a.id = 'acct_demo_case_refund'
+      `);
+      expect(finance.rows).toEqual([{ provider_user_id: 'seed:case-study-refund', organization_id: CASE_STUDY_ORG_ID, role: 'finance' }]);
       expect(byId('case-study-junior')).toMatchObject([{ event_id: 'evt_demo_case_criterium', order_status: 'confirmed', entry_status: 'confirmed', first_name: 'River', racing_age: 12, guardian_name: 'Jordan Example', signer_role: 'guardian', timing_code: 'DVC-J1014', license_reviewed: true, successes: 1, refunds: 0 }]);
     } finally {
       await seed.end();
@@ -219,12 +229,20 @@ describe('generated race case studies', () => {
     try {
       expect(await db.all('SELECT event_id FROM protected_export_audit')).toEqual([{ event_id: unrelated }]);
       expect(await db.all('SELECT event_id FROM emergency_contact_views')).toEqual([]);
+      expect(await db.all(`SELECT id FROM accounts WHERE id = 'acct_demo_case_refund'`)).toEqual([{ id: 'acct_demo_case_refund' }]);
+      expect(await db.all(`SELECT role FROM organization_members WHERE account_id = 'acct_demo_case_refund'`)).toEqual([]);
     } finally {
       await db.close();
     }
     // Nothing is left behind: the same scenario loads again from scratch.
     await ok(await app.inject({ method: 'POST', url: '/api/demo/case-studies/omnium' }), 201);
     expect(((await app.inject({ method: 'GET', url: `/api/events/${eventId}/coupons` })).json() as unknown[]).length).toBe(0);
+    const reloaded = openDb(databaseUrl);
+    try {
+      expect(await reloaded.all(`SELECT organization_id, role FROM organization_members WHERE account_id = 'acct_demo_case_refund'`)).toEqual([{ organization_id: CASE_STUDY_ORG_ID, role: 'finance' }]);
+    } finally {
+      await reloaded.close();
+    }
     await app.close();
   });
 
