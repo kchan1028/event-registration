@@ -66,7 +66,7 @@ Built November 14, 2026, on the stack in [ADR 0001](docs/decisions/0001-stack-fo
 |---|---|
 | Shared field cap | Caps of 40 and 40 with a combined 60: 35 entries in one leave 25 in the other; the 61st rider is refused; two simultaneous requests for the last place across two database connections give exactly one entry |
 | Category eligibility | Masters age and license category, competition class, collegiate path, and junior age bands evaluate independently; unknown data returns review, never cleared |
-| Timed criterium | 45 minutes + 3 laps displays as entered with no invented distance (export not built) |
+| Timed criterium | 45 minutes + 3 laps displays as entered, and the [start-list export](#start-lists-and-timer-export) uses that length, with no invented distance or finish time |
 | Category configuration fixtures | Elite P/1/2, Masters 35+ Cat 3/4, Masters 50+ and 60+ sharing a start, women's combined criterium, junior bands, collegiate plus domestic field all load, validate, and behave as listed |
 
 **Implemented, not yet verified with organizers:** "Publish a weekend" and "Recreate a race schedule" pass end-to-end tests with example data, but the criteria require an organizer to do it with an approved schedule and no developer help. That is a Phase 1 usability test.
