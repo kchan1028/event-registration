@@ -193,6 +193,24 @@ describe('generated race case studies', () => {
       `, [CASE_STUDY_ORG_ID]);
       expect(history.rows).toEqual([{ action: 'granted', role: 'finance', actor_id: null }]);
       expect(byId('case-study-junior')).toMatchObject([{ event_id: 'evt_demo_case_criterium', order_status: 'confirmed', entry_status: 'confirmed', first_name: 'River', racing_age: 12, guardian_name: 'Jordan Example', signer_role: 'guardian', timing_code: 'DVC-J1014', license_reviewed: true, successes: 1, refunds: 0 }]);
+      const harborCheckIn = await seed.query<{ bib: number; scope: string; bib_active: boolean; checked_at_reference: boolean; settings: { scope: string; ranges: { scope: string; first: number; last: number }[] }; locks: number; omnium_bibs: number; omnium_check_ins: number }>(`
+        SELECT b.bib, b.scope, b.released_at IS NULL AS bib_active,
+               c.checked_in_at = $1::timestamptz AS checked_at_reference,
+               s.settings_json AS settings,
+               (SELECT count(*)::int FROM start_list_locks WHERE event_id = 'evt_demo_case_criterium') AS locks,
+               (SELECT count(*)::int FROM bib_assignments WHERE event_id = 'evt_demo_case_omnium') AS omnium_bibs,
+               (SELECT count(*)::int FROM check_ins WHERE event_id = 'evt_demo_case_omnium') AS omnium_check_ins
+        FROM orders o
+        JOIN bib_assignments b ON b.order_id = o.id
+        JOIN check_ins c ON c.order_id = o.id AND c.event_id = o.event_id
+        JOIN bib_settings s ON s.event_id = o.event_id
+        WHERE o.client_request_id = 'case-study-junior'
+      `, [CASE_STUDY_REFERENCE_NOW]);
+      expect(harborCheckIn.rows).toEqual([{
+        bib: 500, scope: 'weekend', bib_active: true, checked_at_reference: true,
+        settings: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 500, last: 519 }] },
+        locks: 0, omnium_bibs: 0, omnium_check_ins: 0,
+      }]);
     } finally {
       await seed.end();
       await app.close();

@@ -7,7 +7,15 @@ import { eventLock, type Repo } from './repo';
 
 const scenarioByKey = () => new Map(buildCaseStudyScenarios().map((scenario) => [scenario.key, scenario]));
 
-export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders, refunds: Refunds) {
+/** Harbor-only. The omnium seed stays without a bib or a check-in. */
+type SeedCheckIn = {
+  saveSettings(eventId: string, input: { scope: 'weekend'; ranges: { scope: 'weekend'; first: number; last: number }[] }): Promise<unknown>;
+  previewBibs(eventId: string, batch: { dayId: string; orderIds: string[]; sort: 'name' }): Promise<{ fingerprint: string }>;
+  applyBibs(eventId: string, batch: { dayId: string; orderIds: string[]; sort: 'name' }, fingerprint: string): Promise<unknown>;
+  checkIn(eventId: string, orderId: string, dayId: string, requestedBib: number | null): Promise<unknown>;
+};
+
+export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders, refunds: Refunds, checkIn: SeedCheckIn) {
   async function organization() {
     const existing = await db.get<{ id: string }>(`SELECT id FROM organizations WHERE id = $1`, [CASE_STUDY_ORG_ID]);
     return existing ?? repo.createOrganization(CASE_STUDY_ORG_NAME, CASE_STUDY_ORG_ID);
@@ -54,6 +62,13 @@ export function createCaseStudyFixtures(db: Db, repo: Repo, orders: Orders, refu
         contactName: 'Jordan Example', contactPhone: '202-555-0185', guardian: { name: 'Jordan Example', email: 'jordan-guardian@example.test', phone: '202-555-0184' },
       });
       await payAndReview(river, 'case-attempt-junior', 'Seeded fictional license review for the junior rider');
+      // Bib 100 and the start-list locks belong to the weekend browser spec on the omnium. This range stays on Harbor.
+      const dayId = event.config.races.find((race) => race.id === junior.raceId)!.dayId;
+      const batch = { dayId, orderIds: [river.id], sort: 'name' as const };
+      await checkIn.saveSettings(eventId, { scope: 'weekend', ranges: [{ scope: 'weekend', first: 500, last: 519 }] });
+      const preview = await checkIn.previewBibs(eventId, batch);
+      await checkIn.applyBibs(eventId, batch, preview.fingerprint);
+      await checkIn.checkIn(eventId, river.id, dayId, null);
       return;
     }
 
