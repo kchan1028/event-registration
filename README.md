@@ -303,7 +303,7 @@ Out of scope at first: timing hardware, results and omnium points scoring, ranki
 | [docs/content-guide.md](docs/content-guide.md) | Rules for future public pages, including SEO, answer engines, and structured data |
 | [docs/operations.md](docs/operations.md) | Proposed operating model: support owners, incident severity, freezes, monitoring, backups, and handoff |
 | [docs/research/README.md](docs/research/README.md) | Research index: design, payments, guardians, email, field discovery, usability, and event case studies |
-| [docs/decisions/README.md](docs/decisions/README.md) | Architecture decision records, including [0001](docs/decisions/0001-stack-for-category-builder-milestone.md), and the backlog of unresolved decisions |
+| [docs/decisions/README.md](docs/decisions/README.md) | Architecture decision records, including [0001](docs/decisions/0001-stack-for-category-builder-milestone.md), and the backlog of accepted and open decisions |
 | [docs/fixtures/README.md](docs/fixtures/README.md) | Fake demonstration data and sample waiver text used by the rider demo |
 | [docs/timer-export-review.md](docs/timer-export-review.md) | Sample start-list export, its columns, and the questions for the timer and officials |
 | [docs/discovery/README.md](docs/discovery/README.md) | Phase 0 discovery kit: interview guides, workflow map, workload baseline, options comparison, USAC and payment questions, pilot selection, and the exit-gate decision memo |
