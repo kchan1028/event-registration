@@ -2,7 +2,7 @@
 
 This describes the database the local build uses today. It covers tables, relationships, important fields, constraints, and what happens when data is removed. The intended product data model, including entities that are not built yet, is in [product.md](product.md#data-model) and [product.md](product.md#data-storage).
 
-**Status:** Implemented (local build). Describes schema version 45 on PostgreSQL as of November 23, 2026. The database moved from SQLite to PostgreSQL under [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md); local SQLite data is not carried over (reseed instead).
+**Status:** Implemented (local build). Describes schema version 46 on PostgreSQL as of November 24, 2026. The database moved from SQLite to PostgreSQL under [ADR 0004](docs/decisions/0004-hosted-stack-and-database.md); local SQLite data is not carried over (reseed instead).
 
 **Source of truth:** the migrations in [src/server/db.ts](src/server/db.ts) and the event configuration schema in [src/shared/schema.ts](src/shared/schema.ts). If this file disagrees with them, the code wins; fix this file in the same change.
 
