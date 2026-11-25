@@ -22,7 +22,7 @@ All of these must be true. Until then, do not create a Blueprint or any Render r
 | [`.dockerignore`](../../.dockerignore) | Keeps tests, docs, local data, and secrets out of the image. |
 | [`render.yaml`](../../render.yaml) | Render Blueprint: production service `cyclereg` (two `0.5c-512mb` instances, manual deploys) and staging service `cyclereg-staging` (one instance, deploys on each push to `main`), each with its own Render Postgres 17 database (`0.5c-1g` and `0.1c-256mb`). Both databases accept private-network connections only. `DATABASE_URL` comes from the database; no secrets are in the file. |
 | [`src/server/listen.ts`](../../src/server/listen.ts) | Listen address from `HOST` (default `127.0.0.1`; `render.yaml` sets `0.0.0.0`). |
-| [`src/server/auth.ts`](../../src/server/auth.ts) | Sign-in: verifies Clerk session tokens. The server will not start without `CLERK_SECRET_KEY`. Set `CLERK_AUTHORIZED_PARTIES` to the site's own origin. |
+| [`src/server/auth.ts`](../../src/server/auth.ts) | Sign-in: verifies Clerk session tokens. The server starts without `CLERK_SECRET_KEY` only outside production on `127.0.0.1`, `localhost`, or `::1`; anywhere else it will not start without that key. Set `CLERK_AUTHORIZED_PARTIES` to the site's own origin. |
 
 Every service uses `/api/health` as its health check: it answers 503 while the database cannot be reached ([operations.md](../operations.md#monitoring-and-alerts)). Migrations run when each instance starts, under a database lock, so two instances starting together migrate once.
 
