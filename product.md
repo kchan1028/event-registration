@@ -726,7 +726,7 @@ The local build stores data in a PostgreSQL database on the developer's computer
 | Dependency | Required decision |
 |---|---|
 | USA Cycling | Confirm partner access, license/category validation, one-day licenses, accepted waiver/guardian workflows, and required reporting directly with USAC |
-| Payments | Stripe selected in ADR 0002; hosted Checkout planned. Confirm the merchant/Connect operating model, organizer onboarding, revenue allocation, payouts, refunds, disputes, and tax responsibility before live use |
+| Payments | Stripe selected in ADR 0002; local test-mode Checkout implemented, live Checkout Planned. Confirm the merchant/Connect operating model, organizer onboarding, revenue allocation, payouts, refunds, disputes, and tax responsibility before live use |
 | Timer / officials | Understand existing race-day changes; investigate accepted file formats only if timing interoperability is selected for future development |
 | Email | Select a transactional provider with delivery status and suppression handling |
 | Existing registrations | Confirm export rights and mappings; never assume signatures or payment tokens transfer |
