@@ -21,7 +21,7 @@ This is a feature summary, not a second requirements document or roadmap. [produ
 | Schedule CSV | Implemented | Import categories with column mapping and row errors; export the configured schedule |
 | Preview and publish | Implemented | Preview eligibility, block publishing on errors, acknowledge warnings, publish only the draft that was reviewed, retain immutable published versions, and record who published each one |
 | Published change-impact preview | Implemented | Show affected categories, entries, riders, and orders; require acknowledgement while preserving accepted prices and rules |
-| Organizer-managed waitlists | Implemented | Enable per category, give waiting riders priority, and issue 24-hour reservation links; delivery and payment remain simulated/manual |
+| Organizer-managed waitlists | Implemented | Enable per category, give waiting riders priority, and issue 24-hour reservation links. The organizer copies the offer link, and the rider pays through the same simulated or Stripe test-mode checkout. Automated promotion, offer email, and automated charging remain Planned |
 | Organizer transfers and withdrawals | Implemented | Change paid entries with a reason and renewed eligibility/capacity checks; preserve the order total and log price differences for settlement outside the app |
 | Draft autosave | Implemented | Save locally with stale-save protection |
 | Registration queue | Implemented | Review simulated orders, outstanding readiness items, and license reviews confirmed without typing |
