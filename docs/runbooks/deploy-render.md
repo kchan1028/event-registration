@@ -8,7 +8,7 @@ Status: Planned. Nothing is deployed and no Render account, Blueprint, service, 
 
 All of these must be true. Until then, do not create a Blueprint or any Render resource.
 
-1. Done (November 15, 2026): email sign-in ([ADR 0003](../decisions/0003-sign-in-and-mfa.md), Clerk's free plan) is built and every API route except health and the public event pages requires it. The listen guard was removed in the same change. Still needed before the first deploy: a Clerk instance for each hosted environment (staging and production), created by the owner, with email code or link sign-in only (no passwords, no SMS); its keys go in the Render Dashboard, never in the repository.
+1. Done (November 15, 2026): email sign-in ([ADR 0003](../decisions/0003-sign-in-and-mfa.md), Clerk's free plan) is built and every API route except the health check, the public event list, rider event pages, the Stripe webhook (trusted only by its verified signature), and, outside production when `RESEND_WEBHOOK_SECRET` is set, the Resend delivery webhook (trusted only by its verified signature; production refuses that secret, so the route stays off) requires it. The listen guard was removed in the same change. Still needed before the first deploy: a Clerk instance for each hosted environment (staging and production), created by the owner, with email code or link sign-in only (no passwords, no SMS); its keys go in the Render Dashboard, never in the repository.
 2. The treasurer has approved the monthly cost (ADR 0004 estimates about $75 a month on the Pro plan).
 3. Legal review of minors' data is done, if any riders are under 13 (ADR 0004 caveats).
 4. The project owner has said, in writing, to create the Render resources.
