@@ -21,6 +21,7 @@ const NEW_INVITE = 'This address bounced or a complaint was received. Mail stays
 const NOT_STOPPED = 'This address is not stopped. Add the person from Team and roles.';
 const STILL_OPEN = 'This invitation is still open. Send it again without extending it.';
 const CHANGED = 'This invitation changed, so this request sent no email.';
+const ENDED = `This invitation has ended. Allow one new invitation. That starts ${INVITATION_DAYS} days from now.`;
 
 type Invitation = {
   email: string;
@@ -172,6 +173,36 @@ describe('invitation mail stops', () => {
       await client.query(`UPDATE email_messages SET provider_message_id = 're_again' WHERE id = $1`, [cleared.invitations[0].lastEmail!.attemptId]);
       await postBounce(app, 're_again', 'evt_again');
       expect((await team()).invitations[0].suppressed).toBe('bounced');
+    } finally {
+      await client.end();
+    }
+  });
+
+  it('does not send an ended invitation, and allow starts a new 14 days', async () => {
+    const { app, client, call, orgId } = await harness();
+    try {
+      const row = await invite(call, orgId);
+      await stop(app, client, row.lastEmail!.attemptId, 're_ended', 'evt_ended');
+      await client.query(`UPDATE organization_invitations SET expires_at = $2 WHERE email = $1`, [ADDRESS, '2027-05-01T15:00:00.000Z']);
+      const current = (await client.query<{ revision: string }>(`SELECT revision FROM organization_invitations WHERE email = $1`, [ADDRESS])).rows[0].revision;
+      const before = (await client.query<{ n: number }>(`SELECT count(*)::int AS n FROM email_messages`)).rows[0].n;
+      const sent = await call('POST', `/api/organizations/${orgId}/invitations/send-without-extending`, { email: ADDRESS, role: 'finance', revision: current });
+      expect(sent.statusCode).toBe(409);
+      expect(sent.json()).toEqual({ error: ENDED });
+      const held = await client.query<{ expires_at: Date; n: number; active: number }>(
+        `SELECT i.expires_at, (SELECT count(*)::int FROM email_messages) AS n, (SELECT count(*)::int FROM email_suppressions WHERE cleared_at IS NULL) AS active
+         FROM organization_invitations i WHERE i.email = $1`,
+        [ADDRESS],
+      );
+      expect(held.rows).toEqual([{ expires_at: new Date('2027-05-01T15:00:00.000Z'), n: before, active: 1 }]);
+      const allowed = await call('POST', `/api/organizations/${orgId}/invitations/allow`, { email: ADDRESS, role: 'finance' });
+      expect(allowed.statusCode).toBe(200);
+      const opened = (allowed.json() as Team).invitations.find((item) => item.email === ADDRESS && item.role === 'finance')!;
+      expect(opened).toMatchObject({ suppressed: null, lastEmail: { status: 'recorded' } });
+      expect(Date.parse(opened.expiresAt) - NOW.getTime()).toBe(INVITATION_DAYS * DAY);
+      expect(opened.revision).not.toBe(row.revision);
+      expect((allowed.json() as Team).history.filter((item) => item.action === 'invitation_renewed')).toEqual([]);
+      expect((allowed.json() as Team).stoppedEmails).toEqual([]);
     } finally {
       await client.end();
     }

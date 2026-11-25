@@ -12,11 +12,13 @@ test('an uncertain invitation can be retried without promising extra days', asyn
       { email: 'delivered@example.test', role: 'finance', expiresAt, revision: 'rev_delivered', earlierEmail: false, suppressed: null, lastEmail: { attemptId: 'eml_delivered', status: 'sent', at: '2027-05-01T12:00:00.000Z', delivery: 'delivered' } },
       { email: 'bounced@example.test', role: 'finance', expiresAt, revision: 'rev_bounced', earlierEmail: false, suppressed: 'bounced', lastEmail: { attemptId: 'eml_bounced', status: 'sent', at: '2027-05-01T12:00:00.000Z', delivery: 'bounced' } },
       { email: 'complained@example.test', role: 'finance', expiresAt, revision: 'rev_complained', earlierEmail: false, suppressed: 'complained', lastEmail: { attemptId: 'eml_complained', status: 'sent', at: '2027-05-01T12:00:00.000Z', delivery: 'complained' } },
+      { email: 'ended@example.test', role: 'finance', expiresAt: '2020-01-01T00:00:00.000Z', revision: 'rev_ended', earlierEmail: false, suppressed: 'bounced', lastEmail: { attemptId: 'eml_ended', status: 'sent', at: '2020-01-01T00:00:00.000Z' } },
     ],
     stoppedEmails: [
       { email: 'earlier@example.test', reason: 'bounced' },
       { email: 'bounced@example.test', reason: 'bounced' },
       { email: 'complained@example.test', reason: 'complained' },
+      { email: 'ended@example.test', reason: 'bounced' },
     ],
     history: [],
   };
@@ -37,7 +39,12 @@ test('an uncertain invitation can be retried without promising extra days', asyn
     await expect(team.getByText('Delivered', { exact: true })).toBeVisible();
     await expect(team.getByText('Bounced', { exact: true })).toBeVisible();
     await expect(team.getByText('Complaint received', { exact: true })).toBeVisible();
-    await expect(team.getByText('Mail stopped')).toHaveCount(3);
+    await expect(team.getByText('Mail stopped')).toHaveCount(4);
+    const ended = team.getByRole('listitem').filter({ hasText: 'ended@example.test' });
+    await expect(ended.getByText('Expired', { exact: true })).toBeVisible();
+    await expect(ended.getByRole('button', { name: /Send without extending/ })).toHaveCount(0);
+    await team.getByLabel('Email').fill('ended@example.test');
+    await expect(team.getByRole('button', { name: 'Allow one new invitation to ended@example.test. This starts a new 14-day invitation.' })).toBeEnabled();
     const safe = team.getByRole('button', { name: 'Send without extending the invitation to bounced@example.test. This does not add days.' });
     await expect(safe).toBeVisible();
     await expect(team.getByRole('button', { name: 'Send without extending the invitation to complained@example.test. This does not add days.' })).toBeVisible();

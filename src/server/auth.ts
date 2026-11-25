@@ -142,6 +142,7 @@ const MAIL_STOPPED_OPEN = 'This address bounced or a complaint was received. Mai
 const MAIL_STOPPED_NEW = 'This address bounced or a complaint was received. Mail stays stopped until an owner allows one new invitation.';
 const MAIL_NOT_STOPPED = 'This address is not stopped. Add the person from Team and roles.';
 const USE_SEND_WITHOUT_EXTENDING = 'This invitation is still open. Send it again without extending it.';
+const INVITATION_ENDED = `This invitation has ended. Allow one new invitation. That starts ${INVITATION_DAYS} days from now.`;
 
 export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, mailer: Mailer, appUrl: string) {
   const nowIso = () => clock().toISOString();
@@ -496,7 +497,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
 
   /**
    * Sends a new invitation email for an open invitation without changing its deadline or recording a renewal.
-   * The stop clears only after that attempt is recorded, sent, or left uncertain. A confirmed failure leaves it.
+   * An invitation that has ended is refused, and the stop stays. The stop clears only after an accepted attempt. A confirmed failure leaves it.
    */
   async function sendWithoutExtending(organizationId: string, email: string, role: Role, revision: string, by: Account) {
     const normalized = email.trim().toLowerCase();
@@ -510,6 +511,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       );
       if (!extant || extant.revision !== revision) throw new HttpError(409, INVITATION_CHANGED);
       if (extant.earlier_email) throw new HttpError(409, EARLIER_EMAIL);
+      if (new Date(extant.expires_at).getTime() <= clock().getTime()) throw new HttpError(409, INVITATION_ENDED);
       if (!(await activeStop(organizationId, normalized))) throw new HttpError(409, MAIL_NOT_STOPPED);
       const id = await mailer.reserve('organizer_invitation', `${organizationId}:${normalized}:${role}`, organizationId, await invitationMessage(organizationId, normalized, role, by, extant.expires_at));
       const attached = await db.run(`UPDATE organization_invitations SET email_attempt_id = $1 WHERE organization_id = $2 AND email = $3 AND role = $4 AND revision = $5`, [
@@ -527,8 +529,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
   }
 
   /**
-   * Allows one new invitation after the previous one is gone. This is a new 14-day invitation, not a renewal.
-   * An open invitation cannot use this path. Granting an existing account sends no mail and does not clear the stop.
+   * Allows one new 14-day invitation after the previous one is gone or has ended. This records an invitation, not a renewal.
+   * An invitation that is still open cannot use this path. Granting an existing account sends no mail and does not clear the stop.
    */
   async function allowInvitation(organizationId: string, email: string, role: Role, by: Account) {
     const normalized = email.trim().toLowerCase();
@@ -541,19 +543,27 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         await grant(organizationId, target, role, by.id);
         return { action: 'none' as const };
       }
-      const extant = await db.get(`SELECT 1 FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3`, [organizationId, normalized, role]);
-      if (extant) throw new HttpError(409, USE_SEND_WITHOUT_EXTENDING);
-      if (!(await activeStop(organizationId, normalized))) throw new HttpError(409, MAIL_NOT_STOPPED);
+      const extant = await db.get<{ expires_at: string }>(
+        `SELECT expires_at FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 FOR UPDATE`,
+        [organizationId, normalized, role],
+      );
       const t = clock();
+      if (extant && new Date(extant.expires_at).getTime() > t.getTime()) throw new HttpError(409, USE_SEND_WITHOUT_EXTENDING);
+      if (!(await activeStop(organizationId, normalized))) throw new HttpError(409, MAIL_NOT_STOPPED);
       const expiresAt = new Date(t.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
-      const invited = await db.run(`INSERT INTO organization_invitations (organization_id, email, role, invited_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, [
-        organizationId,
-        normalized,
-        role,
-        by.id,
-        t.toISOString(),
-        expiresAt,
-      ]);
+      const invited = extant
+        ? await db.run(
+            `UPDATE organization_invitations SET expires_at = $4, invited_by = $5, earlier_email = false WHERE organization_id = $1 AND email = $2 AND role = $3 AND expires_at <= $6`,
+            [organizationId, normalized, role, expiresAt, by.id, t.toISOString()],
+          )
+        : await db.run(`INSERT INTO organization_invitations (organization_id, email, role, invited_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, [
+            organizationId,
+            normalized,
+            role,
+            by.id,
+            t.toISOString(),
+            expiresAt,
+          ]);
       if (!invited) throw new HttpError(409, USE_SEND_WITHOUT_EXTENDING);
       await record(organizationId, 'invited', normalized, role, by.id);
       const id = await mailer.reserve('organizer_invitation', `${organizationId}:${normalized}:${role}`, organizationId, await invitationMessage(organizationId, normalized, role, by, expiresAt));

@@ -192,7 +192,7 @@ Migration 19. Append-only history of role and invitation changes in an organizat
 
 The recipient-facing expiry view reads the latest history action per organization/role for the authenticated email. It shows only invitation_expired actions, so a later grant of the same role supersedes its notice. Re-adding a signed-in recipient is a direct grant, not renewal of the deleted invitation. This derived read adds no table or migration.
 
-Granting a role someone already holds writes no row. Inviting an email again writes `invitation_renewed`. An invitation that expires unused writes `invitation_expired` only when that person signs in; until then the team panel shows it as expired, with Resend and Cancel.
+Granting a role someone already holds writes no row. Inviting an email again writes `invitation_renewed`. An invitation that expires unused writes `invitation_expired` only when that person signs in; until then the team panel shows it as expired, with Resend and Cancel. A stopped address does not offer Resend, or a send that keeps an ended deadline. The owner allows one new invitation instead.
 
 ### junior_profiles
 
@@ -317,7 +317,7 @@ Migration 46. One active stop per organization and normalized address. A verifie
 | `created_at` | When the stop was stored |
 | `cleared_at`, `cleared_by`, `cleared_email_id` | Set together when an allowed send is recorded, sent, or left uncertain. `cleared_by` references `accounts` and restricts deletion. `cleared_email_id` is that allowed message and cascades on delete. All three stay null while the stop is active |
 
-A delivered event does not insert a row. Sending an open invitation again, or allowing one new invitation after cancel, clears the active row only after that attempt is accepted. A confirmed refusal leaves it. A later bounce or complaint can stop the address again. A role grant to an existing account sends no mail and does not clear the row.
+A delivered event does not insert a row. Sending an open invitation again, or allowing one new invitation after cancel or after the invitation has ended, clears the active row only after that attempt is accepted. An ended invitation is not sent with its old deadline, and that refusal leaves the stop. A confirmed refusal leaves it. A later bounce or complaint can stop the address again. A role grant to an existing account sends no mail and does not clear the row.
 
 ### events
 

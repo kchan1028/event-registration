@@ -60,7 +60,7 @@ function deliveryLabel(value: string | null | undefined): string | null {
  * Adding an email that has never signed in records an invitation that becomes a role the
  * first time that person signs in with the same email, if that is within INVITATION_DAYS.
  * Resending a completed invitation emails it again and starts the period over. Retrying an email that might already have been sent does not.
- * A bounced or complained address stays stopped until an owner sends the open invitation again without adding days, or allows one new invitation after cancelling.
+ * A bounced or complained address stays stopped until an owner sends the open invitation again without adding days, or allows one new invitation after cancelling or after it has ended.
  * An owner can hand ownership to a teammate
  * who has signed in; every change appears under Recent changes with who made it.
  */
@@ -117,7 +117,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
     e.preventDefault();
     const typed = email.trim().toLowerCase();
     const stopped = list?.stoppedEmails.some((row) => row.email === typed) ?? false;
-    const openForRole = list?.invitations.some((row) => row.email === typed && row.role === role) ?? false;
+    const openForRole = list?.invitations.some((row) => row.email === typed && row.role === role && new Date(row.expiresAt).getTime() > Date.now()) ?? false;
     const action = stopped && !openForRole ? () => api.allowInvitation(orgId, email.trim(), role) : () => api.addMember(orgId, email.trim(), role);
     if (await run(action)) setEmail('');
   }
@@ -126,7 +126,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
   const candidates = list ? [...new Set(list.members.map((m) => m.email))].filter((address) => !list.members.some((m) => m.email === address && m.role === 'owner')) : [];
   const typed = email.trim().toLowerCase();
   const typedStopped = list?.stoppedEmails.some((row) => row.email === typed) ?? false;
-  const typedOpen = list?.invitations.some((row) => row.email === typed && row.role === role) ?? false;
+  const typedOpen = list?.invitations.some((row) => row.email === typed && row.role === role && new Date(row.expiresAt).getTime() > Date.now()) ?? false;
   const emailHint = typedStopped
     ? typedOpen
       ? 'Mail to this address is stopped. Use Send without extending on the invitation above. That does not add days.'
@@ -207,7 +207,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
                   )}
                   {i.earlierEmail && stopped && ' · Mail stopped'}
                 </span>
-                {!i.earlierEmail && stopped && (
+                {!i.earlierEmail && stopped && !expired && (
                   <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.sendWithoutExtending(orgId, i.email, i.role, i.revision))}>
                     Send without extending
                     <span className="sr-only"> the invitation to {i.email}. This does not add days.</span>
