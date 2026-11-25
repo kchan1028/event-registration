@@ -281,6 +281,19 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { email, role, revision } = shownRow.parse(req.body);
     return access.addMember(id, email, role, me(req), revision);
   });
+  // Its own route, so a server from before it answers 404 instead of treating this as Add or Resend.
+  app.post('/api/organizations/:id/invitations/send-without-extending', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrg(me(req), id, 'members.manage');
+    const { email, role, revision } = shownRow.parse(req.body);
+    return access.sendWithoutExtending(id, email, role, revision, me(req));
+  });
+  app.post('/api/organizations/:id/invitations/allow', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrg(me(req), id, 'members.manage');
+    const { email, role } = memberBody.parse(req.body);
+    return access.allowInvitation(id, email, role, me(req));
+  });
   app.post('/api/organizations/:id/members/remove', async (req) => {
     const { id } = idParam.parse(req.params);
     await access.requireOrg(me(req), id, 'members.manage');

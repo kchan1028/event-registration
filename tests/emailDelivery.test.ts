@@ -26,6 +26,7 @@ type Invitation = {
   expiresAt: string;
   revision: string;
   lastEmail: { attemptId: string; status: string; delivery: string | null } | null;
+  suppressed?: 'bounced' | 'complained' | null;
 };
 
 function sign(body: string, id: string, timestamp: string, secret = SECRET): string {
@@ -136,7 +137,7 @@ describe('Resend delivery webhook', () => {
       const replay = await post(app, delivered, 'evt_delivered', new Date(NOW.getTime() - 300_000));
       expect([sameTime, older, replay].map((res) => res.statusCode)).toEqual([200, 200, 200]);
 
-      const shown = (await app.inject({ method: 'GET', url: `/api/organizations/${orgId}/members`, headers: as('owner.delivery@example.test') })).json() as { members: { role: string }[]; invitations: Invitation[] };
+      const shown = (await app.inject({ method: 'GET', url: `/api/organizations/${orgId}/members`, headers: as('owner.delivery@example.test') })).json() as { members: { role: string }[]; invitations: Invitation[]; stoppedEmails: { email: string; reason: string }[] };
       expect(shown.members.map((member) => member.role)).toEqual(['owner']);
       expect(shown.invitations).toEqual([{
         email: invitation.email,
@@ -144,8 +145,10 @@ describe('Resend delivery webhook', () => {
         expiresAt: invitation.expiresAt,
         revision: invitation.revision,
         earlierEmail: false,
+        suppressed: 'bounced',
         lastEmail: { attemptId: invitation.lastEmail!.attemptId, status: 'sent', at: expect.any(String), delivery: 'delivered' },
       }]);
+      expect(shown.stoppedEmails).toEqual([{ email: invitation.email, reason: 'bounced' }]);
 
       const complained = await post(app, eventBody('email.complained', PROVIDER_ID, '2027-03-15T17:30:00.000Z'), 'evt_complaint');
       const unknown = await post(app, eventBody('email.bounced', 're_missing', '2027-03-15T18:00:00.000Z'), 'evt_unknown');
@@ -158,6 +161,8 @@ describe('Resend delivery webhook', () => {
       expect(after.invitations[0].expiresAt).toBe(invitation.expiresAt);
       expect(after.invitations[0].revision).toBe(invitation.revision);
       expect(after.invitations[0].lastEmail).toMatchObject({ status: 'sent', delivery: 'complained' });
+      expect(after.invitations[0]).toMatchObject({ suppressed: 'bounced' });
+      expect((await client.query<{ reason: string }>(`SELECT reason FROM email_suppressions WHERE cleared_at IS NULL`)).rows).toEqual([{ reason: 'bounced' }]);
 
       const events = await client.query<{ id: string; kind: string }>(`SELECT id, kind FROM email_delivery_events ORDER BY occurred_at, id`);
       expect(events.rows).toEqual([
@@ -178,6 +183,9 @@ describe('Resend delivery webhook', () => {
            UNION ALL SELECT COALESCE(provider_message_id, '') FROM email_messages
            UNION ALL SELECT id FROM email_delivery_events
            UNION ALL SELECT kind FROM email_delivery_events
+           UNION ALL SELECT email FROM email_suppressions
+           UNION ALL SELECT reason FROM email_suppressions
+           UNION ALL SELECT id FROM email_suppressions
          ) s WHERE t ILIKE $1 OR t ILIKE $2 OR t ILIKE $3 OR t ILIKE '%hidden-from%'`,
         [`%${BOUNCE_TEXT}%`, `%${HIDDEN_SUBJECT}%`, `%${HIDDEN_ADDRESS}%`],
       );
@@ -199,6 +207,7 @@ describe('Resend delivery webhook', () => {
       expect(res.json()).toEqual({ received: true });
       expect((await client.query(`SELECT count(*)::int AS n FROM email_delivery_events`)).rows[0].n).toBe(0);
       expect((await client.query(`SELECT count(*)::int AS n FROM email_messages WHERE delivery_status IS NOT NULL`)).rows[0].n).toBe(0);
+      expect((await client.query(`SELECT count(*)::int AS n FROM email_suppressions`)).rows[0].n).toBe(0);
     } finally {
       await client.end();
     }

@@ -314,6 +314,8 @@ export async function downloadFile(url: string): Promise<void> {
 export interface MemberList {
   members: { accountId: string; email: string; role: Role; revision: string }[];
   invitations: Invitation[];
+  /** Addresses in this organization whose operational mail is stopped. */
+  stoppedEmails: { email: string; reason: 'bounced' | 'complained' }[];
   /** The most recent role changes, newest first. */
   history: MembershipChange[];
 }
@@ -342,6 +344,8 @@ export const api = {
   members: (orgId: string) => request<MemberList>('GET', `/api/organizations/${orgId}/members`),
   addMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role }),
   resendInvitation: (orgId: string, email: string, role: Role, revision: string) => request<MemberList>('POST', `/api/organizations/${orgId}/invitations/resend`, { email, role, revision }),
+  sendWithoutExtending: (orgId: string, email: string, role: Role, revision: string) => request<MemberList>('POST', `/api/organizations/${orgId}/invitations/send-without-extending`, { email, role, revision }),
+  allowInvitation: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/invitations/allow`, { email, role }),
   retryInvitation: (orgId: string, email: string, role: Role, retryAttempt: string) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role, retryAttempt }),
   removeMember: (orgId: string, email: string, role: Role, revision: string) => request<MemberList>('POST', `/api/organizations/${orgId}/members/revoke`, { email, role, revision }),
   cancelInvitation: (orgId: string, email: string, role: Role, revision: string) => request<MemberList>('POST', `/api/organizations/${orgId}/invitations/cancel`, { email, role, revision }),

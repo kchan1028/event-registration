@@ -796,6 +796,26 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX email_delivery_events_email_occurred ON email_delivery_events (email_id, occurred_at);
   `,
+  `
+  -- One active stop per organization and address. A bounce and a complaint block the same way until an owner allows a send.
+  -- The row keeps the normalized address so later sends can be refused. Delivery events stay free of addresses.
+  CREATE TABLE email_suppressions (
+    id text PRIMARY KEY,
+    organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    email text NOT NULL,
+    reason text NOT NULL CHECK (reason IN ('bounced', 'complained')),
+    email_id text NOT NULL REFERENCES email_messages(id) ON DELETE CASCADE,
+    created_at timestamptz NOT NULL,
+    cleared_at timestamptz,
+    cleared_by text REFERENCES accounts(id) ON DELETE RESTRICT,
+    cleared_email_id text REFERENCES email_messages(id) ON DELETE CASCADE,
+    CHECK (
+      (cleared_at IS NULL AND cleared_by IS NULL AND cleared_email_id IS NULL)
+      OR (cleared_at IS NOT NULL AND cleared_by IS NOT NULL AND cleared_email_id IS NOT NULL)
+    )
+  );
+  CREATE UNIQUE INDEX email_suppressions_active ON email_suppressions (organization_id, email) WHERE cleared_at IS NULL;
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
