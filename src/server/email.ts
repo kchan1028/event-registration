@@ -329,6 +329,8 @@ export function verifyResendWebhook(secret: string, rawBody: string, headers: { 
  * Records one verified delivery, bounce, or complaint for the matching sent message.
  * An older event does not replace a newer outcome. An unknown or ambiguous provider id is ignored.
  * Nothing here changes the invitation, the role, the send status, or payment, and nothing is sent.
+ * A bounce or complaint also stops later operational mail to that address in the message's organization.
+ * The first active stop is kept. Delivery events still store no address, subject, or bounce text.
  */
 export async function recordResendDelivery(
   db: Db,
@@ -369,5 +371,14 @@ export async function recordResendDelivery(
        WHERE id = $1 AND (delivery_at IS NULL OR delivery_at < $3::timestamptz)`,
       [rows[0].id, kind, occurred.toISOString()],
     );
+    if (kind === 'bounced' || kind === 'complained') {
+      await db.run(
+        `INSERT INTO email_suppressions (id, organization_id, email, reason, email_id, created_at)
+         SELECT $1, organization_id, lower(btrim(to_email)), $2, id, $3
+         FROM email_messages WHERE id = $4
+         ON CONFLICT (organization_id, email) WHERE cleared_at IS NULL DO NOTHING`,
+        [newId('sup'), kind, occurred.toISOString(), rows[0].id],
+      );
+    }
   });
 }

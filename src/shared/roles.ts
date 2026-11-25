@@ -74,6 +74,8 @@ export interface Invitation {
   revision: string;
   /** An email from before attempts were tracked might have been sent, so there is no resend. */
   earlierEmail: boolean;
+  /** Active bounce or complaint for this address in this organization. Null when mail is not stopped. */
+  suppressed: 'bounced' | 'complained' | null;
   /** The latest invitation email. `uncertain` means the provider may have accepted it. Null when none was made (seed scripts). */
   lastEmail: {
     attemptId: string;

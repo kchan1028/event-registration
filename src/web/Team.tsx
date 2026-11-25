@@ -59,7 +59,9 @@ function deliveryLabel(value: string | null | undefined): string | null {
  * People and roles for one organization. Owners only; the server refuses everyone else.
  * Adding an email that has never signed in records an invitation that becomes a role the
  * first time that person signs in with the same email, if that is within INVITATION_DAYS.
- * Resending a completed invitation emails it again and starts the period over. Retrying an email that might already have been sent does not. An owner can hand ownership to a teammate
+ * Resending a completed invitation emails it again and starts the period over. Retrying an email that might already have been sent does not.
+ * A bounced or complained address stays stopped until an owner sends the open invitation again without adding days, or allows one new invitation after cancelling.
+ * An owner can hand ownership to a teammate
  * who has signed in; every change appears under Recent changes with who made it.
  */
 export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }) {
@@ -113,11 +115,23 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
 
   async function add(e: FormEvent) {
     e.preventDefault();
-    if (await run(() => api.addMember(orgId, email.trim(), role))) setEmail('');
+    const typed = email.trim().toLowerCase();
+    const stopped = list?.stoppedEmails.some((row) => row.email === typed) ?? false;
+    const openForRole = list?.invitations.some((row) => row.email === typed && row.role === role) ?? false;
+    const action = stopped && !openForRole ? () => api.allowInvitation(orgId, email.trim(), role) : () => api.addMember(orgId, email.trim(), role);
+    if (await run(action)) setEmail('');
   }
 
   // Signed-in teammates who are not owners yet. An invitation cannot take ownership.
-  const candidates = list ? [...new Set(list.members.map((m) => m.email))].filter((email) => !list.members.some((m) => m.email === email && m.role === 'owner')) : [];
+  const candidates = list ? [...new Set(list.members.map((m) => m.email))].filter((address) => !list.members.some((m) => m.email === address && m.role === 'owner')) : [];
+  const typed = email.trim().toLowerCase();
+  const typedStopped = list?.stoppedEmails.some((row) => row.email === typed) ?? false;
+  const typedOpen = list?.invitations.some((row) => row.email === typed && row.role === role) ?? false;
+  const emailHint = typedStopped
+    ? typedOpen
+      ? 'Mail to this address is stopped. Use Send without extending on the invitation above. That does not add days.'
+      : `Mail to this address is stopped. Allowing one new invitation starts ${INVITATION_DAYS} days from now.`
+    : `They sign in with this email within ${INVITATION_DAYS} days to get the role.`;
 
   if (!open) {
     return (
@@ -164,6 +178,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
             const uncertain = i.lastEmail?.status === 'uncertain';
             const delivery = deliveryLabel(i.lastEmail?.delivery);
             const deliveryFailed = i.lastEmail?.delivery === 'bounced' || i.lastEmail?.delivery === 'complained';
+            const stopped = Boolean(i.suppressed);
             return (
               <li key={`invite-${i.email}-${i.role}`}>
                 <span className="team__email">{i.email}</span>
@@ -182,10 +197,23 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
                           <span className={deliveryFailed ? 'team__email-failed' : undefined}>{delivery}</span>
                         </>
                       )}
+                      {stopped && (
+                        <>
+                          {' · '}
+                          <span className="team__email-failed">Mail stopped</span>
+                        </>
+                      )}
                     </>
                   )}
+                  {i.earlierEmail && stopped && ' · Mail stopped'}
                 </span>
-                {!i.earlierEmail && (
+                {!i.earlierEmail && stopped && (
+                  <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.sendWithoutExtending(orgId, i.email, i.role, i.revision))}>
+                    Send without extending
+                    <span className="sr-only"> the invitation to {i.email}. This does not add days.</span>
+                  </button>
+                )}
+                {!i.earlierEmail && !stopped && (
                   <button className="link-btn" type="button" disabled={busy} onClick={() => (uncertain ? retry(i.email, i.role, i.lastEmail!.attemptId) : run(() => api.resendInvitation(orgId, i.email, i.role, i.revision)))}>
                     {uncertain ? 'Retry send' : 'Resend'}
                     <span className="sr-only">
@@ -202,7 +230,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
         </ul>
       )}
       <form className="team__add" onSubmit={add}>
-        <Field label="Email" hint={`They sign in with this email within ${INVITATION_DAYS} days to get the role.`}>
+        <Field label="Email" hint={emailHint}>
           {(id, describedBy) => <input id={id} className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} aria-describedby={describedBy} required maxLength={254} />}
         </Field>
         <Field label="Role" hint={ROLE_HELP[role]}>
@@ -216,8 +244,15 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
             </select>
           )}
         </Field>
-        <button className="btn btn--secondary" type="submit" disabled={busy || !email.trim()}>
-          Add to team
+        <button className="btn btn--secondary" type="submit" disabled={busy || !email.trim() || (typedStopped && typedOpen)}>
+          {typedStopped && !typedOpen ? (
+            <>
+              Allow one new invitation
+              <span className="sr-only"> to {typed}. This starts a new {INVITATION_DAYS}-day invitation.</span>
+            </>
+          ) : (
+            'Add to team'
+          )}
         </button>
       </form>
       {list && (

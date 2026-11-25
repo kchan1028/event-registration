@@ -138,6 +138,10 @@ const NO_LONGER_OWNER = 'You are no longer an owner, so you cannot manage or see
 const MEMBER_CHANGED = 'This role changed, so nothing was removed.';
 const INVITATION_NOT_CANCELED = 'This invitation changed, so it was not canceled and no role was removed.';
 const INVITATION_CHANGED = 'This invitation changed, so this request sent no email.';
+const MAIL_STOPPED_OPEN = 'This address bounced or a complaint was received. Mail to it stays stopped until an owner sends the invitation again without extending it.';
+const MAIL_STOPPED_NEW = 'This address bounced or a complaint was received. Mail stays stopped until an owner allows one new invitation.';
+const MAIL_NOT_STOPPED = 'This address is not stopped. Add the person from Team and roles.';
+const USE_SEND_WITHOUT_EXTENDING = 'This invitation is still open. Send it again without extending it.';
 
 export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, mailer: Mailer, appUrl: string) {
   const nowIso = () => clock().toISOString();
@@ -307,6 +311,54 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     return value === 'delivered' || value === 'bounced' || value === 'complained' ? value : null;
   }
 
+  function knownStop(value: string | null): 'bounced' | 'complained' | null {
+    return value === 'bounced' || value === 'complained' ? value : null;
+  }
+
+  async function activeStop(organizationId: string, email: string): Promise<'bounced' | 'complained' | null> {
+    const row = await db.get<{ reason: string }>(`SELECT reason FROM email_suppressions WHERE organization_id = $1 AND email = $2 AND cleared_at IS NULL`, [organizationId, email]);
+    return knownStop(row?.reason ?? null);
+  }
+
+  /**
+   * Clears the active stop after an allowed attempt is accepted.
+   * A bounce or complaint already stored on that attempt keeps mail stopped, pointed at the new message.
+   */
+  async function settleStop(organizationId: string, email: string, attemptId: string, byId: string) {
+    await db.transaction(async () => {
+      await db.lock(`org-members:${organizationId}`);
+      const message = await db.get<{ status: string; delivery_status: string | null }>(
+        `SELECT status, delivery_status FROM email_messages WHERE id = $1 AND organization_id = $2 FOR UPDATE`,
+        [attemptId, organizationId],
+      );
+      if (!message || (message.status !== 'recorded' && message.status !== 'sent' && message.status !== 'uncertain')) return;
+      const active = await db.get<{ id: string; email_id: string }>(
+        `SELECT id, email_id FROM email_suppressions WHERE organization_id = $1 AND email = $2 AND cleared_at IS NULL FOR UPDATE`,
+        [organizationId, email],
+      );
+      const bounced = message.delivery_status === 'bounced' || message.delivery_status === 'complained';
+      if (bounced && active?.email_id === attemptId) return;
+      const at = nowIso();
+      if (active) {
+        await db.run(`UPDATE email_suppressions SET cleared_at = $2, cleared_by = $3, cleared_email_id = $4 WHERE id = $1 AND cleared_at IS NULL`, [active.id, at, byId, attemptId]);
+      }
+      if (!bounced) return;
+      await db.run(
+        `INSERT INTO email_suppressions (id, organization_id, email, reason, email_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (organization_id, email) WHERE cleared_at IS NULL DO NOTHING`,
+        [newId('sup'), organizationId, email, message.delivery_status, attemptId, at],
+      );
+    });
+  }
+
+  /** Sends one allowed attempt, then clears the stop only when that attempt was accepted. A confirmed failure leaves the stop. */
+  async function dispatchAllowed(organizationId: string, email: string, attemptId: string, by: Account) {
+    const outcome = await mailer.dispatch(attemptId, by.id);
+    if (outcome === 'refused') throw new HttpError(403, NO_LONGER_OWNER);
+    if (outcome === 'recorded' || outcome === 'sent' || outcome === 'uncertain') await settleStop(organizationId, email, attemptId, by.id);
+  }
+
   async function listMembers(organizationId: string) {
     return db.transaction(async () => {
       // Held across members, invitations, and history. First sign-in takes the same lock, so it cannot commit between the queries and leave the person off both lists.
@@ -315,11 +367,16 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         `SELECT m.account_id, a.email, m.role, m.revision FROM organization_members m JOIN accounts a ON a.id = m.account_id WHERE m.organization_id = $1 ORDER BY a.email, m.role`,
         [organizationId],
       );
-      const invitations = await db.all<{ email: string; role: Role; expires_at: string; revision: string; earlier_email: boolean; email_id: string | null; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null; email_delivery: string | null }>(
-        `SELECT i.email, i.role, i.expires_at, i.revision, i.earlier_email, m.id AS email_id, m.status AS email_status, m.created_at AS email_at, m.delivery_status AS email_delivery
+      const invitations = await db.all<{ email: string; role: Role; expires_at: string; revision: string; earlier_email: boolean; email_id: string | null; email_status: 'recorded' | 'sent' | 'failed' | 'uncertain' | null; email_at: string | null; email_delivery: string | null; suppression_reason: string | null }>(
+        `SELECT i.email, i.role, i.expires_at, i.revision, i.earlier_email, m.id AS email_id, m.status AS email_status, m.created_at AS email_at, m.delivery_status AS email_delivery, s.reason AS suppression_reason
          FROM organization_invitations i
          LEFT JOIN email_messages m ON m.id = i.email_attempt_id
+         LEFT JOIN email_suppressions s ON s.organization_id = i.organization_id AND s.email = i.email AND s.cleared_at IS NULL
          WHERE i.organization_id = $1 ORDER BY i.email, i.role`,
+        [organizationId],
+      );
+      const stopped = await db.all<{ email: string; reason: string }>(
+        `SELECT email, reason FROM email_suppressions WHERE organization_id = $1 AND cleared_at IS NULL ORDER BY email`,
         [organizationId],
       );
       const history = await db.all<{ action: MembershipAction; email: string; role: Role; actor_email: string | null; created_at: string }>(
@@ -330,8 +387,20 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       return {
         members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role, revision: m.revision })),
         invitations: invitations.map(
-          (i): Invitation => ({ email: i.email, role: i.role, expiresAt: i.expires_at, revision: i.revision, earlierEmail: i.earlier_email, lastEmail: i.email_id && i.email_status && i.email_at ? { attemptId: i.email_id, status: i.email_status, at: i.email_at, delivery: knownDelivery(i.email_delivery) } : null }),
+          (i): Invitation => ({
+            email: i.email,
+            role: i.role,
+            expiresAt: i.expires_at,
+            revision: i.revision,
+            earlierEmail: i.earlier_email,
+            suppressed: knownStop(i.suppression_reason),
+            lastEmail: i.email_id && i.email_status && i.email_at ? { attemptId: i.email_id, status: i.email_status, at: i.email_at, delivery: knownDelivery(i.email_delivery) } : null,
+          }),
         ),
+        stoppedEmails: stopped.flatMap((row) => {
+          const reason = knownStop(row.reason);
+          return reason ? [{ email: row.email, reason }] : [];
+        }),
         history: history.map((h): MembershipChange => ({ action: h.action, email: h.email, role: h.role, by: h.actor_email, at: h.created_at })),
       };
     });
@@ -367,6 +436,9 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       );
       if (resendRevision && extant?.revision !== resendRevision) throw new HttpError(409, INVITATION_CHANGED);
       if (by && extant?.earlier_email) throw new HttpError(409, EARLIER_EMAIL);
+      // Refuse before any deadline change. A stopped address is not retried or renewed.
+      const stopped = by ? await activeStop(organizationId, normalized) : null;
+      if (stopped) throw new HttpError(409, extant ? MAIL_STOPPED_OPEN : MAIL_STOPPED_NEW);
       // Only the attempt stored on this invitation counts. A cancelled row is gone, so a re-add starts over.
       if (extant?.email_attempt_id) {
         const attempt = await db.get<{ id: string; status: string }>(`SELECT id, status FROM email_messages WHERE id = $1`, [extant.email_attempt_id]);
@@ -405,14 +477,90 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
 
   /** Retries one attempt while it is still the invitation's own. Unlike addMember, it never invites, renews, or grants. */
   async function retryInvitation(organizationId: string, email: string, role: Role, attemptId: string, by: Account) {
-    const current = await db.get(`SELECT 1 FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 AND email_attempt_id = $4 AND NOT earlier_email`, [
-      organizationId,
-      email.trim().toLowerCase(),
-      role,
-      attemptId,
-    ]);
+    const normalized = email.trim().toLowerCase();
+    const current = await db.transaction(async () => {
+      await db.lock(`org-members:${organizationId}`);
+      await requireOrg(by, organizationId, 'members.manage');
+      if (await activeStop(organizationId, normalized)) throw new HttpError(409, MAIL_STOPPED_OPEN);
+      return db.get(`SELECT 1 FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 AND email_attempt_id = $4 AND NOT earlier_email`, [
+        organizationId,
+        normalized,
+        role,
+        attemptId,
+      ]);
+    });
     if (!current) throw new HttpError(409, INVITATION_CHANGED);
     await dispatchInvitation(organizationId, attemptId, by);
+    return teamFor(organizationId, by);
+  }
+
+  /**
+   * Sends a new invitation email for an open invitation without changing its deadline or recording a renewal.
+   * The stop clears only after that attempt is recorded, sent, or left uncertain. A confirmed failure leaves it.
+   */
+  async function sendWithoutExtending(organizationId: string, email: string, role: Role, revision: string, by: Account) {
+    const normalized = email.trim().toLowerCase();
+    const attemptId = await db.transaction(async () => {
+      await db.lock(`org-members:${organizationId}`);
+      await requireOrg(by, organizationId, 'members.manage');
+      await db.lock(`account:${normalized}`);
+      const extant = await db.get<{ revision: string; earlier_email: boolean; expires_at: string }>(
+        `SELECT revision, earlier_email, expires_at FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 FOR UPDATE`,
+        [organizationId, normalized, role],
+      );
+      if (!extant || extant.revision !== revision) throw new HttpError(409, INVITATION_CHANGED);
+      if (extant.earlier_email) throw new HttpError(409, EARLIER_EMAIL);
+      if (!(await activeStop(organizationId, normalized))) throw new HttpError(409, MAIL_NOT_STOPPED);
+      const id = await mailer.reserve('organizer_invitation', `${organizationId}:${normalized}:${role}`, organizationId, await invitationMessage(organizationId, normalized, role, by, extant.expires_at));
+      const attached = await db.run(`UPDATE organization_invitations SET email_attempt_id = $1 WHERE organization_id = $2 AND email = $3 AND role = $4 AND revision = $5`, [
+        id,
+        organizationId,
+        normalized,
+        role,
+        revision,
+      ]);
+      if (!attached) throw new HttpError(409, INVITATION_CHANGED);
+      return id;
+    });
+    await dispatchAllowed(organizationId, normalized, attemptId, by);
+    return teamFor(organizationId, by);
+  }
+
+  /**
+   * Allows one new invitation after the previous one is gone. This is a new 14-day invitation, not a renewal.
+   * An open invitation cannot use this path. Granting an existing account sends no mail and does not clear the stop.
+   */
+  async function allowInvitation(organizationId: string, email: string, role: Role, by: Account) {
+    const normalized = email.trim().toLowerCase();
+    const decision = await db.transaction(async () => {
+      await db.lock(`org-members:${organizationId}`);
+      await requireOrg(by, organizationId, 'members.manage');
+      await db.lock(`account:${normalized}`);
+      const target = await db.get<Account>(`SELECT id, email FROM accounts WHERE lower(email) = $1`, [normalized]);
+      if (target) {
+        await grant(organizationId, target, role, by.id);
+        return { action: 'none' as const };
+      }
+      const extant = await db.get(`SELECT 1 FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3`, [organizationId, normalized, role]);
+      if (extant) throw new HttpError(409, USE_SEND_WITHOUT_EXTENDING);
+      if (!(await activeStop(organizationId, normalized))) throw new HttpError(409, MAIL_NOT_STOPPED);
+      const t = clock();
+      const expiresAt = new Date(t.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
+      const invited = await db.run(`INSERT INTO organization_invitations (organization_id, email, role, invited_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, [
+        organizationId,
+        normalized,
+        role,
+        by.id,
+        t.toISOString(),
+        expiresAt,
+      ]);
+      if (!invited) throw new HttpError(409, USE_SEND_WITHOUT_EXTENDING);
+      await record(organizationId, 'invited', normalized, role, by.id);
+      const id = await mailer.reserve('organizer_invitation', `${organizationId}:${normalized}:${role}`, organizationId, await invitationMessage(organizationId, normalized, role, by, expiresAt));
+      await db.run(`UPDATE organization_invitations SET email_attempt_id = $1 WHERE organization_id = $2 AND email = $3 AND role = $4`, [id, organizationId, normalized, role]);
+      return { action: 'send' as const, id };
+    });
+    if (decision.action === 'send') await dispatchAllowed(organizationId, normalized, decision.id, by);
     return teamFor(organizationId, by);
   }
 
@@ -525,7 +673,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     );
   }
 
-  return { accountFor, requireOrg, requireEvent, requireEventUntilSaved, requireOrderAccess, memberships, grant, listMembers, addMember, retryInvitation, removeMember, cancelInvitation, transferOwnership, expiredInvitations };
+  return { accountFor, requireOrg, requireEvent, requireEventUntilSaved, requireOrderAccess, memberships, grant, listMembers, addMember, retryInvitation, sendWithoutExtending, allowInvitation, removeMember, cancelInvitation, transferOwnership, expiredInvitations };
 }
 
 export type Access = ReturnType<typeof createAccess>;

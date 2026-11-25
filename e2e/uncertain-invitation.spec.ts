@@ -4,17 +4,28 @@ import { expect, test } from './fixtures';
 test('an uncertain invitation can be retried without promising extra days', async ({ page }) => {
   const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
   const expiresAt = '2027-06-01T12:00:00.000Z';
-  await page.route(`**/api/organizations/${organizationId}/members`, (route) => route.fulfill({
-    json: {
-      members: [{ accountId: 'acct_owner', email: 'organizer@example.test', role: 'owner' }],
-      invitations: [{ email: 'timer@example.test', role: 'finance', expiresAt, revision: 'rev_lost', earlierEmail: false, lastEmail: { attemptId: 'eml_lost', status: 'uncertain', at: '2027-05-01T12:00:00.000Z' } },
-        { email: 'earlier@example.test', role: 'finance', expiresAt, revision: 'rev_earlier', earlierEmail: true, lastEmail: null },
-        { email: 'delivered@example.test', role: 'finance', expiresAt, revision: 'rev_delivered', earlierEmail: false, lastEmail: { attemptId: 'eml_delivered', status: 'sent', at: '2027-05-01T12:00:00.000Z', delivery: 'delivered' } },
-        { email: 'bounced@example.test', role: 'finance', expiresAt, revision: 'rev_bounced', earlierEmail: false, lastEmail: { attemptId: 'eml_bounced', status: 'sent', at: '2027-05-01T12:00:00.000Z', delivery: 'bounced' } },
-        { email: 'complained@example.test', role: 'finance', expiresAt, revision: 'rev_complained', earlierEmail: false, lastEmail: { attemptId: 'eml_complained', status: 'sent', at: '2027-05-01T12:00:00.000Z', delivery: 'complained' } }],
-      history: [],
-    },
-  }));
+  const teamList = {
+    members: [{ accountId: 'acct_owner', email: 'organizer@example.test', role: 'owner' }],
+    invitations: [
+      { email: 'timer@example.test', role: 'finance', expiresAt, revision: 'rev_lost', earlierEmail: false, suppressed: null, lastEmail: { attemptId: 'eml_lost', status: 'uncertain', at: '2027-05-01T12:00:00.000Z' } },
+      { email: 'earlier@example.test', role: 'finance', expiresAt, revision: 'rev_earlier', earlierEmail: true, suppressed: 'bounced', lastEmail: null },
+      { email: 'delivered@example.test', role: 'finance', expiresAt, revision: 'rev_delivered', earlierEmail: false, suppressed: null, lastEmail: { attemptId: 'eml_delivered', status: 'sent', at: '2027-05-01T12:00:00.000Z', delivery: 'delivered' } },
+      { email: 'bounced@example.test', role: 'finance', expiresAt, revision: 'rev_bounced', earlierEmail: false, suppressed: 'bounced', lastEmail: { attemptId: 'eml_bounced', status: 'sent', at: '2027-05-01T12:00:00.000Z', delivery: 'bounced' } },
+      { email: 'complained@example.test', role: 'finance', expiresAt, revision: 'rev_complained', earlierEmail: false, suppressed: 'complained', lastEmail: { attemptId: 'eml_complained', status: 'sent', at: '2027-05-01T12:00:00.000Z', delivery: 'complained' } },
+    ],
+    stoppedEmails: [
+      { email: 'earlier@example.test', reason: 'bounced' },
+      { email: 'bounced@example.test', reason: 'bounced' },
+      { email: 'complained@example.test', reason: 'complained' },
+    ],
+    history: [],
+  };
+  await page.route(`**/api/organizations/${organizationId}/members`, (route) => route.fulfill({ json: teamList }));
+  const safeSends: unknown[] = [];
+  await page.route(`**/api/organizations/${organizationId}/invitations/send-without-extending`, async (route) => {
+    safeSends.push(route.request().postDataJSON());
+    await route.fulfill({ json: teamList });
+  });
   for (const theme of ['light', 'dark']) {
     await page.goto('/');
     await page.evaluate((value) => localStorage.setItem('cyclereg-theme', value), theme);
@@ -26,15 +37,26 @@ test('an uncertain invitation can be retried without promising extra days', asyn
     await expect(team.getByText('Delivered', { exact: true })).toBeVisible();
     await expect(team.getByText('Bounced', { exact: true })).toBeVisible();
     await expect(team.getByText('Complaint received', { exact: true })).toBeVisible();
-    await expect(team.getByRole('button', { name: /Resend invitation to bounced@example.test/ })).toBeVisible();
+    await expect(team.getByText('Mail stopped')).toHaveCount(3);
+    const safe = team.getByRole('button', { name: 'Send without extending the invitation to bounced@example.test. This does not add days.' });
+    await expect(safe).toBeVisible();
+    await expect(team.getByRole('button', { name: 'Send without extending the invitation to complained@example.test. This does not add days.' })).toBeVisible();
+    await expect(team.getByRole('button', { name: /Resend invitation to delivered@example.test/ })).toBeVisible();
+    await expect(team.getByRole('button', { name: /Resend invitation to bounced@example.test/ })).toHaveCount(0);
     const retry = team.getByRole('button', { name: /Retry send/ });
     await expect(retry).toHaveAccessibleName('Retry send of the invitation email to timer@example.test without extending it');
     const earlier = team.getByRole('listitem').filter({ hasText: 'earlier@example.test' });
     await expect(earlier).toContainText('An earlier email might have been sent. To send a new one, cancel and invite again.');
+    await expect(earlier).toContainText('Mail stopped');
     await expect(earlier.getByRole('button')).toHaveCount(1);
     await expect(team.getByRole('status')).toBeEmpty();
     const openUntil = team.locator('time').first();
     await expect(openUntil).toHaveAttribute('datetime', expiresAt);
+    const beforeSafe = safeSends.length;
+    await safe.click();
+    expect(safeSends[beforeSafe]).toEqual({ email: 'bounced@example.test', role: 'finance', revision: 'rev_bounced' });
+    await expect(openUntil).toHaveAttribute('datetime', expiresAt);
+    await expect(team.getByRole('status')).toBeEmpty();
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
