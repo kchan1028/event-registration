@@ -728,7 +728,7 @@ The local build stores data in a PostgreSQL database on the developer's computer
 | USA Cycling | Confirm partner access, license/category validation, one-day licenses, accepted waiver/guardian workflows, and required reporting directly with USAC |
 | Payments | Stripe selected in ADR 0002; local test-mode Checkout implemented, live Checkout Planned. Confirm the merchant/Connect operating model, organizer onboarding, revenue allocation, payouts, refunds, disputes, and tax responsibility before live use |
 | Timer / officials | Understand existing race-day changes; investigate accepted file formats only if timing interoperability is selected for future development |
-| Email | Select a transactional provider with delivery status and suppression handling |
+| Email | Resend selected in ADR 0007. Delivery, bounce, and complaint recording for organizer invitation emails is Implemented locally, test-only. Suppression handling remains Planned. |
 | Existing registrations | Confirm export rights and mappings; never assume signatures or payment tokens transfer |
 | Results sites (road-results.com) | Research how results are updated and which registration fields (name, license number, team, category) a timer needs to build the upload file. See [Results site updates](#results-site-updates-research) |
 
