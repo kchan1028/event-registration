@@ -460,7 +460,7 @@ Normal writers take the event lock, check success then refusal, and never create
 
 ### entry_changes
 
-Log of organizer transfers and withdrawals of paid entries (migration 6). The order's price is never changed; money differences are recorded here and settled outside the app while payments are simulated.
+Log of organizer transfers and withdrawals of paid entries (migration 6). The order's price is never changed. Money differences are recorded here and settled outside the app for both simulated and Stripe test-mode payments.
 
 | Column | Notes |
 |---|---|
