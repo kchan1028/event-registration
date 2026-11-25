@@ -65,7 +65,7 @@ Shared junior profiles use one transaction-scoped family advisory lock across re
 | Transactions and storage | `src/server/repo.ts`, `src/server/db.ts` |
 | Pricing, bundles, and discount precedence | `src/shared/pricing.ts` |
 | Checkout rules: conflicts, selection checks, readiness | `src/shared/checkout.ts` |
-| Orders, holds, simulated payment, license review | `src/server/orders.ts` |
+| Orders, holds, payment confirmation for simulated and Stripe test mode, license review | `src/server/orders.ts` |
 | Interface | `src/web/` (rider checkout in `Register.tsx`, exception queue in `Registrations.tsx`) |
 
 ### Post-close bib allocation
