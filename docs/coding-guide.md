@@ -1,6 +1,6 @@
 # Coding guide
 
-This guide sets the rules code must follow. Most of them protect three things volunteers cannot easily fix by hand on race morning: correct fields, correct money, and private rider data. The local build uses TypeScript, Node.js, React ([ADR 0001](decisions/0001-stack-for-category-builder-milestone.md)), and PostgreSQL ([ADR 0004](decisions/0004-hosted-stack-and-database.md)). Sections about payments, roles, and sign-in describe planned work; nothing for them is built yet.
+This guide sets the rules code must follow. Most of them protect three things volunteers cannot easily fix by hand on race morning: correct fields, correct money, and private rider data. The local build uses TypeScript, Node.js, React ([ADR 0001](decisions/0001-stack-for-category-builder-milestone.md)), and PostgreSQL ([ADR 0004](decisions/0004-hosted-stack-and-database.md)). Sections about payments, roles, and sign-in describe planned work; email sign-in, organizer roles, and simulated or Stripe test-mode payments are built locally.
 
 ## Repository structure and commands
 
