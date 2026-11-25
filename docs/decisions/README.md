@@ -82,7 +82,7 @@ Roadmap impact (roadmap.md):
 
 ## Decision backlog
 
-These are unresolved. They are ordered roughly by when the roadmap needs them. "Needed by" refers to roadmap phases.
+The rows below include accepted decisions as well as open ones. They are ordered roughly by when the roadmap needs them. "Needed by" refers to roadmap phases.
 
 | Decision | Needed by | Options known so far | Main tradeoffs |
 |---|---|---|---|
