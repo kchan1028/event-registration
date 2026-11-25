@@ -121,7 +121,7 @@ SCREENSHOTS=1 npx playwright test e2e/screenshots.spec.ts
 | `E2E_DATABASE_URL` | Throwaway database for the end-to-end test, reset on each run | `postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_e2e` | No |
 | `PORT` or `API_PORT` | API server port | `3001` (`10000` in the Docker image) | No |
 | `HOST` | Address the API listens on ([deploy runbook](deploy-render.md)) | `127.0.0.1` | No |
-| `CLERK_SECRET_KEY` | Clerk secret key (`sk_test_...` for a development instance). The API verifies sign-in with it. Without it, the API uses the local test sign-in on `127.0.0.1` outside production, and refuses to start anywhere else | none | **Yes.** Only in `.env` or the platform's secret store; never commit, log, or paste it |
+| `CLERK_SECRET_KEY` | Clerk secret key (`sk_test_...` for a development instance). The API verifies sign-in with it. Without it, the API uses the local test sign-in outside production on `127.0.0.1`, `localhost`, or `::1`, and refuses to start anywhere else | none | **Yes.** Only in `.env` or the platform's secret store; never commit, log, or paste it |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Clerk publishable key (`pk_test_...`), built into the web app | none | No (public by design), but keep it in `.env` with the secret key |
 | `CLERK_AUTHORIZED_PARTIES` | Comma-separated origins allowed to send session tokens, for example `http://127.0.0.1:5273` locally or the site's own origin when hosted | unset (any origin) | No |
 | `SEED_OWNER_EMAIL` | Same as `--owner` for the seed scripts | unset | No |
