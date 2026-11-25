@@ -348,7 +348,7 @@ Unique on (`event_id`, `category_id`, `rider_ref`): a rider can hold a category 
 
 ### orders
 
-A rider's checkout in the app. Payment is simulated; no money moves.
+A rider's checkout in the app. Payment is simulated or Stripe test mode; live payments are not recorded here.
 
 | Column | Notes |
 |---|---|
