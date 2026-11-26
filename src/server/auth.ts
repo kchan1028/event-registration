@@ -328,8 +328,8 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
   async function settleStop(organizationId: string, email: string, attemptId: string, byId: string) {
     await db.transaction(async () => {
       await db.lock(`org-members:${organizationId}`);
-      const message = await db.get<{ status: string; delivery_status: string | null }>(
-        `SELECT status, delivery_status FROM email_messages WHERE id = $1 AND organization_id = $2 FOR UPDATE`,
+      const message = await db.get<{ status: string; delivery_status: string | null; allowed_stop_id: string | null }>(
+        `SELECT status, delivery_status, allowed_stop_id FROM email_messages WHERE id = $1 AND organization_id = $2 FOR UPDATE`,
         [attemptId, organizationId],
       );
       if (!message || (message.status !== 'recorded' && message.status !== 'sent' && message.status !== 'uncertain')) return;
@@ -337,6 +337,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         `SELECT id, email_id FROM email_suppressions WHERE organization_id = $1 AND email = $2 AND cleared_at IS NULL FOR UPDATE`,
         [organizationId, email],
       );
+      if (message.allowed_stop_id && active?.id !== message.allowed_stop_id) return;
       const bounced = message.delivery_status === 'bounced' || message.delivery_status === 'complained';
       if (bounced && active?.email_id === attemptId) return;
       const at = nowIso();
@@ -358,6 +359,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
     const outcome = await mailer.dispatch(attemptId, by.id);
     if (outcome === 'refused') throw new HttpError(403, NO_LONGER_OWNER);
     if (outcome === 'recorded' || outcome === 'sent' || outcome === 'uncertain') await settleStop(organizationId, email, attemptId, by.id);
+    return outcome;
   }
 
   async function listMembers(organizationId: string) {
@@ -505,15 +507,27 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       await db.lock(`org-members:${organizationId}`);
       await requireOrg(by, organizationId, 'members.manage');
       await db.lock(`account:${normalized}`);
-      const extant = await db.get<{ revision: string; earlier_email: boolean; expires_at: string }>(
-        `SELECT revision, earlier_email, expires_at FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 FOR UPDATE`,
+      const extant = await db.get<{ revision: string; earlier_email: boolean; expires_at: string; email_attempt_id: string | null }>(
+        `SELECT revision, earlier_email, expires_at, email_attempt_id FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 FOR UPDATE`,
         [organizationId, normalized, role],
       );
       if (!extant || extant.revision !== revision) throw new HttpError(409, INVITATION_CHANGED);
       if (extant.earlier_email) throw new HttpError(409, EARLIER_EMAIL);
       if (new Date(extant.expires_at).getTime() <= clock().getTime()) throw new HttpError(409, INVITATION_ENDED);
-      if (!(await activeStop(organizationId, normalized))) throw new HttpError(409, MAIL_NOT_STOPPED);
+      const stop = await db.get<{ id: string }>(
+        `SELECT id FROM email_suppressions WHERE organization_id = $1 AND email = $2 AND cleared_at IS NULL`,
+        [organizationId, normalized],
+      );
+      if (!stop) throw new HttpError(409, MAIL_NOT_STOPPED);
+      if (extant.email_attempt_id) {
+        const existing = await db.get(
+          `SELECT 1 FROM email_messages WHERE id = $1 AND allowed_stop_id = $2 AND status <> 'failed'`,
+          [extant.email_attempt_id, stop.id],
+        );
+        if (existing) return extant.email_attempt_id;
+      }
       const id = await mailer.reserve('organizer_invitation', `${organizationId}:${normalized}:${role}`, organizationId, await invitationMessage(organizationId, normalized, role, by, extant.expires_at));
+      await db.run(`UPDATE email_messages SET allowed_stop_id = $2 WHERE id = $1`, [id, stop.id]);
       const attached = await db.run(`UPDATE organization_invitations SET email_attempt_id = $1 WHERE organization_id = $2 AND email = $3 AND role = $4 AND revision = $5`, [
         id,
         organizationId,
@@ -524,7 +538,9 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
       if (!attached) throw new HttpError(409, INVITATION_CHANGED);
       return id;
     });
-    await dispatchAllowed(organizationId, normalized, attemptId, by);
+    const outcome = await dispatchAllowed(organizationId, normalized, attemptId, by);
+    if (outcome === 'changed') throw new HttpError(409, INVITATION_CHANGED);
+    if (outcome === 'withheld') throw new HttpError(409, 'The earlier invitation email might have been sent. To send a new email, cancel the invitation and allow a new one.');
     return teamFor(organizationId, by);
   }
 

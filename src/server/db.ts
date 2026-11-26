@@ -816,6 +816,9 @@ export const MIGRATIONS: string[] = [
   );
   CREATE UNIQUE INDEX email_suppressions_active ON email_suppressions (organization_id, email) WHERE cleared_at IS NULL;
   `,
+  `
+  ALTER TABLE email_messages ADD COLUMN allowed_stop_id text REFERENCES email_suppressions(id) ON DELETE SET NULL;
+  `,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
