@@ -36,7 +36,7 @@ import { createPayments, paymentsFromEnv, publicAppUrl, type PaymentProvider } f
 import { createRefunds } from './refunds';
 import { createWaitlist } from './waitlist';
 import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
-import { type RiderEmailKind, checkedWebhookSecret, createMailer, emailFromEnv, emailWebhookSecretFromEnv, recordResendDelivery, ResendWebhookRejected, type EmailSender } from './email';
+import { type OrganizerRiderEmailKind, checkedWebhookSecret, createMailer, emailFromEnv, emailWebhookSecretFromEnv, recordResendDelivery, ResendWebhookRejected, type EmailSender } from './email';
 import { createJuniors } from './juniors';
 import { createCancellationConfirmations } from './cancellationConfirmations';
 import { createCancellationFinancialPreflight } from './cancellationFinancialPreflight';
@@ -768,7 +768,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   const eventOrderParams = z.object({ id: idStr, orderId: idStr });
   const emailRecordParams = z.object({ id: idStr, recordId: idStr });
-  function registerRiderEmailControls(path: string, kind: RiderEmailKind, field: 'confirmation' | 'offerEmail') {
+  function registerRiderEmailControls(path: string, kind: OrganizerRiderEmailKind, field: 'confirmation' | 'offerEmail') {
     app.get(path, async (req, reply) => {
       const { id, recordId } = await onEvent(req, 'entries.manage', emailRecordParams);
       reply.header('Cache-Control', 'no-store');

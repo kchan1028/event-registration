@@ -180,7 +180,7 @@ const riderEmailAllowed = `NOT EXISTS (
     )
     AND NOT EXISTS (
       SELECT 1 FROM email_messages previous JOIN email_delivery_events d ON d.email_id = previous.id
-      WHERE previous.organization_id = m.organization_id AND previous.kind IN ('registration_confirmation', 'waitlist_offer')
+      WHERE previous.organization_id = m.organization_id AND previous.kind IN ('registration_confirmation', 'waitlist_offer', 'waitlist_expired')
         AND lower(btrim(previous.to_email)) = lower(btrim(m.to_email)) AND d.kind IN ('bounced', 'complained')
     )`;
 
@@ -190,7 +190,26 @@ const waitlistOfferReady = `EXISTS (
     AND w.offer_expires_at > now() AND lower(btrim(a.email)) = lower(btrim(m.to_email))
     AND ${riderEmailAllowed}
 )`;
-export type RiderEmailKind = 'registration_confirmation' | 'waitlist_offer';
+// Leave unresolved checkout and payment to their existing recovery paths.
+const recentlyExpiredOffer = `w.status = 'offered' AND w.offer_expires_at <= now()
+  AND w.offer_expires_at > now() - interval '24 hours'
+  AND NOT EXISTS (
+    SELECT 1 FROM orders pending WHERE pending.id = w.order_id
+      AND (pending.status IN ('confirmed', 'needs_attention')
+        OR (pending.status IN ('held', 'payment_failed') AND pending.hold_expires_at > now())
+        OR EXISTS (SELECT 1 FROM payment_sessions ps WHERE ps.order_id = pending.id AND ps.status = 'open')
+        OR pending.stripe_checkout_started_at IS NOT NULL)
+  )`;
+
+const waitlistExpiryReady = `EXISTS (
+  SELECT 1 FROM waitlist_entries w JOIN accounts a ON a.id = w.account_id
+  WHERE w.id = m.waitlist_expiry_entry_id AND m.from_email IS NOT NULL
+    AND ${recentlyExpiredOffer} AND lower(btrim(a.email)) = lower(btrim(m.to_email))
+    AND ${riderEmailAllowed}
+)`;
+
+export type OrganizerRiderEmailKind = 'registration_confirmation' | 'waitlist_offer';
+export type RiderEmailKind = OrganizerRiderEmailKind | 'waitlist_expired';
 
 // The last check uses current account and family authority, not purchase provenance alone.
 const confirmationReady = `EXISTS (
@@ -204,6 +223,7 @@ const confirmationReady = `EXISTS (
 const riderEmailReady = {
   registration_confirmation: confirmationReady,
   waitlist_offer: waitlistOfferReady,
+  waitlist_expired: waitlistExpiryReady,
 };
 const riderEmailSource = {
   registration_confirmation: 'JOIN orders source ON source.id = m.order_id',
@@ -236,6 +256,24 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
     }
   }
 
+  async function recordNextWaitlistExpiry() {
+    await db.run(
+      `INSERT INTO email_messages (id, organization_id, kind, ref, waitlist_expiry_entry_id, to_email, subject, body_text, status, created_at, from_email, keyed)
+       SELECT $1, m.organization_id, 'waitlist_expired', w.id, w.id, m.to_email, $2, $3, 'recorded', $4, m.from_email, true
+       FROM waitlist_entries w
+       JOIN accounts a ON a.id = w.account_id
+       JOIN email_messages m ON m.waitlist_entry_id = w.id AND m.kind = 'waitlist_offer'
+       WHERE m.status = 'sent' AND m.from_email IS NOT NULL AND ${recentlyExpiredOffer}
+         AND lower(btrim(a.email)) = lower(btrim(m.to_email)) AND ${riderEmailAllowed}
+         AND NOT EXISTS (
+           SELECT 1 FROM email_messages previous WHERE previous.waitlist_expiry_entry_id = w.id AND previous.kind = 'waitlist_expired'
+         )
+       ORDER BY w.offer_expires_at, w.seq LIMIT 1
+       ON CONFLICT (waitlist_expiry_entry_id) DO NOTHING`,
+      [newId('eml'), 'Your waitlist offer expired', 'Your waitlist offer expired. Sign in to check your registrations or contact the organizer about availability.', clock().toISOString()],
+    );
+  }
+
   const mailer = {
     /** Inserts the durable attempt and does not call the provider. Local mode is recorded and never sent. */
     async reserve(kind: 'organizer_invitation', ref: string, organizationId: string, message: OutgoingEmail): Promise<string> {
@@ -248,7 +286,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       return id;
     },
 
-    async riderEmailStatus(kind: RiderEmailKind, eventId: string, recordId: string) {
+    async riderEmailStatus(kind: OrganizerRiderEmailKind, eventId: string, recordId: string) {
       return await db.get<{ status: EmailStatus; delivery: EmailDelivery | null; canRetry: boolean }>(
         `SELECT m.status, m.delivery_status AS delivery,
            ($3 AND m.status = 'uncertain' AND m.created_at > $4
@@ -260,7 +298,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
     },
 
     /** Call inside the transaction that verifies and locks the organizer's current membership. */
-    async recordRiderEmailRetry(kind: RiderEmailKind, eventId: string, recordId: string, accountId: string) {
+    async recordRiderEmailRetry(kind: OrganizerRiderEmailKind, eventId: string, recordId: string, accountId: string) {
       if (!(await mailer.riderEmailStatus(kind, eventId, recordId))?.canRetry) return undefined;
       return db.get<{ id: string }>(
         `INSERT INTO rider_email_retry_requests (id, email_id, actor_account_id, requested_at)
@@ -273,12 +311,14 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
 
     async dispatchNextRiderEmail(): Promise<void> {
       if (sender.mode === 'local') return;
+      await recordNextWaitlistExpiry();
       const next = await db.get<{ id: string; kind: RiderEmailKind }>(
         `SELECT m.id, m.kind FROM email_messages m
          WHERE m.status IN ('recorded', 'uncertain')
            AND m.created_at > $1 AND (m.sending_until IS NULL OR m.sending_until <= now())
            AND ((m.kind = 'registration_confirmation' AND ${confirmationReady})
-             OR (m.kind = 'waitlist_offer' AND ${waitlistOfferReady}))
+             OR (m.kind = 'waitlist_offer' AND ${waitlistOfferReady})
+             OR (m.kind = 'waitlist_expired' AND ${waitlistExpiryReady}))
          ORDER BY m.sending_until NULLS FIRST, m.created_at, m.seq LIMIT 1`,
         [new Date(clock().getTime() - RESEND_IDEMPOTENCY_WINDOW_MS).toISOString()],
       );
