@@ -131,6 +131,18 @@ export function emailFromEnv(env: Record<string, string | undefined> = process.e
   return resendEmail(from, apiKey, testRecipients);
 }
 
+/** Called in the transaction that confirms the order. No provider call is made. */
+export async function recordRegistrationConfirmation(db: Db, orderId: string, confirmedAt: string) {
+  await db.run(
+    `INSERT INTO email_messages (id, organization_id, kind, ref, order_id, to_email, subject, body_text, status, created_at, keyed)
+     SELECT $1, e.organization_id, 'registration_confirmation', o.id, o.id, a.email, $2, $3, 'recorded', $4, true
+     FROM orders o JOIN events e ON e.id = o.event_id JOIN accounts a ON a.id = o.account_id
+     WHERE o.id = $5
+     ON CONFLICT (order_id) DO NOTHING`,
+    [newId('eml'), 'Registration confirmed', 'Your registration is confirmed. Sign in and open My registrations to see your order and receipt.', confirmedAt, orderId],
+  );
+}
+
 /** `until` is also the token that proves the caller still holds the lease. */
 interface Lease {
   first: boolean;
