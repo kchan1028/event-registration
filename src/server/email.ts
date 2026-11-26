@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { newId } from '../shared/factory';
+import { formatDollars } from '../shared/format';
+import { formatOrderNumber } from '../shared/lookup';
 import { can, ROLES } from '../shared/roles';
 import type { Db } from './db';
 import { orderManagerSql } from './juniors';
@@ -140,8 +142,45 @@ export async function recordRegistrationConfirmation(db: Db, orderId: string, co
      SELECT $1, e.organization_id, 'registration_confirmation', o.id, o.id, a.email, $2, $3, 'recorded', $4, $6, true
      FROM orders o JOIN events e ON e.id = o.event_id JOIN accounts a ON a.id = o.account_id
      WHERE o.id = $5
-     ON CONFLICT (order_id) DO NOTHING`,
+     ON CONFLICT (order_id, kind) DO NOTHING`,
     [newId('eml'), 'Registration confirmed', 'Your registration is confirmed. Sign in and open My registrations to see your order and receipt.', confirmedAt, orderId, senderAddress ?? null],
+  );
+}
+
+/** Order number and total only. Demo copy names the simulated payment. */
+export function registrationReceiptText(orderNumber: string, amount: string, isDemo: boolean): string {
+  return isDemo
+    ? `Demo receipt ${orderNumber} for ${amount}. Simulated payment: no money was charged. Sign in and open My registrations to see it.`
+    : `Receipt ${orderNumber} for ${amount}. Sign in and open My registrations to see it.`;
+}
+
+/** Same confirm transaction as the confirmation. `from_email` stays null, so dispatch never selects it. */
+export async function recordRegistrationReceipt(db: Db, orderId: string, confirmedAt: string) {
+  const row = await db.get<{ organization_id: string; email: string; total_cents: number; is_demo: boolean | null }>(
+    `SELECT e.organization_id, a.email, o.total_cents,
+            (v.config_json #>> '{event,isDemo}') = 'true' AS is_demo
+     FROM orders o
+     JOIN events e ON e.id = o.event_id
+     JOIN accounts a ON a.id = o.account_id
+     JOIN event_versions v ON v.event_id = o.event_id AND v.version = o.published_version
+     WHERE o.id = $1`,
+    [orderId],
+  );
+  if (!row) return;
+  const isDemo = row.is_demo === true;
+  await db.run(
+    `INSERT INTO email_messages (id, organization_id, kind, ref, order_id, to_email, subject, body_text, status, created_at, from_email, keyed)
+     VALUES ($1, $2, 'registration_receipt', $3, $3, $4, $5, $6, 'recorded', $7, NULL, true)
+     ON CONFLICT (order_id, kind) DO NOTHING`,
+    [
+      newId('eml'),
+      row.organization_id,
+      orderId,
+      row.email,
+      'Your receipt',
+      registrationReceiptText(formatOrderNumber(orderId, isDemo), formatDollars(Number(row.total_cents)), isDemo),
+      confirmedAt,
+    ],
   );
 }
 

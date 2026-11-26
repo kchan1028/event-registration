@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { paymentsFromEnv, publicAppUrl, stripePayments } from '../src/server/payments';
 import { testApp, testDatabaseUrl } from './support/db';
 import { openDb } from '../src/server/db';
-import { createMailer, EmailUncertain, localEmail, type EmailSender } from '../src/server/email';
+import { createMailer, EmailUncertain, localEmail, registrationReceiptText, type EmailSender } from '../src/server/email';
+import { formatDollars } from '../src/shared/format';
+import { formatOrderNumber } from '../src/shared/lookup';
 import { as, DEFAULT_TEST_ORGANIZER, fakeAuth } from './support/auth';
 import type { EventConfig } from '../src/shared/schema';
 import { publishReviewed } from './support/publish';
@@ -255,14 +257,25 @@ describe('Stripe hosted Checkout (test mode)', () => {
     await db.connect();
     try {
       expect((await db.query(
-        `SELECT kind, to_email, status, provider_message_id, body_text FROM email_messages WHERE order_id = $1`,
+        `SELECT kind, to_email, status, provider_message_id, from_email, subject, body_text
+         FROM email_messages WHERE order_id = $1 ORDER BY kind`,
         [o.id],
       )).rows).toEqual([{
         kind: 'registration_confirmation',
         to_email: DEFAULT_TEST_ORGANIZER,
         status: 'recorded',
         provider_message_id: null,
+        from_email: null,
+        subject: 'Registration confirmed',
         body_text: 'Your registration is confirmed. Sign in and open My registrations to see your order and receipt.',
+      }, {
+        kind: 'registration_receipt',
+        to_email: DEFAULT_TEST_ORGANIZER,
+        status: 'recorded',
+        provider_message_id: null,
+        from_email: null,
+        subject: 'Your receipt',
+        body_text: registrationReceiptText(formatOrderNumber(o.id, true), formatDollars(5000), true),
       }]);
     } finally {
       await db.end();
@@ -286,9 +299,13 @@ describe('Stripe hosted Checkout (test mode)', () => {
     await webhook('evt_confirmation_delivery', 'checkout.session.completed', paidSession(o));
     const db = openDb(databaseUrl);
     try {
-      const message = await db.get<{ id: string; created_at: string }>(
-        'SELECT id, created_at FROM email_messages WHERE order_id = $1', [o.id],
+      const message = await db.get<{ id: string; created_at: string; from_email: string | null }>(
+        `SELECT id, created_at, from_email FROM email_messages WHERE order_id = $1 AND kind = 'registration_confirmation'`, [o.id],
       );
+      expect(message?.from_email).toBe('first@example.test');
+      expect(await db.get(
+        `SELECT from_email FROM email_messages WHERE order_id = $1 AND kind = 'registration_receipt'`, [o.id],
+      )).toEqual({ from_email: null });
       const now = () => new Date(message!.created_at);
       await createMailer(db, localEmail(), now).dispatchNextRiderEmail();
       expect(send).not.toHaveBeenCalled();
@@ -346,7 +363,7 @@ describe('Stripe hosted Checkout (test mode)', () => {
         confirmation: { status: 'uncertain', delivery: null, canRetry: false },
       });
       expect((await app.inject({ method: 'POST', url: `${url}/retry` })).statusCode).toBe(409);
-      await db.run("UPDATE email_messages SET sending_until = now() - interval '1 second' WHERE order_id = $1", [o.id]);
+      await db.run("UPDATE email_messages SET sending_until = now() - interval '1 second' WHERE order_id = $1 AND kind = 'registration_confirmation'", [o.id]);
       const status = await app.inject({ method: 'GET', url });
       expect(status.headers['cache-control']).toBe('no-store');
       expect(status.json()).toEqual({ confirmation: { status: 'uncertain', delivery: null, canRetry: true } });
@@ -357,7 +374,8 @@ describe('Stripe hosted Checkout (test mode)', () => {
       expect(send.mock.calls[0]).toEqual(send.mock.calls[1]);
       expect(await db.all(
         `SELECT a.email FROM rider_email_retry_requests r
-         JOIN accounts a ON a.id = r.actor_account_id JOIN email_messages m ON m.id = r.email_id WHERE m.order_id = $1`,
+         JOIN accounts a ON a.id = r.actor_account_id JOIN email_messages m ON m.id = r.email_id
+         WHERE m.order_id = $1 AND m.kind = 'registration_confirmation'`,
         [o.id],
       )).toEqual([{ email: DEFAULT_TEST_ORGANIZER }]);
     } finally {
