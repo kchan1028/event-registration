@@ -91,6 +91,30 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
       );
     },
 
+    async eventParticipantHistory(eventId: string, orderId: string) {
+      const history = await db.all<{ orderId: string }>(
+        `WITH event_history AS (
+           SELECT o.id, o.created_at, o.seq, CASE
+             WHEN COALESCE(o.junior_profile_id, c.junior_profile_id) IS NOT NULL
+               THEN 'junior:' || COALESCE(o.junior_profile_id, c.junior_profile_id)
+             WHEN o.self_registration_account_id IS NOT NULL THEN 'adult:' || o.self_registration_account_id
+             ELSE 'order:' || COALESCE(l.rider_key, o.id)
+           END AS history_key
+           FROM orders o
+           LEFT JOIN junior_profile_claims c ON c.id = o.adult_history_claim_id AND c.rider_account_id = o.self_registration_account_id
+           LEFT JOIN rider_links l ON l.order_id = o.id AND l.event_id = o.event_id
+           WHERE o.event_id = $1 AND o.status = 'confirmed'
+         )
+         SELECT related.id AS "orderId"
+         FROM event_history anchor JOIN event_history related USING (history_key)
+         WHERE anchor.id = $2
+         ORDER BY related.created_at DESC, related.seq DESC`,
+        [eventId, orderId],
+      );
+      if (history.length === 0) throw new HttpError(404, 'Registration history not found.');
+      return { orderIds: history.map((row) => row.orderId) };
+    },
+
     keyOf,
     groupOf,
     overview,

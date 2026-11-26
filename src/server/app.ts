@@ -760,15 +760,15 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return (await orders.listOrders(id, q ?? '')).map(omitStaffEmergencyContact);
   });
 
-  const confirmationParams = z.object({ id: idStr, orderId: idStr });
+  const eventOrderParams = z.object({ id: idStr, orderId: idStr });
   app.get('/api/events/:id/orders/:orderId/confirmation-delivery', async (req, reply) => {
-    const { id, orderId } = await onEvent(req, 'entries.manage', confirmationParams);
+    const { id, orderId } = await onEvent(req, 'entries.manage', eventOrderParams);
     reply.header('Cache-Control', 'no-store');
     return { confirmation: await mailer.confirmationStatus(id, orderId) };
   });
 
   app.post('/api/events/:id/orders/:orderId/confirmation-delivery/retry', async (req, reply) => {
-    const { id, orderId } = confirmationParams.parse(req.params);
+    const { id, orderId } = eventOrderParams.parse(req.params);
     const account = me(req);
     const attempt = await db.transaction(async () => {
       await access.requireEventUntilSaved(account, id, 'entries.manage');
@@ -891,6 +891,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = await onEvent(req, 'entries.manage');
     reply.header('Cache-Control', 'no-store');
     return identity.participantGroups(id);
+  });
+
+  app.get('/api/events/:id/orders/:orderId/participant-history', async (req, reply) => {
+    const { id, orderId } = await onEvent(req, 'entries.manage', eventOrderParams);
+    reply.header('Cache-Control', 'no-store');
+    return identity.eventParticipantHistory(id, orderId);
   });
 
   // Rider identity across orders: suggestions and organizer-confirmed links (src/server/identity.ts).
