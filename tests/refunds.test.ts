@@ -1,6 +1,10 @@
 import Stripe from 'stripe';
 import { describe, expect, it, vi } from 'vitest';
+import { openDb } from '../src/server/db';
+import { refundNoticeText, type EmailSender } from '../src/server/email';
 import { stripePayments } from '../src/server/payments';
+import { formatDollars } from '../src/shared/format';
+import { formatOrderNumber } from '../src/shared/lookup';
 import { refundableCents, refundCanMove } from '../src/shared/refunds';
 import { can } from '../src/shared/roles';
 import { REFUND_TEMPLATES } from '../src/shared/refundPolicy';
@@ -17,14 +21,15 @@ const RIDER = { firstName: 'Test', lastName: 'Rider', email: 'test.rider@example
 type Order = { id: string; status: string; totalCents: number; entries: { id: string; status: string }[]; refunds: { id: string; entryId: string | null; amountCents: number; status: string }[] };
 type RefundList = { payments: { ref: string | null; kind: string; remainingCents: number }[]; refunds: { id: string; status: string; failureReason: string | null }[] };
 
-async function setup(opts: { stripe?: boolean } = {}) {
+async function setup(opts: { stripe?: boolean; email?: EmailSender } = {}) {
   const now = new Date('2027-03-01T18:00:00Z');
   const client = new Stripe('sk_test_fictional', { maxNetworkRetries: 0 });
   vi.spyOn(client.checkout.sessions, 'create').mockImplementation((async (p: Stripe.Checkout.SessionCreateParams) => ({ id: 'cs_test_1', url: 'https://checkout.stripe.test/pay/1', expires_at: p.expires_at! }) as Stripe.Checkout.Session) as never);
   let n = 0;
   const refundCall = vi.spyOn(client.refunds, 'create').mockImplementation((async () => ({ id: `re_test_${++n}`, status: 'pending', failure_reason: null }) as unknown as Stripe.Refund) as never);
   const payments = opts.stripe ? stripePayments({ secretKey: 'sk_test_fictional', webhookSecret: WEBHOOK_SECRET, client }) : undefined;
-  const { app } = await testApp({ databaseUrl: await testDatabaseUrl(), now: () => now, payments, appUrl: 'http://app.test' });
+  const databaseUrl = await testDatabaseUrl();
+  const { app } = await testApp({ databaseUrl, now: () => now, payments, email: opts.email, appUrl: 'http://app.test' });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; organizationId: string };
@@ -44,7 +49,7 @@ async function setup(opts: { stripe?: boolean } = {}) {
   const paySimulated = (id: string) => app.inject({ method: 'POST', url: `/api/orders/${id}/payment`, payload: { attemptId: `att-${id}-ok`, outcome: 'success' } });
   const refund = (orderId: string, body: Record<string, unknown>, headers: Record<string, string> = {}) => app.inject({ method: 'POST', url: `/api/orders/${orderId}/refunds`, payload: { clientRequestId: crypto.randomUUID(), ...body }, headers });
   const list = async (orderId: string) => (await app.inject({ method: 'GET', url: `/api/orders/${orderId}/refunds` })).json() as RefundList;
-  return { app, order, payStripe, paySimulated, refund, list, refundCall, webhook, now, eventId, organizationId: event.organizationId };
+  return { app, order, payStripe, paySimulated, refund, list, refundCall, webhook, now, eventId, organizationId: event.organizationId, databaseUrl };
 }
 
 describe('refund rules (shared)', () => {
@@ -248,6 +253,61 @@ describe('refunds', () => {
     expect((await refund(o.id, { amountCents: 1, reason: 'Again' })).statusCode).toBe(409);
     expect((await app.inject({ method: 'POST', url: `/api/refunds/${l.refunds[0].id}/retry` })).statusCode).toBe(200);
     expect(refundCall.mock.calls.map((c) => (c[1] as Stripe.RequestOptions).idempotencyKey)).toEqual([`refund-${l.refunds[0].id}`, `refund-${l.refunds[0].id}`]);
+  });
+
+  it('records one notice when a refund succeeds and none before Stripe confirms it', async () => {
+    const sender: EmailSender = { mode: 'resend', from: 'sender@example.test', async send() { return 're_unused'; } };
+    const simulated = await setup({ email: sender });
+    const db = openDb(simulated.databaseUrl);
+    try {
+      const o = await simulated.order(['RR-M35-34']);
+      await simulated.paySimulated(o.id);
+      const body = { clientRequestId: 'refund-notice-once', entryId: o.entries[0].id, amountCents: 2000, reason: 'Withdrew before the deadline' };
+      expect((await simulated.refund(o.id, body)).statusCode).toBe(200);
+      const notice = await db.get<{ status: string; from_email: string | null; subject: string; body_text: string; order_id: string | null; to_email: string }>(
+        `SELECT status, from_email, subject, body_text, order_id, to_email FROM email_messages WHERE kind = 'refund_notice'`,
+      );
+      expect(notice).toEqual({
+        status: 'recorded',
+        from_email: 'sender@example.test',
+        subject: 'Your refund',
+        body_text: refundNoticeText(formatOrderNumber(o.id, true), formatDollars(2000), true),
+        order_id: null,
+        to_email: DEFAULT_TEST_ORGANIZER,
+      });
+      expect(notice!.body_text).not.toContain('Withdrew');
+      expect((await simulated.refund(o.id, body)).statusCode).toBe(200);
+      expect(await db.all(`SELECT refund_id FROM email_messages WHERE kind = 'refund_notice'`)).toHaveLength(1);
+
+      const stripe = await setup({ stripe: true });
+      const stripeDb = openDb(stripe.databaseUrl);
+      try {
+        const paid = await stripe.order(['RR-M35-34']);
+        await stripe.payStripe(paid);
+        const requested = await stripe.refund(paid.id, { amountCents: 2500, reason: 'Half refund' });
+        expect(requested.statusCode).toBe(200);
+        const refundId = ((await stripe.list(paid.id)).refunds[0]).id;
+        expect(await stripeDb.all(`SELECT id FROM email_messages WHERE kind = 'refund_notice'`)).toEqual([]);
+        const ok = await stripe.webhook('evt_refund_notice', 'refund.updated', { object: 'refund', id: 're_test_1', amount: 2500, currency: 'usd', status: 'succeeded', metadata: { refund_id: refundId } });
+        expect(ok.json()).toMatchObject({ result: 'refund_succeeded' });
+        expect(await stripeDb.get<{ body_text: string; from_email: string | null }>(
+          `SELECT body_text, from_email FROM email_messages WHERE kind = 'refund_notice' AND refund_id = $1`,
+          [refundId],
+        )).toEqual({
+          body_text: refundNoticeText(formatOrderNumber(paid.id, true), formatDollars(2500), true),
+          from_email: null,
+        });
+        await stripe.webhook('evt_refund_notice_again', 'refund.updated', { object: 'refund', id: 're_test_1', amount: 2500, currency: 'usd', status: 'succeeded', metadata: { refund_id: refundId } });
+        expect(await stripeDb.all(`SELECT id FROM email_messages WHERE kind = 'refund_notice'`)).toHaveLength(1);
+        stripe.refundCall.mockRejectedValueOnce(Object.assign(new Error('Fictional refusal'), { statusCode: 400 }));
+        expect((await stripe.refund(paid.id, { amountCents: 100, reason: 'Refused refund' })).statusCode).toBe(409);
+        expect(await stripeDb.all(`SELECT id FROM email_messages WHERE kind = 'refund_notice'`)).toHaveLength(1);
+      } finally {
+        await stripeDb.close();
+      }
+    } finally {
+      await db.close();
+    }
   });
 });
 
