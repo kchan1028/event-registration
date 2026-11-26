@@ -198,8 +198,7 @@ const recentlyExpiredOffer = `w.status = 'offered' AND w.offer_expires_at <= now
       AND (pending.status IN ('confirmed', 'needs_attention')
         OR (pending.status IN ('held', 'payment_failed') AND pending.hold_expires_at > now())
         OR EXISTS (SELECT 1 FROM payment_sessions ps WHERE ps.order_id = pending.id AND ps.status = 'open')
-        OR (pending.stripe_checkout_started_at IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM payment_sessions ps WHERE ps.order_id = pending.id)))
+        OR pending.stripe_checkout_started_at IS NOT NULL)
   )`;
 
 const waitlistExpiryReady = `EXISTS (
