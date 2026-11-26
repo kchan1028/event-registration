@@ -197,15 +197,14 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
                           <span className={deliveryFailed ? 'team__email-failed' : undefined}>{delivery}</span>
                         </>
                       )}
-                      {stopped && (
-                        <>
-                          {' · '}
-                          <span className="team__email-failed">Mail stopped</span>
-                        </>
-                      )}
                     </>
                   )}
-                  {i.earlierEmail && stopped && ' · Mail stopped'}
+                  {stopped && (
+                    <>
+                      {' · '}
+                      <span className="team__email-failed">Mail stopped</span>
+                    </>
+                  )}
                 </span>
                 {!i.earlierEmail && stopped && !expired && (
                   <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.sendWithoutExtending(orgId, i.email, i.role, i.revision))}>
