@@ -207,8 +207,8 @@ export function financeSummaryCsv(summary: EventSummary, eventId: string, genera
   add('waitlist', eventId, '', summary.waitlist);
   for (const { id, name, entries, riders, orders } of summary.byDay) add('day', id, name, { entries, riders, orders });
   for (const { id, name, entries, riders, orders } of summary.byRace) add('race', id, name, { entries, riders, orders });
-  for (const { categoryId, categoryName, entries, riders, orders } of summary.byCategory) {
-    add('category', categoryId, categoryName, { entries, riders, orders });
+  for (const { categoryId, categoryName, code, raceName, entries, riders, orders } of summary.byCategory) {
+    add('category', categoryId, `${categoryName} (${raceName}, ${code})`, { entries, riders, orders });
   }
   if (summary.money) {
     const money = summary.money;

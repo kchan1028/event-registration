@@ -926,7 +926,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       const cancellation = await cancellationExportState(db, p.id, record.config);
       return { body, cancellation, generatedAt, filename: cancellationExportFilename(`${slugName}-${p.kind.slice(0, -4)}${p.kind === 'reconciliation.csv' ? '-LOCAL-RECORDS' : ''}${demo}.csv`, cancellation) };
     });
-    await recordProtectedExport(req, p.id, p.kind.slice(0, -4), file.generatedAt);
+    const auditKind = p.kind === 'finance-summary.csv' ? 'finance_summary' : p.kind.slice(0, -4);
+    await recordProtectedExport(req, p.id, auditKind, file.generatedAt);
     if (p.kind === 'reconciliation.csv' || p.kind === 'finance-summary.csv') reply.header('X-CycleReg-Export-Generated-At', file.generatedAt);
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
