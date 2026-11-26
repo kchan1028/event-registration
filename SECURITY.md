@@ -94,10 +94,10 @@ The waiver acceptance records the accepted version, signature name and signer ro
 
 | Caller | Current response |
 |---|---|
-| Adult placing account, or an active guardian or approved claimant of the linked junior profile | Order detail and My registrations return the waiver and server evidence, along with the rider's emergency contact. |
+| Placing account for an order without a linked junior profile, or an active guardian or approved claimant of the linked profile | Order detail and My registrations return the waiver and server evidence, along with the rider's emergency contact. |
 | Junior's separately authorized read-only login | The same waiver and server evidence and emergency contact are returned in order detail and My registrations. The registration list marks that the login cannot manage the order. |
 | Event owner, registration manager or finance role with `orders.view` | Order detail and the event's registration list include the waiver and server evidence. These ordinary order responses remove the emergency contact and redact its correction values and reason. The separate, audited emergency-contact lookup uses its own permission. |
-| Check-in volunteer or timer/export role alone | No access to the full order response. Use the separately authorized desk or start-list view; configuration and readiness are separate from signature evidence. |
+| Check-in volunteer or timer/export role alone | No access to the full order response. The separately authorized desk or start-list view shows racing age. Both roles can use the audited emergency-contact lookup. |
 | Unrelated account, removed guardian without another source of access, or pending guardian invitee | The relationship does not grant access to the order or its waiver evidence. |
 | Allowlisted support approver acting only in that capacity | The claim approval endpoint returns the claim ID and approval time. It does not grant order access or return stored claim-review inputs. |
 | Public event visitor | Public event detail does not return individual order evidence. |
