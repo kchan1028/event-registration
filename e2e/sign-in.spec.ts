@@ -7,6 +7,9 @@ import { expect, test } from '@playwright/test';
 test('organizer pages ask for sign-in, then show the workspace', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Sign in to CycleReg' })).toBeVisible();
+  await page.getByRole('button', { name: 'Sign in with email' }).click();
+  await expect(page).toHaveTitle('Sign in for testing | CycleReg');
+  await page.getByRole('button', { name: 'Cancel' }).click();
   expect((await page.request.get('/api/organizations')).status()).toBe(401);
 
   await page.getByRole('button', { name: 'Sign in with email' }).click();
@@ -38,8 +41,11 @@ test('riders sign in during checkout and later retrieve their check-in code on a
 
   // After sign-in the rider picks up where they left off.
   await page.getByRole('button', { name: 'Sign in with email' }).click();
+  await expect(page).toHaveTitle('Sign in for testing | CycleReg');
   await page.getByLabel('Test email').fill(email);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Racer details' })).toBeFocused();
+  await expect(page).toHaveTitle(/Race registration · /);
   await expect(page.getByLabel('First name (required)')).toHaveValue('Alex');
   await page.getByRole('button', { name: 'Continue to the waiver' }).click();
   await page.getByLabel('I have read the whole waiver').check();

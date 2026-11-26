@@ -15,7 +15,7 @@ import { api, ApiError, type OrderView, type PaymentMode, type PublicEvent, type
 import { href, navigate } from './App';
 import { formatDateTime, refundedCents } from './format';
 import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
-import { AccountMenu, SignInPrompt, useSession } from './auth';
+import { AccountMenu, setRegisterActive, SignInPrompt, takePendingCheckoutFocus, useSession } from './auth';
 import { useLoad } from './useLoad';
 import { availableWalkUpCategories, categorySelectionStatus, WALK_UP_CATEGORY_PARAM } from './walkUpSelection';
 import { refundPolicyLines } from '../shared/refundPolicy';
@@ -248,6 +248,13 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
   const checkoutMain = useRef<HTMLElement>(null);
   const focusedStep = useRef(draft.step);
   const focusedSignIn = useRef(false);
+  // Take the flag in an effect. A render-time read is cleared by the dev server's extra StrictMode pass.
+  const resumeCheckoutFocus = useRef(false);
+  useEffect(() => {
+    setRegisterActive(true);
+    if (takePendingCheckoutFocus()) resumeCheckoutFocus.current = true;
+    return () => setRegisterActive(false);
+  }, []);
 
   const [offer, setOffer] = useState<WaitlistOffer | null>(null);
   const [offerFailure, setOfferFailure] = useState<{ token: string; message: string; retryable: boolean } | null>(null);
@@ -262,11 +269,12 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
   }, [eventName, kiosk]);
 
   useEffect(() => {
-    if (focusedStep.current === draft.step && !(focusedSignIn.current && signedIn)) return;
+    if (focusedStep.current === draft.step && !(focusedSignIn.current && signedIn) && !resumeCheckoutFocus.current) return;
     const target = checkoutMain.current?.querySelector<HTMLElement>('[data-checkout-step]');
     if (!target) return;
     focusedStep.current = draft.step;
     focusedSignIn.current = target.id === 'signin-prompt-title';
+    resumeCheckoutFocus.current = false;
     target.focus();
   });
 
