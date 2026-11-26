@@ -3,7 +3,7 @@ import pg from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 import { paymentsFromEnv, publicAppUrl, stripePayments } from '../src/server/payments';
 import { testApp, testDatabaseUrl } from './support/db';
-import { as, fakeAuth } from './support/auth';
+import { as, DEFAULT_TEST_ORGANIZER, fakeAuth } from './support/auth';
 import type { EventConfig } from '../src/shared/schema';
 import { publishReviewed } from './support/publish';
 
@@ -238,7 +238,7 @@ describe('Stripe hosted Checkout (test mode)', () => {
   });
 
   it('confirms on a signed paid notification exactly once, even when Stripe repeats it', async () => {
-    const { order, checkout, webhook, paidSession, get, attempts } = await setup();
+    const { order, checkout, webhook, paidSession, get, attempts, databaseUrl } = await setup();
     const o = await order(['RR-M35-34']);
     await checkout(o.id);
     const a = await webhook('evt_test_paid', 'checkout.session.completed', paidSession(o));
@@ -249,6 +249,22 @@ describe('Stripe hosted Checkout (test mode)', () => {
     expect(after.status).toBe('confirmed');
     expect(after.paidWith).toBe('stripe_test');
     expect(await attempts(o.id)).toEqual([{ provider: 'stripe_test', provider_ref: 'pi_test_1', amount_cents: 5000, result_status: 'confirmed' }]);
+    const db = new pg.Client({ connectionString: databaseUrl });
+    await db.connect();
+    try {
+      expect((await db.query(
+        `SELECT kind, to_email, status, provider_message_id, body_text FROM email_messages WHERE order_id = $1`,
+        [o.id],
+      )).rows).toEqual([{
+        kind: 'registration_confirmation',
+        to_email: DEFAULT_TEST_ORGANIZER,
+        status: 'recorded',
+        provider_message_id: null,
+        body_text: 'Your registration is confirmed. Sign in and open My registrations to see your order and receipt.',
+      }]);
+    } finally {
+      await db.end();
+    }
   });
 
   it('rejects a bad signature without needing sign-in, and changes nothing', async () => {
