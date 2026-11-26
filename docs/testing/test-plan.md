@@ -276,6 +276,8 @@ Repeat the scenario with a Clerk development instance and a fictional account af
 
 The timer handoff in `e2e/handoff.spec.ts` uses a separate fictional Timer and exports account. Lock and download the selected race, verify the server denies check-in reads/writes and ledger download for that account, then issue a bib from the organizer session. Confirm the timer sees the bib revision while the locked CSV remains byte-identical. Timing-software compatibility and import validation are deferred under [product scope](../../product.md#out-of-scope-initially).
 
+Run `tests/case-studies.test.ts` to rehearse assigned bibs, repeat-safe check-in and locked start-list exports with the seeded omnium weekend order. Use a fresh fixture database and separate fictional organizer, volunteer and timer accounts. This remains an automated API rehearsal.
+
 The desk shift in `e2e/handoff.spec.ts` uses separate fictional volunteer accounts. After the outgoing browser session closes, the incoming volunteer looks up the first rider, sees the existing check-in and bib without an issuance control, and issues the next bib to another rider. Verify the first check-in and bib history remain unchanged.
 
 `tests/transfers.test.ts` verifies that moving a paid entry between fields in one race updates the current timer CSV and reports the category and start-group changes under the same entry and rider IDs. The locked CSV stays byte-identical.
