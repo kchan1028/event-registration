@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import pg from 'pg';
 import { as } from './support/auth';
-import { testApp, testDatabaseUrl } from './support/db';
+import { testApp } from './support/db';
 import { pairKey, suggestMatches, type IdentityOrder } from '../src/shared/riderIdentity';
 import type { EventConfig } from '../src/shared/schema';
 import { publishReviewed } from './support/publish';
@@ -40,8 +39,7 @@ const RIDER = { firstName: 'Pat', lastName: 'Demo', email: 'pat.demo@example.tes
 async function setup() {
   const start = new Date('2027-03-01T18:00:00Z').getTime();
   let tick = 0;
-  const databaseUrl = await testDatabaseUrl();
-  const { app } = await testApp({ databaseUrl, now: () => new Date(start + tick++ * 1000), holdMinutes: 10 });
+  const { app } = await testApp({ now: () => new Date(start + tick++ * 1000), holdMinutes: 10 });
   const { eventId, organizationId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json<{ eventId: string; organizationId: string }>();
   await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await app.inject({ method: 'PUT', url: `/api/events/${eventId}/bib-settings`, payload: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });
@@ -49,8 +47,8 @@ async function setup() {
   const code = (c: string) => ev.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Demo', signerRole: 'rider' };
   let n = 0;
-  const buy = async (c: string, headers = {}) => {
-    const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, headers, payload: { clientRequestId: `ident-${++n}-xxxxxx`, categoryIds: [code(c)], rider: RIDER, waiver } });
+  const buy = async (c: string, headers = {}, rider = RIDER) => {
+    const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, headers, payload: { clientRequestId: `ident-${++n}-xxxxxx`, categoryIds: [code(c)], rider, waiver: { ...waiver, signatureName: `${rider.firstName} ${rider.lastName}` } } });
     expect(created.statusCode).toBe(201);
     const id = (created.json() as { id: string }).id;
     const paid = await app.inject({ method: 'POST', url: `/api/orders/${id}/payment`, headers, payload: { attemptId: `attempt-${n}-xxxx`, outcome: 'success' } });
@@ -68,31 +66,29 @@ async function setup() {
   const days = ev.config.days.map((d) => d.id);
   const checkInList = async (day: string, q = 'Pat') => (await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in?${new URLSearchParams({ day, q })}` })).json() as { riders: Card[] };
   const checkIn = (orderId: string, day: string) => app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${orderId}`, payload: { dayId: day, bib: null } });
-  return { app, eventId, organizationId, databaseUrl, buy, overview, post, checkInList, days, checkIn };
+  return { app, eventId, organizationId, buy, overview, post, checkInList, days, checkIn };
 }
 
 describe('participant identity API', () => {
-  it('groups confirmed self-registrations by signer account and keeps unverified orders separate', async () => {
-    const { app, eventId, organizationId, databaseUrl, buy } = await setup();
+  it('uses explicit rider links and keeps different riders on one account separate', async () => {
+    const { app, eventId, organizationId, buy } = await setup();
     const rider = as('rider@participants.test');
     const sameContact = as('separate-account@participants.test');
     const first = await buy('RR-M35-34', rider);
     const second = await buy('CR-M35-34', rider);
     const independent = await buy('CR-M35-34', sameContact);
-    const legacy = await buy('RR-M35-34', rider);
-    const db = new pg.Client({ connectionString: databaseUrl });
-    await db.connect();
-    try {
-      await db.query('UPDATE orders SET waiver_evidence_json = NULL WHERE id = $1', [legacy]);
-    } finally {
-      await db.end();
-    }
+    const anotherRider = await buy('RR-M35-34', rider, { ...RIDER, firstName: 'Another' });
+    expect((await app.inject({
+      method: 'POST',
+      url: `/api/events/${eventId}/rider-identity/link`,
+      payload: { orderIds: [first, second] },
+    })).statusCode).toBe(200);
     const url = `/api/events/${eventId}/participant-groups`;
     const response = await app.inject({ url });
     expect(response.statusCode).toBe(200);
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.json()).toEqual([
-      { orderIds: [first, second] }, { orderIds: [independent] }, { orderIds: [legacy] },
+      { orderIds: [first, second] }, { orderIds: [independent] }, { orderIds: [anotherRider] },
     ]);
     const separateEvent = await app.inject({
       method: 'POST',

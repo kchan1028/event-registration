@@ -64,7 +64,7 @@ Run `tests/exports.test.ts` and `tests/protectedExportAudit.test.ts` for changes
 
 ### Event participant grouping
 
-Run `tests/identity.test.ts`, `tests/juniors.test.ts`, and `tests/profileClaims.test.ts` when participant grouping changes. Confirm several orders on one authenticated rider account group together, different accounts with identical rider details remain separate, and orders without authoritative identity evidence stay separate. Verify guardian-profile continuity across an approved claim, confirmed-order filtering, event and role boundaries, and that responses carry order IDs only.
+Run `tests/identity.test.ts`, `tests/juniors.test.ts`, and `tests/profileClaims.test.ts` when participant grouping changes. Confirm organizer-linked orders group together, different riders registered by one account stay separate, and identical contact details establish no link. Verify junior grouping across guardians and profile claims, confirmed-order filtering, event and role boundaries, and that responses carry order IDs only.
 
 ### Registration search by bib and license number
 

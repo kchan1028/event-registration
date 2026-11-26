@@ -62,7 +62,7 @@ describe('claim calendar age and explicit configuration', () => {
 });
 
 describe('support-approved profile claims', () => {
-  it('groups confirmed junior and self-registered orders only after support approves the claim', async () => {
+  it('preserves the junior registration group after an approved claim', async () => {
     const s = await setup();
     s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
     const { config } = (await s.call(ORGANIZER, 'GET', `/api/events/${s.eventId}`)).json();
@@ -85,7 +85,7 @@ describe('support-approved profile claims', () => {
     }
     expect(await groups()).toEqual([{ orderIds: [s.order.id] }, { orderIds: [adultId] }]);
     expect((await s.approve()).statusCode).toBe(200);
-    expect(await groups()).toEqual([{ orderIds: [s.order.id, adultId] }]);
+    expect(await groups()).toEqual([{ orderIds: [s.order.id] }, { orderIds: [adultId] }]);
   });
 
   it('preserves the rider-confirmed zone name rather than a runtime canonical alias for durable replay', async () => {
