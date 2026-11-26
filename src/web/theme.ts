@@ -22,7 +22,8 @@ export function useTheme() {
   const [override, setOverride] = useState(storedTheme);
   const [system, setSystem] = useState(systemTheme);
   const theme = override ?? system;
-  const next = override === system ? null : theme === 'dark' ? 'light' : 'dark';
+  const next = theme === 'dark' ? 'light' : 'dark';
+  const followsSystem = next === system;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -38,13 +39,13 @@ export function useTheme() {
 
   const toggle = () => {
     try {
-      if (next) localStorage.setItem(THEME_KEY, next);
-      else localStorage.removeItem(THEME_KEY);
+      if (followsSystem) localStorage.removeItem(THEME_KEY);
+      else localStorage.setItem(THEME_KEY, next);
     } catch {
       /* storage blocked: the choice lasts for this page only */
     }
-    setOverride(next);
+    setOverride(followsSystem ? null : next);
   };
 
-  return { theme, next, toggle };
+  return { theme, next, followsSystem, toggle };
 }

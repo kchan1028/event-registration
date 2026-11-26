@@ -15,7 +15,7 @@ for (const theme of ['light', 'dark'] as const) {
         await page.setViewportSize({ width, height: 900 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         for (const action of [
-          page.getByRole('button', { name: /Switch to .* theme|Use system theme/ }),
+          page.getByRole('button', { name: /Switch to .* theme/ }),
           page.getByRole('link', { name: 'My registrations', exact: true }),
           page.getByRole('button', { name: 'Sign out', exact: true }),
         ]) {
@@ -42,7 +42,7 @@ for (const theme of ['light', 'dark'] as const) {
       expect(await page.evaluate(geometry)).toEqual(fixed);
       await original.evaluate((el) => el.parentNode?.removeChild(el));
       await page.setViewportSize({ width: 320, height: 900 });
-      await page.getByRole('button', { name: /Switch to .* theme|Use system theme/ }).focus();
+      await page.getByRole('button', { name: /Switch to .* theme/ }).focus();
       await page.keyboard.press('Tab');
       await expect(page.getByRole('link', { name: 'My registrations', exact: true })).toBeFocused();
       await page.keyboard.press('Tab');
@@ -72,7 +72,7 @@ test.describe('touch header', () => {
         await page.setViewportSize({ width, height: 900 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         for (const action of [
-          page.getByRole('button', { name: /Switch to .* theme|Use system theme/ }),
+          page.getByRole('button', { name: /Switch to .* theme/ }),
           page.getByRole('link', { name: 'My registrations', exact: true }),
           page.getByRole('button', { name: 'Sign out', exact: true }),
           ...await page.locator('header a.brand').all(),

@@ -56,9 +56,11 @@ When a change touches one of these areas, run that row's tests in addition to th
 
 Concurrency and idempotency tests must run requests in parallel or replay events; a single-threaded test does not prove them. Use fictional data only.
 
-### Event summary day and race counts
+### Checkout focus, route titles, and theme
 
 In `e2e/checkout.spec.ts`, verify focus reaches the details, waiver and review headings and returns to details on back navigation. Check the rider event tab title, theme persistence after reload and resuming the system color scheme. Verify the sign-in prompt receives focus in `e2e/sign-in.spec.ts` and the event appears in the tab title in `e2e/checkin.spec.ts`. Run header and accessibility regressions when the shared theme control changes.
+
+### Event summary day and race counts
 
 Run `tests/exports.test.ts` and `e2e/event-summary.spec.ts` when the Registrations summary counts change. Paid entries (a confirmed order and a confirmed entry) are counted on the day and race of the entry's current category. A transferred entry counts where it sits now. Days follow the published day list. Riders and orders are unique inside each day, race, and category. A rider in two groups counts in each, and the event rider total still counts that person once. Holds, withdrawals, cancellations, and payment exceptions stay out of these tables. Money stays one event total. The entries and ledger CSV columns stay unchanged. The browser check opens the day, race, and category tables for one fictional rider with a paid entry on each demo day, checks those counts, and checks the summary region at desktop and phone width, including the dark theme at phone width, for overflow and automated accessibility. Credits, deferrals, settlement, and filtered exports are not covered.
 

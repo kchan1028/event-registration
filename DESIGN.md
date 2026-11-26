@@ -201,7 +201,7 @@ A near-neutral ink-on-Tyvek palette where color carries meaning: day identity, s
 ### Dark theme
 The registration tent after sundown. `:root[data-theme='dark']` (screen media only) redefines every color token: a charcoal ground with a faint cool cast (canvas #15181d, tyvek #1b1f25, tyvek-deep #242830), chalk-white ink (#eeede8), and day hues lifted so each stays recognizably the same day while reading at 7:1 on canvas. Ink becomes the light tone, so the primary button turns chalk with dark text (`on-ink`). Status pairs invert: the light status tone on its deep tinted ground. Tints that mixed with white now mix with `canvas`, and the darkest tally step mixes with `mix-strong` (black in light, white in dark). Print always uses the light palette.
 
-The theme follows the system setting until the user picks one with the header toggle (sun or moon icon, accessible name states the current theme). The choice is stored per device under `cyclereg-theme` and applied by an inline script in `index.html` before first paint.
+The theme follows the system setting until the user picks one with the header toggle (sun or moon icon, accessible name states the current theme). The override is stored per device under `cyclereg-theme`. Switching to the current system theme clears the override. The inline script in `index.html` sets the theme and the browser color-scheme hint before first paint.
 
 ### Named Rules
 **The Day Hue Rule.** A day hue appears only on things that belong to that day: rail swatch, race header rule, clip bar, tally segments, rider preview day rule and group labels. It is never used as a general accent or for buttons.

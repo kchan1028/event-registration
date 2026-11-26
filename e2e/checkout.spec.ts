@@ -230,12 +230,17 @@ test('rider screens follow the theme toggle and remember it', async ({ page }) =
   await page.screenshot({ path: 'test-results/rider-dark.png' });
   const scheme = page.locator('meta[name="color-scheme"]');
   await expect(scheme).toHaveAttribute('content', 'dark');
-  await page.getByRole('button', { name: /Switch to light theme/ }).click();
-  await expect(scheme).toHaveAttribute('content', 'light');
-  await page.getByRole('button', { name: /Use system theme/ }).click();
+  await page.getByRole('button', { name: /Switch to light theme.*system preference/ }).click();
   await expect(scheme).toHaveAttribute('content', 'light dark');
+  await page.reload();
+  await expect(scheme).toHaveAttribute('content', 'light dark');
+
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: /Switch to light theme/ }).click();
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(scheme).toHaveAttribute('content', 'light');
 });
 
 test('with the demo setting off, categories outside their window cannot be chosen', async ({ page }) => {

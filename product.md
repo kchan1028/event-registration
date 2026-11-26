@@ -815,7 +815,7 @@ Status: Implemented in the local build (organizer, rider, and check-in screens);
 
 - Default to the device's system preference (light or dark) on first visit.
 - Provide a visible, keyboard-accessible light/dark toggle on every screen, with an accessible name that states the current theme.
-- Remember the user's choice on that device and apply it before the page draws, so the screen does not flash the wrong theme. A signed-in preference may sync across devices later; that is not required for the first release.
+- Remember a theme override on that device and apply it before the page draws. Switching to the current system theme clears the override and follows future system changes. A signed-in preference may sync across devices later; that is not required for the first release.
 - Text, form fields, placeholders, buttons, links, focus indicators, error messages, and status indicators (entry, payment, readiness, check-in ready/blocked) must meet the WCAG 2.2 AA contrast targets in both themes.
 - Status keeps its text and icon in both themes; never rely on color alone. The check-in ready/blocked result must stay readable in bright sunlight in either theme.
 - Printed or exported material (receipts, start lists, timer exports) is unaffected by the screen theme.
