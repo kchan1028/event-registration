@@ -35,4 +35,4 @@ A closed/full category or waitlist remains enforced. Refer the participant to th
 
 ## Evidence still required
 
-Physical QR scanning, hosted kiosk sign-in and payment return, staffed device handover, and accepted waiver/license resolution remain unverified. Automated handoff coverage is in `e2e/walkup.spec.ts`; test policy remains in the [test plan](../testing/test-plan.md). Do not treat a successful simulated purchase as a completed race-day rehearsal.
+Physical QR scanning, hosted kiosk sign-in and payment return, the automated device-handover rehearsal with fictional staff and rider accounts, and accepted waiver/license resolution remain unverified. Automated handoff coverage is in `e2e/walkup.spec.ts`; test policy remains in the [test plan](../testing/test-plan.md). Do not treat a successful simulated purchase as a completed race-day rehearsal.

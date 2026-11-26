@@ -1,6 +1,6 @@
 # Race-day check-in guide
 
-Status: Implemented documentation for local fictional-data rehearsals, November 16, 2026. Instructions were checked against the source; independent volunteer operation, actual devices/printers and the full mock weekend remain unverified. This guide does not authorize live payments, real rider data or sanctioned use. Requirements remain in [product.md](../../product.md#5-race-day-operations); acceptance gates remain in the [roadmap](../../roadmap.md#phase-3--make-race-day-operable).
+Status: Implemented documentation for local fictional-data rehearsals, November 16, 2026. Instructions were checked against the source; the [automated Playwright rehearsal](../testing/test-plan.md#5-manual-checks) of this guide and the full mock weekend have not been run, and physical devices and printers are emulated there, not tested. This guide does not authorize live payments, real rider data or sanctioned use. Requirements remain in [product.md](../../product.md#5-race-day-operations); acceptance gates remain in the [roadmap](../../roadmap.md#phase-3--make-race-day-operable).
 
 ## Before the desk opens: registration lead
 
@@ -106,4 +106,4 @@ Keep printed sheets controlled at the desk, collect them at shift handoff, and g
 
 Before leaving, show the next authorized volunteer the event/day, pending exceptions, last confirmed bib actions, any uncertain submissions, latest roster time and how to reach the lead/deputy. Sign out when handing over a device; the next person uses their own account. Do not pass along a session or ask riders to use the staff device to register.
 
-Use the [test-plan rehearsal scenarios](../testing/test-plan.md#volunteer-runbook-rehearsal) to record what another organizer and volunteers can complete without developer intervention. Record source commit, environment, fictional dataset, role/device, task, observed result, assistance, defects and untested areas. Automated tests and source review alone do not establish volunteer independence or complete Phase 3.
+Use the [test-plan rehearsal scenarios](../testing/test-plan.md#volunteer-runbook-rehearsal) for the [automated Playwright rehearsal](../testing/test-plan.md#5-manual-checks) of this guide, with a separate fictional account for each role. Record source commit, environment, fictional dataset, role/device, task, observed result, defects and steps not rehearsed. The existing `e2e/` specs and source review alone do not complete the rehearsal, and the rehearsal does not replace the named-person acceptance in the Phase 3 exit gate.
