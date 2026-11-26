@@ -1,0 +1,9 @@
+/.github/ @kchan1028
+/tests/ @kchan1028
+/e2e/ @kchan1028
+/src/server/auth.ts @kchan1028
+/src/web/auth.tsx @kchan1028
+/src/server/payments.ts @kchan1028
+/src/server/db.ts @kchan1028
+/package.json @kchan1028
+/package-lock.json @kchan1028
