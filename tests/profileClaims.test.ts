@@ -88,14 +88,19 @@ describe('support-approved profile claims', () => {
     expect(await groups()).toEqual([{ orderIds: [s.order.id] }, { orderIds: [adultId] }]);
   });
 
-  it('saves a history-only link for one approved claim and leaves ambiguous or earlier orders unlinked', async () => {
+  it('saves a history-only link for one approved claim and reads only the authorized history across events', async () => {
     const s = await setup();
     s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
-    const eventUrl = `/api/events/${s.eventId}`;
+    const demo = await s.call(ORGANIZER, 'POST', '/api/demo');
+    expect(demo.statusCode, demo.body).toBe(201);
+    const { eventId: adultEventId } = demo.json();
+    expect(adultEventId).not.toBe(s.eventId);
+    const eventUrl = `/api/events/${adultEventId}`;
+    await publishReviewed(s.app, eventUrl, { acknowledgeWarnings: true }, as(ORGANIZER));
     const { config } = (await s.call(ORGANIZER, 'GET', eventUrl)).json();
     const category = config.categories.find((row: { timingCode: string }) => row.timingCode === 'RR-M35-34');
     const placeAdult = async (clientRequestId: string, selfRegistrationConfirmed: boolean) => {
-      const response = await s.call(RIDER, 'POST', `/api/rider/events/${s.eventId}/orders`, {
+      const response = await s.call(RIDER, 'POST', `/api/rider/events/${adultEventId}/orders`, {
         clientRequestId,
         selfRegistrationConfirmed,
         categoryIds: [category.id],
@@ -138,9 +143,36 @@ describe('support-approved profile claims', () => {
     const staffOrder = await s.call(ORGANIZER, 'GET', `/api/orders/${linked.id}`);
     expect(staffOrder.statusCode).toBe(200);
     expect(staffOrder.json()).not.toHaveProperty('adultHistoryClaimId');
-    const paid = await s.call(RIDER, 'POST', `/api/orders/${linked.id}/payment`, { attemptId: 'adult-claim-link-payment', outcome: 'success' });
-    expect(paid.statusCode, paid.body).toBe(200);
-    expect(paid.json().waiverEvidence).toEqual(linked.waiverEvidence);
+    const historyUrl = (id: string) => `/api/rider/orders/${id}/participant-history`;
+    expect((await s.call(RIDER, 'GET', historyUrl(linked.id))).statusCode).toBe(404);
+    const pay = async (id: string) => {
+      const payment = await s.call(RIDER, 'POST', `/api/orders/${id}/payment`, {
+        attemptId: `history-payment-${id}`, outcome: 'success',
+      });
+      expect(payment.statusCode, payment.body).toBe(200);
+      return payment.json();
+    };
+    expect((await pay(linked.id)).waiverEvidence).toEqual(linked.waiverEvidence);
+    for (const id of [s.order.id, secondJunior.json().id, beforeClaim.id, proxy.id, ambiguous.id]) await pay(id);
+
+    const history = await s.call(RIDER, 'GET', historyUrl(linked.id));
+    expect(history.statusCode, history.body).toBe(200);
+    expect(history.headers['cache-control']).toBe('no-store');
+    expect(history.json()).toEqual({ orders: [
+      { orderId: linked.id, eventId: adultEventId },
+      { orderId: s.order.id, eventId: s.eventId },
+    ] });
+    expect((await s.call(RIDER, 'GET', historyUrl(ambiguous.id))).json()).toEqual({ orders: [
+      { orderId: ambiguous.id, eventId: adultEventId },
+      { orderId: beforeClaim.id, eventId: adultEventId },
+    ] });
+    for (const id of [proxy.id, s.order.id, 'unknown-order']) {
+      expect((await s.call(RIDER, 'GET', historyUrl(id))).statusCode).toBe(404);
+    }
+    expect((await s.app.inject({ url: historyUrl(linked.id) })).statusCode).toBe(401);
+    for (const who of [ORGANIZER, SUPPORT, PARENT, SECOND, VIEWER]) {
+      expect((await s.call(who, 'GET', historyUrl(linked.id))).statusCode).toBe(404);
+    }
 
     const db = new pg.Client({ connectionString: s.databaseUrl });
     await db.connect();

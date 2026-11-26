@@ -567,6 +567,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   // The signed-in person's own registrations, plus those of juniors who named them as their login.
   app.get('/api/rider/registrations', async (req) => orders.listForAccount(me(req)));
 
+  app.get('/api/rider/orders/:id/participant-history', async (req, reply) => {
+    const { id } = idParam.parse(req.params);
+    reply.header('Cache-Control', 'no-store');
+    return orders.participantHistory(id, me(req).id);
+  });
+
   // Explicitly managed juniors, private guardian acceptance, and the junior's read-only login.
   app.post('/api/support/juniors/:id/claim', async (req) => profileClaims.approve(me(req), idParam.parse(req.params).id, req.body));
   app.get('/api/rider/juniors', async (req) => juniors.list(me(req).id));
