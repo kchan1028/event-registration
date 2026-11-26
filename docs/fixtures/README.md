@@ -103,7 +103,7 @@ A November 26, 2026 local API rehearsal in [case-studies.test.ts](../../tests/ca
 
 A November 26, 2026 local API rehearsal in [case-studies.test.ts](../../tests/case-studies.test.ts) started with the full seeded Harbor Masters field. In a disposable database, the organizer enabled that field’s waitlist, a fictional rider joined, and the first attempt to offer a place was refused while the field was full. After the organizer added one place, checkout without the offer was refused and the rider redeemed the offer with simulated payment. The normal seed keeps the waitlist off and contains no offer.
 
-A November 26, 2026 local API rehearsal used the seeded paid Parker and River orders to verify missing rider-waiver and guardian-acceptance desk referrals. The rehearsal undoes River’s seeded check-in in its disposable database before preparing the missing guardian acceptance. Both scenarios deliberately alter only the relevant waiver record in the isolated copy. The desk reports the specific blocker and the server refuses check-in without issuing a bib. Normal checkout still requires acceptance, and the standard seeds keep their valid signatures.
+A November 26, 2026 local API rehearsal used the seeded paid Parker and River orders to verify missing rider-waiver and guardian-acceptance desk referrals. The rehearsal prepares a bib range for Parker and undoes River’s seeded check-in in its disposable database. Both scenarios deliberately alter only the relevant waiver record in the isolated copy. The desk reports the specific blocker and the server refuses check-in without issuing a bib. Normal checkout still requires acceptance, and the standard seeds keep their valid signatures.
 
 ### Future-requirement cases
 
