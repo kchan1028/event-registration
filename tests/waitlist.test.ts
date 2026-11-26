@@ -1,3 +1,4 @@
+import { as } from './support/auth';
 import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
@@ -42,8 +43,8 @@ async function setup() {
 
   const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
   let n = 0;
-  const order = (extra: Record<string, unknown> = {}) =>
-    app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `req-${++n}-xxxxxxxx`, categoryIds: [cat.id], rider: RIDER, waiver, ...extra } });
+  const order = (extra: Record<string, unknown> = {}, headers?: Record<string, string>) =>
+    app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, headers, payload: { clientRequestId: `req-${++n}-xxxxxxxx`, categoryIds: [cat.id], rider: RIDER, waiver, ...extra } });
   const pay = (orderId: string) => app.inject({ method: 'POST', url: `/api/orders/${orderId}/payment`, payload: { attemptId: `att-${Math.random().toString(36).slice(2)}`, outcome: 'success' } });
   const join = (body: Record<string, unknown>) => app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/waitlist`, payload: { categoryId: cat.id, ...body } });
   const list = async () => ((await app.inject({ method: 'GET', url: `/api/events/${eventId}/waitlist` })).json() as { entries: Entry[] }).entries;
@@ -117,7 +118,15 @@ describe('organizer-managed waitlist API', () => {
     expect((await s.offer(b.id)).statusCode).toBe(409);
 
     // The offer link lets that rider register and pay for the reserved place.
-    const lookup = (await s.app.inject({ method: 'GET', url: `/api/rider/offers/${offered.offerToken}` })).json() as { status: string; categoryId: string };
+    const offerUrl = `/api/rider/offers/${offered.offerToken}`;
+    const otherAccount = as('different-rider@example.test');
+    const denied = await s.app.inject({ method: 'GET', url: offerUrl, headers: otherAccount });
+    expect(denied.statusCode).toBe(404);
+    expect(denied.json()).not.toHaveProperty('rider');
+    expect((await s.order({ offerToken: offered.offerToken }, otherAccount)).statusCode).toBe(404);
+    const response = await s.app.inject({ method: 'GET', url: offerUrl });
+    expect(response.headers['cache-control']).toBe('no-store');
+    const lookup = response.json() as { status: string; categoryId: string };
     expect(lookup).toMatchObject({ status: 'offered', categoryId: s.cat.id });
     const o = await s.order({ offerToken: offered.offerToken });
     expect(o.statusCode).toBe(201);

@@ -167,9 +167,9 @@ export function createWaitlist(db: Db, repo: Repo, clock: () => Date) {
       });
     },
 
-    /** What a rider sees when opening an offer link. Only the holder of the link can read it. */
-    async offerByToken(token: string) {
-      const row = await db.get<Row>(`SELECT * FROM waitlist_entries WHERE offer_token = $1`, [token]);
+    /** What a rider sees when opening an offer link. Only the account that joined can read it. */
+    async offerByToken(token: string, accountId: string) {
+      const row = await db.get<Row>(`SELECT * FROM waitlist_entries WHERE offer_token = $1 AND account_id = $2`, [token, accountId]);
       if (!row) throw new HttpError(404, 'This waitlist offer was not found.');
       const config = await published(row.event_id);
       const rider = row.rider_json;

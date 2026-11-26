@@ -20,6 +20,10 @@ Payment confirmation stores one message for the authenticated purchaser account 
 
 Owners and registration managers can read status or request a retry for an order in the authorized event. The Registrations panel loads on demand for those roles. Responses omit recipients, message bodies and provider references. A retry records the actor before dispatch and rechecks the role, current recipient access, suppression and the existing send lease before the provider call. Local-only, terminal and expired records cannot be manually retried.
 
+## Waitlist offer links
+
+Offer lookup and checkout require the account that joined the waitlist. A forwarded token gives another signed-in account neither rider details nor a reservation. Offer lookups use `Cache-Control: no-store`. Rows without a saved account cannot be opened or redeemed through the rider link.
+
 ## Expired invitation guidance (Implemented locally)
 
 The signed-in recipient reads only their own latest expiry notices through `/api/rider/expired-invitations`. Authenticated account email scopes organization/role history, without revealing the team or granting access. A later grant of the same role supersedes its notice. Real identity-provider acceptance remains open.
