@@ -55,6 +55,14 @@ function deliveryLabel(value: string | null | undefined): string | null {
   return null;
 }
 
+type TeamSnapshot = { list: MemberList; receivedAt: number };
+
+function teamTime(snapshot: TeamSnapshot | null): number {
+  const serverTime = Date.parse(snapshot?.list.asOf ?? '');
+  // Advance the server's time with elapsed time, independent of device-clock corrections.
+  return snapshot && Number.isFinite(serverTime) ? serverTime + performance.now() - snapshot.receivedAt : Date.now();
+}
+
 /**
  * People and roles for one organization. Owners only; the server refuses everyone else.
  * Adding an email that has never signed in records an invitation that becomes a role the
@@ -66,7 +74,7 @@ function deliveryLabel(value: string | null | undefined): string | null {
  */
 export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }) {
   const [open, setOpen] = useState(false);
-  const [snapshot, setSnapshot] = useState<{ list: MemberList; receivedAt: number } | null>(null);
+  const [snapshot, setSnapshot] = useState<TeamSnapshot | null>(null);
   const list = snapshot?.list ?? null;
   const setList = useCallback((next: MemberList) => {
     setSnapshot({ list: next, receivedAt: performance.now() });
@@ -82,6 +90,42 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
   useEffect(() => {
     if (open && !list) api.members(orgId).then(setList).catch((e: ApiError) => setError(e.message));
   }, [open, list, orgId, setList]);
+
+  const [deadlineTick, setDeadlineTick] = useState(0);
+  const now = teamTime(snapshot);
+  const deadlines = list?.invitations.map((invitation) => Date.parse(invitation.expiresAt)).filter((deadline) => deadline > now) ?? [];
+  const nextDeadline = Math.min(...deadlines);
+
+  useEffect(() => {
+    if (!open || !Number.isFinite(nextDeadline)) return;
+    const delay = Math.min(Math.max(1, nextDeadline - teamTime(snapshot)), 2_147_483_647);
+    const timer = window.setTimeout(() => setDeadlineTick((tick) => tick + 1), Math.ceil(delay));
+    return () => window.clearTimeout(timer);
+  }, [open, snapshot, nextDeadline, deadlineTick]);
+
+  useEffect(() => {
+    if (!open || !snapshot || busy) return;
+    let active = true;
+    let refreshing = false;
+    async function refresh() {
+      if (!active || refreshing || document.visibilityState !== 'visible') return;
+      refreshing = true;
+      try {
+        const next = await api.members(orgId);
+        if (active) setSnapshot((current) => current === snapshot ? { list: next, receivedAt: performance.now() } : current);
+      } catch {
+        // Keep the last list. A later visibility change or conflicting action can refresh it.
+      } finally {
+        refreshing = false;
+      }
+    }
+
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      active = false;
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [open, snapshot, busy, orgId]);
 
   async function run(action: () => Promise<MemberList>) {
     setBusy(true);
@@ -127,9 +171,6 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
   const candidates = list ? [...new Set(list.members.map((m) => m.email))].filter((address) => !list.members.some((m) => m.email === address && m.role === 'owner')) : [];
   const typed = email.trim().toLowerCase();
   const typedStopped = list?.stoppedEmails.some((row) => row.email === typed) ?? false;
-  const serverTime = Date.parse(list?.asOf ?? '');
-  // Advance the server's time with elapsed time, independent of device-clock corrections.
-  const now = snapshot && Number.isFinite(serverTime) ? serverTime + performance.now() - snapshot.receivedAt : Date.now();
   const typedOpen = list?.invitations.some((row) => row.email === typed && row.role === role && Date.parse(row.expiresAt) > now) ?? false;
   const emailHint = typedStopped
     ? typedOpen

@@ -88,6 +88,50 @@ test('an uncertain invitation can be retried without promising extra days', asyn
   }
 });
 
+for (const trigger of ['deadline', 'visibility'] as const) {
+  test(`Team refreshes an invitation after its ${trigger} changes`, async ({ page }) => {
+    const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
+    const openedAt = new Date('2027-05-01T12:00:00.000Z');
+    const expiresAt = new Date(openedAt.getTime() + 60_000).toISOString();
+    await page.clock.install({ time: openedAt });
+    let asOf = openedAt.toISOString();
+    const address = 'near.deadline@example.test';
+    await page.route(`**/api/organizations/${organizationId}/members`, (route) => route.fulfill({ json: {
+      asOf,
+      members: [],
+      invitations: [{ email: address, role: 'check_in_volunteer', expiresAt, revision: 'rev_deadline', earlierEmail: false, suppressed: 'bounced', lastEmail: null }],
+      stoppedEmails: [{ email: address, reason: 'bounced' }],
+      history: [],
+    } }));
+
+    await page.goto('/');
+    const organization = page.getByRole('article').filter({ has: page.locator(`a[href="#/events/${eventId}"]`) });
+    await organization.getByRole('button', { name: 'Team and roles', exact: true }).click();
+    const team = organization.getByRole('region', { name: /^Team and roles for / });
+    const send = team.getByRole('button', { name: /Send without extending/ });
+    await team.getByLabel('Email').fill(address);
+    await expect(send).toBeVisible();
+
+    if (trigger === 'deadline') {
+      await page.clock.fastForward(60_001);
+    } else {
+      asOf = expiresAt;
+      // The server reaches the deadline while browser elapsed time is still before it.
+      await page.evaluate(() => {
+        let visibility = 'hidden';
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
+        document.dispatchEvent(new Event('visibilitychange'));
+        visibility = 'visible';
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+    }
+
+    await expect(team.getByText('Expired', { exact: true })).toBeVisible();
+    await expect(send).toHaveCount(0);
+    await expect(team.getByRole('button', { name: /Allow one new invitation/ })).toBeEnabled();
+  });
+}
+
 test('Resend names the invitation on screen and refreshes when it has changed', async ({ page }) => {
   const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
   const members = `/api/organizations/${organizationId}/members`;
