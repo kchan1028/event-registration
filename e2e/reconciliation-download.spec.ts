@@ -101,9 +101,16 @@ test('finance can download while registration managers cannot, and revocation is
       await member.goto(`/#/events/${s.eventId}/registrations`);
       await expect(member.getByRole('heading', { name: 'Registrations', exact: true })).toBeVisible();
       const section = member.getByRole('region', { name: 'Local reconciliation records' });
-      if (role === 'registration_manager') await expect(section).toHaveCount(0);
+      const summary = member.getByRole('region', { name: 'Finance summary' });
+      if (role === 'registration_manager') {
+        await expect(section).toHaveCount(0);
+        await expect(summary).toHaveCount(0);
+      }
       else {
         const pending = member.waitForEvent('download'); await section.getByRole('button', { name: 'Download local records (CSV)' }).click(); await pending;
+        const summaryDownload = member.waitForEvent('download');
+        await summary.getByRole('button', { name: 'Download finance summary (CSV)' }).click();
+        await summaryDownload;
         const team = await (await page.request.get(`/api/organizations/${s.organizationId}/members`)).json();
         const { revision } = team.members.find((m: { email: string; role: string }) => m.email === email && m.role === role);
         expect((await page.request.post(`/api/organizations/${s.organizationId}/members/revoke`, { data: { email, role, revision } })).status()).toBe(200);
@@ -113,9 +120,37 @@ test('finance can download while registration managers cannot, and revocation is
         const denied = await deniedResponse; expect(denied.status()).toBe(404);
         expect(denied.headers()['content-disposition']).toBeUndefined();
         await expect(section.getByRole('alert')).toContainText((await denied.json()).error); expect(downloads).toBe(0);
+        const deniedSummaryResponse = member.waitForResponse(`**/api/events/${s.eventId}/exports/finance-summary.csv`);
+        await summary.getByRole('button', { name: 'Download finance summary (CSV)' }).click();
+        const deniedSummary = await deniedSummaryResponse;
+        expect(deniedSummary.status()).toBe(404);
+        expect(deniedSummary.headers()['content-disposition']).toBeUndefined();
+        await expect(summary.getByRole('alert')).toContainText((await deniedSummary.json()).error);
+        expect(downloads).toBe(0);
       }
     } finally { await context.close(); }
   }
+});
+
+test('owner downloads the event-wide finance summary from Registrations', async ({ page }) => {
+  const { eventId } = await fixture(page);
+  await page.setViewportSize({ width: 360, height: 1000 });
+  await page.goto(`/#/events/${eventId}/registrations`);
+  const section = page.getByRole('region', { name: 'Finance summary' });
+  await expect(section).toContainText('Registration search and filters do not narrow this file.');
+  for (const theme of ['light', 'dark']) {
+    await page.locator('html').evaluate((root, theme) => root.setAttribute('data-theme', theme), theme);
+    expect(await section.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect((await new AxeBuilder({ page }).include('[aria-labelledby="finance-summary-title"]').analyze()).violations).toEqual([]);
+  }
+  const pending = page.waitForEvent('download');
+  await section.getByRole('button', { name: 'Download finance summary (CSV)' }).click();
+  const download = await pending;
+  expect(download.suggestedFilename()).toContain('finance-summary');
+  const [header, ...rows] = parseCsv(await readFile((await download.path())!, 'utf8'));
+  expect(header).toEqual(['generated_at', 'event_id', 'scope', 'scope_id', 'scope_name', 'metric', 'value', 'unit']);
+  expect(rows).toContainEqual([expect.any(String), eventId, 'event', eventId, '', 'confirmed_orders', '1', 'count']);
+  await expect(section.getByRole('status')).toContainText('Download requested.');
 });
 
 test('unpublished events hide the control until publication', async ({ page }) => {
@@ -124,5 +159,8 @@ test('unpublished events hide the control until publication', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Registrations', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Local reconciliation records' })).toHaveCount(0);
   expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).status()).toBe(200);
+  const summary = page.getByRole('region', { name: 'Finance summary' });
+  await expect(summary).toHaveCount(0);
   await page.reload(); await expect(page.getByRole('region', { name: 'Local reconciliation records' })).toBeVisible();
+  await expect(summary).toBeVisible();
 });

@@ -5,7 +5,7 @@ import { publishReviewed } from './support/publish';
 test('a paid weekend shows day and race counts without splitting the rider', async ({ page }) => {
   const eventId = await paidWeekend(page);
   await page.goto(`/#/events/${eventId}/registrations`);
-  const summary = page.getByRole('region', { name: 'Summary' });
+  const summary = page.getByRole('region', { name: 'Summary', exact: true });
   await expect(summary).toBeVisible();
   await expect(stat(summary, 'Riders')).toHaveText('1');
   await expect(stat(summary, 'Paid entries')).toHaveText('2');
