@@ -158,6 +158,12 @@ describe('support-approved profile claims', () => {
     expect(withoutHeld.json()).toEqual({ orders: [{ orderId: linked.id, eventId: adultEventId }] });
     for (const id of [s.order.id, secondJunior.json().id, beforeClaim.id, proxy.id, ambiguous.id]) await pay(id);
 
+    const registrations = await s.call(RIDER, 'GET', '/api/rider/registrations');
+    expect(registrations.statusCode, registrations.body).toBe(200);
+    expect(registrations.json<{ id: string; canViewParticipantHistory?: true }[]>()
+      .filter((order) => order.canViewParticipantHistory).map((order) => order.id))
+      .toEqual([ambiguous.id, linked.id, beforeClaim.id]);
+
     const history = await s.call(RIDER, 'GET', historyUrl(linked.id));
     expect(history.statusCode, history.body).toBe(200);
     expect(history.headers['cache-control']).toBe('no-store');

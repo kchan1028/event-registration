@@ -4547,6 +4547,11 @@ fieldset:disabled .field label {
   font-weight: 600;
   color: var(--ink);
 }
+.my-reg-history {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .my-junior {
   display: grid;
   gap: var(--s-2);

@@ -36,6 +36,7 @@ export interface ReceivedGuardianInvitation {
 export interface RegistrationAccess {
   placedByYou: boolean;
   canManage: boolean;
+  canViewParticipantHistory?: true;
 }
 
 /** Private relationship history visible only to a current guardian. */

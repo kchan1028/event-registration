@@ -401,6 +401,7 @@ export const api = {
   createCoupon: (eventId: string, body: CouponInput) => request<CouponView>('POST', `/api/events/${eventId}/coupons`, body),
   setCouponActive: (eventId: string, couponId: string, active: boolean) => request<CouponView>('POST', `/api/events/${eventId}/coupons/${couponId}/active`, { active }),
   order: (id: string) => request<OrderView>('GET', `/api/orders/${id}`),
+  participantHistory: (orderId: string) => request<{ orders: { orderId: string; eventId: string }[] }>('GET', `/api/rider/orders/${orderId}/participant-history`),
   myRegistrations: () => request<(OrderView & RegistrationAccess)[]>('GET', '/api/rider/registrations'),
   guardianInvitations: () => request<ReceivedGuardianInvitation[]>('GET', '/api/rider/guardian-invitations'),
   acceptGuardianInvitation: (id: string) => request<JuniorProfile[]>('POST', `/api/rider/guardian-invitations/${id}/accept`, { acknowledge: true }),

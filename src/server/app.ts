@@ -569,7 +569,10 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   // The signed-in person's own registrations, plus those of juniors who named them as their login.
-  app.get('/api/rider/registrations', async (req) => orders.listForAccount(me(req)));
+  app.get('/api/rider/registrations', async (req, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return orders.listForAccount(me(req));
+  });
 
   app.get('/api/rider/orders/:id/participant-history', async (req, reply) => {
     const { id } = idParam.parse(req.params);
