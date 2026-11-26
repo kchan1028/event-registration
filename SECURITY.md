@@ -90,7 +90,7 @@ Each version an organizer publishes records the publishing account from the sess
 
 New orders record the authenticated accepting account ID, validated declared racing age and server acceptance timestamp beside the original waiver. Client-supplied evidence is ignored; checkout replay and rider corrections preserve the original snapshot. Historical records remain null rather than being reconstructed. Existing private order-access rules govern this evidence, including read-only junior viewing; no public field, access override or federation approval is added. Demo/case-study fixture orders, including organizer demo actions, have no inferred accepting account. Preservation is enforced by application writes, not a database immutability trigger. Retention, real identity and legal/minor acceptance remain launch gates.
 
-`GET /api/events/:id/participant-groups` requires current event `entries.manage` permission (owner or registration manager). It returns confirmed order IDs grouped within the authorized event and sets `Cache-Control: no-store`. Account IDs, junior profile IDs, names, and other personal or waiver data are omitted. Grouping grants no authority over an order.
+`GET /api/events/:id/participant-groups` requires current event `entries.manage` permission (owner or registration manager). It returns confirmed order IDs grouped within the authorized event and sets `Cache-Control: no-store`. Account IDs, junior profile IDs, names, and other personal or waiver data are omitted. Grouping grants no authority over an order. The Event participants section uses the same permission and displays only the count and a general explanation.
 
 ### Current order evidence by viewer
 

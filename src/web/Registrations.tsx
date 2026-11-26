@@ -10,6 +10,7 @@ import { refundedCents } from './format';
 import { CancellationPreview } from './registrations/CancellationPreview';
 import { ChangesToResolve } from './registrations/ChangesToResolve';
 import { OrderRow } from './registrations/OrderRow';
+import { ParticipantCount } from './registrations/ParticipantCount';
 import { SameRider } from './registrations/SameRider';
 import { FinanceDownloads } from './registrations/FinanceDownloads';
 import { ReservationLookup } from './registrations/ReservationLookup';
@@ -76,6 +77,7 @@ export function Registrations({ draft }: { draft: Draft }) {
 
       {published && can(roles, 'export.ledger') && <FinanceDownloads key={eventId} eventId={eventId} />}
       {published && <Summary eventId={eventId} refreshKey={orders} />}
+      {published && canManage && <ParticipantCount key={eventId} eventId={eventId} refreshKey={orders} />}
       {published && orders !== null && can(roles, 'payments.refund') && <CancellationPreview eventId={eventId} revision={draft.data.revision} publishedVersion={draft.data.publishedVersion} orders={orders} onExecutionSaved={reload} />}
 
       {published && can(roles, 'orders.view') && (
