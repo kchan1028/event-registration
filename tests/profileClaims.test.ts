@@ -196,6 +196,112 @@ describe('support-approved profile claims', () => {
     }
   });
 
+  it('lets support review duplicate approved claims without changing access or later checkout', async () => {
+    const s = await setup();
+    s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
+    const reviewUrl = `/api/support/accounts/${s.account.id}/duplicate-junior-claims`;
+    const review = () => s.call(SUPPORT, 'GET', reviewUrl);
+    expect((await s.app.inject({ method: 'GET', url: reviewUrl })).statusCode).toBe(401);
+    for (const who of [ORGANIZER, RIDER, PARENT, SECOND, VIEWER]) {
+      expect((await s.call(who, 'GET', reviewUrl)).statusCode).toBe(403);
+    }
+    expect((await s.call(SUPPORT, 'GET', '/api/support/accounts/acct_missing/duplicate-junior-claims')).statusCode).toBe(404);
+    const none = await review();
+    expect(none.statusCode, none.body).toBe(200);
+    expect(none.headers['cache-control']).toBe('no-store');
+    expect(none.json()).toEqual({ riderAccountId: s.account.id, resolutionRequired: false, claims: [] });
+
+    const first = await s.approve();
+    expect(first.statusCode, first.body).toBe(200);
+    const one = await review();
+    expect(one.json()).toEqual({
+      riderAccountId: s.account.id,
+      resolutionRequired: false,
+      claims: [{ claimId: first.json().claimId, juniorProfileId: s.profile.id, approvedAt: first.json().approvedAt }],
+    });
+
+    const { config } = (await s.call(ORGANIZER, 'GET', `/api/events/${s.eventId}`)).json();
+    const adultCategory = config.categories.find((row: { timingCode: string }) => row.timingCode === 'RR-M35-34').id;
+    const placeAdult = async (clientRequestId: string) => {
+      const response = await s.call(RIDER, 'POST', `/api/rider/events/${s.eventId}/orders`, {
+        clientRequestId,
+        selfRegistrationConfirmed: true,
+        categoryIds: [adultCategory],
+        rider: { ...s.body.rider, firstName: 'Adult', racingAge: 40, licenseCategory: '3', email: RIDER, guardian: null },
+        waiver: { ...s.body.waiver, signatureName: 'Adult Fictional', signerRole: 'rider' },
+      });
+      expect(response.statusCode, response.body).toBe(201);
+      return response.json();
+    };
+    const linked = await placeAdult('adult-after-single-claim-review');
+    expect(linked.selfRegistrationConfirmed).toBe(true);
+
+    const secondJunior = await s.call(SECOND, 'POST', `/api/rider/events/${s.eventId}/orders`, {
+      ...s.body,
+      clientRequestId: 'second-fictional-junior-for-review',
+      rider: { ...s.body.rider, guardian: { ...s.body.rider.guardian, email: SECOND } },
+    });
+    expect(secondJunior.statusCode, secondJunior.body).toBe(201);
+    const [secondProfile] = (await s.call(SECOND, 'GET', '/api/rider/juniors')).json();
+    const second = await s.call(SUPPORT, 'POST', `/api/support/juniors/${secondProfile.id}/claim`, {
+      ...s.input, clientRequestId: 'second-fictional-support-claim',
+    });
+    expect(second.statusCode, second.body).toBe(200);
+
+    const duplicate = await review();
+    expect(duplicate.statusCode, duplicate.body).toBe(200);
+    const listed = duplicate.json();
+    expect(listed.resolutionRequired).toBe(true);
+    expect(listed.claims).toEqual([
+      { claimId: first.json().claimId, juniorProfileId: s.profile.id, approvedAt: first.json().approvedAt },
+      { claimId: second.json().claimId, juniorProfileId: secondProfile.id, approvedAt: second.json().approvedAt },
+    ]);
+    expect(listed).not.toHaveProperty('birthDate');
+    expect(JSON.stringify(listed)).not.toContain('FICTIONAL-REVIEW');
+    const replay = await review();
+    expect(replay.json()).toEqual(listed);
+
+    const db = new pg.Client({ connectionString: s.databaseUrl });
+    await db.connect();
+    const evidence = async () => (await db.query(
+      `SELECT o.id, o.account_id, o.junior_profile_id, o.self_registration_account_id, o.adult_history_claim_id,
+              o.waiver_evidence_json, g.revoked_at IS NOT NULL AS guardian_revoked
+       FROM orders o LEFT JOIN junior_guardians g ON g.junior_profile_id = o.junior_profile_id
+       ORDER BY o.seq`,
+    )).rows;
+    const before = await evidence();
+    expect(replay.json()).toEqual((await review()).json());
+    expect(await evidence()).toEqual(before);
+    const ambiguous = await placeAdult('adult-after-duplicate-claim-review');
+    expect(ambiguous.selfRegistrationConfirmed).toBe(true);
+    const paid = await s.call(RIDER, 'POST', `/api/orders/${ambiguous.id}/payment`, {
+      attemptId: 'duplicate-review-payment', outcome: 'success',
+    });
+    expect(paid.statusCode, paid.body).toBe(200);
+    expect(paid.json().waiverEvidence).toEqual(ambiguous.waiverEvidence);
+    const again = await s.call(RIDER, 'POST', `/api/orders/${ambiguous.id}/payment`, {
+      attemptId: 'duplicate-review-payment', outcome: 'success',
+    });
+    expect(again.json()).toEqual(paid.json());
+    try {
+      const stored = (await db.query(
+        `SELECT id, account_id, junior_profile_id, adult_history_claim_id FROM orders WHERE id = ANY($1) ORDER BY seq`,
+        [[linked.id, ambiguous.id]],
+      )).rows;
+      expect(stored).toEqual([
+        { id: linked.id, account_id: s.account.id, junior_profile_id: null, adult_history_claim_id: first.json().claimId },
+        { id: ambiguous.id, account_id: s.account.id, junior_profile_id: null, adult_history_claim_id: null },
+      ]);
+      const guardians = (await db.query(
+        `SELECT junior_profile_id, revoked_at IS NOT NULL AS revoked FROM junior_guardians WHERE junior_profile_id = ANY($1) ORDER BY junior_profile_id`,
+        [[s.profile.id, secondProfile.id]],
+      )).rows;
+      expect(guardians).toEqual([s.profile.id, secondProfile.id].sort().map((junior_profile_id) => ({ junior_profile_id, revoked: true })));
+    } finally {
+      await db.end();
+    }
+  });
+
   it('keeps organizer participant history within one authorized event and includes the saved claim', async () => {
     const s = await setup();
     s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
@@ -291,6 +397,9 @@ describe('support-approved profile claims', () => {
     await disabled.app.close();
     const { app } = await testApp({ databaseUrl: disabled.databaseUrl, auth: fakeAuth(), profileClaims: { supportAccountIds: [SUPPORT_ID] } });
     expect((await app.inject({ method: 'POST', url: `/api/support/juniors/${disabled.profile.id}/claim`, headers: as(SUPPORT), payload: disabled.input })).statusCode).toBe(503);
+    const reviewUrl = `/api/support/accounts/${disabled.account.id}/duplicate-junior-claims`;
+    expect((await app.inject({ method: 'GET', url: reviewUrl, headers: as(ORGANIZER) })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: reviewUrl, headers: as(SUPPORT) })).statusCode).toBe(503);
   });
 
   it('atomically ends both guardians and viewer access while preserving purchase/payment/waiver and exact replay', async () => {
