@@ -38,11 +38,17 @@ For the pilot only, the pilot club's own Stripe account receives payments; no Co
 
 Recommend **Option A, each club is the merchant through its own connected account**, so CycleReg never holds club money and each treasurer keeps control of payouts, refunds, and disputes. For the Phase 2 sandbox, model charges as belonging to an organization's connected account and record fees, refunds, and disputes per organization in the ledger.
 
+### Stripe documentation check (November 25, 2026)
+
+Direct charges support the proposed arrangement when the club is the merchant of record. The club must be identified consistently on the event website, at checkout, on the receipt, on the card statement, in the customer terms, and in the Connect configuration. The customer-facing commercial arrangement determines who is the merchant. [Stripe merchant of record guide](https://docs.stripe.com/connect/merchant-of-record)
+
+For direct charges, Stripe attempts to debit refunds and disputed amounts from the club's connected balance. The account configuration determines who pays dispute fees and whether Stripe or CycleReg covers unrecoverable connected-account losses. For Option A, the treasurer and project owner still need to confirm a supported configuration that bills the club for dispute fees and assigns unrecoverable connected-account losses to Stripe. [Stripe charge types](https://docs.stripe.com/connect/charges) · [Stripe dispute handling](https://docs.stripe.com/connect/disputes) · [Stripe risk and liability](https://docs.stripe.com/connect/risk-management)
+
 Before acceptance:
 
-1. Verify against current Stripe documentation which Connect charge type gives the club merchant status and dispute responsibility, and record the dated source here (ADR 0002 requires this verification).
-2. The pilot club's treasurer reviews onboarding steps, payout timing, dispute handling, and any tax reporting, and agrees in writing.
-3. Decide whether CycleReg charges any platform fee (product.md business model hypothesis); default is none for the pilot.
+1. Confirm and record a supported U.S. Connect account configuration that bills the club for dispute fees and assigns unrecoverable connected-account losses to Stripe.
+2. The pilot club's treasurer reviews onboarding, the proposed fee and loss configuration, payout timing, dispute handling, and any tax reporting, and agrees in writing.
+3. Decide whether CycleReg charges any platform fee (product.md business model hypothesis). The proposed default is none for the pilot.
 
 Option C remains a fallback for a one-club pilot if Connect onboarding proves too heavy, at the cost of rework before a second club.
 
@@ -51,7 +57,7 @@ Option C remains a fallback for a one-club pilot if Connect onboarding proves to
 - Sandbox work can proceed: the ledger records which organization each charge, fee, refund, and dispute belongs to.
 - No live keys, live charges, or account creation are authorized by this ADR.
 - Cross-organization season passes (Phase 6) will need a further decision about splitting one rider payment across clubs.
-- Next: Stripe documentation check, treasurer review, then an accepted version of this ADR before any live payment.
+- Complete the acceptance steps above before accepting this ADR or implementing live payments.
 
 Product impact (product.md): None until accepted.
 Roadmap impact (roadmap.md): The Phase 2 live-use gate on the merchant model points to this ADR.
