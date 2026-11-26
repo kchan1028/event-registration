@@ -5,12 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
     <meta name="description" content="CycleReg organizer workspace: build and validate road race and criterium category schedules." />
-    <title>CycleReg organizer workspace</title>
+    <title>Organizer workspace | CycleReg</title>
+    <meta name="color-scheme" content="light dark" />
     <script>
       (function () {
         var t;
         try { t = localStorage.getItem('cyclereg-theme'); } catch (e) {}
-        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        if (t === 'light' || t === 'dark') document.querySelector('meta[name="color-scheme"]').content = t;
+        else t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         document.documentElement.dataset.theme = t;
       })();
     </script>

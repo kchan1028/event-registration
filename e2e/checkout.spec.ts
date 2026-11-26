@@ -29,6 +29,7 @@ async function signAndReview(page: Page, name: string) {
 
 test('two races on one day: second-race discount, fees, signature errors, back navigation, simulated payment', async ({ page }) => {
   await openEvent(page, 'criterium');
+  await expect(page).toHaveTitle(/^Race registration · .+ \| CycleReg$/);
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
   // Fixture registration opens Jan 1, 2027; the demo says so and lets testers try it anyway.
   if (new Date() < new Date('2027-01-01T17:00:00Z')) await expect(page.getByRole('note').filter({ hasText: 'Demo mode:' })).toContainText('opens Jan 1, 2027');
@@ -43,20 +44,24 @@ test('two races on one day: second-race discount, fees, signature errors, back n
   await expect(tray.locator('.quote__total')).toContainText('$59.65');
 
   await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  await expect(page.getByRole('heading', { name: 'Racer details' })).toBeFocused();
   await expect(page.getByLabel('First name (required)')).toHaveValue('Alex');
   await page.getByRole('button', { name: 'Continue to the waiver' }).click();
+  await expect(page.getByRole('heading', { name: 'Waiver', exact: true })).toBeFocused();
 
   await page.getByRole('button', { name: 'Sign and review the order' }).click();
   const summary = page.locator('.error-summary');
   await expect(summary).toContainText('Type your full name to sign the waiver.');
   await expect(summary).toContainText('Check the box to confirm you agree to the waiver.');
   await signAndReview(page, 'Alex Demo');
+  await expect(page.getByRole('heading', { name: 'Review your order' })).toBeFocused();
 
   await expect(page.locator('.simulated').first()).toHaveText('Simulated payment: no money is charged.');
   await expect(page.getByRole('button', { name: /^Pay/ })).toHaveCount(0);
 
   // Back to a completed step keeps the data (and releases the hold).
   await page.getByRole('button', { name: /Racer details/ }).click();
+  await expect(page.getByRole('heading', { name: 'Racer details' })).toBeFocused();
   await expect(page.getByLabel('Last name (required)')).toHaveValue('Demo');
   await page.getByRole('button', { name: 'Continue to the waiver' }).click();
   await expect(page.getByLabel(/Type your full name to sign/)).toHaveValue('Alex Demo');
@@ -223,6 +228,14 @@ test('rider screens follow the theme toggle and remember it', async ({ page }) =
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(page.locator('.demo-badge')).toBeVisible();
   await page.screenshot({ path: 'test-results/rider-dark.png' });
+  const scheme = page.locator('meta[name="color-scheme"]');
+  await expect(scheme).toHaveAttribute('content', 'dark');
+  await page.getByRole('button', { name: /Switch to light theme/ }).click();
+  await expect(scheme).toHaveAttribute('content', 'light');
+  await page.getByRole('button', { name: /Use system theme/ }).click();
+  await expect(scheme).toHaveAttribute('content', 'light dark');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
 test('with the demo setting off, categories outside their window cannot be chosen', async ({ page }) => {

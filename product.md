@@ -326,7 +326,7 @@ Steps:
 
 Rules:
 
-- **Navigation.** A visible progress indicator shows the current step. The rider can go back to any completed step without losing entered data, and cannot skip ahead past an incomplete step. An uncertain reservation must be recovered before editing the submitted entries or consent.
+- **Navigation.** A visible progress indicator shows the current step. When the rider changes steps, keyboard focus moves to the new step or its sign-in prompt. The rider can go back to any completed step without losing entered data, and cannot skip ahead past an incomplete step. An uncertain reservation must be recovered before editing the submitted entries or consent.
 - **Validation.** Required fields are marked. Errors appear next to the field when the rider tries to continue, say what is wrong and how to fix it, are summarized at the top of the step, and are announced to screen readers. The summary takes focus once per failed submission and does not steal focus while the rider corrects a field. See the [accessibility rules](docs/coding-guide.md#accessibility-and-mobile-usability).
 - **Simulation labeling.** Every demo screen shows a persistent, readable "Demo" label. The order review, payment step, confirmation, and receipt also state "Simulated payment: no money is charged". Buttons say "Complete simulated payment", never "Pay" or "Buy". The receipt is watermarked as a demo.
 - **Separate states.** Entry, payment, and readiness states stay independent in the demo, as in the product. A simulated paid entry is not shown as cleared to race.

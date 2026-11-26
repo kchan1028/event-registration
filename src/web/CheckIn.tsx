@@ -27,6 +27,10 @@ export function CheckIn({ eventId }: { eventId: string }) {
   const [dayId, setDayId] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [data, setData] = useState<CheckInList | null>(null);
+  const eventName = data?.eventName;
+  useEffect(() => {
+    if (eventName) document.title = `Check-in · ${eventName} | CycleReg`;
+  }, [eventName]);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [recovery, setRecovery] = useState(() => new Map<string, CheckInRecovery>());

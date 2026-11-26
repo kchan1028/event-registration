@@ -255,10 +255,10 @@ const SUN = 'M8 10.75a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5ZM8 1.5v1.25m0 
 const MOON = 'M13.5 9.6A5.75 5.75 0 0 1 6.4 2.5a5.75 5.75 0 1 0 7.1 7.1Z';
 
 export function ThemeToggle() {
-  const [theme, toggle] = useTheme();
-  const next = theme === 'dark' ? 'light' : 'dark';
+  const { theme, next, toggle } = useTheme();
+  const label = next ? `Switch to ${next} theme` : 'Use system theme';
   return (
-    <button type="button" className="theme-toggle" data-current={theme} onClick={toggle} aria-label={`Theme: ${theme}. Switch to ${next} theme`} title={`Switch to ${next} theme`}>
+    <button type="button" className="theme-toggle" data-current={theme} onClick={toggle} aria-label={`Theme: ${theme}. ${label}`} title={label}>
       <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d={theme === 'dark' ? MOON : SUN} />
       </svg>

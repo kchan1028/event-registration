@@ -33,7 +33,7 @@ test('riders sign in during checkout and later retrieve their check-in code on a
   await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
   await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
   await page.getByRole('button', { name: 'Continue to racer details' }).click();
-  await expect(page.getByRole('heading', { name: 'Sign in to continue your registration' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in to continue your registration' })).toBeFocused();
   await expect(page.getByLabel('First name (required)')).toHaveCount(0);
 
   // After sign-in the rider picks up where they left off.

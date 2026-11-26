@@ -154,12 +154,12 @@ function TestSignInPage({ onDone, onCancel }: { onDone: (email: string) => void;
 }
 
 /** Shown in place of a page or step that needs sign-in. */
-export function SignInPrompt({ title, children }: { title: string; children: ReactNode }) {
+export function SignInPrompt({ title, children, checkoutStep }: { title: string; children: ReactNode; checkoutStep?: boolean }) {
   const session = useSession();
   if (session.status === 'loading') return <div className="skeleton" aria-label="Checking sign-in" />;
   return (
     <section className="signin-prompt" aria-labelledby="signin-prompt-title">
-      <h2 id="signin-prompt-title">{title}</h2>
+      <h2 id="signin-prompt-title" tabIndex={checkoutStep ? -1 : undefined} data-checkout-step={checkoutStep}>{title}</h2>
       <p>{children}</p>
       {session.status === 'unconfigured' ? (
         <p className="alert alert--warn" role="alert">

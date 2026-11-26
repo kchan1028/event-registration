@@ -14,7 +14,7 @@ export function FieldBoard({ draft, raceId, onSelect, selectedId }: { draft: Dra
   const { config, update, readOnly } = draft;
   const race = config.races.find((r) => r.id === raceId)!;
   const dayIndex = config.days.findIndex((d) => d.id === race.dayId);
-  const groups = [...config.startGroups.filter((g) => g.raceId === raceId)].sort((a, b) => (a.startTime ?? '99').localeCompare(b.startTime ?? '99'));
+  const groups = config.startGroups.filter((g) => g.raceId === raceId).sort((a, b) => (a.startTime ?? '99').localeCompare(b.startTime ?? '99'));
   const cats = sortCategories(config.categories.filter((c) => c.raceId === raceId && c.status !== 'archived'));
   const unassigned = cats.filter((c) => !c.startGroupId || !groups.some((g) => g.id === c.startGroupId));
   const [editing, setEditing] = useState<string | null>(null);
