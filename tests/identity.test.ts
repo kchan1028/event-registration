@@ -47,8 +47,8 @@ async function setup() {
   const code = (c: string) => ev.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Demo', signerRole: 'rider' };
   let n = 0;
-  const buy = async (c: string, headers = {}, rider = RIDER) => {
-    const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, headers, payload: { clientRequestId: `ident-${++n}-xxxxxx`, categoryIds: [code(c)], rider, waiver: { ...waiver, signatureName: `${rider.firstName} ${rider.lastName}` } } });
+  const buy = async (c: string, headers = {}, rider = RIDER, selfRegistrationConfirmed?: true) => {
+    const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, headers, payload: { clientRequestId: `ident-${++n}-xxxxxx`, categoryIds: [code(c)], rider, selfRegistrationConfirmed, waiver: { ...waiver, signatureName: `${rider.firstName} ${rider.lastName}` } } });
     expect(created.statusCode).toBe(201);
     const id = (created.json() as { id: string }).id;
     const paid = await app.inject({ method: 'POST', url: `/api/orders/${id}/payment`, headers, payload: { attemptId: `attempt-${n}-xxxx`, outcome: 'success' } });
@@ -70,6 +70,30 @@ async function setup() {
 }
 
 describe('participant identity API', () => {
+  it('groups confirmed adult self-registrations by account and keeps other orders event-local', async () => {
+    const { app, eventId, buy, post, checkInList, days } = await setup();
+    const rider = as('rider@participants.test');
+    const other = as('other-rider@participants.test');
+    const first = await buy('RR-M35-34', rider, RIDER, true);
+    const second = await buy('CR-M35-34', rider, RIDER, true);
+    const proxy = await buy('RR-M35-34', rider);
+    const otherAccount = await buy('CR-M35-34', other, RIDER, true);
+
+    const groups = async () => {
+      const response = await app.inject({ url: `/api/events/${eventId}/participant-groups` });
+      expect(response.statusCode, response.body).toBe(200);
+      return response.json();
+    };
+    const expected = [{ orderIds: [first, second] }, { orderIds: [proxy] }, { orderIds: [otherAccount] }];
+    expect(await groups()).toEqual(expected);
+    expect((await checkInList(days[0])).riders).toHaveLength(4);
+
+    expect((await post('link', { orderIds: [first, proxy] })).statusCode).toBe(200);
+    expect((await post('link', { orderIds: [first, otherAccount] })).statusCode).toBe(200);
+    expect(await groups()).toEqual(expected);
+    expect((await checkInList(days[0])).riders).toHaveLength(2);
+  });
+
   it('uses explicit rider links and keeps different riders on one account separate', async () => {
     const { app, eventId, organizationId, buy } = await setup();
     const rider = as('rider@participants.test');

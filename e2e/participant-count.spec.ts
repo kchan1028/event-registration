@@ -17,32 +17,38 @@ test('explains the event participant count to staff with entry management access
   await expect(section.getByRole('status')).toHaveText('0 participants with confirmed orders');
 
   const { config } = await (await page.request.get(eventUrl)).json();
-  const category = config.categories.find((row: { timingCode: string }) => row.timingCode === 'RR-J1516');
-  const rider = {
-    firstName: 'Sam', lastName: 'Fictional', email: '', team: '',
-    racingAge: 16, licenseCategory: null, licenseType: 'annual', competitionClass: 'men',
-    collegiateDivision: null,
-    guardian: { name: 'Pat Fictional', relationship: 'Parent', email: 'parent@example.test', phone: '' },
-    emergencyContact: { name: 'Pat Fictional', phone: '555-555-0199' },
-  };
-  for (const attempt of [1, 2]) {
-    const created = await page.request.post(`/api/rider/events/${eventId}/orders`, {
-      data: {
-        clientRequestId: `participant-order-${attempt}`,
-        categoryIds: [category.id],
-        rider,
-        waiver: {
-          version: config.registration.waiverVersion, read: true, agreed: true,
-          signatureName: 'Pat Fictional', signerRole: 'guardian',
+  const placeOrders = async (kind: 'junior' | 'adult') => {
+    const isJunior = kind === 'junior';
+    const category = config.categories.find((row: { timingCode: string }) => row.timingCode === (isJunior ? 'RR-J1516' : 'RR-M35-34'));
+    const rider = {
+      firstName: 'Sam', lastName: 'Fictional', email: 'rider@example.test', team: '',
+      racingAge: isJunior ? 16 : 40, licenseCategory: isJunior ? null : '3',
+      licenseType: 'annual', competitionClass: 'men', collegiateDivision: null,
+      guardian: isJunior ? { name: 'Pat Fictional', relationship: 'Parent', email: 'parent@example.test', phone: '' } : null,
+      emergencyContact: { name: 'Pat Fictional', phone: '555-555-0199' },
+    };
+    for (const attempt of [1, 2]) {
+      const created = await page.request.post(`/api/rider/events/${eventId}/orders`, {
+        data: {
+          clientRequestId: `participant-order-${kind}-${attempt}`,
+          categoryIds: [category.id],
+          selfRegistrationConfirmed: !isJunior,
+          rider,
+          waiver: {
+            version: config.registration.waiverVersion, read: true, agreed: true,
+            signatureName: isJunior ? 'Pat Fictional' : 'Sam Fictional', signerRole: isJunior ? 'guardian' : 'rider',
+          },
         },
-      },
-    });
-    expect(created.status(), await created.text()).toBe(201);
-    const { id } = await created.json();
-    expect((await page.request.post(`/api/orders/${id}/payment`, {
-      data: { attemptId: `participant-payment-${eventId}-${attempt}`, outcome: 'success' },
-    })).status()).toBe(200);
-  }
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      const { id } = await created.json();
+      expect((await page.request.post(`/api/orders/${id}/payment`, {
+        data: { attemptId: `participant-payment-${eventId}-${kind}-${attempt}`, outcome: 'success' },
+      })).status()).toBe(200);
+    }
+  };
+  await placeOrders('junior');
+  await placeOrders('adult');
 
   let failCountRequest = true;
   await page.route(`**${eventUrl}/participant-groups`, (route) =>
@@ -55,10 +61,11 @@ test('explains the event participant count to staff with entry management access
   await retry.focus();
   failCountRequest = false;
   await retry.press('Enter');
-  await expect(section.getByRole('status')).toHaveText('1 participant with confirmed orders');
+  await expect(section.getByRole('status')).toHaveText('2 participants with confirmed orders');
   await expect(section.getByRole('status')).toBeFocused();
   await expect(section).toContainText('one check-in card for two participants');
-  await expect(section).toContainText('two check-in cards for one participant');
+  await expect(section).toContainText('two check-in cards');
+  await expect(section).toContainText('Adult orders marked as self-registration count together for the same signed-in account.');
   await expect(section).not.toContainText('Fictional');
 
   for (const colorScheme of ['light', 'dark'] as const) {
