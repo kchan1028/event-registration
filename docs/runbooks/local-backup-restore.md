@@ -253,7 +253,7 @@ A restore error is not permission to continue with partial data. The intended ta
 
 ## 5. Record evidence and clean up
 
-Keep execution evidence in the PR or a dated rehearsal record under the [test plan](../testing/test-plan.md#5-manual-checks): author/verifier, full source commit, tool/server versions, created database names, archive byte size and checksum, compared table count, populated fixture coverage, successful and failed commands, recovered workflow results and remaining gaps. Do not attach the archive or raw fixture/record dumps. A second operator repeats the procedure with a fresh run ID and records their own result.
+Keep execution evidence in the PR or a dated rehearsal record under the [test plan](../testing/test-plan.md#5-manual-checks): author/verifier, full source commit, tool/server versions, created database names, archive byte size and checksum, compared table count, populated fixture coverage, successful and failed commands, recovered workflow results and remaining gaps. Do not attach the archive or raw fixture/record dumps. Repeat the procedure as a separate automated run with a fresh run ID and record that run's result separately ([rehearsal rule](../testing/test-plan.md#5-manual-checks)).
 
 After preserving the public-safe evidence and confirming these databases were created by this rehearsal, drop only those exact three names. If creation failed because a name already existed, do not run cleanup against that database. Check the variables against the creation log first.
 
