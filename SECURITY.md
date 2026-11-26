@@ -16,7 +16,7 @@ The server sends organizer invitation emails through Resend only in test mode wi
 
 ## Registration confirmation recording
 
-Payment confirmation stores one message for the authenticated purchaser account on an account-backed order. The body contains generic sign-in instructions and no rider, waiver, payment, or emergency contact details. The internal record is dispatched only through the existing allowlisted test sender. Immediately before sending, the worker rechecks the purchaser address, current order and guardian authority, confirmed entry and organization email suppression. It holds no database connection during the provider call.
+Payment confirmation stores one message for the authenticated purchaser account on an account-backed order. The body contains generic sign-in instructions and no rider, waiver, payment, or emergency contact details. The internal record is dispatched only through the existing allowlisted test sender, and only when recorded with a test sender configured. A confirmation bounce or complaint stops later confirmations to that address in the same organization and does not expose rider addresses through the invitation suppression list. Immediately before sending, the worker rechecks the purchaser address, current order and guardian authority, confirmed entry and organization email suppression. It holds no database connection during the provider call.
 
 ## Expired invitation guidance (Implemented locally)
 

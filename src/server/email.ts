@@ -133,14 +133,14 @@ export function emailFromEnv(env: Record<string, string | undefined> = process.e
 }
 
 /** Called in the transaction that confirms the order. No provider call is made. */
-export async function recordRegistrationConfirmation(db: Db, orderId: string, confirmedAt: string) {
+export async function recordRegistrationConfirmation(db: Db, orderId: string, confirmedAt: string, senderAddress?: string) {
   await db.run(
-    `INSERT INTO email_messages (id, organization_id, kind, ref, order_id, to_email, subject, body_text, status, created_at, keyed)
-     SELECT $1, e.organization_id, 'registration_confirmation', o.id, o.id, a.email, $2, $3, 'recorded', $4, true
+    `INSERT INTO email_messages (id, organization_id, kind, ref, order_id, to_email, subject, body_text, status, created_at, from_email, keyed)
+     SELECT $1, e.organization_id, 'registration_confirmation', o.id, o.id, a.email, $2, $3, 'recorded', $4, $6, true
      FROM orders o JOIN events e ON e.id = o.event_id JOIN accounts a ON a.id = o.account_id
      WHERE o.id = $5
      ON CONFLICT (order_id) DO NOTHING`,
-    [newId('eml'), 'Registration confirmed', 'Your registration is confirmed. Sign in and open My registrations to see your order and receipt.', confirmedAt, orderId],
+    [newId('eml'), 'Registration confirmed', 'Your registration is confirmed. Sign in and open My registrations to see your order and receipt.', confirmedAt, orderId, senderAddress ?? null],
   );
 }
 
@@ -161,12 +161,17 @@ function storedError(err: unknown): string {
 const confirmationReady = `EXISTS (
   SELECT 1 FROM orders o JOIN accounts a ON a.id = o.account_id
   LEFT JOIN junior_profiles j ON j.id = o.junior_profile_id
-  WHERE o.id = m.order_id AND o.status = 'confirmed' AND lower(btrim(a.email)) = lower(btrim(m.to_email))
+  WHERE o.id = m.order_id AND m.from_email IS NOT NULL AND o.status = 'confirmed' AND lower(btrim(a.email)) = lower(btrim(m.to_email))
     AND ${orderManagerSql('a.id')}
     AND EXISTS (SELECT 1 FROM order_entries e WHERE e.order_id = o.id AND e.status = 'confirmed')
     AND NOT EXISTS (
       SELECT 1 FROM email_suppressions s
       WHERE s.organization_id = m.organization_id AND s.email = lower(btrim(m.to_email)) AND s.cleared_at IS NULL
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM email_messages previous JOIN email_delivery_events d ON d.email_id = previous.id
+      WHERE previous.organization_id = m.organization_id AND previous.kind = 'registration_confirmation'
+        AND lower(btrim(previous.to_email)) = lower(btrim(m.to_email)) AND d.kind IN ('bounced', 'complained')
     )
 )`;
 const invitationReady = `EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id AND NOT earlier_email)`;
@@ -256,12 +261,12 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
         const lease = await db.get<Lease>(
           `UPDATE email_messages m
            SET started_at = COALESCE(m.started_at, $2), sending_until = now() + make_interval(secs => $3),
-               status = 'uncertain', from_email = CASE WHEN $4 THEN COALESCE(m.from_email, $5) ELSE m.from_email END
+               status = 'uncertain'
            FROM (SELECT id, started_at FROM email_messages WHERE id = $1 FOR UPDATE) was
            WHERE m.id = was.id AND (m.status = 'uncertain' OR ($4 AND m.status = 'recorded'))
              AND (m.sending_until IS NULL OR m.sending_until <= now()) AND ${ready}
            RETURNING was.started_at IS NULL AS first, m.sending_until::text AS until`,
-          [id, clock().toISOString(), SEND_LEASE_SECONDS, confirmation, sender.from ?? null],
+          [id, clock().toISOString(), SEND_LEASE_SECONDS, confirmation],
         );
         if (!lease) continue;
         // The claim took time, so check the lease, the invitation, the retrying account and the window again, in one
@@ -421,7 +426,7 @@ export async function recordResendDelivery(
       await db.run(
         `INSERT INTO email_suppressions (id, organization_id, email, reason, email_id, created_at)
          SELECT $1, organization_id, lower(btrim(to_email)), $2, id, $3
-         FROM email_messages WHERE id = $4
+         FROM email_messages WHERE id = $4 AND kind = 'organizer_invitation'
          ON CONFLICT (organization_id, email) WHERE cleared_at IS NULL DO NOTHING`,
         [newId('sup'), kind, occurred.toISOString(), rows[0].id],
       );

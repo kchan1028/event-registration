@@ -137,7 +137,7 @@ function checkInCode(): string {
   return `${s.slice(0, 5)}-${s.slice(5)}`;
 }
 
-export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes: number, coupons: Coupons, juniors: Juniors) {
+export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes: number, coupons: Coupons, juniors: Juniors, confirmationSender?: string) {
   const nowIso = () => clock().toISOString();
   const orderRow = (id: string) => db.get<OrderRow>(`SELECT * FROM orders WHERE id = $1`, [id]);
   const entryRows = (orderId: string) => db.all<EntryRow>(`SELECT * FROM order_entries WHERE order_id = $1 ORDER BY seq`, [orderId]);
@@ -647,7 +647,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           if (next === 'confirmed') {
             await db.run(`UPDATE orders SET status = 'confirmed', check_in_code = $1, confirmed_at = $2, updated_at = $3 WHERE id = $4`, [checkInCode(), t, t, orderId]);
             await db.run(`UPDATE order_entries SET status = 'confirmed' WHERE order_id = $1`, [orderId]);
-            await recordRegistrationConfirmation(db, orderId, t);
+            await recordRegistrationConfirmation(db, orderId, t, confirmationSender);
             await db.run(`UPDATE waitlist_entries SET status = 'accepted', updated_at = $1 WHERE order_id = $2 AND status = 'offered'`, [t, orderId]);
           } else {
             await db.run(`UPDATE orders SET status = $1, updated_at = $2 WHERE id = $3`, [next, t, orderId]);

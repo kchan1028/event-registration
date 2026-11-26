@@ -114,7 +114,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const juniors = createJuniors(db, clock);
   const profileClaims = createProfileClaims(db, clock, claimSettings);
   const staffHoldRelease = opts.staffHoldRelease ?? staffHoldReleaseFromEnv();
-  const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10), coupons, juniors);
+  const emailSender = opts.email ?? emailFromEnv();
+  const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10), coupons, juniors, emailSender.mode === 'resend' ? emailSender.from : undefined);
   const refunds = createRefunds(db, paymentProvider, clock, repo);
   const identity = createIdentity(db, orders, clock);
   const resolutions = createResolutions(db, orders, clock);
@@ -123,7 +124,6 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const emergencyContacts = createEmergencyContacts(db, clock);
   const waitlist = createWaitlist(db, repo, clock);
   const caseStudies = createCaseStudyFixtures(db, repo, orders, refunds, checkIn);
-  const emailSender = opts.email ?? emailFromEnv();
   const mailer = createMailer(db, emailSender, clock);
   // Senders need a public URL for the invitation sign-in link.
   const access = createAccess(db, provider, clock, mailer, appUrl || (emailSender.mode !== 'local' ? publicAppUrl() : ''));
