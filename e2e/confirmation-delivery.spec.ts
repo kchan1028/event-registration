@@ -74,12 +74,17 @@ test('registration managers can read local status while finance cannot see the p
       const row = member.locator('.order').filter({ hasText: 'Download Fictional' });
       await expect(row).toBeVisible();
       const panel = row.locator('.confirmation-delivery');
+      const receipt = row.locator('.receipt-email-delivery');
       if (role === 'finance') {
         await expect(panel).toHaveCount(0);
+        await expect(receipt).toHaveCount(0);
       } else {
         await panel.locator('summary').click();
         await expect(panel.getByRole('status')).toContainText('Send status: Recorded');
         await expect(panel.getByRole('button', { name: 'Retry confirmation' })).toHaveCount(0);
+        await receipt.locator('summary').click();
+        await expect(receipt.getByRole('status')).toContainText('Send status: Recorded');
+        await expect(receipt.getByRole('button', { name: 'Retry receipt email' })).toHaveCount(0);
       }
     } finally {
       await context.close();
