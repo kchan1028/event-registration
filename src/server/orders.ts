@@ -697,6 +697,30 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
       return views.map((v, i) => ({ ...v, placedByYou: rows[i].account_id === account.id, canManage: rows[i].can_manage === true } satisfies RegistrationAccess));
     },
 
+    /** The adult order selects a saved history group; current order authority still controls every result. */
+    async participantHistory(orderId: string, accountId: string) {
+      const orders = await db.all<{ orderId: string; eventId: string }>(
+        `WITH anchor AS (
+           SELECT adult_history_claim_id FROM orders
+           WHERE id = $1 AND account_id = $2 AND self_registration_account_id = $2 AND status = 'confirmed'
+         )
+         SELECT o.id AS "orderId", o.event_id AS "eventId"
+         FROM anchor
+         LEFT JOIN junior_profile_claims c ON c.id = anchor.adult_history_claim_id AND c.rider_account_id = $2
+         JOIN orders o ON (
+           (o.account_id = $2 AND o.self_registration_account_id = $2
+             AND o.adult_history_claim_id IS NOT DISTINCT FROM anchor.adult_history_claim_id)
+           OR o.junior_profile_id = c.junior_profile_id
+         )
+         LEFT JOIN junior_profiles j ON j.id = o.junior_profile_id
+         WHERE o.status = 'confirmed' AND ${orderManagerSql('$2')}
+         ORDER BY o.created_at DESC, o.seq DESC`,
+        [orderId, accountId],
+      );
+      if (orders.length === 0) throw new HttpError(404, 'Registration history not found.');
+      return { orders };
+    },
+
     /** Look up a committed reservation by its exact rider request reference, within one event. */
     async lookupReservation(eventId: string, clientRequestId: string): Promise<ReservationLookupResult> {
       const row = await reservationOrder(eventId, clientRequestId);
