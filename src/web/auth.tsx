@@ -1,5 +1,5 @@
 import { ClerkProvider, useAuth, useClerk, useUser } from '@clerk/react';
-import { createContext, useContext, useState, type FormEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { setTokenGetter } from './api';
 import { Field, Pending, ThemeToggle } from './ui';
 
@@ -79,6 +79,16 @@ export function kioskEventId(): string | null {
 
 const TEST_KEY = 'cyclereg.test-session';
 
+// The test sign-in page replaces the app, so checkout remounts afterwards. One successful
+// sign-in asks that remount to focus the restored step. Cancel does not.
+let pendingCheckoutFocus = false;
+
+export function takePendingCheckoutFocus(): boolean {
+  const pending = pendingCheckoutFocus;
+  pendingCheckoutFocus = false;
+  return pending;
+}
+
 function readTestEmail(): string | null {
   try {
     return sessionStorage.getItem(TEST_KEY);
@@ -112,6 +122,8 @@ function TestSession({ children }: { children: ReactNode }) {
     } catch {
       /* storage blocked: keep the session in memory */
     }
+    const hash = window.location.hash;
+    pendingCheckoutFocus = hash.startsWith('#/register/') || new URLSearchParams(window.location.search).has('kiosk');
     setEmail(value);
     setAsking(false);
   };
@@ -125,6 +137,13 @@ function TestSession({ children }: { children: ReactNode }) {
 function TestSignInPage({ onDone, onCancel }: { onDone: (email: string) => void; onCancel: () => void }) {
   const [value, setValue] = useState('');
   const valid = /^[a-z0-9._+-]+@[a-z0-9.-]+\.test$/.test(value.trim().toLowerCase());
+  useEffect(() => {
+    const previous = document.title;
+    document.title = 'Sign in for testing | CycleReg';
+    return () => {
+      document.title = previous;
+    };
+  }, []);
   function submit(e: FormEvent) {
     e.preventDefault();
     if (valid) onDone(value.trim().toLowerCase());
