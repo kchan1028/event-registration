@@ -58,9 +58,9 @@ async function postBounce(app: { inject: (opts: object) => Promise<{ statusCode:
   expect(res.statusCode).toBe(200);
 }
 
-async function harness(email: EmailSender = localEmail()) {
+async function harness(email: EmailSender = localEmail(), now = () => NOW) {
   const databaseUrl = await testDatabaseUrl();
-  const { app, access } = await testApp({ databaseUrl, auth: fakeAuth(), email, now: () => NOW, emailWebhookSecret: SECRET });
+  const { app, access } = await testApp({ databaseUrl, auth: fakeAuth(), email, now, emailWebhookSecret: SECRET });
   const call = (method: 'GET' | 'POST', url: string, payload?: object, who = OWNER) => app.inject({ method, url, headers: as(who), payload });
   const created = await call('POST', '/api/organizations', { name: 'Stop Club' });
   expect(created.statusCode).toBe(201);
@@ -173,6 +173,55 @@ describe('invitation mail stops', () => {
       await client.query(`UPDATE email_messages SET provider_message_id = 're_again' WHERE id = $1`, [cleared.invitations[0].lastEmail!.attemptId]);
       await postBounce(app, 're_again', 'evt_again');
       expect((await team()).invitations[0].suppressed).toBe('bounced');
+    } finally {
+      await client.end();
+    }
+  });
+
+  it('shares one allowed attempt while the original send is in progress', async () => {
+    let sends = 0;
+    let markStarted = () => {};
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    let releaseSend = () => {};
+    const release = new Promise<void>((resolve) => { releaseSend = resolve; });
+    const email: EmailSender = {
+      mode: 'resend',
+      async send() {
+        if (++sends === 1) return 'msg-original';
+        markStarted();
+        await release;
+        return 'msg-shared';
+      },
+    };
+    let markOverlap = () => {};
+    const overlap = new Promise<void>((resolve) => { markOverlap = resolve; });
+    let watchOverlap = false;
+    const { app, client, call, orgId, team } = await harness(email, () => {
+      if (watchOverlap) markOverlap();
+      return NOW;
+    });
+    try {
+      const row = await invite(call, orgId);
+      await postBounce(app, 'msg-original', 'evt-overlap');
+      const send = () => call('POST', `/api/organizations/${orgId}/invitations/send-without-extending`, {
+        email: ADDRESS, role: 'finance', revision: row.revision,
+      });
+      const first = send();
+      await started;
+      watchOverlap = true;
+      const second = send();
+      try {
+        await overlap;
+        // Reading the team takes the same membership lock and waits for the second reservation.
+        await team();
+      } finally {
+        releaseSend();
+      }
+      expect((await first).statusCode).toBe(200);
+      expect((await second).statusCode).toBe(200);
+      expect(sends).toBe(2);
+      expect((await client.query(`SELECT count(*)::int AS n FROM email_messages WHERE organization_id = $1`, [orgId])).rows[0].n).toBe(2);
+      expect((await team()).invitations[0]).toMatchObject({ expiresAt: row.expiresAt, revision: row.revision, suppressed: null, lastEmail: { status: 'sent' } });
     } finally {
       await client.end();
     }
