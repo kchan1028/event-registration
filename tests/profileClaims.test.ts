@@ -430,6 +430,31 @@ describe('support-approved profile claims', () => {
       expect(response.statusCode).toBe(status);
       if (status === 200) expect(response.json()).toEqual(expected);
     }
+
+    const live = (await s.call(ORGANIZER, 'GET', `/api/events/${s.eventId}`)).json();
+    const flipped = await s.call(ORGANIZER, 'PUT', `/api/events/${s.eventId}/config`, {
+      revision: live.revision,
+      config: { ...live.config, event: { ...live.config.event, isDemo: false } },
+    });
+    expect(flipped.statusCode, flipped.body).toBe(200);
+    const published = await publishReviewed(s.app, `/api/events/${s.eventId}`, { acknowledgeWarnings: true }, as(ORGANIZER));
+    expect(published.statusCode, published.body).toBe(200);
+    const listed = (await s.call(ORGANIZER, 'GET', `/api/events/${s.eventId}/orders`)).json() as { id: string; orderNumber: string }[];
+    const receiptNumber = listed.find((row) => row.id === anchor)?.orderNumber;
+    expect(receiptNumber).toBe(formatOrderNumber(anchor, true));
+    expect((await s.call(ORGANIZER, 'GET', url(sameEventId, sameOrder))).json()).toEqual({
+      orderIds: [sameOrder, juniorSame],
+      otherEvents: [{
+        eventId: s.eventId,
+        name: demoName,
+        demo: false,
+        orders: [anchor, s.order.id].map((orderId) => ({
+          orderId,
+          orderNumber: formatOrderNumber(orderId, true),
+          createdAt: createdAt.get(orderId),
+        })),
+      }],
+    });
   });
 
   it('preserves the rider-confirmed zone name rather than a runtime canonical alias for durable replay', async () => {

@@ -929,7 +929,7 @@ Resolved November 26, 2026 by the project owner (raised the same day). The organ
 
 ### Demo orders in organizer history
 
-Resolved November 26, 2026 by the project owner (raised the same day). The organizer history read includes confirmed orders from demo events in the same organization. Participant history in Registrations shows the other events and labels a demo event's orders as demo. The read does not leave those orders out.
+Resolved November 26, 2026 by the project owner (raised the same day). The organizer history read includes confirmed orders from demo events in the same organization. Participant history in Registrations shows the other events and labels a demo event's orders as demo. The read does not leave those orders out. The Demo label follows the event's current published version. The order number follows the published version stored on the order, the same way a receipt does.
 
 ### Duplicate junior claim resolution
 
