@@ -584,6 +584,10 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   // Explicitly managed juniors, private guardian acceptance, and the junior's read-only login.
   app.post('/api/support/juniors/:id/claim', async (req) => profileClaims.approve(me(req), idParam.parse(req.params).id, req.body));
+  app.get('/api/support/accounts/:id/duplicate-junior-claims', async (req, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return profileClaims.reviewDuplicates(me(req), idParam.parse(req.params).id);
+  });
   app.get('/api/rider/juniors', async (req) => juniors.list(me(req).id));
   app.get('/api/rider/guardian-invitations', async (req) => juniors.receivedInvitations(me(req)));
   app.post('/api/rider/guardian-invitations/:id/accept', async (req) => {

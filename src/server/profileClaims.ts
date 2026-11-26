@@ -54,5 +54,28 @@ export function createProfileClaims(db: Db, clock: () => Date, settings: Profile
         return { claimId: id, approvedAt };
       });
     },
+
+    /** Lists approved unmerged claims. It does not choose one or change access. */
+    async reviewDuplicates(actor: Account, riderAccountId: string) {
+      if (!operators.has(actor.id)) throw new HttpError(403, 'Only an explicitly configured support operator may review duplicate profile claims.');
+      if (minimumAge !== 18) throw new HttpError(503, 'Profile claims are disabled until the minimum calendar age is explicitly configured.');
+      if (!await db.get(`SELECT 1 FROM accounts WHERE id = $1`, [riderAccountId])) throw new HttpError(404, 'Rider account not found.');
+      const claims = await db.all<{ id: string; junior_profile_id: string; approved_at: string }>(
+        `SELECT c.id, c.junior_profile_id, c.approved_at
+         FROM junior_profile_claims c JOIN junior_profiles j ON j.id = c.junior_profile_id
+         WHERE c.rider_account_id = $1 AND j.merged_into_id IS NULL
+         ORDER BY c.approved_at, c.id`,
+        [riderAccountId],
+      );
+      return {
+        riderAccountId,
+        resolutionRequired: claims.length > 1,
+        claims: claims.map((claim) => ({
+          claimId: claim.id,
+          juniorProfileId: claim.junior_profile_id,
+          approvedAt: new Date(claim.approved_at).toISOString(),
+        })),
+      };
+    },
   };
 }
