@@ -542,8 +542,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   // Organizer-managed waitlists (src/server/waitlist.ts).
   app.post('/api/rider/events/:id/waitlist', async (req, reply) => reply.status(201).send(await waitlist.join(idParam.parse(req.params).id, req.body, me(req).id)));
-  // The offer link is private to the rider it was sent to; opening it needs sign-in.
-  app.get('/api/rider/offers/:token', async (req) => waitlist.offerByToken(z.object({ token: z.string().min(10).max(64) }).parse(req.params).token));
+  // A forwarded link cannot expose the offer to another signed-in account.
+  app.get('/api/rider/offers/:token', async (req, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const { token } = z.object({ token: z.string().min(10).max(64) }).parse(req.params);
+    return waitlist.offerByToken(token, me(req).id);
+  });
   app.get('/api/events/:id/waitlist', async (req) => {
     return waitlist.list((await onEvent(req, 'entries.manage')).id);
   });

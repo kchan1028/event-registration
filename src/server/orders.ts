@@ -505,8 +505,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         let offer: { id: string; category_id: string } | null = null;
         if (input.offerToken) {
           const row = await db.get<{ id: string; category_id: string; status: StoredWaitlistStatus; offer_expires_at: string | null }>(
-            `SELECT id, category_id, status, offer_expires_at FROM waitlist_entries WHERE offer_token = $1 AND event_id = $2`,
-            [input.offerToken, eventId],
+            `SELECT id, category_id, status, offer_expires_at FROM waitlist_entries WHERE offer_token = $1 AND event_id = $2 AND account_id = $3`,
+            [input.offerToken, eventId, accountId],
           );
           const status = row ? effectiveWaitlistStatus(row.status, row.offer_expires_at, nowIso()) : null;
           if (!row || status === 'removed') throw new HttpError(404, 'This waitlist offer was not found or was withdrawn.');
