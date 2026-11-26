@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { describe, expect, it } from 'vitest';
+import { formatOrderNumber } from '../src/shared/lookup';
 import { claimCalendarAge, profileClaimApprovalSchema } from '../src/shared/profileClaims';
 import { profileClaimSettingsFromEnv, validateProfileClaimSettings } from '../src/server/profileClaims';
 import { as, fakeAuth } from './support/auth';
@@ -306,6 +307,11 @@ describe('support-approved profile claims', () => {
   it('reads organizer history across one organization and keeps another organization out', async () => {
     const s = await setup();
     s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
+    const createdAt = new Map<string, string>([[s.order.id, s.order.createdAt]]);
+    const remember = (body: { id: string; createdAt: string }) => {
+      createdAt.set(body.id, body.createdAt);
+      return body.id;
+    };
     const createAdult = async (ref: string, selfRegistrationConfirmed: boolean, eventId = s.eventId) => {
       const { config } = (await s.call(ORGANIZER, 'GET', `/api/events/${eventId}`)).json();
       const adult = config.categories.find((row: { timingCode: string }) => row.timingCode === 'RR-M35-34');
@@ -315,7 +321,7 @@ describe('support-approved profile claims', () => {
         waiver: { ...s.body.waiver, version: config.registration.waiverVersion, signatureName: 'Adult Fictional', signerRole: 'rider' },
       });
       expect(response.statusCode, response.body).toBe(201);
-      return response.json().id as string;
+      return remember(response.json());
     };
     const createJunior = async (ref: string, eventId: string) => {
       const { config } = (await s.call(ORGANIZER, 'GET', `/api/events/${eventId}`)).json();
@@ -327,8 +333,18 @@ describe('support-approved profile claims', () => {
         waiver: { ...s.body.waiver, version: config.registration.waiverVersion },
       });
       expect(response.statusCode, response.body).toBe(201);
-      return response.json().id as string;
+      return remember(response.json());
     };
+    const otherEventGroup = (eventId: string, name: string, demo: boolean, orderIds: string[]) => ({
+      eventId,
+      name,
+      demo,
+      orders: orderIds.map((orderId) => ({
+        orderId,
+        orderNumber: formatOrderNumber(orderId, demo),
+        createdAt: createdAt.get(orderId),
+      })),
+    });
     const source = (await s.call(ORGANIZER, 'GET', `/api/events/${s.eventId}`)).json();
     const sameOrg = await s.call(ORGANIZER, 'POST', `/api/organizations/${s.organizationId}/events`, {
       name: 'Second fictional event', template: 'road_race', startDate: '2027-04-04', timeZone: 'America/Los_Angeles',
@@ -369,8 +385,10 @@ describe('support-approved profile claims', () => {
 
     const url = (event: string, order: string) => `/api/events/${event}/orders/${order}/participant-history`;
     const getHistory = (id: string, who = ORGANIZER) => s.call(who, 'GET', url(s.eventId, id));
-    const expected = { orderIds: [anchor, s.order.id], otherEvents: [{ eventId: sameEventId, orderIds: [sameOrder, juniorSame] }] };
-    const unclaimed = { orderIds: [earlier], otherEvents: [{ eventId: sameEventId, orderIds: [unclaimedSame] }] };
+    const demoName = 'Example Valley Omnium (demonstration)';
+    const sameName = 'Second fictional event';
+    const expected = { orderIds: [anchor, s.order.id], otherEvents: [otherEventGroup(sameEventId, sameName, false, [sameOrder, juniorSame])] };
+    const unclaimed = { orderIds: [earlier], otherEvents: [otherEventGroup(sameEventId, sameName, false, [unclaimedSame])] };
     for (const id of [anchor, s.order.id]) {
       const response = await getHistory(id);
       expect(response.statusCode, response.body).toBe(200);
@@ -380,18 +398,16 @@ describe('support-approved profile claims', () => {
       expect(JSON.stringify(response.json())).not.toContain(s.account.id);
     }
     expect((await getHistory(anchor)).json()).toEqual(expected);
-    expect((await s.call(ORGANIZER, 'GET', url(sameEventId, sameOrder))).json()).toEqual({
+    const fromSecond = {
       orderIds: [sameOrder, juniorSame],
-      otherEvents: [{ eventId: s.eventId, orderIds: [anchor, s.order.id] }],
-    });
-    expect((await s.call(ORGANIZER, 'GET', url(sameEventId, juniorSame))).json()).toEqual({
-      orderIds: [sameOrder, juniorSame],
-      otherEvents: [{ eventId: s.eventId, orderIds: [anchor, s.order.id] }],
-    });
+      otherEvents: [otherEventGroup(s.eventId, demoName, true, [anchor, s.order.id])],
+    };
+    expect((await s.call(ORGANIZER, 'GET', url(sameEventId, sameOrder))).json()).toEqual(fromSecond);
+    expect((await s.call(ORGANIZER, 'GET', url(sameEventId, juniorSame))).json()).toEqual(fromSecond);
     expect((await getHistory(earlier)).json()).toEqual(unclaimed);
     expect((await s.call(ORGANIZER, 'GET', url(sameEventId, unclaimedSame))).json()).toEqual({
       orderIds: [unclaimedSame],
-      otherEvents: [{ eventId: s.eventId, orderIds: [earlier] }],
+      otherEvents: [otherEventGroup(s.eventId, demoName, true, [earlier])],
     });
     expect((await getHistory(proxy)).json()).toEqual({ orderIds: [proxy], otherEvents: [] });
     expect((await s.call(ORGANIZER, 'GET', url(sameEventId, sameProxy))).json()).toEqual({ orderIds: [sameProxy], otherEvents: [] });
