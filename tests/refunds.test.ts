@@ -192,17 +192,19 @@ describe('refunds', () => {
     expect(late.json()).toMatchObject({ result: 'refund_succeeded' });
   });
 
-  it('reconciles a signed Stripe refund failure and recovers the original request once', async () => {
+  it.each(['pending', 'requested'] as const)('reconciles a signed Stripe failure for a %s refund and recovers the original request', async (status) => {
     const { order, payStripe, refund, refundCall, webhook, list } = await setup({ stripe: true });
     const o = await order(['RR-M35-34']);
     expect((await payStripe(o)).statusCode).toBe(200);
     const body = { clientRequestId: 'signed-refund-failure', amountCents: 100, reason: 'Fictional refund failure' };
+    // A lost provider response leaves no Stripe refund ID locally. The notification then matches by metadata.
+    if (status === 'requested') refundCall.mockRejectedValueOnce(new Error('Fictional provider timeout'));
     const initial = await refund(o.id, body);
-    expect(initial.statusCode).toBe(200);
-    const pending = await list(o.id);
-    expect(pending.refunds).toEqual([expect.objectContaining({ status: 'pending' })]);
-    expect(pending.payments).toEqual([expect.objectContaining({ remainingCents: o.totalCents - body.amountCents })]);
-    const [{ id }] = pending.refunds;
+    expect(initial.statusCode).toBe(status === 'requested' ? 502 : 200);
+    const before = await list(o.id);
+    expect(before.refunds).toEqual([expect.objectContaining({ status })]);
+    expect(before.payments).toEqual([expect.objectContaining({ remainingCents: o.totalCents - body.amountCents })]);
+    const [{ id }] = before.refunds;
 
     const failure = {
       object: 'refund',
@@ -224,7 +226,11 @@ describe('refunds', () => {
 
     const replay = await refund(o.id, body);
     expect(replay.statusCode).toBe(200);
-    expect(replay.json()).toMatchObject({ refundId: id, status: 'confirmed', totalCents: o.totalCents, entries: [{ id: o.entries[0].id, status: 'confirmed' }] });
+    expect(replay.json()).toMatchObject({
+      refundId: id, status: 'confirmed', totalCents: o.totalCents,
+      entries: [{ id: o.entries[0].id, status: 'confirmed' }],
+      refunds: [{ id, status: 'failed' }],
+    });
     const saved = await list(o.id);
     expect(saved.refunds).toEqual([expect.objectContaining({ id, status: 'failed', failureReason: failure.failure_reason })]);
     expect(saved.payments).toEqual([expect.objectContaining({ remainingCents: o.totalCents, refundedCents: 0 })]);
