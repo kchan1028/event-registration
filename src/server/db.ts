@@ -829,6 +829,7 @@ export const MIGRATIONS: string[] = [
     (kind = 'organizer_invitation' AND order_id IS NULL)
     OR (kind = 'registration_confirmation' AND order_id IS NOT NULL AND ref = order_id)
   );`,
+  `ALTER TABLE orders ADD COLUMN adult_history_claim_id text REFERENCES junior_profile_claims(id) ON DELETE RESTRICT;`,
   `CREATE TABLE confirmation_retry_requests (
     id text PRIMARY KEY,
     email_id text NOT NULL REFERENCES email_messages(id) ON DELETE CASCADE,
