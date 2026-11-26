@@ -192,6 +192,45 @@ describe('refunds', () => {
     expect(late.json()).toMatchObject({ result: 'refund_succeeded' });
   });
 
+  it('reconciles a signed Stripe refund failure and recovers the original request once', async () => {
+    const { order, payStripe, refund, refundCall, webhook, list } = await setup({ stripe: true });
+    const o = await order(['RR-M35-34']);
+    expect((await payStripe(o)).statusCode).toBe(200);
+    const body = { clientRequestId: 'signed-refund-failure', amountCents: 100, reason: 'Fictional refund failure' };
+    const initial = await refund(o.id, body);
+    expect(initial.statusCode).toBe(200);
+    const pending = await list(o.id);
+    expect(pending.refunds).toEqual([expect.objectContaining({ status: 'pending' })]);
+    expect(pending.payments).toEqual([expect.objectContaining({ remainingCents: o.totalCents - body.amountCents })]);
+    const [{ id }] = pending.refunds;
+
+    const failure = {
+      object: 'refund',
+      id: 're_test_1',
+      amount: body.amountCents,
+      currency: 'usd',
+      status: 'failed',
+      failure_reason: 'expired_or_canceled_card',
+      payment_intent: 'pi_test_1',
+      metadata: { order_id: o.id, refund_id: id },
+    };
+    const sendFailure = () => webhook('evt_signed_refund_failed', 'refund.failed', failure);
+    const first = await sendFailure();
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toEqual({ result: 'refund_failed', duplicate: false });
+    const repeated = await sendFailure();
+    expect(repeated.statusCode).toBe(200);
+    expect(repeated.json()).toEqual({ result: 'refund_failed', duplicate: true });
+
+    const replay = await refund(o.id, body);
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toMatchObject({ refundId: id, status: 'confirmed', totalCents: o.totalCents, entries: [{ id: o.entries[0].id, status: 'confirmed' }] });
+    const saved = await list(o.id);
+    expect(saved.refunds).toEqual([expect.objectContaining({ id, status: 'failed', failureReason: failure.failure_reason })]);
+    expect(saved.payments).toEqual([expect.objectContaining({ remainingCents: o.totalCents, refundedCents: 0 })]);
+    expect(refundCall).toHaveBeenCalledTimes(1);
+  });
+
   it('Stripe: a timeout keeps the refund requested and reserved; retry reuses the key', async () => {
     const { app, order, payStripe, refund, refundCall, list } = await setup({ stripe: true });
     const o = await order(['RR-M35-34']);
