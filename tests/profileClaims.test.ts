@@ -21,7 +21,7 @@ async function setup(minimumAge: number | undefined = 18) {
   finally { await client.end(); }
   const now = new Date('2026-02-28T12:00:00Z');
   const { app } = await testApp({ databaseUrl, auth: fakeAuth(), now: () => now, profileClaims: { minimumAge, supportAccountIds: [SUPPORT_ID] } });
-  const call = (who: string, method: 'GET' | 'POST', url: string, payload?: object) => app.inject({ method, url, headers: as(who), payload });
+  const call = (who: string, method: 'GET' | 'POST' | 'PUT', url: string, payload?: object) => app.inject({ method, url, headers: as(who), payload });
   const { eventId, organizationId } = (await call(ORGANIZER, 'POST', '/api/demo')).json();
   await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true }, as(ORGANIZER));
   const { config } = (await call(ORGANIZER, 'GET', `/api/events/${eventId}`)).json();
@@ -303,7 +303,7 @@ describe('support-approved profile claims', () => {
     }
   });
 
-  it('keeps organizer participant history within one authorized event and includes the saved claim', async () => {
+  it('reads organizer history across one organization and keeps another organization out', async () => {
     const s = await setup();
     s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
     const createAdult = async (ref: string, selfRegistrationConfirmed: boolean, eventId = s.eventId) => {
@@ -326,32 +326,63 @@ describe('support-approved profile claims', () => {
     expect(otherEvent).not.toBe(s.eventId);
     await publishReviewed(s.app, `/api/events/${otherEvent}`, { acknowledgeWarnings: true }, as(ORGANIZER));
     const otherOrder = await createAdult('staff-history-other-event', true, otherEvent);
-    for (const orderId of [s.order.id, earlier, anchor, proxy, otherOrder]) {
+    const source = (await s.call(ORGANIZER, 'GET', `/api/events/${s.eventId}`)).json();
+    const sameOrg = await s.call(ORGANIZER, 'POST', `/api/organizations/${s.organizationId}/events`, {
+      name: 'Second fictional event', template: 'road_race', startDate: '2027-04-04', timeZone: 'America/Los_Angeles',
+    });
+    expect(sameOrg.statusCode, sameOrg.body).toBe(201);
+    const sameEventId = sameOrg.json().id as string;
+    const copied = await s.call(ORGANIZER, 'PUT', `/api/events/${sameEventId}/config`, {
+      revision: sameOrg.json().revision,
+      config: {
+        ...source.config,
+        event: { ...source.config.event, name: 'Second fictional event', isDemo: false },
+        categories: source.config.categories.map((category: { registration: { opensAt: string | null; closesAt: string | null } }) => ({
+          ...category,
+          registration: { ...category.registration, opensAt: null, closesAt: null },
+        })),
+      },
+    });
+    expect(copied.statusCode, copied.body).toBe(200);
+    await publishReviewed(s.app, `/api/events/${sameEventId}`, { acknowledgeWarnings: true }, as(ORGANIZER));
+    const sameOrder = await createAdult('staff-history-same-org', true, sameEventId);
+    const sameHeld = await createAdult('staff-history-same-org-unpaid', true, sameEventId);
+    for (const orderId of [s.order.id, earlier, anchor, proxy, otherOrder, sameOrder]) {
       const payment = await s.call(RIDER, 'POST', `/api/orders/${orderId}/payment`, { attemptId: `staff-history-${orderId}`, outcome: 'success' });
       expect(payment.statusCode, payment.body).toBe(200);
     }
 
     const url = (event: string, order: string) => `/api/events/${event}/orders/${order}/participant-history`;
     const getHistory = (id: string, who = ORGANIZER) => s.call(who, 'GET', url(s.eventId, id));
-    const expected = { orderIds: [anchor, s.order.id] };
+    const expected = { orderIds: [anchor, s.order.id], otherEvents: [{ eventId: sameEventId, orderIds: [sameOrder] }] };
     for (const id of [anchor, s.order.id]) {
       const response = await getHistory(id);
       expect(response.statusCode, response.body).toBe(200);
       expect(response.headers['cache-control']).toBe('no-store');
       expect(response.json()).toEqual(expected);
+      expect(JSON.stringify(response.json())).not.toContain(s.profile.id);
+      expect(JSON.stringify(response.json())).not.toContain(s.account.id);
     }
-    expect((await getHistory(earlier)).json()).toEqual({ orderIds: [earlier] });
-    expect((await getHistory(proxy)).json()).toEqual({ orderIds: [proxy] });
+    expect((await getHistory(anchor)).json()).toEqual(expected);
+    expect((await s.call(ORGANIZER, 'GET', url(sameEventId, sameOrder))).json()).toEqual({
+      orderIds: [sameOrder],
+      otherEvents: [{ eventId: s.eventId, orderIds: [anchor, s.order.id] }],
+    });
+    expect((await getHistory(earlier)).json()).toEqual({ orderIds: [earlier], otherEvents: [] });
+    expect((await getHistory(proxy)).json()).toEqual({ orderIds: [proxy], otherEvents: [] });
     expect((await getHistory(held)).statusCode).toBe(404);
+    expect((await s.call(ORGANIZER, 'GET', url(sameEventId, sameHeld))).statusCode).toBe(404);
     expect((await getHistory(otherOrder)).statusCode).toBe(404);
     expect((await s.call(ORGANIZER, 'GET', url(otherEvent, anchor))).statusCode).toBe(404);
-    expect((await s.call(ORGANIZER, 'GET', url(otherEvent, otherOrder))).json()).toEqual({ orderIds: [otherOrder] });
+    expect((await s.call(ORGANIZER, 'GET', url(otherEvent, otherOrder))).json()).toEqual({ orderIds: [otherOrder], otherEvents: [] });
     expect((await s.app.inject({ url: url(s.eventId, anchor) })).statusCode).toBe(401);
     for (const who of [RIDER, PARENT, VIEWER]) expect((await getHistory(anchor, who)).statusCode).toBe(404);
     for (const [role, status] of [['registration_manager', 200], ['finance', 403]] as const) {
       const email = `${role}@staff-history.test`;
       expect((await s.call(ORGANIZER, 'POST', `/api/organizations/${s.organizationId}/members`, { email, role })).statusCode).toBe(200);
-      expect((await getHistory(anchor, email)).statusCode).toBe(status);
+      const response = await getHistory(anchor, email);
+      expect(response.statusCode).toBe(status);
+      if (status === 200) expect(response.json()).toEqual(expected);
     }
   });
 

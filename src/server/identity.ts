@@ -91,29 +91,47 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
       );
     },
 
-    /** History follows the claim saved with the order. Participant counts group adult self-registrations by account. */
+    /**
+     * History follows the claim saved with the order. Participant counts group adult
+     * self-registrations by account. Other events are limited to the same organization.
+     */
     async eventParticipantHistory(eventId: string, orderId: string) {
-      const history = await db.all<{ orderId: string }>(
-        `WITH event_history AS (
-           SELECT o.id, o.created_at, o.seq, CASE
+      const history = await db.all<{ orderId: string; eventId: string }>(
+        `WITH org_history AS (
+           SELECT o.id, o.event_id, o.created_at, o.seq, CASE
              WHEN COALESCE(o.junior_profile_id, c.junior_profile_id) IS NOT NULL
                THEN 'junior:' || COALESCE(o.junior_profile_id, c.junior_profile_id)
              WHEN o.self_registration_account_id IS NOT NULL THEN 'adult:' || o.self_registration_account_id
              ELSE 'order:' || COALESCE(l.rider_key, o.id)
            END AS history_key
            FROM orders o
+           JOIN events e ON e.id = o.event_id
            LEFT JOIN junior_profile_claims c ON c.id = o.adult_history_claim_id AND c.rider_account_id = o.self_registration_account_id
            LEFT JOIN rider_links l ON l.order_id = o.id AND l.event_id = o.event_id
-           WHERE o.event_id = $1 AND o.status = 'confirmed'
+           WHERE e.organization_id = (SELECT organization_id FROM events WHERE id = $1)
+             AND o.status = 'confirmed'
          )
-         SELECT related.id AS "orderId"
-         FROM event_history anchor JOIN event_history related USING (history_key)
-         WHERE anchor.id = $2
-         ORDER BY related.created_at DESC, related.seq DESC`,
+         SELECT related.id AS "orderId", related.event_id AS "eventId"
+         FROM org_history anchor JOIN org_history related USING (history_key)
+         WHERE anchor.id = $2 AND anchor.event_id = $1
+         ORDER BY related.created_at DESC, related.seq DESC, related.id`,
         [eventId, orderId],
       );
       if (history.length === 0) throw new HttpError(404, 'Registration history not found.');
-      return { orderIds: history.map((row) => row.orderId) };
+      const otherEvents = new Map<string, string[]>();
+      const orderIds: string[] = [];
+      for (const row of history) {
+        if (row.eventId === eventId) orderIds.push(row.orderId);
+        else {
+          const ids = otherEvents.get(row.eventId) ?? [];
+          ids.push(row.orderId);
+          otherEvents.set(row.eventId, ids);
+        }
+      }
+      return {
+        orderIds,
+        otherEvents: [...otherEvents].sort(([a], [b]) => a.localeCompare(b)).map(([id, ids]) => ({ eventId: id, orderIds: ids })),
+      };
     },
 
     keyOf,
