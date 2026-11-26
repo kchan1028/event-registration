@@ -341,6 +341,12 @@ export interface StartListOverview {
   races: StartListRace[];
 }
 
+export interface ConfirmationDelivery {
+  status: 'recorded' | 'sent' | 'failed' | 'uncertain';
+  delivery: 'delivered' | 'bounced' | 'complained' | null;
+  canRetry: boolean;
+}
+
 export const api = {
   expiredInvitations: () => request<ExpiredInvitationNotice[]>('GET', '/api/rider/expired-invitations'),
   members: (orgId: string) => request<MemberList>('GET', `/api/organizations/${orgId}/members`),
@@ -379,6 +385,10 @@ export const api = {
   waitlist: (eventId: string) => request<{ offerHours: number; entries: WaitlistEntryView[] }>('GET', `/api/events/${eventId}/waitlist`),
   offerWaitlistPlace: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer`),
   removeFromWaitlist: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/remove`),
+  confirmationDelivery: (eventId: string, orderId: string) =>
+    request<{ confirmation: ConfirmationDelivery | null }>('GET', `/api/events/${eventId}/orders/${orderId}/confirmation-delivery`),
+  retryConfirmation: (eventId: string, orderId: string) =>
+    request<{ confirmation: ConfirmationDelivery | null }>('POST', `/api/events/${eventId}/orders/${orderId}/confirmation-delivery/retry`),
   reservationStatus: (eventId: string, reference: string) =>
     request<ReservationLookupResult>('POST', `/api/events/${eventId}/reservation-status`, { reference }),
   releaseReservation: (eventId: string, input: { reference: string; reason: string; riderRequested: true }) =>

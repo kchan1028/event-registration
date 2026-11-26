@@ -18,7 +18,7 @@ The server sends organizer invitation emails through Resend only in test mode wi
 
 Payment confirmation stores one message for the authenticated purchaser account on an account-backed order. The body contains generic sign-in instructions and no rider, waiver, payment, or emergency contact details. The internal record is dispatched only through the existing allowlisted test sender, and only when recorded with a test sender configured. A confirmation bounce or complaint stops later confirmations to that address in the same organization and does not expose rider addresses through the invitation suppression list. Immediately before sending, the worker rechecks the purchaser address, current order and guardian authority, confirmed entry and organization email suppression. It holds no database connection during the provider call.
 
-Owners and registration managers can read status or request a retry for an order in the authorized event. Responses omit recipients, message bodies and provider references. A retry records the actor before dispatch and rechecks the role, current recipient access, suppression and the existing send lease before the provider call. Local-only, terminal and expired records cannot be manually retried.
+Owners and registration managers can read status or request a retry for an order in the authorized event. The Registrations panel loads on demand for those roles. Responses omit recipients, message bodies and provider references. A retry records the actor before dispatch and rechecks the role, current recipient access, suppression and the existing send lease before the provider call. Local-only, terminal and expired records cannot be manually retried.
 
 ## Expired invitation guidance (Implemented locally)
 

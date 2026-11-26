@@ -1,3 +1,4 @@
+import { ConfirmationDeliveryPanel } from './ConfirmationDeliveryPanel';
 import { useState, type ReactNode } from 'react';
 import { licenseLabel } from '../../shared/eligibility';
 import { formatCents } from '../../shared/format';
@@ -55,6 +56,9 @@ export function OrderRow({ order, categories, canManage, canRefund, onChange }: 
           Check-in code <code className="code">{order.checkInCode}</code> ·{' '}
           <a href={href({ page: 'order', orderId: order.id })}>Rider confirmation</a>
         </p>
+      )}
+      {canManage && (order.status === 'confirmed' || order.checkInCode) && (
+        <ConfirmationDeliveryPanel key={session.email?.toLowerCase()} eventId={order.eventId} orderId={order.id} />
       )}
       {(order.answers.length > 0 || order.addenda.length > 0) && (
         <ul className="small order__answers">
