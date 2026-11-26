@@ -60,7 +60,12 @@ describe('registration takes the flag in its mount effect', () => {
 
   it('calls retainCheckoutFocus once, from the mount effect', () => {
     const start = register.indexOf('export function Register(');
-    const next = register.indexOf('\nexport function ', start + 1);
+    const functionAt = register.indexOf('\nfunction ', start + 1);
+    const exportAt = register.indexOf('\nexport function ', start + 1);
+    const ends = [functionAt, exportAt].filter((index) => index >= 0);
+    const next = ends.length ? Math.min(...ends) : -1;
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(next).toBeGreaterThan(start);
     const body = register.slice(start, next);
     expect(body).not.toContain('takePendingCheckoutFocus');
     expect(body.match(/retainCheckoutFocus\s*\(/g)?.length ?? 0).toBe(1);
