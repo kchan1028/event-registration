@@ -58,9 +58,10 @@ describe('registration takes the flag in its mount effect', () => {
   const register = readFileSync(new URL('../src/web/Register.tsx', import.meta.url), 'utf8');
   const auth = readFileSync(new URL('../src/web/auth.tsx', import.meta.url), 'utf8');
 
-  it('does not read the pending flag while rendering', () => {
+  it('calls retainCheckoutFocus once, from the mount effect', () => {
     const body = register.slice(register.indexOf('export function Register'));
     expect(body).not.toContain('takePendingCheckoutFocus');
+    expect(body.split('retainCheckoutFocus(').length - 1).toBe(1);
     const effectStart = body.indexOf('useEffect(() => {\n    setRegisterActive(true);');
     const effect = body.slice(effectStart, body.indexOf('}, []);', effectStart));
     expect(effect).toContain('retainCheckoutFocus(resumeCheckoutFocus)');
