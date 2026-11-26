@@ -6,6 +6,7 @@ import { testApp, testDatabaseUrl } from './support/db';
 import type { EventConfig } from '../src/shared/schema';
 import type { WaiverEvidence } from '../src/shared/checkout';
 import { publishReviewed } from './support/publish';
+import { as } from './support/auth';
 
 type Order = {
   id: string;
@@ -123,6 +124,81 @@ describe('rider checkout: holds and simulated payment', () => {
     expect(a.waiverEvidence?.signerAccountId).toBe(signer.id);
     expect(a.waiverEvidence?.acceptedAt).not.toBe(body.waiverEvidence.acceptedAt);
     expect(b.waiverEvidence).toEqual(a.waiverEvidence);
+    expect(await entriesCount()).toBe(before + 1);
+  });
+
+  it('records adult self-registration from the signed-in account and preserves the evidence on replay', async () => {
+    const { app, databaseUrl, eventId, code, waiver, entriesCount } = await setup();
+    const rider = as('self-registering-rider@example.test');
+    const other = as('other-rider@example.test');
+    const url = `/api/rider/events/${eventId}/orders`;
+    const place = (headers: Record<string, string>, reference: string, extra: Record<string, unknown> = {}) => app.inject({
+      method: 'POST', url, headers,
+      payload: { clientRequestId: reference, categoryIds: [code('RR-M35-34')], rider: RIDER, waiver, ...extra },
+    });
+    const before = await entriesCount();
+    const accountId = (await app.inject({ url: '/api/me', headers: rider })).json().account.id;
+    const otherAccountId = (await app.inject({ url: '/api/me', headers: other })).json().account.id;
+    const explicit = { selfRegistrationConfirmed: true, selfRegistrationAccountId: otherAccountId };
+
+    expect((await place({ authorization: 'Bearer invalid' }, 'adult-self-register', explicit)).statusCode).toBe(401);
+    const created = await place(rider, 'adult-self-register', explicit);
+    expect(created.statusCode, created.body).toBe(201);
+    const linked = created.json<Order & { selfRegistrationConfirmed: boolean }>();
+    expect(linked.selfRegistrationConfirmed).toBe(true);
+    expect(linked.waiverEvidence?.signerAccountId).toBe(accountId);
+    expect(linked).not.toHaveProperty('selfRegistrationAccountId');
+    expect((await place(other, 'adult-self-register', explicit)).statusCode).toBe(409);
+    const replay = await place(rider, 'adult-self-register', { selfRegistrationConfirmed: false });
+    expect(replay.statusCode, replay.body).toBe(201);
+    expect(replay.json()).toEqual(linked);
+
+    const proxy = await place(rider, 'adult-proxy-order', { selfRegistrationConfirmed: false });
+    const omitted = await place(rider, 'adult-confirmation-omitted');
+    for (const result of [proxy, omitted]) {
+      expect(result.statusCode, result.body).toBe(201);
+      expect(result.json()).not.toHaveProperty('selfRegistrationConfirmed');
+    }
+    const replayWithoutEvidence = await place(rider, 'adult-confirmation-omitted', explicit);
+    expect(replayWithoutEvidence.statusCode, replayWithoutEvidence.body).toBe(201);
+    expect(replayWithoutEvidence.json()).toEqual(omitted.json());
+    expect(await entriesCount()).toBe(before + 3);
+
+    const organizerView = await app.inject({ url: `/api/events/${eventId}/orders` });
+    expect(organizerView.statusCode, organizerView.body).toBe(200);
+    const organizerOrder = organizerView.json<Order[]>().find((row) => row.id === linked.id);
+    expect(organizerOrder).toBeDefined();
+    expect(organizerOrder).not.toHaveProperty('selfRegistrationConfirmed');
+    expect(organizerOrder).not.toHaveProperty('selfRegistrationAccountId');
+    expect((await app.inject({ url: `/api/orders/${linked.id}`, headers: other })).statusCode).toBe(404);
+
+    const db = openDb(databaseUrl);
+    try {
+      const evidence = (id: string) => db.get('SELECT self_registration_account_id FROM orders WHERE id = $1', [id]);
+      expect(await evidence(linked.id)).toEqual({ self_registration_account_id: accountId });
+      expect(await evidence(proxy.json().id)).toEqual({ self_registration_account_id: null });
+      expect(await evidence(omitted.json().id)).toEqual({ self_registration_account_id: null });
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('rejects adult self-registration confirmation on a guardian checkout without holding places', async () => {
+    const { order, code, waiver, entriesCount } = await setup();
+    const categoryIds = [code('RR-J1516')];
+    const payload = {
+      clientRequestId: 'junior-no-adult-link',
+      rider: { ...RIDER, racingAge: 16, guardian: { name: 'Pat Example', email: 'guardian@example.test' } },
+      waiver: { ...waiver, signatureName: 'Pat Example', signerRole: 'guardian' },
+    };
+    const before = await entriesCount();
+    const refused = await order(categoryIds, { ...payload, selfRegistrationConfirmed: true });
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(refused.json().error).toContain('Self-registration can only be confirmed');
+    expect(await entriesCount()).toBe(before);
+    const allowed = await order(categoryIds, payload);
+    expect(allowed.statusCode, allowed.body).toBe(201);
+    expect(allowed.json()).not.toHaveProperty('selfRegistrationConfirmed');
     expect(await entriesCount()).toBe(before + 1);
   });
 

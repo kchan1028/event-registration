@@ -822,6 +822,7 @@ export const MIGRATIONS: string[] = [
   `ALTER TABLE protected_export_audit DROP CONSTRAINT protected_export_audit_export_kind_check;
   ALTER TABLE protected_export_audit ADD CONSTRAINT protected_export_audit_export_kind_check
     CHECK (export_kind IN ('entries', 'ledger', 'reconciliation', 'start_list', 'finance_summary'));`,
+  `ALTER TABLE orders ADD COLUMN self_registration_account_id text REFERENCES accounts(id) ON DELETE SET NULL;`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

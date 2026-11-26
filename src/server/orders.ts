@@ -263,6 +263,11 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     return (await viewsOf([row]))[0];
   }
 
+  async function checkoutView(id: string, selfRegistrationAccountId: string | null) {
+    const order = await view(id);
+    return selfRegistrationAccountId === null ? order : { ...order, selfRegistrationConfirmed: true };
+  }
+
   function buildView(row: OrderRow, config: EventConfig, latest: EventConfig, rows: EntryRow[], changes: ChangeRow[], corrections: CorrectionRow[]) {
     const findCat = (id: string) => config.categories.find((c) => c.id === id) ?? latest.categories.find((c) => c.id === id);
     const rider = row.rider_json;
@@ -441,13 +446,13 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
      */
     async createOrder(
       eventId: string,
-      input: { clientRequestId: string; categoryIds: string[]; bundleIntent?: string | null; rider?: unknown; waiver?: unknown; extras?: unknown; offerToken?: string | null; couponCode?: string | null },
+      input: { clientRequestId: string; categoryIds: string[]; selfRegistrationConfirmed?: boolean; bundleIntent?: string | null; rider?: unknown; waiver?: unknown; extras?: unknown; offerToken?: string | null; couponCode?: string | null },
       /** The signed-in rider's account; null only for orders the demo seeders place. */
       accountId: string | null,
     ) {
       return db.transaction(async () => {
         await db.lock(eventLock(eventId));
-        const existing = await db.get<{ id: string; account_id: string | null; junior_profile_id: string | null }>(`SELECT id, account_id,junior_profile_id FROM orders WHERE event_id = $1 AND client_request_id = $2`, [
+        const existing = await db.get<{ id: string; account_id: string | null; junior_profile_id: string | null; self_registration_account_id: string | null }>(`SELECT id, account_id, junior_profile_id, self_registration_account_id FROM orders WHERE event_id = $1 AND client_request_id = $2`, [
           eventId,
           input.clientRequestId,
         ]);
@@ -458,7 +463,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
             await juniors.lockProfiles();
             if (!(await db.get(`SELECT 1 FROM orders o LEFT JOIN junior_profiles j ON j.id = o.junior_profile_id WHERE o.id = $1 AND ${orderManagerSql('$2')}`, [existing.id, accountId]))) throw new HttpError(404, 'Order not found.');
           }
-          return view(existing.id);
+          return checkoutView(existing.id, existing.self_registration_account_id);
         }
 
         const { config, version } = await repo.getPublished(eventId);
@@ -485,6 +490,10 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         if (check.needsGuardian && !rider.guardian) throw new HttpError(422, 'Riders with a racing age of 18 or under need a parent or guardian. Enter their name.');
         const signatureProblem = checkSignature(rider, waiver, check.needsGuardian);
         if (signatureProblem) throw new HttpError(422, signatureProblem);
+        if (input.selfRegistrationConfirmed && (!accountId || rider.racingAge === null || check.needsGuardian || rider.guardian)) {
+          throw new HttpError(422, 'Self-registration can only be confirmed for a signed-in adult registering without a guardian. Nothing was held.');
+        }
+        const selfRegistrationAccountId = input.selfRegistrationConfirmed ? accountId : null;
         // Per-category questions and waiver addenda (product.md 1a).
         const submitted = orderExtrasSchema.parse(input.extras ?? {});
         const extraProblems = checkExtras(config, input.categoryIds, submitted);
@@ -536,9 +545,9 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const t = nowIso();
         const expires = new Date(clock().getTime() + holdMinutes * 60_000).toISOString();
         await db.run(
-          `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json, coupon_id, account_id, waiver_evidence_json, stripe_checkout_tracked)
-           VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true)`,
-          [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null, accountId, JSON.stringify({ signerAccountId: accountId, riderRacingAge: rider.racingAge, acceptedAt: t } satisfies WaiverEvidence)],
+          `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json, coupon_id, account_id, waiver_evidence_json, stripe_checkout_tracked, self_registration_account_id)
+           VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true, $16)`,
+          [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null, accountId, JSON.stringify({ signerAccountId: accountId, riderRacingAge: rider.racingAge, acceptedAt: t } satisfies WaiverEvidence), selfRegistrationAccountId],
         );
         // A guardian's junior order links to the explicitly managed profile; placing account and waiver remain provenance.
         if (accountId && rider.guardian) await juniors.adopt(accountId);
@@ -552,7 +561,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           );
         }
         if (offer) await db.run(`UPDATE waitlist_entries SET order_id = $1, updated_at = $2 WHERE id = $3`, [id, t, offer.id]);
-        return view(id);
+        return checkoutView(id, selfRegistrationAccountId);
       });
     },
 

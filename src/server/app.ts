@@ -489,6 +489,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const body = z
       .object({
         clientRequestId: reservationReferenceSchema,
+        selfRegistrationConfirmed: z.boolean().optional(),
         categoryIds: z.array(idStr).min(1).max(10),
         bundleIntent: idStr.nullable().optional(),
         rider: z.unknown(),
