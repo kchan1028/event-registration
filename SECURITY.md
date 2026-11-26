@@ -42,7 +42,9 @@ Financial-preflight reads require current event finance authority and an event-s
 
 ## Protected CSV audit
 
-Entries, ledger, reconciliation and start-list CSV handlers record the authenticated actor only after authorization and successful preparation. An audit error returns no CSV. HEAD, denied and failed preparations do not create audit rows. The audit tracks generation, since the server cannot confirm delivery or local file persistence. Existing CSV permissions remain in force. Audit data has no application read endpoint and contains no CSV contents, rider details or provider references. Restricted operator access and retention/deletion approval remain gates before real rider data.
+The finance summary CSV requires current event `export.ledger` permission before reading financial data. It contains aggregate metrics and published scope labels and records the authenticated actor on generation.
+
+Entries, ledger, finance summary, reconciliation and start-list CSV handlers record the authenticated actor only after authorization and successful preparation. An audit error returns no CSV. HEAD, denied and failed preparations do not create audit rows. The audit tracks generation, since the server cannot confirm delivery or local file persistence. Existing CSV permissions remain in force. Audit data has no application read endpoint and contains no CSV contents, rider details or provider references. Restricted operator access and retention/deletion approval remain gates before real rider data.
 
 ## Public cancellation status
 

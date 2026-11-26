@@ -16,7 +16,7 @@ import { configFromTemplate, newId } from '../shared/factory';
 import { type EventConfig, bibNumberSchema, createEventInputSchema, eventConfigSchema } from '../shared/schema';
 import { entriesCsv, ledgerCsv } from '../shared/exports';
 import { reservationLookupSchema, reservationReferenceSchema } from '../shared/checkout';
-import { eventSummary } from '../shared/reports';
+import { eventSummary, financeSummaryCsv } from '../shared/reports';
 import { riderCorrectionSchema, staffReleaseReasonSchema } from '../shared/lookup';
 import { changeImpact, waiverChanged, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
@@ -903,10 +903,10 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     );
   }
 
-  // Protected database exports: entries, ledger and local reconciliation evidence. No contact or emergency details.
+  // Protected database exports: entries, ledger, finance summary and local reconciliation evidence. No contact or emergency details.
   app.get('/api/events/:id/exports/:kind', async (req, reply) => {
     // The permission depends on which file is asked for, so the parameters are parsed before the check.
-    const p = z.object({ id: idStr, kind: z.enum(['entries.csv', 'ledger.csv', 'reconciliation.csv']) }).parse(req.params);
+    const p = z.object({ id: idStr, kind: z.enum(['entries.csv', 'ledger.csv', 'reconciliation.csv', 'finance-summary.csv']) }).parse(req.params);
     await access.requireEvent(me(req), p.id, p.kind === 'entries.csv' ? 'export.entries' : 'export.ledger');
     const file = await db.transaction(async () => {
       await db.lock(eventLock(p.id));
@@ -918,13 +918,16 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       if (p.kind === 'reconciliation.csv') body = await reconciliationCsv(db, p.id, generatedAt, record.config.event.isDemo);
       else {
         const list = (await orders.listOrders(p.id)).filter(isLiveOrder);
-        body = p.kind === 'entries.csv' ? entriesCsv(list, await identity.keyOf(p.id)) : ledgerCsv(list);
+        if (p.kind === 'finance-summary.csv') {
+          const summary = eventSummary(list, await identity.keyOf(p.id), await waitlist.statuses(p.id), true);
+          body = financeSummaryCsv(summary, p.id, generatedAt);
+        } else body = p.kind === 'entries.csv' ? entriesCsv(list, await identity.keyOf(p.id)) : ledgerCsv(list);
       }
       const cancellation = await cancellationExportState(db, p.id, record.config);
       return { body, cancellation, generatedAt, filename: cancellationExportFilename(`${slugName}-${p.kind.slice(0, -4)}${p.kind === 'reconciliation.csv' ? '-LOCAL-RECORDS' : ''}${demo}.csv`, cancellation) };
     });
     await recordProtectedExport(req, p.id, p.kind.slice(0, -4), file.generatedAt);
-    if (p.kind === 'reconciliation.csv') reply.header('X-CycleReg-Export-Generated-At', file.generatedAt);
+    if (p.kind === 'reconciliation.csv' || p.kind === 'finance-summary.csv') reply.header('X-CycleReg-Export-Generated-At', file.generatedAt);
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
       .header('Content-Disposition', `attachment; filename="${file.filename}"`)

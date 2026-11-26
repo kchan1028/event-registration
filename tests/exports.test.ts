@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { testApp } from './support/db';
 import { parseCsv } from '../src/shared/csv';
 import { entriesCsv, ledgerCsv, type ExportOrder } from '../src/shared/exports';
-import { eventSummary } from '../src/shared/reports';
+import { eventSummary, financeSummaryCsv } from '../src/shared/reports';
 import type { EventConfig } from '../src/shared/schema';
 import { publishReviewed } from './support/publish';
 
@@ -220,6 +220,17 @@ describe('event summary', () => {
     expect(-(m.refundedCents + m.duplicateChargeRefundedCents)).toBe(cents('refund'));
     expect(m).toMatchObject({ refundedCents: 2000, duplicateChargeRefundedCents: 8800, netCents: m.receivedCents - 2000, needsAttention: { orders: 1, cents: 8500 } });
 
+    const generatedAt = '2027-03-02T12:00:00.000Z';
+    const report = table(financeSummaryCsv(s, 'event_1', generatedAt));
+    expect(report.every((row) => row.generated_at === generatedAt && row.event_id === 'event_1')).toBe(true);
+    expect(report.filter((row) => row.unit === 'usd_cents').every((row) => row.scope === 'event')).toBe(true);
+    expect(report).toEqual(expect.arrayContaining([
+      expect.objectContaining({ scope: 'event', metric: 'net', value: String(m.netCents), unit: 'usd_cents' }),
+      expect.objectContaining({ scope: 'event', metric: 'needs_attention', value: '8500', unit: 'usd_cents' }),
+      expect.objectContaining({ scope: 'day', scope_id: 'day_sat', metric: 'riders', value: '1' }),
+    ]));
+    expect(table(financeSummaryCsv(eventSummary(all, (id) => id, [], false), 'event_1', generatedAt))
+      .some((row) => row.unit === 'usd_cents')).toBe(false);
     expect(eventSummary(all, (id) => id, [], false).money).toBeNull();
   });
 

@@ -35,6 +35,7 @@ it('records authenticated actors and file scope for protected CSV responses', as
     const downloads = [
       { path: 'exports/entries.csv', kind: 'entries', actor: owner, headers: {} },
       { path: 'exports/ledger.csv', kind: 'ledger', actor: financeId, headers: finance },
+      { path: 'exports/finance-summary.csv', kind: 'finance-summary', actor: financeId, headers: finance },
       { path: 'exports/reconciliation.csv', kind: 'reconciliation', actor: financeId, headers: finance },
       { path: 'start-lists/all/csv', kind: 'start_list', actor: timerId, headers: timer, raceId: 'all' },
       { path: `start-lists/${raceId}/csv`, kind: 'start_list', actor: timerId, headers: timer, raceId },
@@ -68,7 +69,10 @@ it('does not record HEAD, denied or invalid requests, and withholds CSV when rec
     expect((await app.inject({ method: 'POST', url: `/api/organizations/${organizationId}/members`, payload: { role: 'registration_manager', email: 'manager@export-audit.test' } })).statusCode).toBe(200);
     expect((await app.inject({ method: 'HEAD', url: entries })).statusCode).toBe(200);
     expect((await app.inject({ method: 'HEAD', url: startList })).statusCode).toBe(200);
+    const financeSummary = `${eventUrl}/exports/finance-summary.csv`;
     const checks = [
+      { url: financeSummary, headers: manager, status: 403 },
+      { url: financeSummary, headers: outsider, status: 404 },
       { url: entries, headers: { authorization: 'Bearer invalid' }, status: 401 },
       { url: entries, headers: outsider, status: 404 },
       { url: `${eventUrl}/exports/ledger.csv`, headers: manager, status: 403 },
@@ -83,7 +87,7 @@ it('does not record HEAD, denied or invalid requests, and withholds CSV when rec
     expect((await client.query('SELECT id FROM protected_export_audit')).rows).toEqual([]);
 
     await client.query('ALTER TABLE protected_export_audit ADD CONSTRAINT reject_test_audit CHECK (false)');
-    for (const url of [entries, startList]) {
+    for (const url of [entries, startList, financeSummary]) {
       const response = await app.inject({ url });
       expect(response.statusCode).toBe(500);
       expect(response.headers['content-disposition']).toBeUndefined();
