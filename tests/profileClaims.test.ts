@@ -153,6 +153,9 @@ describe('support-approved profile claims', () => {
       return payment.json();
     };
     expect((await pay(linked.id)).waiverEvidence).toEqual(linked.waiverEvidence);
+    const withoutHeld = await s.call(RIDER, 'GET', historyUrl(linked.id));
+    expect(withoutHeld.statusCode, withoutHeld.body).toBe(200);
+    expect(withoutHeld.json()).toEqual({ orders: [{ orderId: linked.id, eventId: adultEventId }] });
     for (const id of [s.order.id, secondJunior.json().id, beforeClaim.id, proxy.id, ambiguous.id]) await pay(id);
 
     const history = await s.call(RIDER, 'GET', historyUrl(linked.id));
