@@ -317,15 +317,18 @@ describe('support-approved profile claims', () => {
       expect(response.statusCode, response.body).toBe(201);
       return response.json().id as string;
     };
-    const earlier = await createAdult('before-staff-history-claim', true);
-    expect((await s.approve()).statusCode).toBe(200);
-    const anchor = await createAdult('staff-history-anchor', true);
-    const proxy = await createAdult('staff-history-proxy', false);
-    const held = await createAdult('staff-history-unpaid', true);
-    const otherEvent = (await s.call(ORGANIZER, 'POST', '/api/demo')).json().eventId;
-    expect(otherEvent).not.toBe(s.eventId);
-    await publishReviewed(s.app, `/api/events/${otherEvent}`, { acknowledgeWarnings: true }, as(ORGANIZER));
-    const otherOrder = await createAdult('staff-history-other-event', true, otherEvent);
+    const createJunior = async (ref: string, eventId: string) => {
+      const { config } = (await s.call(ORGANIZER, 'GET', `/api/events/${eventId}`)).json();
+      const junior = config.categories.find((row: { timingCode: string }) => row.timingCode === 'RR-J1516');
+      const response = await s.call(PARENT, 'POST', `/api/rider/events/${eventId}/orders`, {
+        ...s.body,
+        clientRequestId: ref,
+        categoryIds: [junior.id],
+        waiver: { ...s.body.waiver, version: config.registration.waiverVersion },
+      });
+      expect(response.statusCode, response.body).toBe(201);
+      return response.json().id as string;
+    };
     const source = (await s.call(ORGANIZER, 'GET', `/api/events/${s.eventId}`)).json();
     const sameOrg = await s.call(ORGANIZER, 'POST', `/api/organizations/${s.organizationId}/events`, {
       name: 'Second fictional event', template: 'road_race', startDate: '2027-04-04', timeZone: 'America/Los_Angeles',
@@ -345,16 +348,29 @@ describe('support-approved profile claims', () => {
     });
     expect(copied.statusCode, copied.body).toBe(200);
     await publishReviewed(s.app, `/api/events/${sameEventId}`, { acknowledgeWarnings: true }, as(ORGANIZER));
+    const earlier = await createAdult('before-staff-history-claim', true);
+    const unclaimedSame = await createAdult('before-staff-history-claim-same-org', true, sameEventId);
+    const juniorSame = await createJunior('staff-history-junior-same-org', sameEventId);
+    expect((await s.approve()).statusCode).toBe(200);
+    const anchor = await createAdult('staff-history-anchor', true);
+    const proxy = await createAdult('staff-history-proxy', false);
+    const held = await createAdult('staff-history-unpaid', true);
+    const otherEvent = (await s.call(ORGANIZER, 'POST', '/api/demo')).json().eventId;
+    expect(otherEvent).not.toBe(s.eventId);
+    await publishReviewed(s.app, `/api/events/${otherEvent}`, { acknowledgeWarnings: true }, as(ORGANIZER));
+    const otherOrder = await createAdult('staff-history-other-event', true, otherEvent);
     const sameOrder = await createAdult('staff-history-same-org', true, sameEventId);
+    const sameProxy = await createAdult('staff-history-proxy-same-org', false, sameEventId);
     const sameHeld = await createAdult('staff-history-same-org-unpaid', true, sameEventId);
-    for (const orderId of [s.order.id, earlier, anchor, proxy, otherOrder, sameOrder]) {
+    for (const orderId of [s.order.id, earlier, unclaimedSame, juniorSame, anchor, proxy, otherOrder, sameOrder, sameProxy]) {
       const payment = await s.call(RIDER, 'POST', `/api/orders/${orderId}/payment`, { attemptId: `staff-history-${orderId}`, outcome: 'success' });
       expect(payment.statusCode, payment.body).toBe(200);
     }
 
     const url = (event: string, order: string) => `/api/events/${event}/orders/${order}/participant-history`;
     const getHistory = (id: string, who = ORGANIZER) => s.call(who, 'GET', url(s.eventId, id));
-    const expected = { orderIds: [anchor, s.order.id], otherEvents: [{ eventId: sameEventId, orderIds: [sameOrder] }] };
+    const expected = { orderIds: [anchor, s.order.id], otherEvents: [{ eventId: sameEventId, orderIds: [sameOrder, juniorSame] }] };
+    const unclaimed = { orderIds: [earlier], otherEvents: [{ eventId: sameEventId, orderIds: [unclaimedSame] }] };
     for (const id of [anchor, s.order.id]) {
       const response = await getHistory(id);
       expect(response.statusCode, response.body).toBe(200);
@@ -365,14 +381,28 @@ describe('support-approved profile claims', () => {
     }
     expect((await getHistory(anchor)).json()).toEqual(expected);
     expect((await s.call(ORGANIZER, 'GET', url(sameEventId, sameOrder))).json()).toEqual({
-      orderIds: [sameOrder],
+      orderIds: [sameOrder, juniorSame],
       otherEvents: [{ eventId: s.eventId, orderIds: [anchor, s.order.id] }],
     });
-    expect((await getHistory(earlier)).json()).toEqual({ orderIds: [earlier], otherEvents: [] });
+    expect((await s.call(ORGANIZER, 'GET', url(sameEventId, juniorSame))).json()).toEqual({
+      orderIds: [sameOrder, juniorSame],
+      otherEvents: [{ eventId: s.eventId, orderIds: [anchor, s.order.id] }],
+    });
+    expect((await getHistory(earlier)).json()).toEqual(unclaimed);
+    expect((await s.call(ORGANIZER, 'GET', url(sameEventId, unclaimedSame))).json()).toEqual({
+      orderIds: [unclaimedSame],
+      otherEvents: [{ eventId: s.eventId, orderIds: [earlier] }],
+    });
     expect((await getHistory(proxy)).json()).toEqual({ orderIds: [proxy], otherEvents: [] });
+    expect((await s.call(ORGANIZER, 'GET', url(sameEventId, sameProxy))).json()).toEqual({ orderIds: [sameProxy], otherEvents: [] });
     expect((await getHistory(held)).statusCode).toBe(404);
     expect((await s.call(ORGANIZER, 'GET', url(sameEventId, sameHeld))).statusCode).toBe(404);
     expect((await getHistory(otherOrder)).statusCode).toBe(404);
+    expect((await s.call(ORGANIZER, 'GET', url(sameEventId, anchor))).statusCode).toBe(404);
+    expect((await s.call(ORGANIZER, 'GET', url(s.eventId, sameOrder))).statusCode).toBe(404);
+    expect((await s.call(ORGANIZER, 'GET', url(s.eventId, juniorSame))).statusCode).toBe(404);
+    expect((await s.call(ORGANIZER, 'GET', url(s.eventId, unclaimedSame))).statusCode).toBe(404);
+    expect((await s.call(ORGANIZER, 'GET', url(sameEventId, earlier))).statusCode).toBe(404);
     expect((await s.call(ORGANIZER, 'GET', url(otherEvent, anchor))).statusCode).toBe(404);
     expect((await s.call(ORGANIZER, 'GET', url(otherEvent, otherOrder))).json()).toEqual({ orderIds: [otherOrder], otherEvents: [] });
     expect((await s.app.inject({ url: url(s.eventId, anchor) })).statusCode).toBe(401);
