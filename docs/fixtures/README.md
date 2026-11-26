@@ -101,12 +101,13 @@ Morgan Example's three omnium orders share one name, email, team, and racing age
 
 A November 26, 2026 local API rehearsal in [case-studies.test.ts](../../tests/case-studies.test.ts) used the seeded Parker weekend order directly. In an isolated fictional database, the organizer assigned weekend bib 100, a fictional volunteer checked Parker in on both days and repeated each check without changing its saved time, and a fictional timer locked both start lists and verified the saved CSVs. The seed still opens with these actions available for a fresh run. Staffed race-day rehearsal remains separate.
 
-These development and rehearsal cases are not in the reusable seed. Automated tests build their own rows where a test is named.
+A November 26, 2026 local API rehearsal in [case-studies.test.ts](../../tests/case-studies.test.ts) started with the full seeded Harbor Masters field. In a disposable database, the organizer enabled that field’s waitlist, a fictional rider joined, and the first attempt to offer a place was refused while the field was full. After the organizer added one place, checkout without the offer was refused and the rider redeemed the offer with simulated payment. The normal seed keeps the waitlist off and contains no offer.
+
+The reusable seed still has no missing-waiver case.
 
 | Missing case | Why it is not seeded |
 |---|---|
 | Missing waiver or missing guardian acceptance | Checkout requires a signed waiver before it creates an order. There is no approved way to store a missing acceptance. |
-| Waitlist offer | Joining requires a full category with the waitlist turned on, and an offer then needs a free place. Harbor Masters is the full field and has no waitlist. Turning one on would change that fixture. An offer on an open omnium category would block later registration there. |
 
 ### Future-requirement cases
 
