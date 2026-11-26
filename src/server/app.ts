@@ -831,6 +831,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return checkIn.applyReassignments(id, body.batch, body.fingerprint, me(req).id);
   });
 
+  app.get('/api/events/:id/participant-groups', async (req, reply) => {
+    const { id } = await onEvent(req, 'entries.manage');
+    reply.header('Cache-Control', 'no-store');
+    return identity.participantGroups(id);
+  });
+
   // Rider identity across orders: suggestions and organizer-confirmed links (src/server/identity.ts).
   app.get('/api/events/:id/rider-identity', async (req) => {
     return identity.overview((await onEvent(req, 'entries.manage')).id);

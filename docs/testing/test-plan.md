@@ -62,6 +62,10 @@ Run `tests/exports.test.ts` and `e2e/event-summary.spec.ts` when the Registratio
 
 Run `tests/exports.test.ts` and `tests/protectedExportAudit.test.ts` for changes to the finance summary CSV. Verify grouped counts, event-only money, export timestamp, denied and cross-organization access, actor attribution, and withholding the attachment if audit recording fails.
 
+### Event participant grouping
+
+Run `tests/identity.test.ts`, `tests/juniors.test.ts`, and `tests/profileClaims.test.ts` when participant grouping changes. Confirm several orders on one authenticated rider account group together, different accounts with identical rider details remain separate, and orders without authoritative identity evidence stay separate. Verify guardian-profile continuity across an approved claim, confirmed-order filtering, event and role boundaries, and that responses carry order IDs only.
+
 ### Registration search by bib and license number
 
 Run `tests/lookup.test.ts` and the license and bib case in `e2e/checkout.spec.ts` when registration search changes. The Registrations field and `GET /api/events/:id/orders?q=` use `matchesRegistration`. A license matches only as the whole number, ignoring case, spaces, and hyphens. An active bib matches the exact number, the same rule as check-in, including a leading zero. A released bib drops out of the order view and out of search. Check-in search stays in `src/server/checkin.ts` and does not read license numbers. The browser check registers one fictional paid rider, assigns one bib, and confirms the whole license and that bib each return that row, a shorter piece of the license does not, and the field still filters at 390px without horizontal overflow.

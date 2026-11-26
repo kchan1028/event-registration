@@ -67,6 +67,32 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
   }
 
   return {
+    /**
+     * Participant workspace identity uses the signed-in self-registrant or an existing
+     * junior profile. Order references are the only identifiers released to event staff.
+     */
+    async participantGroups(eventId: string) {
+      return db.all<{ orderIds: string[] }>(
+        `WITH participant_orders AS (
+           SELECT o.id, o.seq, CASE
+             WHEN c.rider_account_id IS NOT NULL THEN 'account:' || c.rider_account_id
+             WHEN o.junior_profile_id IS NOT NULL THEN 'junior:' || o.junior_profile_id
+             WHEN o.waiver_json ->> 'signerRole' = 'rider'
+               AND o.waiver_evidence_json ->> 'signerAccountId' = o.account_id
+               AND o.rider_json ->> 'guardian' IS NULL THEN 'account:' || o.account_id
+             ELSE 'order:' || o.id END AS participant_key
+           FROM orders o
+           LEFT JOIN junior_profile_claims c ON c.junior_profile_id = o.junior_profile_id
+           WHERE o.event_id = $1 AND o.status = 'confirmed'
+         )
+         SELECT array_agg(id ORDER BY seq, id) AS "orderIds"
+         FROM participant_orders
+         GROUP BY participant_key
+         ORDER BY min(seq), min(id)`,
+        [eventId],
+      );
+    },
+
     keyOf,
     groupOf,
     overview,

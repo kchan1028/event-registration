@@ -369,7 +369,9 @@ Acceptance: two independent builds produce equal configurations and stable IDs; 
 
 ### Participant management
 
-Status: Planned beyond the Implemented event-level Registrations queue and lookup, audited rider corrections, organizer transfers/withdrawals, and check-in lookup. This manages race participants, not volunteer recruitment or staffing.
+Status: Planned beyond the Implemented event-level Registrations queue and lookup, participant grouping, audited rider corrections, organizer transfers/withdrawals, and check-in lookup. This manages race participants, not volunteer recruitment or staffing.
+
+Implemented locally (November 26, 2026): the event participant-groups API returns groups of confirmed order IDs to event owners and registration managers. A self-registration uses the account recorded by the server at waiver acceptance. A guardian registration uses the junior profile, including reuse by a second guardian. An approved profile claim connects that junior's orders to the claiming rider's self-registrations. Orders without this evidence remain separate. Grouping does not use names, emails, or license numbers. The response omits account and junior profile IDs, contact details, and waiver data. Event-local links for bibs and check-in continue to follow their existing rules. The workspace, saved views, and cross-event lookup are Planned.
 
 - Provide a participant workspace across events an organizer is authorized to manage, backed by reusable rider identity. Distinguish people, event registrations, race entries, orders, waitlist records, credits, and payment/readiness states; several entries must not become several unrelated rider profiles.
 - Search by rider, team, permitted license identifier, bib, order, event, or category. Filter by race/day, status, missing waiver/license review, payment exception, waitlist, and package/pass membership. Show a history of registrations, communications, changes, credits, and deferrals with source dates and reasons.
