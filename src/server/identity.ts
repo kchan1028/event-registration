@@ -1,3 +1,4 @@
+import { formatOrderNumber } from '../shared/lookup';
 import { pairKey, suggestMatches, type MatchSuggestion } from '../shared/riderIdentity';
 import type { Db } from './db';
 import { isLiveOrder, type Orders, type OrderView } from './orders';
@@ -96,7 +97,7 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
      * self-registrations by account. Other events are limited to the same organization.
      */
     async eventParticipantHistory(eventId: string, orderId: string) {
-      const history = await db.all<{ orderId: string; eventId: string }>(
+      const history = await db.all<{ orderId: string; eventId: string; createdAt: string; eventName: string; demo: boolean }>(
         `WITH org_history AS (
            SELECT o.id, o.event_id, o.created_at, o.seq, CASE
              WHEN COALESCE(o.junior_profile_id, c.junior_profile_id) IS NOT NULL
@@ -111,26 +112,40 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
            WHERE e.organization_id = (SELECT organization_id FROM events WHERE id = $1)
              AND o.status = 'confirmed'
          )
-         SELECT related.id AS "orderId", related.event_id AS "eventId"
-         FROM org_history anchor JOIN org_history related USING (history_key)
+         SELECT related.id AS "orderId", related.event_id AS "eventId", related.created_at AS "createdAt",
+                v.config_json #>> '{event,name}' AS "eventName",
+                (v.config_json #>> '{event,isDemo}') = 'true' AS demo
+         FROM org_history anchor
+         JOIN org_history related USING (history_key)
+         JOIN events ev ON ev.id = related.event_id
+         JOIN event_versions v ON v.event_id = ev.id AND v.version = ev.published_version
          WHERE anchor.id = $2 AND anchor.event_id = $1
          ORDER BY related.created_at DESC, related.seq DESC, related.id`,
         [eventId, orderId],
       );
       if (history.length === 0) throw new HttpError(404, 'Registration history not found.');
-      const otherEvents = new Map<string, string[]>();
+      const otherEvents = new Map<string, { name: string; demo: boolean; orders: { orderId: string; orderNumber: string; createdAt: string }[] }>();
       const orderIds: string[] = [];
       for (const row of history) {
         if (row.eventId === eventId) orderIds.push(row.orderId);
         else {
-          const ids = otherEvents.get(row.eventId) ?? [];
-          ids.push(row.orderId);
-          otherEvents.set(row.eventId, ids);
+          const group = otherEvents.get(row.eventId) ?? { name: row.eventName, demo: row.demo, orders: [] };
+          group.orders.push({
+            orderId: row.orderId,
+            orderNumber: formatOrderNumber(row.orderId, row.demo),
+            createdAt: row.createdAt,
+          });
+          otherEvents.set(row.eventId, group);
         }
       }
       return {
         orderIds,
-        otherEvents: [...otherEvents].sort(([a], [b]) => a.localeCompare(b)).map(([id, ids]) => ({ eventId: id, orderIds: ids })),
+        otherEvents: [...otherEvents].sort(([a], [b]) => a.localeCompare(b)).map(([id, group]) => ({
+          eventId: id,
+          name: group.name,
+          demo: group.demo,
+          orders: group.orders,
+        })),
       };
     },
 

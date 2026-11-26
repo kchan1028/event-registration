@@ -45,6 +45,29 @@ function HistoryOrders({ order, ordersById }: HistoryProps) {
         </ul>
       )}
       {related.length < data.orderIds.length && <p className="muted small">Refresh Registrations to see the latest orders.</p>}
+      {data.otherEvents.length > 0 && (
+        <>
+          <p className="muted small" id={`other-events-${order.id}`}>Other events in this organization</p>
+          {data.otherEvents.some((event) => event.demo) && <p className="muted small">Demo marks simulated orders.</p>}
+          <ul className="order__entries small" aria-labelledby={`other-events-${order.id}`}>
+            {data.otherEvents.map((event) => (
+              <li key={event.eventId}>
+                <p>
+                  {event.name}
+                  {event.demo && <span className="tag tag--demo">Demo</span>}
+                </p>
+                <ul className="order__entries" aria-label={`Confirmed orders for ${event.name}`}>
+                  {event.orders.map((row) => (
+                    <li key={row.orderId}>
+                      Order {row.orderNumber} · <time dateTime={row.createdAt}>{formatDateTime(row.createdAt)}</time>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </>
   );
 }
