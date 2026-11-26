@@ -270,7 +270,7 @@ describe('Stripe hosted Checkout (test mode)', () => {
     const mailDb = openDb(databaseUrl);
     try {
       const send = vi.fn().mockResolvedValue('unexpected-send');
-      await createMailer(mailDb, { mode: 'resend', from: 'test@example.test', send }, clock.now).dispatchNextConfirmation();
+      await createMailer(mailDb, { mode: 'resend', from: 'test@example.test', send }, clock.now).dispatchNextRiderEmail();
       expect(send).not.toHaveBeenCalled();
     } finally {
       await mailDb.close();
@@ -290,34 +290,34 @@ describe('Stripe hosted Checkout (test mode)', () => {
         'SELECT id, created_at FROM email_messages WHERE order_id = $1', [o.id],
       );
       const now = () => new Date(message!.created_at);
-      await createMailer(db, localEmail(), now).dispatchNextConfirmation();
+      await createMailer(db, localEmail(), now).dispatchNextRiderEmail();
       expect(send).not.toHaveBeenCalled();
       const mailer = createMailer(db, sender, now);
-      await mailer.dispatchNextConfirmation();
+      await mailer.dispatchNextRiderEmail();
       expect((await get(o.id)).status).toBe('confirmed');
-      await mailer.dispatchNextConfirmation();
+      await mailer.dispatchNextRiderEmail();
       expect(send).toHaveBeenCalledTimes(1);
       await db.run("UPDATE email_messages SET sending_until = now() - interval '1 second' WHERE id = $1", [message!.id]);
       const expired = createMailer(db, sender, () => new Date(now().getTime() + 24 * 60 * 60 * 1000));
-      await expired.dispatchNextConfirmation();
+      await expired.dispatchNextRiderEmail();
       expect(send).toHaveBeenCalledTimes(1);
       await db.run(
         `INSERT INTO email_suppressions (id, organization_id, email, reason, email_id, created_at)
          SELECT 'test-stop', organization_id, to_email, 'bounced', id, created_at FROM email_messages WHERE id = $1`,
         [message!.id],
       );
-      await mailer.dispatchNextConfirmation();
+      await mailer.dispatchNextRiderEmail();
       expect(send).toHaveBeenCalledTimes(1);
       await db.run("DELETE FROM email_suppressions WHERE id = 'test-stop'");
       await db.run(
         `INSERT INTO email_delivery_events (id, email_id, kind, occurred_at) VALUES ('test-bounce', $1, 'bounced', $2)`,
         [message!.id, message!.created_at],
       );
-      await mailer.dispatchNextConfirmation();
+      await mailer.dispatchNextRiderEmail();
       expect(send).toHaveBeenCalledTimes(1);
       await db.run("DELETE FROM email_delivery_events WHERE id = 'test-bounce'");
       const restarted = createMailer(db, { ...sender, from: 'second@example.test' }, now);
-      await Promise.all([restarted.dispatchNextConfirmation(), mailer.dispatchNextConfirmation()]);
+      await Promise.all([restarted.dispatchNextRiderEmail(), mailer.dispatchNextRiderEmail()]);
       expect(send).toHaveBeenCalledTimes(2);
       expect(send.mock.calls[1]).toEqual(send.mock.calls[0]);
       expect(send.mock.calls[1][1]).toBe(message!.id);
@@ -339,7 +339,7 @@ describe('Stripe hosted Checkout (test mode)', () => {
     const url = `/api/events/${eventId}/orders/${o.id}/confirmation-delivery`;
     const db = openDb(databaseUrl);
     try {
-      await createMailer(db, sender, clock.now).dispatchNextConfirmation();
+      await createMailer(db, sender, clock.now).dispatchNextRiderEmail();
       expect((await app.inject({ method: 'GET', url, headers: as('outsider@example.test') })).statusCode).toBe(404);
       expect((await app.inject({ method: 'POST', url: `${url}/retry`, headers: as('outsider@example.test') })).statusCode).toBe(404);
       expect((await app.inject({ method: 'GET', url })).json()).toEqual({

@@ -145,6 +145,22 @@ export async function recordRegistrationConfirmation(db: Db, orderId: string, co
   );
 }
 
+/** Called in the transaction that opens the offer. No provider call is made. */
+export async function recordWaitlistOfferEmail(
+  db: Db, entryId: string, eventId: string, token: string, offeredAt: string, expiresAt: string,
+  sender?: { address: string; appUrl: string },
+) {
+  const link = `${sender?.appUrl ?? ''}/#/register/${encodeURIComponent(eventId)}?offer=${encodeURIComponent(token)}`;
+  const body = `A place is available for your waitlist entry. Your offer expires at ${expiresAt}. Sign in with the account you used to join the waitlist: ${link}`;
+  await db.run(
+    `INSERT INTO email_messages (id, organization_id, kind, ref, waitlist_entry_id, to_email, subject, body_text, status, created_at, from_email, keyed)
+     SELECT $1, e.organization_id, 'waitlist_offer', w.id, w.id, a.email, $2, $3, 'recorded', $4, $5, true
+     FROM waitlist_entries w JOIN events e ON e.id = w.event_id JOIN accounts a ON a.id = w.account_id
+     WHERE w.id = $6 ON CONFLICT (waitlist_entry_id) DO NOTHING`,
+    [newId('eml'), 'A waitlist place is available', body, offeredAt, sender?.address ?? null, entryId],
+  );
+}
+
 /** `until` is also the token that proves the caller still holds the lease. */
 interface Lease {
   first: boolean;
@@ -158,6 +174,24 @@ function storedError(err: unknown): string {
   return UNKNOWN_OUTCOME;
 }
 
+const riderEmailAllowed = `NOT EXISTS (
+      SELECT 1 FROM email_suppressions s
+      WHERE s.organization_id = m.organization_id AND s.email = lower(btrim(m.to_email)) AND s.cleared_at IS NULL
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM email_messages previous JOIN email_delivery_events d ON d.email_id = previous.id
+      WHERE previous.organization_id = m.organization_id AND previous.kind IN ('registration_confirmation', 'waitlist_offer')
+        AND lower(btrim(previous.to_email)) = lower(btrim(m.to_email)) AND d.kind IN ('bounced', 'complained')
+    )`;
+
+const waitlistOfferReady = `EXISTS (
+  SELECT 1 FROM waitlist_entries w JOIN accounts a ON a.id = w.account_id
+  WHERE w.id = m.waitlist_entry_id AND m.from_email IS NOT NULL AND w.status = 'offered'
+    AND w.offer_expires_at > now() AND lower(btrim(a.email)) = lower(btrim(m.to_email))
+    AND ${riderEmailAllowed}
+)`;
+type RiderEmailKind = 'registration_confirmation' | 'waitlist_offer';
+
 // The last check uses current account and family authority, not purchase provenance alone.
 const confirmationReady = `EXISTS (
   SELECT 1 FROM orders o JOIN accounts a ON a.id = o.account_id
@@ -165,16 +199,12 @@ const confirmationReady = `EXISTS (
   WHERE o.id = m.order_id AND m.from_email IS NOT NULL AND o.status = 'confirmed' AND lower(btrim(a.email)) = lower(btrim(m.to_email))
     AND ${orderManagerSql('a.id')}
     AND EXISTS (SELECT 1 FROM order_entries e WHERE e.order_id = o.id AND e.status = 'confirmed')
-    AND NOT EXISTS (
-      SELECT 1 FROM email_suppressions s
-      WHERE s.organization_id = m.organization_id AND s.email = lower(btrim(m.to_email)) AND s.cleared_at IS NULL
-    )
-    AND NOT EXISTS (
-      SELECT 1 FROM email_messages previous JOIN email_delivery_events d ON d.email_id = previous.id
-      WHERE previous.organization_id = m.organization_id AND previous.kind = 'registration_confirmation'
-        AND lower(btrim(previous.to_email)) = lower(btrim(m.to_email)) AND d.kind IN ('bounced', 'complained')
-    )
+    AND ${riderEmailAllowed}
 )`;
+const riderEmailReady = {
+  registration_confirmation: confirmationReady,
+  waitlist_offer: waitlistOfferReady,
+};
 const invitationReady = `EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id AND NOT earlier_email)`;
 
 /**
@@ -182,7 +212,7 @@ const invitationReady = `EXISTS (SELECT 1 FROM organization_invitations WHERE em
  * Call `reserve` inside the invitation transaction. Call `dispatch` only after that transaction commits.
  */
 export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
-  async function finish(id: string, message: OutgoingEmail, lease: Lease, confirmation: boolean): Promise<EmailStatus> {
+  async function finish(id: string, message: OutgoingEmail, lease: Lease, riderEmail: boolean): Promise<EmailStatus> {
     try {
       const providerId = await sender.send(message, id);
       // An acceptance is final whoever holds the lease by now: every send of an attempt shares one key.
@@ -196,7 +226,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       const status = lease.first && (err instanceof EmailRefusal || err instanceof EmailNotSent) ? 'failed' : 'uncertain';
       const saved = await db.run(
         `UPDATE email_messages SET status = $1, error = $2, sending_until = CASE WHEN $5 AND $1 = 'uncertain' THEN now() + interval '1 minute' END WHERE id = $3 AND status = 'uncertain' AND sending_until = $4::timestamptz`,
-        [status, storedError(err), id, lease.until, confirmation],
+        [status, storedError(err), id, lease.until, riderEmail],
       );
       return saved ? status : 'uncertain';
     }
@@ -237,17 +267,18 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       );
     },
 
-    async dispatchNextConfirmation(): Promise<void> {
+    async dispatchNextRiderEmail(): Promise<void> {
       if (sender.mode === 'local') return;
-      const next = await db.get<{ id: string }>(
-        `SELECT m.id FROM email_messages m
-         WHERE m.kind = 'registration_confirmation' AND m.status IN ('recorded', 'uncertain')
+      const next = await db.get<{ id: string; kind: RiderEmailKind }>(
+        `SELECT m.id, m.kind FROM email_messages m
+         WHERE m.status IN ('recorded', 'uncertain')
            AND m.created_at > $1 AND (m.sending_until IS NULL OR m.sending_until <= now())
-           AND ${confirmationReady}
+           AND ((m.kind = 'registration_confirmation' AND ${confirmationReady})
+             OR (m.kind = 'waitlist_offer' AND ${waitlistOfferReady}))
          ORDER BY m.sending_until NULLS FIRST, m.created_at, m.seq LIMIT 1`,
         [new Date(clock().getTime() - RESEND_IDEMPOTENCY_WINDOW_MS).toISOString()],
       );
-      if (next) await mailer.dispatch(next.id, undefined, 'registration_confirmation');
+      if (next) await mailer.dispatch(next.id, undefined, next.kind);
     },
 
     /**
@@ -259,9 +290,9 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
      * A cancellation after that check cannot recall the send.
      * `refused` means the account retrying it no longer manages the team at that last check, so nothing is sent.
      */
-    async dispatch(id: string, retriedBy?: string, kind: 'organizer_invitation' | 'registration_confirmation' = 'organizer_invitation'): Promise<EmailStatus | 'withheld' | 'changed' | 'refused'> {
-      const confirmation = kind === 'registration_confirmation';
-      const ready = confirmation ? confirmationReady : invitationReady;
+    async dispatch(id: string, retriedBy?: string, kind: 'organizer_invitation' | RiderEmailKind = 'organizer_invitation'): Promise<EmailStatus | 'withheld' | 'changed' | 'refused'> {
+      const riderEmail = kind !== 'organizer_invitation';
+      const ready = kind === 'organizer_invitation' ? invitationReady : riderEmailReady[kind];
       for (;;) {
         const row = await db.get<{ created_at: string; to_email: string; subject: string; body_text: string; status: EmailStatus; current: boolean; sending: boolean }>(
           `SELECT created_at, to_email, subject, body_text, status,
@@ -271,9 +302,9 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
           [id, kind],
         );
         if (!row) return 'changed';
-        if (row.status !== 'uncertain' && !(confirmation && row.status === 'recorded')) return row.status;
+        if (row.status !== 'uncertain' && !(riderEmail && row.status === 'recorded')) return row.status;
         if (row.sending) {
-          if (confirmation) return 'withheld';
+          if (riderEmail) return 'withheld';
           await sleep(LEASE_POLL_MS);
           continue;
         }
@@ -290,7 +321,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
            WHERE m.id = was.id AND (m.status = 'uncertain' OR ($4 AND m.status = 'recorded'))
              AND (m.sending_until IS NULL OR m.sending_until <= now()) AND ${ready}
            RETURNING was.started_at IS NULL AS first, m.sending_until::text AS until`,
-          [id, clock().toISOString(), SEND_LEASE_SECONDS, confirmation],
+          [id, clock().toISOString(), SEND_LEASE_SECONDS, riderEmail],
         );
         if (!lease) continue;
         // The claim took time, so check the lease, the invitation, the retrying account and the window again, in one
@@ -306,9 +337,9 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
                WHERE organization_id = m.organization_id AND account_id = $4 AND role IN (SELECT jsonb_array_elements_text($5::jsonb))
              )) AS allowed, m.from_email
            FROM email_messages m WHERE m.id = $1`,
-          [id, lease.until, SEND_TIMEOUT_MS / 1000, retriedBy ?? null, JSON.stringify(confirmation ? REGISTRATION_MANAGER_ROLES : TEAM_MANAGER_ROLES)],
+          [id, lease.until, SEND_TIMEOUT_MS / 1000, retriedBy ?? null, JSON.stringify(riderEmail ? REGISTRATION_MANAGER_ROLES : TEAM_MANAGER_ROLES)],
         );
-        if (last?.ready && last.allowed && !pastWindow()) return finish(id, { to: row.to_email, from: last.from_email ?? undefined, subject: row.subject, text: row.body_text }, lease, confirmation);
+        if (last?.ready && last.allowed && !pastWindow()) return finish(id, { to: row.to_email, from: last.from_email ?? undefined, subject: row.subject, text: row.body_text }, lease, riderEmail);
         // No provider call was made, so give the lease back and let the loop report why.
         await db.run(
           `UPDATE email_messages SET sending_until = NULL, started_at = CASE WHEN $3::boolean THEN NULL ELSE started_at END
@@ -316,7 +347,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
           [id, lease.until, lease.first],
         );
         if (last && !last.allowed) return 'refused';
-        if (confirmation) return 'withheld';
+        if (riderEmail) return 'withheld';
       }
     },
   };

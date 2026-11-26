@@ -5,14 +5,14 @@ import { newId } from '../shared/factory';
 import type { EventConfig } from '../shared/schema';
 import { blocksPublicSale, effectiveWaitlistStatus, OFFER_HOURS, waitlistJoinSchema, type StoredWaitlistStatus, type WaitlistJoin, type WaitlistStatus } from '../shared/waitlist';
 import type { Db } from './db';
+import { recordWaitlistOfferEmail } from './email';
 import { requireCancellationOpen } from './cancellationClosure';
 import { eventLock, HttpError, type Repo } from './repo';
 
 /**
  * Organizer-managed waitlists. Riders join a full category that has a waitlist;
  * the organizer offers places in order; an offer reserves the place for
- * OFFER_HOURS and is redeemed through a private link at checkout. No email is
- * sent: the organizer copies the link to the rider. Policy is in shared/waitlist.ts.
+ * OFFER_HOURS and is redeemed through a private link at checkout. The organizer can copy the link to the rider. A configured test sender can email it. Policy is in shared/waitlist.ts.
  */
 
 interface Row {
@@ -29,7 +29,7 @@ interface Row {
   account_id: string | null;
 }
 
-export function createWaitlist(db: Db, repo: Repo, clock: () => Date) {
+export function createWaitlist(db: Db, repo: Repo, clock: () => Date, email?: { address: string; appUrl: string }) {
   const nowIso = () => clock().toISOString();
   const byId = (id: string, eventId: string) => db.get<Row>(`SELECT * FROM waitlist_entries WHERE id = $1 AND event_id = $2`, [id, eventId]);
   const byCategory = (eventId: string, categoryId: string) =>
@@ -143,13 +143,15 @@ export function createWaitlist(db: Db, repo: Repo, clock: () => Date) {
           if (!room.ok) throw new HttpError(409, `${name} has no free place to offer. Raise its limit or wait until a place frees up.`);
           const t = nowIso();
           const expires = new Date(clock().getTime() + OFFER_HOURS * 3_600_000).toISOString();
+          const token = randomBytes(18).toString('base64url');
           await db.run(`UPDATE waitlist_entries SET status = 'offered', offer_token = $1, offered_at = $2, offer_expires_at = $3, updated_at = $4 WHERE id = $5`, [
-            randomBytes(18).toString('base64url'),
+            token,
             t,
             expires,
             t,
             row.id,
           ]);
+          await recordWaitlistOfferEmail(db, row.id, eventId, token, t, expires, email);
           return view((await byId(row.id, eventId))!);
       });
     },
