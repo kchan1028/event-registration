@@ -8,7 +8,7 @@ Everyone who takes part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## The one rule that applies to every change
 
-Every change must review [product.md](product.md) and [roadmap.md](roadmap.md) for impact, and also [feature.md](feature.md), [SECURITY.md](SECURITY.md), [DATA_MODEL.md](DATA_MODEL.md), the [test plan](docs/testing/test-plan.md), and the [audit findings](AUDIT.md). AI agents follow the same rules; their local instruction file is not tracked.
+Every change must review [product.md](product.md) and [roadmap.md](roadmap.md) for impact, and also the [feature map](feature.md#feature-map), [SECURITY.md](SECURITY.md), [DATA_MODEL.md](DATA_MODEL.md), the [test plan](docs/testing/test-plan.md), and the [audit findings](AUDIT.md). AI agents follow the same rules; their local instruction file is not tracked.
 
 - Update `product.md` when requirements, scope, user flows, business rules, acceptance criteria, or product decisions change.
 - Update `roadmap.md` when priorities, dependencies, milestones, blockers, or delivery status change.
@@ -17,7 +17,8 @@ Every change must review [product.md](product.md) and [roadmap.md](roadmap.md) f
 - Mark roadmap work complete only after its acceptance criteria are verified.
 - Distinguish planned, implemented, and verified behavior.
 - Do not maintain a competing product roadmap elsewhere.
-- Update `feature.md` when a feature is added, removed, or changes status, and `SECURITY.md` when the change touches sign-in, roles, permissions, payments, personal data, secrets, or routes open without sign-in.
+- Check the feature map when changing a product workflow. Update the affected inventory row when a feature is added, removed, or changes behavior or availability. Update the map when its workflow, app entry point, or destination link changes. Keep requirements in `product.md`, delivery status in `roadmap.md`, and source and test locations in the codebase map. Record the affected rows or no impact in the change summary.
+- Update `SECURITY.md` when the change touches sign-in, roles, permissions, payments, personal data, secrets, or routes open without sign-in.
 - Update [AUDIT.md](AUDIT.md) when the change introduces, fixes, or invalidates a recorded finding. Only verification evidence closes a finding.
 
 Reviewers will send back any change whose summary does not state its product and roadmap impact.

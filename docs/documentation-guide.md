@@ -25,7 +25,7 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 |---|---|---|
 | Requirements, scope, flows, business rules, acceptance criteria | [product.md](../product.md) | Source of truth |
 | Phases, priorities, dependencies, risks, delivery status | [roadmap.md](../roadmap.md) | Source of truth; the only roadmap |
-| Feature overview | [feature.md](../feature.md) | Summarizes existing requirements and status; not a competing roadmap |
+| Feature map and inventory | [feature.md](../feature.md#feature-map) | Routes readers from app workflows to requirements and the feature inventory. Update map links and affected rows under the [contribution rules](../CONTRIBUTING.md#the-one-rule-that-applies-to-every-change) |
 | Project summary, status snapshot, document map | [README.md](../README.md) | Summarizes; must match the two sources |
 | How to propose and review changes | [CONTRIBUTING.md](../CONTRIBUTING.md) | Issue forms in `.github/ISSUE_TEMPLATE/` and the pull request template in `.github/pull_request_template.md` follow it |
 | Expected behavior and conduct reports | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1; reports go through the private channel in SECURITY.md |

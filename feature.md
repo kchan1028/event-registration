@@ -1,10 +1,25 @@
 # Feature overview
 
-Status: Local build, not live. Updated November 21, 2026.
+Status: Local build.
 
-CycleReg helps organizers configure road races and criteriums, lets riders try registration with simulated payment, and supports local check-in and sample start lists. It is not ready for live registration: multi-factor sign-in, real payments, and federation connections are not built. Passwordless email sign-in with organizations and organizer roles is built (Phase 2).
+CycleReg helps organizers configure road races and criteriums, lets riders try registration with simulated or Stripe test-mode payment, and supports local check-in and sample start lists. It is not ready for live registration: multi-factor sign-in, real payments, and federation connections are not built. Passwordless email sign-in with organizations and organizer roles is built (Phase 2).
 
 This is a feature summary, not a second requirements document or roadmap. [product.md](product.md) defines requirements and acceptance criteria. [roadmap.md](roadmap.md) owns delivery status, priorities, dependencies, and verification evidence. “Implemented” below means available in the local build; it does not mean approved for a live event or verified with users.
+
+## Feature map
+
+Use this map to find a workflow and its requirements. The feature tables below describe local availability. Follow the [codebase map](docs/codebase-map.md#by-task-area) for source files and tests, and the [roadmap](roadmap.md) for delivery status and remaining work.
+
+| Workflow | Where to start | Requirements |
+|---|---|---|
+| Set up a race and publish registration | Event setup and the category builder · [Organizer features](#organizer-features) | [Category builder](product.md#1a-road-race-and-criterium-category-builder--p0) |
+| Find an event, enter, and pay | Public event list and rider registration · [Rider features](#rider-features) | [Capacity and entry integrity](product.md#3-capacity-and-entry-integrity), [Money and reporting](product.md#6-money-and-reporting) |
+| Find a receipt or manage guardian access | My registrations · [Rider features](#rider-features) | [Rider self-service](product.md#rider-self-service), [Sign-in and account security](product.md#sign-in-and-account-security) |
+| Find riders, resolve entries, and manage waitlists | Registrations · [Organizer features](#organizer-features) | [Participant management](product.md#participant-management), [Capacity and entry integrity](product.md#3-capacity-and-entry-integrity) |
+| Invite staff or check email delivery | Team and roles for invitations, Registrations for confirmation and offer email · [Organizer features](#organizer-features) | [Sign-in and account security](product.md#sign-in-and-account-security), [Communications](product.md#communications) |
+| Review refunds, cancellation, or finances | Registrations · [Organizer features](#organizer-features) | [Money and reporting](product.md#6-money-and-reporting), [Reporting](product.md#reporting), [Event and race cancellation](product.md#event-and-race-cancellation) |
+| Check riders in, issue bibs, and export start lists | Check-in and Start lists · [Race-day features](#race-day-features) | [Race-day operations](product.md#5-race-day-operations) |
+| Try a fictional event | Local demo setup · [Local demo and interface](#local-demo-and-interface) | [Local setup](docs/runbooks/local-setup.md), [Event fixtures](docs/fixtures/events.md) |
 
 ## Organizer features
 
@@ -21,7 +36,7 @@ This is a feature summary, not a second requirements document or roadmap. [produ
 | Schedule CSV | Implemented | Import categories with column mapping and row errors; export the configured schedule |
 | Preview and publish | Implemented | Preview eligibility, block publishing on errors, acknowledge warnings, publish only the draft that was reviewed, retain immutable published versions, and record who published each one |
 | Published change-impact preview | Implemented | Show affected categories, entries, riders, and orders; require acknowledgement while preserving accepted prices and rules |
-| Organizer-managed waitlists | Implemented | Enable per category, give waiting riders priority, and issue 24-hour reservation links. The organizer copies the offer link, and the rider pays through the same simulated or Stripe test-mode checkout. Automated promotion, offer email, and automated charging remain Planned |
+| Organizer-managed waitlists | Implemented | Enable per category, give waiting riders priority, and issue 24-hour reservation links. The organizer can copy the offer link. Test-mode offer and expiry email and organizer offer delivery controls are available. The joining account signs in to use the link. Automated promotion and charging remain Planned |
 | Organizer transfers and withdrawals | Implemented | Change paid entries with a reason and renewed eligibility/capacity checks; preserve the order total and log price differences for settlement outside the app |
 | Draft autosave | Implemented | Save locally with stale-save protection |
 | Registration queue | Implemented | Review simulated orders, outstanding readiness items, and license reviews confirmed without typing |
@@ -137,7 +152,7 @@ The status column says what is Implemented locally and what remains Planned. Pha
 | Rider self-service changes, withdrawals, and policy-governed transfers | Planned beyond existing organizer actions | [Rider self-service](product.md#rider-self-service) |
 | Waitlist offer email and automated promotion | Offer and expiry emails and organizer offer delivery controls Implemented locally in test mode. Automated promotion remains Planned | [Capacity and entry integrity](product.md#3-capacity-and-entry-integrity) |
 | Timing-software integration and round-trip validation | Deferred for possible future development | [Product scope](product.md#out-of-scope-initially) |
-| Confirmations, receipts, targeted operational email, and delivery tracking | Planned. Invitation delivery, bounce, and complaint are recorded and shown locally; invitation suppression and a send that does not add days are Implemented locally. Registration confirmation recording, test-mode dispatch, and the organizer status and retry API are Implemented locally. The Registrations order panel shows send and delivery outcomes and offers eligible retries. Other message types remain Planned | [Communications](product.md#communications) |
+| Confirmations, receipts, targeted operational email, and delivery tracking | Planned. Invitation delivery, bounce, and complaint are recorded and shown locally; invitation suppression and a send that does not add days are Implemented locally. Registration confirmation recording, test-mode dispatch, and the organizer status and retry API are Implemented locally. The Registrations order panel shows send and delivery outcomes and offers eligible retries. Test-mode waitlist offer and expiry emails also exist. Receipts, payment and refund updates, entry-change notices, and targeted operational email remain Planned | [Communications](product.md#communications) |
 | Coupon/referral codes, redemption limits, and count-based pricing | Basic event coupons and redemption limits are Implemented locally; referral codes and count-based pricing remain Planned | [Promotions](product.md#promotions) |
 | Participant workspace, reusable rider identity, saved filtered views, history, and safe bulk actions | Event lookup, participant grouping API for juniors and explicitly self-registered adults, event participant count with check-in explanation, and explicit adult self-registration, history-only link to a single approved junior claim, private rider history, receipt links in My registrations, event-scoped organizer history in Registrations, organizer history for the same organization's other events, and a support read of duplicate approved claims Implemented locally (November 26, 2026); the Registrations panel for those other events, claim resolution, broader workspace, saved views, history, and bulk actions Planned | [Participant management](product.md#participant-management) |
 | Automatic post-close bib assignment and previewed bulk allocation | Bulk preview/apply Implemented in the manager check-in panel; opt-in post-close automatic assignment Implemented locally; previewed manual/resequenced reassignment with reasons, history, and start-list revisions Implemented locally; shared-range overlap and individual corrections after refund/cancellation Implemented locally; staff rehearsal remains Planned. Removing a selected rider clears their replacement draft. | [Automatic and bulk bib assignment](product.md#automatic-and-bulk-bib-assignment) |

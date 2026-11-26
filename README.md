@@ -22,7 +22,7 @@ CycleReg proposes a guided cycling workflow: categories modeled the way road and
 
 Berkeley Omnium (Berkeley Bicycle Club) is the reference scenario and proposed first design partner. It is not an approved migration, and it stays on its current registration system until the launch criteria in [product.md](product.md#launch-criteria) pass.
 
-See [feature.md](feature.md) for a concise overview of implemented and planned features. Stripe hosted Checkout and organizer refunds are implemented locally in test mode ([ADR 0002](docs/decisions/0002-stripe-payments.md)); real-provider operating verification remains open and live payments are not enabled. Planned expansion includes communications, rider self-service, promotions, reporting, race-day registration, dedicated omnium/stage-race setup, and multi-organization season passes. The current UI's bundles are same-event packages only.
+Use the [feature map](feature.md#feature-map) to find app workflows and their requirements. Stripe hosted Checkout and organizer refunds are implemented locally in test mode ([ADR 0002](docs/decisions/0002-stripe-payments.md)); real-provider operating verification remains open and live payments are not enabled. Planned expansion includes communications, rider self-service, promotions, reporting, race-day registration, dedicated omnium/stage-race setup, and multi-organization season passes. The current UI's bundles are same-event packages only.
 
 ## What works today
 
