@@ -252,10 +252,11 @@ describe('support-approved profile claims', () => {
     expect(duplicate.statusCode, duplicate.body).toBe(200);
     const listed = duplicate.json();
     expect(listed.resolutionRequired).toBe(true);
-    expect(listed.claims).toEqual([
+    const expectedClaims = [
       { claimId: first.json().claimId, juniorProfileId: s.profile.id, approvedAt: first.json().approvedAt },
       { claimId: second.json().claimId, juniorProfileId: secondProfile.id, approvedAt: second.json().approvedAt },
-    ]);
+    ].sort((a, b) => a.approvedAt.localeCompare(b.approvedAt) || a.claimId.localeCompare(b.claimId));
+    expect(listed.claims).toEqual(expectedClaims);
     expect(listed).not.toHaveProperty('birthDate');
     expect(JSON.stringify(listed)).not.toContain('FICTIONAL-REVIEW');
     const replay = await review();
