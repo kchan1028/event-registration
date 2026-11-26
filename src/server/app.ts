@@ -122,11 +122,13 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const startLists = createStartLists(db, repo, orders, clock, identity);
   const checkIn = createCheckIn(db, repo, orders, clock, identity, startLists);
   const emergencyContacts = createEmergencyContacts(db, clock);
-  const waitlist = createWaitlist(db, repo, clock);
+  const emailAppUrl = appUrl || (emailSender.mode === 'resend' ? publicAppUrl() : '');
+  const waitlist = createWaitlist(db, repo, clock, emailSender.mode === 'resend' && emailSender.from
+    ? { address: emailSender.from, appUrl: emailAppUrl } : undefined);
   const caseStudies = createCaseStudyFixtures(db, repo, orders, refunds, checkIn);
   const mailer = createMailer(db, emailSender, clock);
   // Senders need a public URL for the invitation sign-in link.
-  const access = createAccess(db, provider, clock, mailer, appUrl || (emailSender.mode !== 'local' ? publicAppUrl() : ''));
+  const access = createAccess(db, provider, clock, mailer, emailAppUrl);
   const automaticBibs = createAutomaticBibs(db, repo, checkIn, access, clock);
   const cancellationAllocations = createCancellationAllocations(db, repo, clock);
   const cancellationImpact = createCancellationImpact(db, repo, cancellationAllocations, clock);
@@ -167,14 +169,14 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     let stopping = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let work: Promise<void> = Promise.resolve();
-    function pollConfirmations() {
-      work = mailer.dispatchNextConfirmation().catch(() => {
-        app.log.error('Registration confirmation worker failed; check database availability.');
+    function pollRiderEmail() {
+      work = mailer.dispatchNextRiderEmail().catch(() => {
+        app.log.error('Rider email worker failed; check database availability.');
       }).finally(() => {
-        if (!stopping) timer = setTimeout(pollConfirmations, 5_000);
+        if (!stopping) timer = setTimeout(pollRiderEmail, 5_000);
       });
     }
-    app.addHook('onListen', async () => { pollConfirmations(); });
+    app.addHook('onListen', async () => { pollRiderEmail(); });
     app.addHook('preClose', async () => {
       stopping = true;
       clearTimeout(timer);

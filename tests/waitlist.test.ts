@@ -1,6 +1,8 @@
-import { as } from './support/auth';
-import { describe, expect, it } from 'vitest';
-import { testApp } from './support/db';
+import { describe, expect, it, vi } from 'vitest';
+import { as, DEFAULT_TEST_ORGANIZER } from './support/auth';
+import { testApp, testDatabaseUrl } from './support/db';
+import { openDb } from '../src/server/db';
+import { createMailer, EmailUncertain, type EmailSender } from '../src/server/email';
 import type { EventConfig } from '../src/shared/schema';
 import { blocksPublicSale, effectiveWaitlistStatus, waitlistJoinSchema } from '../src/shared/waitlist';
 import { publishReviewed } from './support/publish';
@@ -12,9 +14,10 @@ const joiner = (n: number) => ({ firstName: 'Wait', lastName: `Rider${n}`, email
 
 type Entry = { id: string; status: string; position: number | null; offerToken: string | null; orderId: string | null };
 
-async function setup() {
+async function setup(email?: EmailSender) {
   let now = new Date('2027-03-01T18:00:00Z');
-  const { app } = await testApp({ now: () => now, holdMinutes: 10 });
+  const databaseUrl = await testDatabaseUrl();
+  const { app } = await testApp({ databaseUrl, now: () => now, holdMinutes: 10, email, appUrl: 'https://registration.example.test' });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   const get = async () => (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; revision: number; entries: { categoryId: string }[] };
   let ev = await get();
@@ -52,7 +55,7 @@ async function setup() {
   const remove = (id: string) => app.inject({ method: 'POST', url: `/api/events/${eventId}/waitlist/${id}/remove` });
   const publicEvent = async () => (await app.inject({ method: 'GET', url: `/api/public/events/${eventId}` })).json() as { remaining: Record<string, number | null>; waitlist: Record<string, { waiting: number }> };
   const advanceHours = (h: number) => (now = new Date(now.getTime() + h * 3_600_000));
-  return { app, eventId, cat, used, setCap, order, pay, join, list, offer, remove, publicEvent, advanceHours };
+  return { app, databaseUrl, now: () => now, eventId, cat, used, setCap, order, pay, join, list, offer, remove, publicEvent, advanceHours };
 }
 
 describe('waitlist rules', () => {
@@ -138,6 +141,50 @@ describe('organizer-managed waitlist API', () => {
     expect(after.find((e) => e.id === b.id)).toMatchObject({ status: 'waiting', position: 1 });
     // A used offer cannot be redeemed again.
     expect((await s.order({ offerToken: offered.offerToken })).statusCode).toBe(409);
+  });
+
+  it('records one offer email for the joining account and repeats only eligible sends', async () => {
+    const send = vi.fn().mockRejectedValueOnce(new EmailUncertain('Fictional timeout.')).mockResolvedValue('re_waitlist_offer');
+    const sender = { mode: 'resend' as const, from: 'sender@example.test', send };
+    const s = await setup(sender);
+    const entries = await Promise.all([1, 2, 3].map(async (n) => (await s.join(joiner(n))).json<Entry>()));
+    await s.setCap(s.used + entries.length);
+    const first = (await s.offer(entries[0].id)).json<Entry & { offerExpiresAt: string }>();
+    expect(first.status).toBe('offered');
+    expect((await s.offer(entries[0].id)).statusCode).toBe(409);
+    expect((await s.offer(entries[1].id)).statusCode).toBe(200);
+    expect((await s.offer(entries[2].id)).statusCode).toBe(200);
+    expect((await s.remove(entries[1].id)).statusCode).toBe(200);
+    const db = openDb(s.databaseUrl);
+    try {
+      const rows = await db.all<{ id: string; waitlist_entry_id: string }>(
+        "SELECT id, waitlist_entry_id FROM email_messages WHERE kind = 'waitlist_offer'",
+      );
+      expect(rows).toHaveLength(3);
+      const mailer = createMailer(db, sender, s.now);
+      // Put the third offer past its expiry to model a stale worker pickup.
+      await db.run("UPDATE waitlist_entries SET offer_expires_at = now() - interval '1 second' WHERE id = $1", [entries[2].id]);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(1);
+      const id = rows.find((row) => row.waitlist_entry_id === first.id)!.id;
+      expect(send.mock.calls[0]).toEqual([{
+        from: sender.from,
+        to: DEFAULT_TEST_ORGANIZER,
+        subject: 'A waitlist place is available',
+        text: expect.stringContaining(`${first.offerExpiresAt}. Sign in with the account you used to join the waitlist: https://registration.example.test/#/register/${s.eventId}?offer=${first.offerToken}`),
+      }, id]);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(1);
+      await db.run("UPDATE email_messages SET sending_until = now() - interval '1 second' WHERE id = $1", [id]);
+      await mailer.dispatchNextRiderEmail();
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send.mock.calls[1]).toEqual(send.mock.calls[0]);
+      expect(await db.get('SELECT status, provider_message_id FROM email_messages WHERE id = $1', [id]))
+        .toEqual({ status: 'sent', provider_message_id: 're_waitlist_offer' });
+    } finally {
+      await db.close();
+    }
   });
 
   it('an unused offer expires after 24 hours and frees the place for the next rider', async () => {

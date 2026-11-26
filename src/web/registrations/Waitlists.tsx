@@ -5,9 +5,9 @@ import type { Draft } from '../Builder';
 import { formatDateTime } from '../format';
 import { useLoad } from '../useLoad';
 
-const WL_LABEL: Record<WaitlistEntryView['status'], string> = { waiting: 'Waiting', offered: 'Offer sent', expired: 'Offer expired', accepted: 'Registered', removed: 'Removed' };
+const WL_LABEL: Record<WaitlistEntryView['status'], string> = { waiting: 'Waiting', offered: 'Offer open', expired: 'Offer expired', accepted: 'Registered', removed: 'Removed' };
 
-/** Organizer-managed waitlists: offer freed places in order. No email is sent; copy the offer link to the rider. */
+/** Organizer-managed waitlists: offer freed places in order. The organizer can copy the offer link to the rider. */
 /** `onChanged`: called after an offer or removal, so the page can refresh what depends on the waitlist. */
 export function Waitlists({ draft, onChanged }: { draft: Draft; onChanged: () => void }) {
   const eventId = draft.data.id;
@@ -31,7 +31,7 @@ export function Waitlists({ draft, onChanged }: { draft: Draft; onChanged: () =>
   return (
     <section className="settings__section" aria-labelledby="wl-title">
       <h3 id="wl-title">Waitlists</h3>
-      <p className="muted small">Freed places go to waiting riders first. Offer them in order; an offer holds the place for {OFFER_HOURS} hours. Email is not sent yet: copy the link to the rider.</p>
+      <p className="muted small">Freed places go to waiting riders first. Offer them in order; an offer holds the place for {OFFER_HOURS} hours. Copy the link to share an offer. If test email is configured, the app also queues the offer for email.</p>
       {error && (
         <p className="alert alert--error" role="alert">
           {error}

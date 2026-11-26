@@ -108,6 +108,10 @@ test('a held waitlist offer is a reserved place and is not a missing package', a
   const token = (await offered.json()).offerToken as string;
   expect(token).toBeTruthy();
 
+  await page.goto(`/#/events/${eventId}/registrations`);
+  await expect(page.getByText('Offer open', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Copy the link to share an offer/)).toBeVisible();
+
   await page.goto(`/#/register/${eventId}?offer=${token}`);
   await expect(page.getByText('Your place is held')).toBeVisible();
   await expect(page.getByText('Place offered to you')).toBeVisible();
