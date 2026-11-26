@@ -291,7 +291,10 @@ describe('Stripe hosted Checkout (test mode)', () => {
   });
 
   it('dispatches a confirmation with a stable key and sender across an uncertain retry', async () => {
-    const send = vi.fn().mockRejectedValueOnce(new EmailUncertain('Fictional timeout.')).mockResolvedValue('re_confirmation');
+    const send = vi.fn()
+      .mockRejectedValueOnce(new EmailUncertain('Fictional timeout.'))
+      .mockResolvedValueOnce('re_receipt')
+      .mockResolvedValue('re_confirmation');
     const sender = { mode: 'resend' as const, from: 'first@example.test', send };
     const { order, checkout, webhook, paidSession, get, databaseUrl } = await setup({ email: sender });
     const o = await order(['RR-M35-34']);
@@ -303,42 +306,57 @@ describe('Stripe hosted Checkout (test mode)', () => {
         `SELECT id, created_at, from_email FROM email_messages WHERE order_id = $1 AND kind = 'registration_confirmation'`, [o.id],
       );
       expect(message?.from_email).toBe('first@example.test');
-      expect(await db.get(
-        `SELECT from_email FROM email_messages WHERE order_id = $1 AND kind = 'registration_receipt'`, [o.id],
-      )).toEqual({ from_email: null });
+      const receipt = await db.get<{ id: string; from_email: string | null; status: string; provider_message_id: string | null }>(
+        `SELECT id, from_email, status, provider_message_id FROM email_messages WHERE order_id = $1 AND kind = 'registration_receipt'`, [o.id],
+      );
+      expect(receipt).toMatchObject({ from_email: 'first@example.test', status: 'recorded', provider_message_id: null });
       const now = () => new Date(message!.created_at);
       await createMailer(db, localEmail(), now).dispatchNextRiderEmail();
       expect(send).not.toHaveBeenCalled();
       const mailer = createMailer(db, sender, now);
       await mailer.dispatchNextRiderEmail();
       expect((await get(o.id)).status).toBe('confirmed');
-      await mailer.dispatchNextRiderEmail();
       expect(send).toHaveBeenCalledTimes(1);
-      await db.run("UPDATE email_messages SET sending_until = now() - interval '1 second' WHERE id = $1", [message!.id]);
-      const expired = createMailer(db, sender, () => new Date(now().getTime() + 24 * 60 * 60 * 1000));
-      await expired.dispatchNextRiderEmail();
-      expect(send).toHaveBeenCalledTimes(1);
-      await db.run(
-        `INSERT INTO email_suppressions (id, organization_id, email, reason, email_id, created_at)
-         SELECT 'test-stop', organization_id, to_email, 'bounced', id, created_at FROM email_messages WHERE id = $1`,
-        [message!.id],
-      );
-      await mailer.dispatchNextRiderEmail();
-      expect(send).toHaveBeenCalledTimes(1);
-      await db.run("DELETE FROM email_suppressions WHERE id = 'test-stop'");
       await db.run(
         `INSERT INTO email_delivery_events (id, email_id, kind, occurred_at) VALUES ('test-bounce', $1, 'bounced', $2)`,
         [message!.id, message!.created_at],
       );
       await mailer.dispatchNextRiderEmail();
       expect(send).toHaveBeenCalledTimes(1);
+      expect(await db.get('SELECT status, provider_message_id FROM email_messages WHERE id = $1', [receipt!.id]))
+        .toEqual({ status: 'recorded', provider_message_id: null });
+      await db.run("DELETE FROM email_delivery_events WHERE id = 'test-bounce'");
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send.mock.calls[1][1]).toBe(receipt!.id);
+      expect(send.mock.calls[1][0]).toMatchObject({ from: sender.from, to: DEFAULT_TEST_ORGANIZER, subject: 'Your receipt' });
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(2);
+      await db.run("UPDATE email_messages SET sending_until = now() - interval '1 second' WHERE id = $1", [message!.id]);
+      const expired = createMailer(db, sender, () => new Date(now().getTime() + 24 * 60 * 60 * 1000));
+      await expired.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(2);
+      await db.run(
+        `INSERT INTO email_suppressions (id, organization_id, email, reason, email_id, created_at)
+         SELECT 'test-stop', organization_id, to_email, 'bounced', id, created_at FROM email_messages WHERE id = $1`,
+        [message!.id],
+      );
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(2);
+      await db.run("DELETE FROM email_suppressions WHERE id = 'test-stop'");
+      await db.run(
+        `INSERT INTO email_delivery_events (id, email_id, kind, occurred_at) VALUES ('test-bounce', $1, 'bounced', $2)`,
+        [message!.id, message!.created_at],
+      );
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(2);
       await db.run("DELETE FROM email_delivery_events WHERE id = 'test-bounce'");
       const restarted = createMailer(db, { ...sender, from: 'second@example.test' }, now);
       await Promise.all([restarted.dispatchNextRiderEmail(), mailer.dispatchNextRiderEmail()]);
-      expect(send).toHaveBeenCalledTimes(2);
-      expect(send.mock.calls[1]).toEqual(send.mock.calls[0]);
-      expect(send.mock.calls[1][1]).toBe(message!.id);
-      expect(send.mock.calls[1][0]).toMatchObject({ from: sender.from, to: DEFAULT_TEST_ORGANIZER });
+      expect(send).toHaveBeenCalledTimes(3);
+      expect(send.mock.calls[2]).toEqual(send.mock.calls[0]);
+      expect(send.mock.calls[2][1]).toBe(message!.id);
+      expect(send.mock.calls[2][0]).toMatchObject({ from: sender.from, to: DEFAULT_TEST_ORGANIZER });
       expect(await db.get('SELECT status, provider_message_id FROM email_messages WHERE id = $1', [message!.id]))
         .toEqual({ status: 'sent', provider_message_id: 're_confirmation' });
     } finally {
@@ -372,6 +390,10 @@ describe('Stripe hosted Checkout (test mode)', () => {
       expect((await app.inject({ method: 'POST', url: `${url}/retry` })).statusCode).toBe(409);
       expect(send).toHaveBeenCalledTimes(2);
       expect(send.mock.calls[0]).toEqual(send.mock.calls[1]);
+      expect(await db.get(
+        `SELECT status, provider_message_id, from_email FROM email_messages WHERE order_id = $1 AND kind = 'registration_receipt'`,
+        [o.id],
+      )).toEqual({ status: 'recorded', provider_message_id: null, from_email: 'sender@example.test' });
       expect(await db.all(
         `SELECT a.email FROM rider_email_retry_requests r
          JOIN accounts a ON a.id = r.actor_account_id JOIN email_messages m ON m.id = r.email_id

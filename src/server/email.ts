@@ -154,8 +154,8 @@ export function registrationReceiptText(orderNumber: string, amount: string, isD
     : `Receipt ${orderNumber} for ${amount}. Sign in and open My registrations to see it.`;
 }
 
-/** Same confirm transaction as the confirmation. `from_email` stays null, so dispatch never selects it. */
-export async function recordRegistrationReceipt(db: Db, orderId: string, confirmedAt: string) {
+/** Same confirm transaction as the confirmation. A null sender stays unsent. */
+export async function recordRegistrationReceipt(db: Db, orderId: string, confirmedAt: string, senderAddress?: string) {
   const row = await db.get<{ organization_id: string; email: string; total_cents: number; is_demo: boolean | null }>(
     `SELECT e.organization_id, a.email, o.total_cents,
             (v.config_json #>> '{event,isDemo}') = 'true' AS is_demo
@@ -170,7 +170,7 @@ export async function recordRegistrationReceipt(db: Db, orderId: string, confirm
   const isDemo = row.is_demo === true;
   await db.run(
     `INSERT INTO email_messages (id, organization_id, kind, ref, order_id, to_email, subject, body_text, status, created_at, from_email, keyed)
-     VALUES ($1, $2, 'registration_receipt', $3, $3, $4, $5, $6, 'recorded', $7, NULL, true)
+     VALUES ($1, $2, 'registration_receipt', $3, $3, $4, $5, $6, 'recorded', $7, $8, true)
      ON CONFLICT (order_id, kind) DO NOTHING`,
     [
       newId('eml'),
@@ -180,6 +180,7 @@ export async function recordRegistrationReceipt(db: Db, orderId: string, confirm
       'Your receipt',
       registrationReceiptText(formatOrderNumber(orderId, isDemo), formatDollars(Number(row.total_cents)), isDemo),
       confirmedAt,
+      senderAddress ?? null,
     ],
   );
 }
@@ -219,7 +220,7 @@ const riderEmailAllowed = `NOT EXISTS (
     )
     AND NOT EXISTS (
       SELECT 1 FROM email_messages previous JOIN email_delivery_events d ON d.email_id = previous.id
-      WHERE previous.organization_id = m.organization_id AND previous.kind IN ('registration_confirmation', 'waitlist_offer', 'waitlist_expired')
+      WHERE previous.organization_id = m.organization_id AND previous.kind IN ('registration_confirmation', 'registration_receipt', 'waitlist_offer', 'waitlist_expired')
         AND lower(btrim(previous.to_email)) = lower(btrim(m.to_email)) AND d.kind IN ('bounced', 'complained')
     )`;
 
@@ -248,7 +249,7 @@ const waitlistExpiryReady = `EXISTS (
 )`;
 
 export type OrganizerRiderEmailKind = 'registration_confirmation' | 'waitlist_offer';
-export type RiderEmailKind = OrganizerRiderEmailKind | 'waitlist_expired';
+export type RiderEmailKind = OrganizerRiderEmailKind | 'waitlist_expired' | 'registration_receipt';
 
 // The last check uses current account and family authority, not purchase provenance alone.
 const confirmationReady = `EXISTS (
@@ -261,6 +262,7 @@ const confirmationReady = `EXISTS (
 )`;
 const riderEmailReady = {
   registration_confirmation: confirmationReady,
+  registration_receipt: confirmationReady,
   waitlist_offer: waitlistOfferReady,
   waitlist_expired: waitlistExpiryReady,
 };
@@ -356,6 +358,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
          WHERE m.status IN ('recorded', 'uncertain')
            AND m.created_at > $1 AND (m.sending_until IS NULL OR m.sending_until <= now())
            AND ((m.kind = 'registration_confirmation' AND ${confirmationReady})
+             OR (m.kind = 'registration_receipt' AND ${confirmationReady})
              OR (m.kind = 'waitlist_offer' AND ${waitlistOfferReady})
              OR (m.kind = 'waitlist_expired' AND ${waitlistExpiryReady}))
          ORDER BY m.sending_until NULLS FIRST, m.created_at, m.seq LIMIT 1`,
