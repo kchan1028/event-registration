@@ -196,6 +196,58 @@ describe('support-approved profile claims', () => {
     }
   });
 
+  it('keeps organizer participant history within one authorized event and includes the saved claim', async () => {
+    const s = await setup();
+    s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
+    const createAdult = async (ref: string, selfRegistrationConfirmed: boolean, eventId = s.eventId) => {
+      const { config } = (await s.call(ORGANIZER, 'GET', `/api/events/${eventId}`)).json();
+      const adult = config.categories.find((row: { timingCode: string }) => row.timingCode === 'RR-M35-34');
+      const response = await s.call(RIDER, 'POST', `/api/rider/events/${eventId}/orders`, {
+        clientRequestId: ref, categoryIds: [adult.id], selfRegistrationConfirmed,
+        rider: { ...s.body.rider, firstName: 'Adult', racingAge: 40, licenseCategory: '3', email: RIDER, guardian: null },
+        waiver: { ...s.body.waiver, version: config.registration.waiverVersion, signatureName: 'Adult Fictional', signerRole: 'rider' },
+      });
+      expect(response.statusCode, response.body).toBe(201);
+      return response.json().id as string;
+    };
+    const earlier = await createAdult('before-staff-history-claim', true);
+    expect((await s.approve()).statusCode).toBe(200);
+    const anchor = await createAdult('staff-history-anchor', true);
+    const proxy = await createAdult('staff-history-proxy', false);
+    const held = await createAdult('staff-history-unpaid', true);
+    const otherEvent = (await s.call(ORGANIZER, 'POST', '/api/demo')).json().eventId;
+    expect(otherEvent).not.toBe(s.eventId);
+    await publishReviewed(s.app, `/api/events/${otherEvent}`, { acknowledgeWarnings: true }, as(ORGANIZER));
+    const otherOrder = await createAdult('staff-history-other-event', true, otherEvent);
+    for (const orderId of [s.order.id, earlier, anchor, proxy, otherOrder]) {
+      const payment = await s.call(RIDER, 'POST', `/api/orders/${orderId}/payment`, { attemptId: `staff-history-${orderId}`, outcome: 'success' });
+      expect(payment.statusCode, payment.body).toBe(200);
+    }
+
+    const url = (event: string, order: string) => `/api/events/${event}/orders/${order}/participant-history`;
+    const getHistory = (id: string, who = ORGANIZER) => s.call(who, 'GET', url(s.eventId, id));
+    const expected = { orderIds: [anchor, s.order.id] };
+    for (const id of [anchor, s.order.id]) {
+      const response = await getHistory(id);
+      expect(response.statusCode, response.body).toBe(200);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.json()).toEqual(expected);
+    }
+    expect((await getHistory(earlier)).json()).toEqual({ orderIds: [earlier] });
+    expect((await getHistory(proxy)).json()).toEqual({ orderIds: [proxy] });
+    expect((await getHistory(held)).statusCode).toBe(404);
+    expect((await getHistory(otherOrder)).statusCode).toBe(404);
+    expect((await s.call(ORGANIZER, 'GET', url(otherEvent, anchor))).statusCode).toBe(404);
+    expect((await s.call(ORGANIZER, 'GET', url(otherEvent, otherOrder))).json()).toEqual({ orderIds: [otherOrder] });
+    expect((await s.app.inject({ url: url(s.eventId, anchor) })).statusCode).toBe(401);
+    for (const who of [RIDER, PARENT, VIEWER]) expect((await getHistory(anchor, who)).statusCode).toBe(404);
+    for (const [role, status] of [['registration_manager', 200], ['finance', 403]] as const) {
+      const email = `${role}@staff-history.test`;
+      expect((await s.call(ORGANIZER, 'POST', `/api/organizations/${s.organizationId}/members`, { email, role })).statusCode).toBe(200);
+      expect((await getHistory(anchor, email)).statusCode).toBe(status);
+    }
+  });
+
   it('preserves the rider-confirmed zone name rather than a runtime canonical alias for durable replay', async () => {
     const s = await setup(); s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
     const first = await s.approve(SUPPORT, { timeZone: 'US/Pacific' });
