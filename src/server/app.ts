@@ -762,6 +762,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return (await orders.listOrders(id, q ?? '')).map(omitStaffEmergencyContact);
   });
 
+  const eventOrderParams = z.object({ id: idStr, orderId: idStr });
   const emailRecordParams = z.object({ id: idStr, recordId: idStr });
   function registerRiderEmailControls(path: string, kind: RiderEmailKind, field: 'confirmation' | 'offerEmail') {
     app.get(path, async (req, reply) => {
@@ -896,6 +897,12 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const { id } = await onEvent(req, 'entries.manage');
     reply.header('Cache-Control', 'no-store');
     return identity.participantGroups(id);
+  });
+
+  app.get('/api/events/:id/orders/:orderId/participant-history', async (req, reply) => {
+    const { id, orderId } = await onEvent(req, 'entries.manage', eventOrderParams);
+    reply.header('Cache-Control', 'no-store');
+    return identity.eventParticipantHistory(id, orderId);
   });
 
   // Rider identity across orders: suggestions and organizer-confirmed links (src/server/identity.ts).
