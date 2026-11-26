@@ -64,7 +64,7 @@ Run `tests/exports.test.ts` and `tests/protectedExportAudit.test.ts` for changes
 
 ### Event participant grouping
 
-Run `tests/identity.test.ts`, `tests/juniors.test.ts`, and `tests/profileClaims.test.ts` when participant grouping changes. Confirm organizer-linked orders group together, different riders registered by one account stay separate, and identical contact details establish no link. Verify junior grouping across guardians and profile claims, confirmed-order filtering, event and role boundaries, and that responses carry order IDs only.
+Run `tests/identity.test.ts`, `tests/juniors.test.ts`, and `tests/profileClaims.test.ts` when participant grouping changes. Confirm organizer-linked orders group together, different riders registered by one account stay separate, and identical contact details establish no link. Verify junior grouping across guardians and profile claims, confirmed-order filtering, event and role boundaries, and that responses carry order IDs only. Until the product decision for mixed links, verify that a same-rider link between a junior profile and an adult order or another junior profile combines their check-in cards, leaves participant groups separate, and grants neither buyer access to the other order.
 
 ### Registration search by bib and license number
 
