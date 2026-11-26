@@ -12,6 +12,7 @@ import type { EventConfig } from '../src/shared/schema';
 import { openDb } from '../src/server/db';
 import { as } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
+import { publishReviewed } from './support/publish';
 
 /** Waits until this many requests are blocked on a lock in the test's database. */
 async function untilWaiting(client: pg.Client, count: number) {
@@ -219,6 +220,81 @@ describe('generated race case studies', () => {
       await seed.end();
       await app.close();
     }
+  });
+
+  it('rehearses a waitlist offer from the seeded full Harbor field', async () => {
+    const { app } = await testApp({ now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+    expect((await app.inject({ method: 'POST', url: '/api/demo/case-studies/criterium' })).statusCode).toBe(201);
+    const eventId = 'evt_demo_case_criterium';
+    const base = `/api/events/${eventId}`;
+    const getConfig = async () => (await app.inject({ method: 'GET', url: base })).json<{ config: EventConfig; revision: number }>();
+    const publicEvent = async () => {
+      const response = await app.inject({ method: 'GET', url: `/api/public/events/${eventId}` });
+      expect(response.statusCode).toBe(200);
+      return response.json<{ remaining: Record<string, number | null>; waitlist: Record<string, { waiting: number }> }>();
+    };
+    const field = (await getConfig()).config.categories.find((category) => category.timingCode === 'DVC-M35')!;
+    const capacity = field.cap!;
+    expect(field.waitlistEnabled).not.toBe(true);
+    expect((await publicEvent()).remaining[field.id]).toBe(0);
+
+    // Changes are scoped to this test's disposable copy of the fixture.
+    const openWaitlist = async (cap: number) => {
+      const { config, revision } = await getConfig();
+      const category = config.categories.find((row) => row.id === field.id)!;
+      category.waitlistEnabled = true;
+      category.cap = cap;
+      const save = await app.inject({ method: 'PUT', url: `${base}/config`, payload: { revision, config } });
+      expect(save.statusCode, save.body).toBe(200);
+      const publish = await publishReviewed(app, base, { acknowledgeWarnings: true, acknowledgeImpact: true });
+      expect(publish.statusCode, publish.body).toBe(200);
+    };
+    await openWaitlist(capacity);
+    const rider = {
+      firstName: 'Sky', lastName: 'Example', email: 'harbor-waitlist@example.test', team: '',
+      racingAge: 42, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null,
+    };
+    const headers = as(rider.email);
+    const joined = await app.inject({
+      method: 'POST', url: `/api/rider/events/${eventId}/waitlist`, headers, payload: { categoryId: field.id, ...rider },
+    });
+    expect(joined.statusCode, joined.body).toBe(201);
+    const entry = joined.json<{ id: string }>();
+    expect(entry).toMatchObject({ status: 'waiting', position: 1 });
+    const offer = () => app.inject({ method: 'POST', url: `${base}/waitlist/${entry.id}/offer` });
+    expect((await offer()).statusCode).toBe(409);
+
+    await openWaitlist(capacity + 1);
+    expect((await publicEvent()).remaining[field.id]).toBe(0);
+    const offered = await offer();
+    expect(offered.statusCode, offered.body).toBe(200);
+    const { offerToken } = offered.json<{ offerToken: string }>();
+    const lookedUp = await app.inject({ method: 'GET', url: `/api/rider/offers/${offerToken}`, headers });
+    expect(lookedUp.statusCode).toBe(200);
+    expect(lookedUp.json()).toMatchObject({ eventId, categoryId: field.id, status: 'offered' });
+
+    const { config } = await getConfig();
+    const reserve = (token?: string) => app.inject({
+      method: 'POST', url: `/api/rider/events/${eventId}/orders`, headers,
+      payload: {
+        clientRequestId: 'harbor-waitlist-rehearsal', categoryIds: [field.id], offerToken: token,
+        rider: { ...rider, guardian: null, emergencyContact: { name: 'Fictional Contact', phone: '555-555-0199' } },
+        waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Sky Example', signerRole: 'rider' },
+      },
+    });
+    expect((await reserve()).statusCode).toBe(409);
+    const reserved = await reserve(offerToken);
+    expect(reserved.statusCode, reserved.body).toBe(201);
+    const order = reserved.json<{ id: string }>();
+    const paid = await app.inject({
+      method: 'POST', url: `/api/orders/${order.id}/payment`, headers, payload: { attemptId: 'harbor-waitlist-payment', outcome: 'success' },
+    });
+    expect(paid.statusCode, paid.body).toBe(200);
+    expect(paid.json()).toMatchObject({ status: 'confirmed', entries: [{ categoryId: field.id, status: 'confirmed' }] });
+    const after = await app.inject({ method: 'GET', url: `/api/rider/offers/${offerToken}`, headers });
+    expect(after.statusCode).toBe(200);
+    expect(after.json()).toMatchObject({ status: 'accepted' });
+    expect((await publicEvent()).remaining[field.id]).toBe(0);
   });
 
   it('rehearses both omnium days and locked start lists with the seeded weekend order', async () => {
