@@ -58,7 +58,10 @@ export function OrderRow({ order, categories, canManage, canRefund, onChange, pa
         </p>
       )}
       {canManage && (order.status === 'confirmed' || order.checkInCode) && (
-        <RiderEmailDeliveryPanel key={session.email?.toLowerCase()} eventId={order.eventId} recordId={order.id} kind="confirmation" />
+        <>
+          <RiderEmailDeliveryPanel key={`confirmation:${session.email?.toLowerCase()}`} eventId={order.eventId} recordId={order.id} kind="confirmation" />
+          <RiderEmailDeliveryPanel key={`receipt:${session.email?.toLowerCase()}`} eventId={order.eventId} recordId={order.id} kind="receipt" />
+        </>
       )}
       {participantHistory}
       {(order.answers.length > 0 || order.addenda.length > 0) && (

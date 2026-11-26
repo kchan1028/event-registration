@@ -394,6 +394,18 @@ describe('Stripe hosted Checkout (test mode)', () => {
         `SELECT status, provider_message_id, from_email FROM email_messages WHERE order_id = $1 AND kind = 'registration_receipt'`,
         [o.id],
       )).toEqual({ status: 'recorded', provider_message_id: null, from_email: 'sender@example.test' });
+      const receiptUrl = `/api/events/${eventId}/orders/${o.id}/receipt-delivery`;
+      expect((await app.inject({ method: 'GET', url: receiptUrl, headers: as('outsider@example.test') })).statusCode).toBe(404);
+      const recordedReceipt = await app.inject({ method: 'GET', url: receiptUrl });
+      expect(recordedReceipt.headers['cache-control']).toBe('no-store');
+      expect(recordedReceipt.json()).toEqual({ receipt: { status: 'recorded', delivery: null, canRetry: false } });
+      expect((await app.inject({ method: 'POST', url: `${receiptUrl}/retry` })).statusCode).toBe(409);
+      await db.run("UPDATE email_messages SET status = 'uncertain', sending_until = now() - interval '1 second' WHERE order_id = $1 AND kind = 'registration_receipt'", [o.id]);
+      expect((await app.inject({ method: 'GET', url: receiptUrl })).json()).toEqual({ receipt: { status: 'uncertain', delivery: null, canRetry: true } });
+      expect((await app.inject({ method: 'POST', url: `${receiptUrl}/retry` })).json()).toEqual({ receipt: { status: 'sent', delivery: null, canRetry: false } });
+      expect(send).toHaveBeenCalledTimes(3);
+      expect(send.mock.calls[2][0]).toMatchObject({ subject: 'Your receipt', from: 'sender@example.test', to: DEFAULT_TEST_ORGANIZER });
+      expect((await app.inject({ method: 'GET', url })).json()).toEqual({ confirmation: { status: 'sent', delivery: null, canRetry: false } });
       expect(await db.all(
         `SELECT a.email FROM rider_email_retry_requests r
          JOIN accounts a ON a.id = r.actor_account_id JOIN email_messages m ON m.id = r.email_id

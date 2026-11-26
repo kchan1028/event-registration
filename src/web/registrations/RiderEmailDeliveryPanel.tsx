@@ -14,8 +14,14 @@ const deliveryLabels = {
   complained: 'Complaint received',
 };
 
-export function RiderEmailDeliveryPanel({ eventId, recordId, kind }: { eventId: string; recordId: string; kind: 'confirmation' | 'offer' }) {
-  const offer = kind === 'offer';
+const panelCopy = {
+  confirmation: { summary: 'Confirmation email', retry: 'Retry confirmation', className: 'confirmation-delivery' },
+  offer: { summary: 'Offer email', retry: 'Retry offer email', className: 'offer-email-delivery' },
+  receipt: { summary: 'Receipt email', retry: 'Retry receipt email', className: 'receipt-email-delivery' },
+} as const;
+
+export function RiderEmailDeliveryPanel({ eventId, recordId, kind }: { eventId: string; recordId: string; kind: keyof typeof panelCopy }) {
+  const copy = panelCopy[kind];
   const [delivery, setDelivery] = useState<RiderEmailDelivery | null>();
   const [busy, setBusy] = useState<'refresh' | 'retry' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,9 +35,11 @@ export function RiderEmailDeliveryPanel({ eventId, recordId, kind }: { eventId: 
     setBusy(action);
     setError(null);
     try {
-      const result = offer
+      const result = kind === 'offer'
         ? (await (action === 'retry' ? api.retryWaitlistOfferEmail : api.waitlistOfferEmail)(eventId, recordId)).offerEmail
-        : (await (action === 'retry' ? api.retryConfirmation : api.confirmationDelivery)(eventId, recordId)).confirmation;
+        : kind === 'receipt'
+          ? (await (action === 'retry' ? api.retryReceiptDelivery : api.receiptDelivery)(eventId, recordId)).receipt
+          : (await (action === 'retry' ? api.retryConfirmation : api.confirmationDelivery)(eventId, recordId)).confirmation;
       if (!result?.canRetry && document.activeElement === retryButton.current) refreshButton.current?.focus();
       setDelivery(result);
     } catch {
@@ -45,8 +53,8 @@ export function RiderEmailDeliveryPanel({ eventId, recordId, kind }: { eventId: 
   }
 
   return (
-    <details className={offer ? 'offer-email-delivery' : 'confirmation-delivery'} onToggle={(event) => { if (event.currentTarget.open) void load('refresh'); }}>
-      <summary className="lookup-toggle">{offer ? 'Offer email' : 'Confirmation email'}</summary>
+    <details className={copy.className} onToggle={(event) => { if (event.currentTarget.open) void load('refresh'); }}>
+      <summary className="lookup-toggle">{copy.summary}</summary>
       <p className="small" role="status">
         {busy === 'retry' ? 'Retrying email…'
           : busy ? 'Checking email status…'
@@ -59,7 +67,7 @@ export function RiderEmailDeliveryPanel({ eventId, recordId, kind }: { eventId: 
       <div className="row-actions">
         <button ref={refreshButton} type="button" className="btn btn--secondary btn--small" aria-disabled={busy !== null} onClick={() => void load('refresh')}>Refresh status</button>
         {delivery?.canRetry && (
-          <button ref={retryButton} type="button" className="btn btn--secondary btn--small" aria-disabled={busy !== null} onClick={() => void load('retry')}>{offer ? 'Retry offer email' : 'Retry confirmation'}</button>
+          <button ref={retryButton} type="button" className="btn btn--secondary btn--small" aria-disabled={busy !== null} onClick={() => void load('retry')}>{copy.retry}</button>
         )}
       </div>
     </details>

@@ -768,7 +768,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
 
   const eventOrderParams = z.object({ id: idStr, orderId: idStr });
   const emailRecordParams = z.object({ id: idStr, recordId: idStr });
-  function registerRiderEmailControls(path: string, kind: OrganizerRiderEmailKind, field: 'confirmation' | 'offerEmail') {
+  function registerRiderEmailControls(path: string, kind: OrganizerRiderEmailKind, field: 'confirmation' | 'receipt' | 'offerEmail') {
     app.get(path, async (req, reply) => {
       const { id, recordId } = await onEvent(req, 'entries.manage', emailRecordParams);
       reply.header('Cache-Control', 'no-store');
@@ -782,7 +782,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
         await access.requireEventUntilSaved(account, id, 'entries.manage');
         return mailer.recordRiderEmailRetry(kind, id, recordId, account.id);
       });
-      if (!attempt) throw new HttpError(409, kind === 'waitlist_offer' ? 'This offer email cannot be retried now.' : 'This confirmation cannot be retried now.');
+      if (!attempt) throw new HttpError(409, kind === 'waitlist_offer' ? 'This offer email cannot be retried now.' : kind === 'registration_receipt' ? 'This receipt email cannot be retried now.' : 'This confirmation cannot be retried now.');
       const result = await mailer.dispatch(attempt.id, account.id, kind);
       if (result === 'refused') throw new HttpError(403, 'Your role in this organization does not allow this.');
       await access.requireEvent(account, id, 'entries.manage');
@@ -791,6 +791,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     });
   }
   registerRiderEmailControls('/api/events/:id/orders/:recordId/confirmation-delivery', 'registration_confirmation', 'confirmation');
+  registerRiderEmailControls('/api/events/:id/orders/:recordId/receipt-delivery', 'registration_receipt', 'receipt');
   registerRiderEmailControls('/api/events/:id/waitlist/:recordId/offer-email', 'waitlist_offer', 'offerEmail');
 
   // Organizer corrections to rider details. A reason is required and every correction is kept.
