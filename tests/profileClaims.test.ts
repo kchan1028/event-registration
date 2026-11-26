@@ -21,7 +21,7 @@ async function setup(minimumAge: number | undefined = 18) {
   finally { await client.end(); }
   const now = new Date('2026-02-28T12:00:00Z');
   const { app } = await testApp({ databaseUrl, auth: fakeAuth(), now: () => now, profileClaims: { minimumAge, supportAccountIds: [SUPPORT_ID] } });
-  const call = (who: string, method: 'GET' | 'POST', url: string, payload?: object) => app.inject({ method, url, headers: as(who), payload });
+  const call = (who: string, method: 'GET' | 'POST' | 'PUT', url: string, payload?: object) => app.inject({ method, url, headers: as(who), payload });
   const { eventId, organizationId } = (await call(ORGANIZER, 'POST', '/api/demo')).json();
   await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true }, as(ORGANIZER));
   const { config } = (await call(ORGANIZER, 'GET', `/api/events/${eventId}`)).json();
