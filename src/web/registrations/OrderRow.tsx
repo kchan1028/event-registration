@@ -80,7 +80,7 @@ export function OrderRow({ order, categories, canManage, canRefund, onChange, pa
       {order.status === 'needs_attention' && (
         <p className="note note--error">Payment arrived but no place was confirmed (the hold had ended and a place filled, the rider had cancelled, or the amount did not match). Refund the rider or offer another race.</p>
       )}
-      {(order.status === 'confirmed' || order.status === 'needs_attention') && <RefundPanel key={`${session.email?.toLowerCase()}:${order.id}`} order={order} canRefund={canRefund} onChange={onChange} />}
+      {(order.status === 'confirmed' || order.status === 'needs_attention') && <RefundPanel key={`${session.email?.toLowerCase()}:${order.id}`} order={order} canRefund={canRefund} canManage={canManage} onChange={onChange} />}
       <ul className="order__entries">
         {order.entries.map((e) => (
           <EntryLine key={e.id} entry={e} confirmed={order.status === 'confirmed'} canManage={canManage} onChange={onChange}>

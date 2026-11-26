@@ -18,7 +18,15 @@ const panelCopy = {
   confirmation: { summary: 'Confirmation email', retry: 'Retry confirmation', className: 'confirmation-delivery' },
   offer: { summary: 'Offer email', retry: 'Retry offer email', className: 'offer-email-delivery' },
   receipt: { summary: 'Receipt email', retry: 'Retry receipt email', className: 'receipt-email-delivery' },
+  refund: { summary: 'Refund email', retry: 'Retry refund email', className: 'refund-email-delivery' },
 } as const;
+
+async function readDelivery(kind: keyof typeof panelCopy, eventId: string, recordId: string, action: 'refresh' | 'retry') {
+  if (kind === 'offer') return (await (action === 'retry' ? api.retryWaitlistOfferEmail : api.waitlistOfferEmail)(eventId, recordId)).offerEmail;
+  if (kind === 'receipt') return (await (action === 'retry' ? api.retryReceiptDelivery : api.receiptDelivery)(eventId, recordId)).receipt;
+  if (kind === 'refund') return (await (action === 'retry' ? api.retryRefundNotice : api.noticeDelivery)(eventId, recordId)).notice;
+  return (await (action === 'retry' ? api.retryConfirmation : api.confirmationDelivery)(eventId, recordId)).confirmation;
+}
 
 export function RiderEmailDeliveryPanel({ eventId, recordId, kind }: { eventId: string; recordId: string; kind: keyof typeof panelCopy }) {
   const copy = panelCopy[kind];
@@ -35,11 +43,7 @@ export function RiderEmailDeliveryPanel({ eventId, recordId, kind }: { eventId: 
     setBusy(action);
     setError(null);
     try {
-      const result = kind === 'offer'
-        ? (await (action === 'retry' ? api.retryWaitlistOfferEmail : api.waitlistOfferEmail)(eventId, recordId)).offerEmail
-        : kind === 'receipt'
-          ? (await (action === 'retry' ? api.retryReceiptDelivery : api.receiptDelivery)(eventId, recordId)).receipt
-          : (await (action === 'retry' ? api.retryConfirmation : api.confirmationDelivery)(eventId, recordId)).confirmation;
+      const result = await readDelivery(kind, eventId, recordId, action);
       if (!result?.canRetry && document.activeElement === retryButton.current) refreshButton.current?.focus();
       setDelivery(result);
     } catch {

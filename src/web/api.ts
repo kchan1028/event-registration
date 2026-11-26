@@ -401,6 +401,10 @@ export const api = {
     request<{ receipt: RiderEmailDelivery | null }>('GET', `/api/events/${eventId}/orders/${orderId}/receipt-delivery`),
   retryReceiptDelivery: (eventId: string, orderId: string) =>
     request<{ receipt: RiderEmailDelivery | null }>('POST', `/api/events/${eventId}/orders/${orderId}/receipt-delivery/retry`),
+  noticeDelivery: (eventId: string, refundId: string) =>
+    request<{ notice: RiderEmailDelivery | null }>('GET', `/api/events/${eventId}/refunds/${refundId}/notice-delivery`),
+  retryRefundNotice: (eventId: string, refundId: string) =>
+    request<{ notice: RiderEmailDelivery | null }>('POST', `/api/events/${eventId}/refunds/${refundId}/notice-delivery/retry`),
   reservationStatus: (eventId: string, reference: string) =>
     request<ReservationLookupResult>('POST', `/api/events/${eventId}/reservation-status`, { reference }),
   releaseReservation: (eventId: string, input: { reference: string; reason: string; riderRequested: true }) =>

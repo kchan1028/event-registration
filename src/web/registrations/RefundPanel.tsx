@@ -7,12 +7,14 @@ import { api, type ApiError, type OrderView, type OrganizerRefundView, type Refu
 import { formatDateTime } from '../format';
 import { Field, moneyText, parseMoney, ReasonForm } from '../ui';
 import { RefundPolicyPreview } from './RefundPolicyPreview';
+import { RiderEmailDeliveryPanel } from './RiderEmailDeliveryPanel';
 
 /**
  * Refunds for one order. A refund returns money from one payment, optionally for one entry; it never
  * withdraws the entry (use Withdraw for that). Owner and finance roles can refund; others see the history.
+ * Email status is limited to entries.manage, so finance sees the refund and not the notice panel.
  */
-export function RefundPanel({ order, canRefund, onChange }: { order: OrderView; canRefund: boolean; onChange: (o: OrderView) => void }) {
+export function RefundPanel({ order, canRefund, canManage, onChange }: { order: OrderView; canRefund: boolean; canManage: boolean; onChange: (o: OrderView) => void }) {
   const session = useSession();
   const storageKey = `cyclereg.refund.${session.email?.toLowerCase()}.${order.id}`;
   const [pending, setPending] = useState<RefundRequest | null>(() => {
@@ -245,6 +247,9 @@ export function RefundPanel({ order, canRefund, onChange }: { order: OrderView; 
                 {r.requestedBy ? ` · by ${r.requestedBy}` : ''} · Reason: {r.reason}
                 {r.failureReason && ` · ${r.status === 'failed' ? 'Stripe said' : 'Last error'}: ${r.failureReason}`}
               </span>
+              {canManage && (
+                <RiderEmailDeliveryPanel key={`refund:${session.email?.toLowerCase()}:${r.id}`} eventId={order.eventId} recordId={r.id} kind="refund" />
+              )}
               {r.status === 'requested' && canRefund && (
                 <button className="btn btn--ghost btn--small" disabled={busy || pending !== null} onClick={() => retry(r.id)}>
                   Send again
