@@ -222,6 +222,60 @@ describe('generated race case studies', () => {
     }
   });
 
+  it.each([
+    { fixture: 'omnium', orderRef: 'case-study-weekend', blocker: 'waiver', patch: { signatureName: '' }, undoSeededCheckIn: false },
+    { fixture: 'criterium', orderRef: 'case-study-junior', blocker: 'guardian', patch: { signatureName: 'River Example', signerRole: 'rider' }, undoSeededCheckIn: true },
+  ])('rehearses a paid seeded rider with a missing $blocker acceptance', async ({ fixture, orderRef, blocker, patch, undoSeededCheckIn }) => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
+    const seeded = await app.inject({ method: 'POST', url: `/api/demo/case-studies/${fixture}` });
+    expect(seeded.statusCode, seeded.body).toBe(201);
+    const { eventId } = seeded.json<{ eventId: string }>();
+    const base = `/api/events/${eventId}`;
+    const db = openDb(databaseUrl);
+    try {
+      const order = await db.get<{ id: string }>('SELECT id FROM orders WHERE event_id = $1 AND client_request_id = $2', [eventId, orderRef]);
+      expect(order).toBeDefined();
+      const orderId = order!.id;
+      const loadDesk = async () => {
+        const response = await app.inject({ method: 'GET', url: `${base}/check-in` });
+        expect(response.statusCode, response.body).toBe(200);
+        const list = response.json<CheckInList>();
+        return { dayId: list.dayId, rider: list.riders.find((row) => row.orderId === orderId) };
+      };
+      const initial = await loadDesk();
+      expect(initial.rider).toMatchObject({ payment: 'confirmed', result: { ready: true } });
+      if (undoSeededCheckIn) {
+        expect(initial.rider).toMatchObject({ bib: 500, checkedInAt: expect.any(String) });
+        const undo = await app.inject({
+          method: 'POST', url: `${base}/check-in/${orderId}/undo`, payload: { dayId: initial.dayId, reason: 'Prepare fictional missing-acceptance rehearsal' },
+        });
+        expect(undo.statusCode, undo.body).toBe(200);
+      } else {
+        const settings = await app.inject({
+          method: 'PUT', url: `${base}/bib-settings`, payload: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
+        });
+        expect(settings.statusCode, settings.body).toBe(200);
+      }
+
+      // Supported checkout cannot create either condition. Change only the disposable copy.
+      expect(await db.run('UPDATE orders SET waiver_json = waiver_json || $2::jsonb WHERE id = $1', [orderId, JSON.stringify(patch)])).toBe(1);
+      const blocked = await loadDesk();
+      expect(blocked.rider).toMatchObject({
+        payment: 'confirmed', bib: null, checkedInAt: null,
+        result: { ready: false, blockers: [expect.objectContaining({ key: blocker })] },
+      });
+      const refused = await app.inject({
+        method: 'POST', url: `${base}/check-in/${orderId}`, payload: { dayId: blocked.dayId, bib: null },
+      });
+      expect(refused.statusCode, refused.body).toBe(409);
+      expect(refused.json()).toMatchObject({ details: { code: 'check_in_not_ready', dayId: blocked.dayId, rider: blocked.rider } });
+      expect(await loadDesk()).toEqual(blocked);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('rehearses a waitlist offer from the seeded full Harbor field', async () => {
     const { app } = await testApp({ now: () => new Date(CASE_STUDY_REFERENCE_NOW) });
     expect((await app.inject({ method: 'POST', url: '/api/demo/case-studies/criterium' })).statusCode).toBe(201);
