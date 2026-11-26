@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { INVITATION_DAYS, ROLE_LABELS, ROLES, type MembershipChange, type Role } from '../shared/roles';
 import { api, ApiError, type MemberList } from './api';
 import { formatDateTime } from './format';
@@ -66,7 +66,11 @@ function deliveryLabel(value: string | null | undefined): string | null {
  */
 export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }) {
   const [open, setOpen] = useState(false);
-  const [list, setList] = useState<MemberList | null>(null);
+  const [snapshot, setSnapshot] = useState<{ list: MemberList; receivedAt: number } | null>(null);
+  const list = snapshot?.list ?? null;
+  const setList = useCallback((next: MemberList) => {
+    setSnapshot({ list: next, receivedAt: performance.now() });
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>('check_in_volunteer');
@@ -77,7 +81,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
 
   useEffect(() => {
     if (open && !list) api.members(orgId).then(setList).catch((e: ApiError) => setError(e.message));
-  }, [open, list, orgId]);
+  }, [open, list, orgId, setList]);
 
   async function run(action: () => Promise<MemberList>) {
     setBusy(true);
@@ -115,10 +119,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
 
   async function add(e: FormEvent) {
     e.preventDefault();
-    const typed = email.trim().toLowerCase();
-    const stopped = list?.stoppedEmails.some((row) => row.email === typed) ?? false;
-    const openForRole = list?.invitations.some((row) => row.email === typed && row.role === role && new Date(row.expiresAt).getTime() > Date.now()) ?? false;
-    const action = stopped && !openForRole ? () => api.allowInvitation(orgId, email.trim(), role) : () => api.addMember(orgId, email.trim(), role);
+    const action = typedStopped && !typedOpen ? () => api.allowInvitation(orgId, email.trim(), role) : () => api.addMember(orgId, email.trim(), role);
     if (await run(action)) setEmail('');
   }
 
@@ -126,7 +127,10 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
   const candidates = list ? [...new Set(list.members.map((m) => m.email))].filter((address) => !list.members.some((m) => m.email === address && m.role === 'owner')) : [];
   const typed = email.trim().toLowerCase();
   const typedStopped = list?.stoppedEmails.some((row) => row.email === typed) ?? false;
-  const typedOpen = list?.invitations.some((row) => row.email === typed && row.role === role && new Date(row.expiresAt).getTime() > Date.now()) ?? false;
+  const serverTime = Date.parse(list?.asOf ?? '');
+  // Advance the server's time with elapsed time, independent of device-clock corrections.
+  const now = snapshot && Number.isFinite(serverTime) ? serverTime + performance.now() - snapshot.receivedAt : Date.now();
+  const typedOpen = list?.invitations.some((row) => row.email === typed && row.role === role && Date.parse(row.expiresAt) > now) ?? false;
   const emailHint = typedStopped
     ? typedOpen
       ? 'Mail to this address is stopped. Use Send without extending on the invitation above. That does not add days.'
@@ -174,7 +178,7 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
             </li>
           ))}
           {list.invitations.map((i) => {
-            const expired = new Date(i.expiresAt) <= new Date();
+            const expired = Date.parse(i.expiresAt) <= now;
             const uncertain = i.lastEmail?.status === 'uncertain';
             const delivery = deliveryLabel(i.lastEmail?.delivery);
             const deliveryFailed = i.lastEmail?.delivery === 'bounced' || i.lastEmail?.delivery === 'complained';

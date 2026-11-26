@@ -453,7 +453,8 @@ describe('organizer roles', () => {
     await invite(late);
     await invite(renewed);
     now = new Date(now.getTime() + 13 * DAY);
-    const list = (await invite(renewed)).json() as { invitations: unknown[] };
+    const list = (await invite(renewed)).json() as { asOf: string; invitations: unknown[] };
+    expect(list.asOf).toBe(now.toISOString());
     expect(list.invitations).toEqual([
       { email: late, role: 'finance', expiresAt: new Date(Date.parse('2027-03-01T18:00:00Z') + INVITATION_DAYS * DAY).toISOString(), revision: expect.any(String), earlierEmail: false, suppressed: null, lastEmail: { attemptId: expect.any(String), status: 'recorded', at: '2027-03-01T18:00:00.000Z', delivery: null } },
       { email: renewed, role: 'finance', expiresAt: new Date(now.getTime() + INVITATION_DAYS * DAY).toISOString(), revision: expect.any(String), earlierEmail: false, suppressed: null, lastEmail: { attemptId: expect.any(String), status: 'recorded', at: now.toISOString(), delivery: null } },
@@ -1047,7 +1048,7 @@ describe('organizer roles', () => {
 
     expect((await call('POST', url, stale)).statusCode).toBe(change === 'recovered' ? 200 : 409);
     expect(calls).toHaveLength(sent);
-    expect((await call('GET', url)).json()).toEqual(before);
+    expect((await call('GET', url)).json()).toEqual({ ...before, asOf: expect.any(String) });
   });
 
   it('refuses resend and retry where the outgoing server saved an email without a key, until cancel and invite again', async () => {
@@ -1071,7 +1072,7 @@ describe('organizer roles', () => {
       expect(before.invitations[0]).toMatchObject({ earlierEmail: true });
       expect((await call('POST', url, body)).statusCode).toBe(409);
       expect((await call('POST', url, { ...body, retryAttempt: attemptId })).statusCode).toBe(409);
-      expect((await call('GET', url)).json()).toEqual(before);
+      expect((await call('GET', url)).json()).toEqual({ ...before, asOf: expect.any(String) });
       expect(calls).toHaveLength(1);
       await takeOffTeam(call, org.id, body.email, body.role);
       expect((await call('POST', url, body)).json().invitations[0]).toMatchObject({ earlierEmail: false, suppressed: null, lastEmail: { status: 'sent' } });
@@ -1357,7 +1358,7 @@ describe('organizer roles', () => {
     expect((await call('POST', `${base}/invitations/cancel`, stale)).statusCode).toBe(409);
     // A screen from before revisions sends this for both buttons.
     expect((await call('POST', `${base}/members/remove`, body)).statusCode).toBe(409);
-    expect((await call('GET', `${base}/members`)).json()).toEqual(before);
+    expect((await call('GET', `${base}/members`)).json()).toEqual({ ...before, asOf: expect.any(String) });
   });
 
   it('a stale Remove leaves a role that was granted again', async () => {
@@ -1375,7 +1376,7 @@ describe('organizer roles', () => {
 
     expect((await call('POST', `${base}/members/revoke`, stale)).statusCode).toBe(409);
     expect((await call('POST', `${base}/members/remove`, body)).statusCode).toBe(409);
-    expect((await call('GET', `${base}/members`)).json()).toEqual(before);
+    expect((await call('GET', `${base}/members`)).json()).toEqual({ ...before, asOf: expect.any(String) });
   });
 
   it('never removes the last owner', async () => {
@@ -1386,7 +1387,7 @@ describe('organizer roles', () => {
     const res = await takeOffTeam((...args) => call(OWNER, ...args), valley, OWNER, 'owner');
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ error: 'An organization needs at least one owner. Add another owner first.' });
-    expect((await call(OWNER, 'GET', url)).json()).toEqual(before);
+    expect((await call(OWNER, 'GET', url)).json()).toEqual({ ...before, asOf: expect.any(String) });
   });
 
   it('gives Cancel and a first sign-in one outcome when they overlap', async () => {
@@ -1769,7 +1770,7 @@ describe('organizer roles', () => {
     }
     const afterRefusals = await call(OWNER, 'GET', membersUrl);
     expect(afterRefusals.statusCode).toBe(200);
-    expect(afterRefusals.json()).toEqual(before);
+    expect(afterRefusals.json()).toEqual({ ...before, asOf: expect.any(String) });
 
     expect((await call(OWNER, 'POST', membersUrl, { email: successor, role: 'finance' })).statusCode).toBe(200);
     await call(OWNER, 'POST', `/api/organizations/${valley}/members`, { email: OWNER, role: 'registration_manager' });

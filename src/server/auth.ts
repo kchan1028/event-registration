@@ -388,6 +388,7 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
         [organizationId],
       );
       return {
+        asOf: nowIso(),
         members: members.map((m) => ({ accountId: m.account_id, email: m.email, role: m.role, revision: m.revision })),
         invitations: invitations.map(
           (i): Invitation => ({
