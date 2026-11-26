@@ -336,6 +336,11 @@ describe('refunds', () => {
       expect(send.mock.calls.map((call) => call[0].subject)).toEqual(['Registration confirmed', 'Your receipt']);
       expect(await db.get(`SELECT status FROM email_messages WHERE id = $1`, [notice!.id])).toEqual({ status: 'recorded' });
       await db.run(`UPDATE email_messages SET from_email = $2 WHERE id = $1`, [notice!.id, 'sender@example.test']);
+      await db.run(`UPDATE accounts SET email = 'moved@example.test' WHERE email = $1`, [DEFAULT_TEST_ORGANIZER]);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(await db.get(`SELECT status FROM email_messages WHERE id = $1`, [notice!.id])).toEqual({ status: 'recorded' });
+      await db.run(`UPDATE accounts SET email = $1 WHERE email = 'moved@example.test'`, [DEFAULT_TEST_ORGANIZER]);
       await mailer.dispatchNextRiderEmail();
       expect(send).toHaveBeenCalledTimes(3);
       expect(send.mock.calls[2][1]).toBe(notice!.id);
