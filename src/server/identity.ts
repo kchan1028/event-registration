@@ -97,9 +97,9 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
      * self-registrations by account. Other events are limited to the same organization.
      */
     async eventParticipantHistory(eventId: string, orderId: string) {
-      const history = await db.all<{ orderId: string; eventId: string; createdAt: string; eventName: string; demo: boolean }>(
+      const history = await db.all<{ orderId: string; eventId: string; createdAt: string; eventName: string; demo: boolean; orderDemo: boolean }>(
         `WITH org_history AS (
-           SELECT o.id, o.event_id, o.created_at, o.seq, CASE
+           SELECT o.id, o.event_id, o.created_at, o.seq, o.published_version, CASE
              WHEN COALESCE(o.junior_profile_id, c.junior_profile_id) IS NOT NULL
                THEN 'junior:' || COALESCE(o.junior_profile_id, c.junior_profile_id)
              WHEN o.self_registration_account_id IS NOT NULL THEN 'adult:' || o.self_registration_account_id
@@ -114,11 +114,13 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
          )
          SELECT related.id AS "orderId", related.event_id AS "eventId", related.created_at AS "createdAt",
                 v.config_json #>> '{event,name}' AS "eventName",
-                (v.config_json #>> '{event,isDemo}') = 'true' AS demo
+                (v.config_json #>> '{event,isDemo}') = 'true' AS demo,
+                (ov.config_json #>> '{event,isDemo}') = 'true' AS "orderDemo"
          FROM org_history anchor
          JOIN org_history related USING (history_key)
          JOIN events ev ON ev.id = related.event_id
          JOIN event_versions v ON v.event_id = ev.id AND v.version = ev.published_version
+         JOIN event_versions ov ON ov.event_id = related.event_id AND ov.version = related.published_version
          WHERE anchor.id = $2 AND anchor.event_id = $1
          ORDER BY related.created_at DESC, related.seq DESC, related.id`,
         [eventId, orderId],
@@ -132,7 +134,7 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
           const group = otherEvents.get(row.eventId) ?? { name: row.eventName, demo: row.demo, orders: [] };
           group.orders.push({
             orderId: row.orderId,
-            orderNumber: formatOrderNumber(row.orderId, row.demo),
+            orderNumber: formatOrderNumber(row.orderId, row.orderDemo),
             createdAt: row.createdAt,
           });
           otherEvents.set(row.eventId, group);
