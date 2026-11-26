@@ -341,7 +341,7 @@ export interface StartListOverview {
   races: StartListRace[];
 }
 
-export interface ConfirmationDelivery {
+export interface RiderEmailDelivery {
   status: 'recorded' | 'sent' | 'failed' | 'uncertain';
   delivery: 'delivered' | 'bounced' | 'complained' | null;
   canRetry: boolean;
@@ -385,10 +385,14 @@ export const api = {
   waitlist: (eventId: string) => request<{ offerHours: number; entries: WaitlistEntryView[] }>('GET', `/api/events/${eventId}/waitlist`),
   offerWaitlistPlace: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer`),
   removeFromWaitlist: (eventId: string, entryId: string) => request<WaitlistEntryView>('POST', `/api/events/${eventId}/waitlist/${entryId}/remove`),
+  waitlistOfferEmail: (eventId: string, entryId: string) =>
+    request<{ offerEmail: RiderEmailDelivery | null }>('GET', `/api/events/${eventId}/waitlist/${entryId}/offer-email`),
+  retryWaitlistOfferEmail: (eventId: string, entryId: string) =>
+    request<{ offerEmail: RiderEmailDelivery | null }>('POST', `/api/events/${eventId}/waitlist/${entryId}/offer-email/retry`),
   confirmationDelivery: (eventId: string, orderId: string) =>
-    request<{ confirmation: ConfirmationDelivery | null }>('GET', `/api/events/${eventId}/orders/${orderId}/confirmation-delivery`),
+    request<{ confirmation: RiderEmailDelivery | null }>('GET', `/api/events/${eventId}/orders/${orderId}/confirmation-delivery`),
   retryConfirmation: (eventId: string, orderId: string) =>
-    request<{ confirmation: ConfirmationDelivery | null }>('POST', `/api/events/${eventId}/orders/${orderId}/confirmation-delivery/retry`),
+    request<{ confirmation: RiderEmailDelivery | null }>('POST', `/api/events/${eventId}/orders/${orderId}/confirmation-delivery/retry`),
   reservationStatus: (eventId: string, reference: string) =>
     request<ReservationLookupResult>('POST', `/api/events/${eventId}/reservation-status`, { reference }),
   releaseReservation: (eventId: string, input: { reference: string; reason: string; riderRequested: true }) =>

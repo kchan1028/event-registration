@@ -111,6 +111,10 @@ test('a held waitlist offer is a reserved place and is not a missing package', a
   await page.goto(`/#/events/${eventId}/registrations`);
   await expect(page.getByText('Offer open', { exact: true })).toBeVisible();
   await expect(page.getByText(/Copy the link to share an offer/)).toBeVisible();
+  const emailPanel = page.locator('.offer-email-delivery');
+  await emailPanel.locator('summary').click();
+  await expect(emailPanel.getByRole('status')).toContainText('Send status: Recorded');
+  await expect(emailPanel.getByRole('button', { name: 'Retry offer email' })).toHaveCount(0);
 
   await page.goto(`/#/register/${eventId}?offer=${token}`);
   await expect(page.getByText('Your place is held')).toBeVisible();

@@ -173,11 +173,24 @@ describe('organizer-managed waitlist API', () => {
         subject: 'A waitlist place is available',
         text: expect.stringContaining(`${first.offerExpiresAt}. Sign in with the account you used to join the waitlist: https://registration.example.test/#/register/${s.eventId}?offer=${first.offerToken}`),
       }, id]);
-      await mailer.dispatchNextRiderEmail();
-      expect(send).toHaveBeenCalledTimes(1);
+      const route = (entryId: string) => `/api/events/${s.eventId}/waitlist/${entryId}/offer-email`;
+      const url = route(first.id);
+      expect((await s.app.inject({ method: 'GET', url, headers: as('outsider@example.test') })).statusCode).toBe(404);
+      expect((await s.app.inject({ method: 'POST', url: `${url}/retry` })).statusCode).toBe(409);
       await db.run("UPDATE email_messages SET sending_until = now() - interval '1 second' WHERE id = $1", [id]);
+      const status = await s.app.inject({ method: 'GET', url });
+      expect(status.headers['cache-control']).toBe('no-store');
+      expect(status.json()).toEqual({ offerEmail: { status: 'uncertain', delivery: null, canRetry: true } });
+      const before = await s.list();
+      await db.run("UPDATE email_messages SET status = 'uncertain' WHERE waitlist_entry_id = ANY($1)", [entries.slice(1).map((entry) => entry.id)]);
+      for (const entry of entries.slice(1)) {
+        expect((await s.app.inject({ method: 'POST', url: `${route(entry.id)}/retry` })).statusCode).toBe(409);
+      }
+      const retried = await s.app.inject({ method: 'POST', url: `${url}/retry` });
+      expect(retried.json()).toEqual({ offerEmail: { status: 'sent', delivery: null, canRetry: false } });
       await mailer.dispatchNextRiderEmail();
-      await mailer.dispatchNextRiderEmail();
+      expect(await s.list()).toEqual(before);
+      expect(await db.all('SELECT email_id FROM rider_email_retry_requests')).toEqual([{ email_id: id }]);
       expect(send).toHaveBeenCalledTimes(2);
       expect(send.mock.calls[1]).toEqual(send.mock.calls[0]);
       expect(await db.get('SELECT status, provider_message_id FROM email_messages WHERE id = $1', [id]))

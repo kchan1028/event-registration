@@ -36,7 +36,7 @@ import { createPayments, paymentsFromEnv, publicAppUrl, type PaymentProvider } f
 import { createRefunds } from './refunds';
 import { createWaitlist } from './waitlist';
 import { createRepo, eventLock, HttpError, liveEntrySql, type Repo } from './repo';
-import { checkedWebhookSecret, createMailer, emailFromEnv, emailWebhookSecretFromEnv, recordResendDelivery, ResendWebhookRejected, type EmailSender } from './email';
+import { type RiderEmailKind, checkedWebhookSecret, createMailer, emailFromEnv, emailWebhookSecretFromEnv, recordResendDelivery, ResendWebhookRejected, type EmailSender } from './email';
 import { createJuniors } from './juniors';
 import { createCancellationConfirmations } from './cancellationConfirmations';
 import { createCancellationFinancialPreflight } from './cancellationFinancialPreflight';
@@ -762,28 +762,31 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return (await orders.listOrders(id, q ?? '')).map(omitStaffEmergencyContact);
   });
 
-  const confirmationParams = z.object({ id: idStr, orderId: idStr });
-  app.get('/api/events/:id/orders/:orderId/confirmation-delivery', async (req, reply) => {
-    const { id, orderId } = await onEvent(req, 'entries.manage', confirmationParams);
-    reply.header('Cache-Control', 'no-store');
-    return { confirmation: await mailer.confirmationStatus(id, orderId) };
-  });
-
-  app.post('/api/events/:id/orders/:orderId/confirmation-delivery/retry', async (req, reply) => {
-    const { id, orderId } = confirmationParams.parse(req.params);
-    const account = me(req);
-    const attempt = await db.transaction(async () => {
-      await access.requireEventUntilSaved(account, id, 'entries.manage');
-      return mailer.recordConfirmationRetry(id, orderId, account.id);
+  const emailRecordParams = z.object({ id: idStr, recordId: idStr });
+  function registerRiderEmailControls(path: string, kind: RiderEmailKind, field: 'confirmation' | 'offerEmail') {
+    app.get(path, async (req, reply) => {
+      const { id, recordId } = await onEvent(req, 'entries.manage', emailRecordParams);
+      reply.header('Cache-Control', 'no-store');
+      return { [field]: await mailer.riderEmailStatus(kind, id, recordId) };
     });
-    if (!attempt) throw new HttpError(409, 'This confirmation cannot be retried now.');
-    const result = await mailer.dispatch(attempt.id, account.id, 'registration_confirmation');
-    if (result === 'refused') throw new HttpError(403, 'Your role in this organization does not allow this.');
-    // Recheck access before returning delivery evidence, including after a slow provider response.
-    await access.requireEvent(account, id, 'entries.manage');
-    reply.header('Cache-Control', 'no-store');
-    return { confirmation: await mailer.confirmationStatus(id, orderId) };
-  });
+
+    app.post(`${path}/retry`, async (req, reply) => {
+      const { id, recordId } = emailRecordParams.parse(req.params);
+      const account = me(req);
+      const attempt = await db.transaction(async () => {
+        await access.requireEventUntilSaved(account, id, 'entries.manage');
+        return mailer.recordRiderEmailRetry(kind, id, recordId, account.id);
+      });
+      if (!attempt) throw new HttpError(409, kind === 'waitlist_offer' ? 'This offer email cannot be retried now.' : 'This confirmation cannot be retried now.');
+      const result = await mailer.dispatch(attempt.id, account.id, kind);
+      if (result === 'refused') throw new HttpError(403, 'Your role in this organization does not allow this.');
+      await access.requireEvent(account, id, 'entries.manage');
+      reply.header('Cache-Control', 'no-store');
+      return { [field]: await mailer.riderEmailStatus(kind, id, recordId) };
+    });
+  }
+  registerRiderEmailControls('/api/events/:id/orders/:recordId/confirmation-delivery', 'registration_confirmation', 'confirmation');
+  registerRiderEmailControls('/api/events/:id/waitlist/:recordId/offer-email', 'waitlist_offer', 'offerEmail');
 
   // Organizer corrections to rider details. A reason is required and every correction is kept.
   app.post('/api/orders/:id/rider-corrections', async (req) => {

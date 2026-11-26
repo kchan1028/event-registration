@@ -190,7 +190,7 @@ const waitlistOfferReady = `EXISTS (
     AND w.offer_expires_at > now() AND lower(btrim(a.email)) = lower(btrim(m.to_email))
     AND ${riderEmailAllowed}
 )`;
-type RiderEmailKind = 'registration_confirmation' | 'waitlist_offer';
+export type RiderEmailKind = 'registration_confirmation' | 'waitlist_offer';
 
 // The last check uses current account and family authority, not purchase provenance alone.
 const confirmationReady = `EXISTS (
@@ -204,6 +204,10 @@ const confirmationReady = `EXISTS (
 const riderEmailReady = {
   registration_confirmation: confirmationReady,
   waitlist_offer: waitlistOfferReady,
+};
+const riderEmailSource = {
+  registration_confirmation: 'JOIN orders source ON source.id = m.order_id',
+  waitlist_offer: 'JOIN waitlist_entries source ON source.id = m.waitlist_entry_id',
 };
 const invitationReady = `EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id AND NOT earlier_email)`;
 
@@ -244,26 +248,26 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       return id;
     },
 
-    async confirmationStatus(eventId: string, orderId: string) {
+    async riderEmailStatus(kind: RiderEmailKind, eventId: string, recordId: string) {
       return await db.get<{ status: EmailStatus; delivery: EmailDelivery | null; canRetry: boolean }>(
         `SELECT m.status, m.delivery_status AS delivery,
            ($3 AND m.status = 'uncertain' AND m.created_at > $4
-             AND (m.sending_until IS NULL OR m.sending_until <= now()) AND ${confirmationReady}) AS "canRetry"
-         FROM email_messages m JOIN orders o ON o.id = m.order_id
-         WHERE o.event_id = $1 AND o.id = $2 AND m.kind = 'registration_confirmation'`,
-        [eventId, orderId, sender.mode === 'resend', new Date(clock().getTime() - RESEND_IDEMPOTENCY_WINDOW_MS).toISOString()],
+             AND (m.sending_until IS NULL OR m.sending_until <= now()) AND ${riderEmailReady[kind]}) AS "canRetry"
+         FROM email_messages m ${riderEmailSource[kind]}
+         WHERE source.event_id = $1 AND source.id = $2 AND m.kind = $5`,
+        [eventId, recordId, sender.mode === 'resend', new Date(clock().getTime() - RESEND_IDEMPOTENCY_WINDOW_MS).toISOString(), kind],
       ) ?? null;
     },
 
     /** Call inside the transaction that verifies and locks the organizer's current membership. */
-    async recordConfirmationRetry(eventId: string, orderId: string, accountId: string) {
-      if (!(await mailer.confirmationStatus(eventId, orderId))?.canRetry) return undefined;
+    async recordRiderEmailRetry(kind: RiderEmailKind, eventId: string, recordId: string, accountId: string) {
+      if (!(await mailer.riderEmailStatus(kind, eventId, recordId))?.canRetry) return undefined;
       return db.get<{ id: string }>(
-        `INSERT INTO confirmation_retry_requests (id, email_id, actor_account_id, requested_at)
-         SELECT $1, m.id, $2, $3 FROM email_messages m JOIN orders o ON o.id = m.order_id
-         WHERE o.event_id = $4 AND o.id = $5 AND m.kind = 'registration_confirmation'
+        `INSERT INTO rider_email_retry_requests (id, email_id, actor_account_id, requested_at)
+         SELECT $1, m.id, $2, $3 FROM email_messages m ${riderEmailSource[kind]}
+         WHERE source.event_id = $4 AND source.id = $5 AND m.kind = $6
          RETURNING email_id AS id`,
-        [newId('crr'), accountId, clock().toISOString(), eventId, orderId],
+        [newId('crr'), accountId, clock().toISOString(), eventId, recordId, kind],
       );
     },
 

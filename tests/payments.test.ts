@@ -356,7 +356,7 @@ describe('Stripe hosted Checkout (test mode)', () => {
       expect(send).toHaveBeenCalledTimes(2);
       expect(send.mock.calls[0]).toEqual(send.mock.calls[1]);
       expect(await db.all(
-        `SELECT a.email FROM confirmation_retry_requests r
+        `SELECT a.email FROM rider_email_retry_requests r
          JOIN accounts a ON a.id = r.actor_account_id JOIN email_messages m ON m.id = r.email_id WHERE m.order_id = $1`,
         [o.id],
       )).toEqual([{ email: DEFAULT_TEST_ORGANIZER }]);

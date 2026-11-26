@@ -1,3 +1,4 @@
+import { RiderEmailDeliveryPanel } from './RiderEmailDeliveryPanel';
 import { OFFER_HOURS } from '../../shared/waitlist';
 import { api, type ApiError, type WaitlistEntryView } from '../api';
 import { href } from '../App';
@@ -56,6 +57,7 @@ export function Waitlists({ draft, onChanged }: { draft: Draft; onChanged: () =>
                     Offer link (until {formatDateTime(w.offerExpiresAt!)}): <code className="code">{link(w.offerToken)}</code>
                   </p>
                 )}
+                {w.offeredAt && <RiderEmailDeliveryPanel eventId={eventId} recordId={w.id} kind="offer" />}
                 <p className="order__entry-actions">
                   {w.status === 'waiting' && (
                     <button className="btn btn--primary btn--small" onClick={() => act(() => api.offerWaitlistPlace(eventId, w.id))}>
