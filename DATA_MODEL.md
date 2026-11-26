@@ -289,6 +289,7 @@ The invitation and its email attempt are reserved together under the organizatio
 | `from_email` | Migration 40. The sender saved at reservation, which a retry repeats. Null in local mode and on older rows |
 | `delivery_status` | Migration 45. `delivered`, `bounced`, or `complained`, or null until a verified webhook records one. Independent of `status` |
 | `delivery_at` | Migration 45. The provider event's `created_at`. Replaced only when a later event is strictly newer |
+| `allowed_stop_id` | Migration 47. The stop that authorized a send without extending. Earlier attempts keep a null reference. Deleting the stop clears the reference |
 
 A verified Resend webhook also writes `email_delivery_events` (migration 45). Deleting the message deletes its events. The event id is the provider webhook id, so a replay does not insert twice. `kind` is `delivered`, `bounced`, or `complained`. `occurred_at` is the event's `created_at`. The row stores no subject, addresses, or bounce text. `email_messages.provider_message_id` has a partial index for that lookup. An unknown or ambiguous provider id writes nothing. A bounce or complaint also inserts `email_suppressions` for that message's organization and normalized address. The first active row is kept.
 
@@ -306,7 +307,7 @@ Migration 45. One row per verified delivery, bounce, or complaint webhook that m
 
 ### email_suppressions
 
-Migrations 46 and 47. An allowed send without extending records the active stop on its email attempt. The reference is cleared if that stop is deleted. Earlier attempts keep a null reference. One active stop per organization and normalized address. A verified bounce or complaint inserts it. A later event for the same address does not add a second active row. Deleting the organization, the causing message, or the message that cleared the stop deletes the row. Deleting the account that cleared it is refused.
+Migration 46. One active stop per organization and normalized address. A verified bounce or complaint inserts it. A later event for the same address does not add a second active row. Deleting the organization, the causing message, or the message that cleared the stop deletes the row. Deleting the account that cleared it is refused.
 
 | Column | Notes |
 |---|---|
