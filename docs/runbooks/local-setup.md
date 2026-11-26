@@ -205,7 +205,7 @@ Record the tested commit, date, event/fixture, completed cases, expected and act
 
 ## Email in test mode (optional)
 
-In local mode the app records organizer invitations, registration confirmations and waitlist offers in `email_messages` and sends nothing. To rehearse with Resend:
+In local mode the app records organizer invitations, registration confirmations, one registration receipt when an account-backed order confirms, and waitlist offers in `email_messages` and sends nothing. To rehearse with Resend:
 
 1. In the project's Resend account, create a sending key and verify a sender domain. For an initial test, Resend's `onboarding@resend.dev` sender can send to the account owner's address.
 2. In the server's local `.env`, set `EMAIL_MODE=resend`, `EMAIL_FROM=<sender address>`, `RESEND_API_KEY=<sending key>`, and `EMAIL_TEST_RECIPIENTS=<comma-separated test addresses>`. Restart `npm run dev`.
