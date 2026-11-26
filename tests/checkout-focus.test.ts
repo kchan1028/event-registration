@@ -60,10 +60,10 @@ describe('registration takes the flag in its mount effect', () => {
 
   it('calls retainCheckoutFocus once, from the mount effect', () => {
     const start = register.indexOf('export function Register(');
-    const functionAt = register.indexOf('\nfunction ', start + 1);
-    const exportAt = register.indexOf('\nexport function ', start + 1);
-    const ends = [functionAt, exportAt].filter((index) => index >= 0);
-    const next = ends.length ? Math.min(...ends) : -1;
+    // The next top-level declaration ends Register, including const, async, and default forms.
+    const boundary = /\n(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s|\n(?:export\s+)?(?:const|let|var)\s+\w+\s*=|\n(?:export\s+)?class\s/g;
+    boundary.lastIndex = start + 1;
+    const next = boundary.exec(register)?.index ?? -1;
     expect(start).toBeGreaterThanOrEqual(0);
     expect(next).toBeGreaterThan(start);
     const body = register.slice(start, next);
