@@ -36,9 +36,10 @@ function ParticipantCountContent({ eventId, refreshKey }: { eventId: string; ref
         </>
       )}
       <p className="muted small">
-        Confirmed orders for the same junior profile count as one participant. Orders without a junior profile count together when staff link them as the same rider.
-        Check-in uses same-rider links for all orders. Linking across junior profiles, or linking a junior order to an adult order, can make one check-in card for two participants.
-        Unlinked orders for the same junior profile can make two check-in cards for one participant.
+        Orders for one junior profile count as one participant. Adult orders marked as self-registration count together for the same signed-in account.
+        Other orders count together when staff link them as the same rider.
+        Check-in uses same-rider links for all orders. Linking across participant groups can make one check-in card for two participants.
+        Unlinked orders for one participant can make two check-in cards.
       </p>
     </div>
   );
