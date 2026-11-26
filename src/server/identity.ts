@@ -91,6 +91,7 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
       );
     },
 
+    /** History follows the claim saved with the order. Participant counts group adult self-registrations by account. */
     async eventParticipantHistory(eventId: string, orderId: string) {
       const history = await db.all<{ orderId: string }>(
         `WITH event_history AS (
