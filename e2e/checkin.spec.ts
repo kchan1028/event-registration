@@ -30,6 +30,7 @@ test('typed code and name lookup work after camera permission is denied', async 
     };
   });
   await page.goto(`/#/events/${eventId}/check-in`);
+  await expect(page).toHaveTitle(`Check-in · ${list.eventName} | CycleReg`);
   const search = page.getByRole('searchbox', { name: 'Find a rider' });
   const detail = page.getByRole('region', { name: 'Rider check-in' });
   await expect(page.getByText(`${riders.length} riders on`)).toBeVisible();

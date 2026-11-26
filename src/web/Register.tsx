@@ -244,6 +244,9 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [draft, update] = useDraft(eventId, kiosk);
+  const checkoutMain = useRef<HTMLElement>(null);
+  const focusedStep = useRef(draft.step);
+  const focusedSignIn = useRef(false);
 
   const [offer, setOffer] = useState<WaitlistOffer | null>(null);
   const [offerFailure, setOfferFailure] = useState<{ token: string; message: string; retryable: boolean } | null>(null);
@@ -251,6 +254,21 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
   const [offerAttempt, setOfferAttempt] = useState(0);
   const session = useSession();
   const signedIn = session.status === 'signed-in';
+  const eventName = ev?.config.event.name;
+
+  useEffect(() => {
+    if (!kiosk && eventName) document.title = `Race registration · ${eventName} | CycleReg`;
+  }, [eventName, kiosk]);
+
+  useEffect(() => {
+    if (focusedStep.current === draft.step && !(focusedSignIn.current && signedIn)) return;
+    const target = checkoutMain.current?.querySelector<HTMLElement>('[data-checkout-step]');
+    if (!target) return;
+    focusedStep.current = draft.step;
+    focusedSignIn.current = target.id === 'signin-prompt-title';
+    target.focus();
+  });
+
   const linkParams = new URLSearchParams(kiosk ? '' : window.location.hash.split('?')[1] ?? '');
   const offerToken = linkParams.get('offer');
 
@@ -408,7 +426,7 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
   return (
     <div className="reg">
       <RegHeader demo={config.event.isDemo} mode={ev.paymentMode} kiosk={kiosk} />
-      <main className="reg__main">
+      <main ref={checkoutMain} className="reg__main">
         <section className="reg__event" aria-labelledby="reg-title">
           {!kiosk && <a className="link small" href={href({ page: 'events' })}>All events</a>}
           <h1 id="reg-title" ref={eventHeading} tabIndex={-1}>{config.event.name}</h1>
@@ -506,12 +524,12 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
         )}
         {draft.step === 'races' && <ChooseRaces ev={ev} draft={draft} update={update} kiosk={kiosk} />}
         {blockedDraft ? (
-          <section className="note note--warn cancellation-notice" aria-label="Cancelled race selection">
+          <section className="note note--warn cancellation-notice" aria-label="Cancelled race selection" tabIndex={-1} data-checkout-step>
             <p>A selected race was cancelled. Return to race selection and remove cancelled entries before continuing. Your entered details are saved.</p>
             <button className="btn btn--secondary" onClick={() => goTo('races')}>Review race selection</button>
           </section>
         ) : draft.step !== 'races' && !signedIn ? (
-          <SignInPrompt title="Sign in to continue your registration">
+          <SignInPrompt title="Sign in to continue your registration" checkoutStep>
             Your race choices are saved. Sign in with your email to enter your details, sign the waiver, and hold your places. Your registration is kept in your
             account.
           </SignInPrompt>
@@ -519,7 +537,12 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
           <>
         {draft.step === 'details' && <DetailsStep config={config} draft={draft} update={update} goTo={goTo} kiosk={kiosk} />}
         {draft.step === 'waiver' && <Waiver ev={ev} draft={draft} update={update} goTo={goTo} setEvent={setEv} />}
-        {draft.step === 'review' && draft.orderId && <Review orderId={draft.orderId} eventId={eventId} goTo={goTo} paymentMode={ev.paymentMode} onKioskOrder={onKioskOrder} />}
+        {draft.step === 'review' && draft.orderId && (
+          <section className="reg__panel" aria-labelledby="review-title">
+            <h2 id="review-title" tabIndex={-1} data-checkout-step>Review your order</h2>
+            <Review orderId={draft.orderId} eventId={eventId} goTo={goTo} paymentMode={ev.paymentMode} onKioskOrder={onKioskOrder} />
+          </section>
+        )}
           </>
         )}
       </main>
@@ -650,7 +673,7 @@ function ChooseRaces({ ev, draft, update, kiosk }: { ev: PublicEvent; draft: Dra
         <ErrorSummary errors={errors} />
         <WindowBanner ev={ev} />
         <section className="about" aria-labelledby="about-title">
-          <h2 id="about-title" tabIndex={-1}>About you</h2>
+          <h2 id="about-title" tabIndex={-1} data-checkout-step>About you</h2>
           <p className="muted">Use your details to find matching races, or browse the full schedule.</p>
           <Field label="Use a demo rider (fake data)" id="f-demo-rider" className="about__demo">
             {(id) => (
@@ -757,7 +780,7 @@ function ChooseRaces({ ev, draft, update, kiosk }: { ev: PublicEvent; draft: Dra
               {config.races
                 .filter((r) => r.dayId === day.id)
                 .map((race) => {
-                  const groups = [...config.startGroups.filter((g) => g.raceId === race.id)].sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
+                  const groups = config.startGroups.filter((g) => g.raceId === race.id).sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
                   return (
                     <div key={race.id} className="sched-race">
                       <h3 className="sched-race__title">
@@ -1209,7 +1232,7 @@ function DetailsStep({ config, draft, update, goTo, kiosk }: { config: EventConf
       }}
     >
       <ErrorSummary errors={summary} />
-      <h2>Racer details</h2>
+      <h2 tabIndex={-1} data-checkout-step>Racer details</h2>
       <p className="muted">Entered once for every race in this order. Required fields are marked.</p>
       {d.demoRiderId && <p className="note">Prefilled from a demo rider. These details are fictional fixtures.</p>}
       <div className="form-row">
@@ -1411,7 +1434,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
   return (
     <section className="reg__panel" aria-labelledby="waiver-title">
       <ErrorSummary errors={errors} />
-      <h2 id="waiver-title">Waiver</h2>
+      <h2 id="waiver-title" tabIndex={-1} data-checkout-step>Waiver</h2>
       {pending && <>
         <p className="note" role="status">Your reservation request is pending. Retry to recover the same order before changing your entries. Your original details, waiver and signature are saved.</p>
         <Field id="reservation-reference" label="Reservation reference" hint="If retries keep failing, share this reference with the event organizer before starting another registration.">
@@ -1568,8 +1591,7 @@ function Review({ orderId, eventId, goTo, paymentMode, onKioskOrder }: {
   const ss = String(left % 60).padStart(2, '0');
 
   return (
-    <section className="reg__panel" aria-labelledby="review-title">
-      <h2 id="review-title">Review your order</h2>
+    <>
       <PaymentNote mode={paymentMode} />
       {!expired ? (
         <p className="hold" role="timer" aria-live="off">
@@ -1633,7 +1655,7 @@ function Review({ orderId, eventId, goTo, paymentMode, onKioskOrder }: {
       <button className="btn btn--ghost" disabled={busy} onClick={() => goTo('races')}>
         <Icon name="arrow-left" /> {cancelled ? 'Change my entries' : 'Change my entries (releases the hold)'}
       </button>
-    </section>
+    </>
   );
 }
 

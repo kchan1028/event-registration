@@ -50,6 +50,27 @@ export function navigate(route: Route): void {
   window.location.hash = href(route);
 }
 
+const pageTitles = {
+  home: 'Organizer workspace',
+  register: 'Race registration',
+  events: 'Find a race',
+  order: 'Registration confirmation',
+  'my-registrations': 'My registrations',
+  checkin: 'Check-in',
+  roster: 'Fallback roster',
+};
+
+const organizerTitles = {
+  race: 'Category builder',
+  setup: 'Event setup',
+  pools: 'Capacity pools',
+  publish: 'Publish event',
+  preview: 'Registration preview',
+  registrations: 'Registrations',
+  import: 'Import categories',
+  startlists: 'Start lists',
+};
+
 export function App() {
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   useEffect(() => {
@@ -59,6 +80,14 @@ export function App() {
   }, []);
 
   const kiosk = kioskEventId();
+  const title = kiosk !== null
+    ? TEST_MODE && kiosk ? 'Test registration kiosk' : 'Test kiosk unavailable'
+    : route.page === 'event' ? organizerTitles[route.view] : pageTitles[route.page];
+  const eventId = 'eventId' in route ? route.eventId : undefined;
+  useEffect(() => {
+    document.title = `${title} | CycleReg`;
+  }, [title, eventId]);
+
   if (kiosk !== null) return TEST_MODE && kiosk
     ? <KioskRegistration key={kiosk} eventId={kiosk} />
     : <main className="state-page"><h1>Test kiosk unavailable</h1><p>Ask staff for the public registration address.</p></main>;

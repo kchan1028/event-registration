@@ -18,34 +18,34 @@ function systemTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-function apply(theme: Theme) {
-  document.documentElement.dataset.theme = theme;
-}
+export function useTheme() {
+  const [override, setOverride] = useState(storedTheme);
+  const [system, setSystem] = useState(systemTheme);
+  const theme = override ?? system;
+  const next = theme === 'dark' ? 'light' : 'dark';
+  const followsSystem = next === system;
 
-export function useTheme(): [Theme, () => void] {
-  const [theme, setTheme] = useState<Theme>(() => (document.documentElement.dataset.theme as Theme) || storedTheme() || systemTheme());
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]')?.setAttribute('content', override ?? 'light dark');
+  }, [theme, override]);
 
-  useEffect(() => apply(theme), [theme]);
-
-  // Follow the system setting until the user picks a theme on this device.
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = () => {
-      if (!storedTheme()) setTheme(mq.matches ? 'dark' : 'light');
-    };
+    const onChange = () => setSystem(mq.matches ? 'dark' : 'light');
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
   const toggle = () => {
-    const next: Theme = theme === 'dark' ? 'light' : 'dark';
     try {
-      localStorage.setItem(THEME_KEY, next);
+      if (followsSystem) localStorage.removeItem(THEME_KEY);
+      else localStorage.setItem(THEME_KEY, next);
     } catch {
       /* storage blocked: the choice lasts for this page only */
     }
-    setTheme(next);
+    setOverride(followsSystem ? null : next);
   };
 
-  return [theme, toggle];
+  return { theme, next, followsSystem, toggle };
 }
