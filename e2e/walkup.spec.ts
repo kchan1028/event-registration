@@ -276,6 +276,7 @@ test('shared test kiosk clears the receipt and draft between rider sessions on t
     const details = kiosk.getByRole('button', { name: 'Continue to racer details' });
     await details.click();
     await kiosk.getByRole('button', { name: 'Continue to the waiver' }).click();
+    await expect(kiosk.getByRole('checkbox', { name: 'I’m registering myself' })).toHaveCount(0);
     await kiosk.getByLabel('I have read the whole waiver').check();
     await kiosk.getByLabel(/Type your full name to sign/).fill('Alex Demo');
     await kiosk.getByLabel('I agree to this waiver', { exact: true }).check();

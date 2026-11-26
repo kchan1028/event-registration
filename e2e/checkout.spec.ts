@@ -53,7 +53,10 @@ test('two races on one day: second-race discount, fees, signature errors, back n
   const summary = page.locator('.error-summary');
   await expect(summary).toContainText('Type your full name to sign the waiver.');
   await expect(summary).toContainText('Check the box to confirm you agree to the waiver.');
+  await expect(page.getByRole('checkbox', { name: 'I’m registering myself' })).not.toBeChecked();
+  const proxyRequest = page.waitForRequest((request) => request.method() === 'POST' && request.url().includes('/api/rider/events/') && request.url().endsWith('/orders'));
   await signAndReview(page, 'Alex Demo');
+  expect((await proxyRequest).postDataJSON()).not.toHaveProperty('selfRegistrationConfirmed');
   await expect(page.getByRole('heading', { name: 'Review your order' })).toBeFocused();
 
   await expect(page.locator('.simulated').first()).toHaveText('Simulated payment: no money is charged.');
@@ -79,6 +82,62 @@ test('two races on one day: second-race discount, fees, signature errors, back n
   await expect(page.locator('.receipt')).toContainText('Simulated payment: no money is charged.');
   await expect(page.locator('.done__entry').first()).toContainText('License: simulated check valid (demo)');
   await expect(page.locator('.done__entry').first()).toContainText('Waiver signed by Alex Demo');
+});
+
+test('adult self-registration requires a fresh choice and retries the same signed-in request', async ({ page }) => {
+  const eventId = await openEvent(page, 'criterium');
+  await page.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+  await page.getByRole('checkbox', { name: /DVC-M45/ }).click();
+  await page.getByRole('button', { name: 'Continue to racer details' }).click();
+  const continueToWaiver = page.getByRole('button', { name: 'Continue to the waiver' });
+  await continueToWaiver.click();
+  const self = page.getByRole('checkbox', { name: 'I’m registering myself' });
+  await expect(self).toBeEnabled();
+  await self.check();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await continueToWaiver.click();
+  await expect(self).not.toBeChecked();
+  await page.setViewportSize({ width: 360, height: 800 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  expect((await new AxeBuilder({ page }).include('[aria-labelledby="waiver-title"]').analyze()).violations).toEqual([]);
+  await self.focus();
+  await self.press('Space');
+  await expect(self).toBeChecked();
+
+  const requests: unknown[] = [];
+  const replies: { id: string; selfRegistrationConfirmed?: boolean }[] = [];
+  await page.route(`**/api/rider/events/${eventId}/orders`, async (route) => {
+    requests.push(route.request().postDataJSON());
+    const response = await route.fetch();
+    replies.push(await response.json());
+    if (requests.length === 1) await route.abort('failed');
+    else await route.fulfill({ response });
+  });
+  await signAndReview(page, 'Alex Demo');
+  await expect(page.locator('.error-summary')).toContainText('Cannot reach');
+  await expect(page.getByText('Your self-registration confirmation is saved with this pending request.')).toBeVisible();
+  await expect(self).toHaveCount(0);
+  expect(requests[0]).toMatchObject({ selfRegistrationConfirmed: true });
+  expect(replies[0]).toMatchObject({ selfRegistrationConfirmed: true });
+
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Retry reservation' })).toBeEnabled();
+  const switchAccount = async (email: string) => {
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.getByRole('button', { name: 'Sign in with email' }).click();
+    await page.getByLabel('Test email').fill(email);
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  };
+  await switchAccount('different-checkout-rider@example.test');
+  const retry = page.getByRole('button', { name: 'Retry reservation' });
+  await expect(retry).toBeDisabled();
+  await expect(page.getByText(/Sign back in with the account that confirmed self-registration/)).toBeVisible();
+  expect(requests).toHaveLength(1);
+  await switchAccount(E2E_ORGANIZER);
+  await retry.click();
+  await expect(page.getByRole('heading', { name: 'Review your order' })).toBeVisible();
+  expect(requests).toEqual([requests[0], requests[0]]);
+  expect(replies).toEqual([replies[0], replies[0]]);
 });
 
 test('weekend bundle needs both days; missing details show field messages and a summary', async ({ page }) => {
@@ -144,6 +203,7 @@ test('junior with guardian: only the guardian’s typed name signs', async ({ pa
   await expect(page.getByLabel('Guardian name')).toHaveValue('Jordan Demo');
   await page.getByRole('button', { name: 'Continue to the waiver' }).click();
 
+  await expect(page.getByRole('checkbox', { name: 'I’m registering myself' })).toHaveCount(0);
   await signAndReview(page, 'Casey Demo');
   await expect(page.locator('.error-summary')).toContainText("The typed name must match the rider's name (or the guardian's, for a minor).");
   await page.getByLabel(/Type your full name to sign/).fill('Jordan Demo');
