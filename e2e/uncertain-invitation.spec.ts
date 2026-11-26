@@ -186,8 +186,9 @@ for (const action of ['closing Team', 'cancelling the invitation'] as const) {
       Object.defineProperty(document, 'visibilityState', { configurable: true, value: visibility });
       document.dispatchEvent(new Event('visibilitychange'));
     }, state);
+    const hiddenRequest = page.waitForRequest((request) => request.url().endsWith(`${base}/members`), { timeout: 400 });
     await changeVisibility('hidden');
-    await page.clock.runFor(100);
+    await expect(hiddenRequest).rejects.toThrow('Timeout');
     expect(reads).toBe(1);
     await changeVisibility('visible');
     await expect.poll(() => reads).toBe(2);
@@ -209,6 +210,7 @@ for (const action of ['closing Team', 'cancelling the invitation'] as const) {
     await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 
     if (action === 'closing Team') {
+      await expect(page.locator('html')).toHaveAttribute('data-test-deadline-timer', 'cancelled');
       await openTeam.click();
       await expect(team.getByText(invitation.email, { exact: true })).toBeVisible();
     }
