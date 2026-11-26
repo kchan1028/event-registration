@@ -9,8 +9,15 @@ import { as, fakeAuth } from '../tests/support/auth';
 import { adminUrl, TEST_SERVER_URL } from '../tests/support/server';
 import { publishReviewed } from '../tests/support/publish';
 
-// An isolated local app returns an actual failed refund through its API; the provider is fake.
-for (const storageAvailable of [true, false]) test(`recovers the exact failed refund without another provider call (storage available: ${storageAvailable})`, async ({ page }) => {
+const cases = [
+  { outcome: 'returned failure', storageAvailable: true },
+  { outcome: 'returned failure', storageAvailable: false },
+  { outcome: 'request refusal', storageAvailable: true },
+  { outcome: 'later failure notification', storageAvailable: true },
+] as const;
+
+for (const { outcome, storageAvailable } of cases) test(`recovers ${outcome} without another provider call (storage available: ${storageAvailable})`, async ({ page }) => {
+  const failureReason = 'Fictional provider rejection';
   const database = `cyclereg_failed_refund_${process.pid}_${Date.now()}_e2e`;
   const url = new URL(process.env.E2E_DATABASE_URL ?? TEST_SERVER_URL);
   expect(['localhost', '127.0.0.1', '::1', '[::1]']).toContain(url.hostname);
@@ -25,7 +32,14 @@ for (const storageAvailable of [true, false]) test(`recovers the exact failed re
     const provider: PaymentProvider = {
       mode: 'stripe_test',
       async createCheckout(req) { return { id: 'cs_fake_failed_refund', url: 'https://checkout.fictional.test/session', expiresAt: new Date(req.expiresAt * 1000).toISOString() }; },
-      async refund(req) { refundCalls++; return { providerId: 're_fake_failed_refund', refundId: req.refundId, status: 'failed', failureReason: 'Fictional provider rejection' }; },
+      async refund(req) {
+        refundCalls++;
+        if (outcome === 'request refusal') throw Object.assign(new Error(failureReason), { statusCode: 402 });
+        if (outcome === 'later failure notification') {
+          return { providerId: 're_fake_failed_refund', refundId: req.refundId, status: 'pending', failureReason: null };
+        }
+        return { providerId: 're_fake_failed_refund', refundId: req.refundId, status: 'failed', failureReason };
+      },
       parseWebhook(raw, signature) { if (signature !== 'fictional-test-notification') throw new HttpError(400, 'Fictional signature refused.'); return JSON.parse(raw) as ProviderEvent; },
     };
     app = buildApp({ databaseUrl: url.toString(), serveWeb: true, auth: fakeAuth(), payments: provider, email: localEmail(), appUrl: 'http://127.0.0.1', now: () => new Date('2027-03-01T18:00:00Z') }).app;
@@ -57,11 +71,12 @@ for (const storageAvailable of [true, false]) test(`recovers the exact failed re
     await page.getByLabel('Reason for the refund (required)').fill('Fictional failed provider result');
     let interrupted = true;
     let body: { clientRequestId: string } | undefined;
+    let committedStatus: number | undefined;
     await page.route(`**/api/orders/${order.id}/refunds`, async (route) => {
       if (!interrupted) return route.continue();
       if (route.request().method() === 'POST') {
         body = route.request().postDataJSON();
-        const saved = await route.fetch(); expect(saved.ok()).toBe(true);
+        committedStatus = (await route.fetch()).status();
       }
       await route.abort('failed');
     });
@@ -69,6 +84,7 @@ for (const storageAvailable of [true, false]) test(`recovers the exact failed re
     const recovery = page.getByRole('region', { name: 'Recover refund for Failed Fictional' });
     await expect(recovery.getByRole('button', { name: 'Retry original refund' })).toBeEnabled();
     expect(refundCalls).toBe(1);
+    expect(committedStatus).toBe(outcome === 'request refusal' ? 409 : 200);
     if (storageAvailable) await page.reload();
     else expect(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith('cyclereg.refund.')))).toEqual([]);
     await expect(recovery).toBeVisible();
@@ -81,9 +97,26 @@ for (const storageAvailable of [true, false]) test(`recovers the exact failed re
       for (const width of [360, 1440]) {
         await page.setViewportSize({ width, height: 1000 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-        await recovery.screenshot({ path: `test-results/failed-refund-${theme}-${width}.png` });
+        await recovery.screenshot({ path: test.info().outputPath(`failed-refund-${theme}-${width}.png`) });
       }
       expect((await new AxeBuilder({ page }).include('[aria-label="Recover refund for Failed Fictional"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+    }
+    if (outcome === 'later failure notification') {
+      const pending = (await call('GET', `/api/orders/${order.id}/refunds`)).json();
+      expect(pending.refunds).toEqual([expect.objectContaining({ amountCents: 100, status: 'pending' })]);
+      expect(pending.payments).toEqual([expect.objectContaining({ remainingCents: order.totalCents - 100 })]);
+      const event: ProviderEvent = {
+        id: 'evt_fake_refund_failed', type: 'refund.failed', outcome: 'refund', sessionId: null, orderId: order.id,
+        amountCents: 100, currency: 'usd', paymentRef: 'pi_fake_failed_refund',
+        refund: { providerId: 're_fake_failed_refund', refundId: pending.refunds[0].id, status: 'failed', failureReason },
+      };
+      const failed = await app!.inject({
+        method: 'POST', url: '/api/payments/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': 'fictional-test-notification' },
+        payload: JSON.stringify(event),
+      });
+      expect(failed.statusCode).toBe(200);
+      expect(failed.json()).toMatchObject({ result: 'refund_failed' });
     }
     interrupted = false;
     await recovery.getByRole('button', { name: 'Retry original refund' }).focus();
@@ -93,7 +126,8 @@ for (const storageAvailable of [true, false]) test(`recovers the exact failed re
     await expect(page.getByRole('button', { name: 'Refund Failed Fictional', exact: true })).toBeFocused();
     const history = await (await call('GET', `/api/orders/${order.id}/refunds`)).json();
     expect(history.refunds).toHaveLength(1);
-    expect(history.refunds[0]).toMatchObject({ clientRequestId: body!.clientRequestId, amountCents: 100, status: 'failed', failureReason: 'Fictional provider rejection' });
+    expect(history.refunds[0]).toMatchObject({ clientRequestId: body!.clientRequestId, amountCents: 100, status: 'failed', failureReason });
+    expect(history.payments).toEqual([expect.objectContaining({ remainingCents: order.totalCents, refundedCents: 0 })]);
     expect(refundCalls).toBe(1);
     const after = (await call('GET', `/api/orders/${order.id}`)).json();
     expect(after.status).toBe('confirmed');
