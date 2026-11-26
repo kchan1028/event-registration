@@ -5,6 +5,7 @@ test('an uncertain invitation can be retried without promising extra days', asyn
   const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
   const expiresAt = '2027-06-01T12:00:00.000Z';
   const teamList = {
+    asOf: '2027-05-01T12:00:00.000Z',
     members: [{ accountId: 'acct_owner', email: 'organizer@example.test', role: 'owner' }],
     invitations: [
       { email: 'timer@example.test', role: 'finance', expiresAt, revision: 'rev_lost', earlierEmail: false, suppressed: null, lastEmail: { attemptId: 'eml_lost', status: 'uncertain', at: '2027-05-01T12:00:00.000Z' } },
@@ -31,6 +32,7 @@ test('an uncertain invitation can be retried without promising extra days', asyn
     await route.fulfill({ json: teamList });
   });
   for (const theme of ['light', 'dark']) {
+    await page.clock.setFixedTime(new Date(theme === 'light' ? '2030-01-01T00:00:00Z' : '2019-01-01T00:00:00Z'));
     await page.goto('/');
     await page.evaluate((value) => localStorage.setItem('cyclereg-theme', value), theme);
     await page.reload();

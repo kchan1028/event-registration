@@ -312,6 +312,8 @@ export async function downloadFile(url: string): Promise<void> {
 }
 
 export interface MemberList {
+  /** Server time when the list was assembled. Older servers can omit it. */
+  asOf?: string;
   members: { accountId: string; email: string; role: Role; revision: string }[];
   invitations: Invitation[];
   /** Addresses in this organization whose operational mail is stopped. */
