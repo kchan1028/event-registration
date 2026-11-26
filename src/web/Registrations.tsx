@@ -10,6 +10,7 @@ import { refundedCents } from './format';
 import { CancellationPreview } from './registrations/CancellationPreview';
 import { ChangesToResolve } from './registrations/ChangesToResolve';
 import { OrderRow } from './registrations/OrderRow';
+import { ParticipantCount } from './registrations/ParticipantCount';
 import { SameRider } from './registrations/SameRider';
 import { ReconciliationDownload } from './registrations/ReconciliationDownload';
 import { ReservationLookup } from './registrations/ReservationLookup';
@@ -132,6 +133,7 @@ export function Registrations({ draft }: { draft: Draft }) {
       )}
       {canManage && <ChangesToResolve eventId={eventId} refreshKey={orders} />}
 
+      {published && canManage && orders !== null && <ParticipantCount key={eventId} eventId={eventId} refreshKey={orders} />}
       {canManage && <SameRider eventId={eventId} onChanged={reload} />}
 
       {canManage && <Waitlists draft={draft} onChanged={reload} />}
