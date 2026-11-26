@@ -91,9 +91,17 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
     if (open && !list) api.members(orgId).then(setList).catch((e: ApiError) => setError(e.message));
   }, [open, list, orgId, setList]);
 
+  const [deadlineTick, setDeadlineTick] = useState(0);
   const now = teamTime(snapshot);
   const deadlines = list?.invitations.map((invitation) => Date.parse(invitation.expiresAt)).filter((deadline) => deadline > now) ?? [];
   const nextDeadline = Math.min(...deadlines);
+
+  useEffect(() => {
+    if (!open || !Number.isFinite(nextDeadline)) return;
+    const delay = Math.min(Math.max(1, nextDeadline - teamTime(snapshot)), 2_147_483_647);
+    const timer = window.setTimeout(() => setDeadlineTick((tick) => tick + 1), Math.ceil(delay));
+    return () => window.clearTimeout(timer);
+  }, [open, snapshot, nextDeadline, deadlineTick]);
 
   useEffect(() => {
     if (!open || !snapshot || busy) return;
@@ -112,15 +120,12 @@ export function TeamPanel({ orgId, orgName }: { orgId: string; orgName: string }
       }
     }
 
-    const delay = Math.min(Math.max(0, nextDeadline - teamTime(snapshot)), 2_147_483_647);
-    const timer = Number.isFinite(nextDeadline) ? window.setTimeout(refresh, delay) : undefined;
     document.addEventListener('visibilitychange', refresh);
     return () => {
       active = false;
-      window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [open, snapshot, busy, orgId, nextDeadline]);
+  }, [open, snapshot, busy, orgId]);
 
   async function run(action: () => Promise<MemberList>) {
     setBusy(true);

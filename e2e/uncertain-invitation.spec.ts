@@ -112,10 +112,10 @@ for (const trigger of ['deadline', 'visibility'] as const) {
     await team.getByLabel('Email').fill(address);
     await expect(send).toBeVisible();
 
-    asOf = expiresAt;
     if (trigger === 'deadline') {
       await page.clock.fastForward(60_001);
     } else {
+      asOf = expiresAt;
       // The server reaches the deadline while browser elapsed time is still before it.
       await page.evaluate(() => {
         let visibility = 'hidden';
