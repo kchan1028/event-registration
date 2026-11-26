@@ -162,6 +162,26 @@ Keep the exclusive event lock until an alternative proves the same published ver
 
 **Hosting decision remains open** (November 18, 2026, project owner). Establish the expected opening peak and acceptable p95/error budgets from organizer evidence before setting hosted thresholds. Retain the current lock provisionally. Revisit at the pre-hosting gate with representative event sizes, sustained arrivals, independent readers/writers and hosted pool telemetry. See [issue #195](https://github.com/kchan1028/event-registration/issues/195).
 
+
+### Local mixed public and race-day read contention
+
+November 25, 2026, at application commit `5d96bab`. Five rounds used separate disposable databases, a fresh Fastify application per round in one test worker, an application pool of ten connections, Node 24.21.0 on an ARM64 Mac, and local PostgreSQL 17.12 in Docker. Requests used Fastify injection. The primary event was the two-day fictional demo with test entries removed, one paid two-race order, and one saved start-list snapshot. A published fictional Harbor criterium supplied an unrelated-event probe. Each route was warmed before timing.
+
+Each round measured one same-event hold alone, then two bursts of 33 concurrent requests. Each burst included 24 public detail reads on the primary event, three protected check-in reads across both days (the two-day roster load plus one additional desk read), four protected downloads (entries, ledger, current start list, and the saved snapshot), and one public detail read on the second event. The remaining request was either a hold on the criterium or a reviewed simulated cancellation of the road race. The holds were released outside the timed trials. Creation of the cancellation plan and its preview was also outside the timed trial.
+
+| Measured request | Mixed with hold (ms) | Mixed with cancellation (ms) |
+|---|---:|---:|
+| Public detail, median round p95 | 74.44 | 62.12 |
+| Check-in and day roster reads, median round maximum | 140.95 | 116.66 |
+| Protected CSV downloads, median round maximum | 133.83 | 114.61 |
+| Second-event public probe, median | 57.71 | 45.71 |
+| Competing write, median | 87.49 | 139.41 |
+| Peak busy connections / queued pool requests / advisory-lock waiters | 10 / 23 / 9 | 10 / 23 / 9 |
+
+The standalone hold median was 9.22 ms (8.42–10.35 ms). With mixed reads it was 87.49 ms (81.00–88.21 ms). No standalone cancellation baseline was collected. Each public p95 is nearest-rank over 24 reads per round, then the median across five rounds. The smaller route groups report maxima per round. The observer sampled pool counters and PostgreSQL advisory waits every 2 ms plus query and scheduling time, with 58–66 samples per mixed burst. Peaks can occur at different instants.
+
+All 320 timed GETs returned 200, all ten holds returned 201, and all five simulated cancellations returned 200. A follow-up public read confirmed the road-race category was closed in every round. The mixed workload occupied the entire pool and delayed the unrelated-event probe. Keep this evidence alongside the earlier public-only experiment. Both used small fictional datasets, a single application instance, and short bursts, so they leave sustained arrival rates, larger rosters, network latency and representative hosted budgets open. Keep [#195](https://github.com/kchan1028/event-registration/issues/195) open for that evaluation.
+
 ## Benchmark patterns, economics and owner decisions
 
 Platform X/Y/Z labels are scoped to this report; no earlier mapping is published, although public descriptions may permit inference. All benchmark statements are V, not firsthand transactions. Platform X's indexed official documentation describes independent sub-events under one event, optional grouping/shared limits and configurable demographic filters. Platform Y's directly readable documentation describes guardian signing/delegation and waiver-status metadata export. Platform Z's directly readable help describes event selection, multiple registrants, final review and receipt recovery [S10–S12]. These patterns support clear hierarchy, signer accountability and recovery; demographic filtering is not license verification, and multi-person checkout is not automatic MVP scope. Earlier [design research](design-research.md) retains the broader task comparison. Discovery, mobile, keyboard, fees, actual refunds, check-in and offline behavior were not freshly exercised. Missing public documentation is not evidence of a missing capability.
