@@ -829,6 +829,13 @@ export const MIGRATIONS: string[] = [
     (kind = 'organizer_invitation' AND order_id IS NULL)
     OR (kind = 'registration_confirmation' AND order_id IS NOT NULL AND ref = order_id)
   );`,
+  `CREATE TABLE confirmation_retry_requests (
+    id text PRIMARY KEY,
+    email_id text NOT NULL REFERENCES email_messages(id) ON DELETE CASCADE,
+    actor_account_id text REFERENCES accounts(id) ON DELETE SET NULL,
+    requested_at timestamptz NOT NULL
+  );
+  CREATE INDEX confirmation_retry_requests_by_email ON confirmation_retry_requests(email_id);`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
