@@ -797,6 +797,16 @@ Protected CSV attribution is Implemented locally. After authorization and file p
 
 Before storing real rider data, approve retention periods and deletion procedures for registrations, waiver evidence, minors, emergency contacts, exports, and audit records. Demonstrate a backup restore, account and organization access revocation, and an access-restricted export audit. Record the incident owner and escalation path. Automated tests with fictional data do not satisfy these operating approvals.
 
+#### Minor-data approval
+
+Open, first raised November 17, 2026, with the current API field review recorded November 25, 2026. The project owner owns acceptance. The privacy and support operators who will carry it out still need to be named. Track acceptance under [#170](https://github.com/kchan1028/event-registration/issues/170).
+
+- Approve the minimum evidence each authorized viewer needs. Use the [current API field review](SECURITY.md#current-order-evidence-by-viewer) to decide who needs signature name and role, accepting account ID, accepted time, declared racing age, and emergency contact. Consider keeping the full acceptance record for authorized evidence retrieval and narrowing routine list and read-only responses. Any projection change needs explicit approval and tests for the affected roles.
+- Decide retention and deletion for junior profiles, grant and invitation history, original waiver evidence, and support claim review data. Specify what stays available after account deletion, how retained evidence or foreign keys are handled, and how the decision applies to exports and restored backups. The existing 365-day decision applies to emergency-contact lookup records.
+- Name the support approver and escalation owner. Define how support confirms authority, handles an opaque review reference, and resolves disputed access or deletion without giving event staff a family override. Verify authorization, evidence handling and rollback with fictional data after the procedures are approved.
+
+Fictional checks may continue under the current access model. Real minor data remains blocked until these decisions and the associated real identity and consent acceptance are recorded. Revisit at the Phase 2 exit review and before enabling real-data use.
+
 ### Display themes
 
 Status: Implemented in the local build (organizer, rider, and check-in screens); signed-in sync is Planned. Riders register at night and volunteers check riders in outdoors, so one fixed color scheme will not suit everyone.
