@@ -11,7 +11,7 @@ import { CancellationPreview } from './registrations/CancellationPreview';
 import { ChangesToResolve } from './registrations/ChangesToResolve';
 import { OrderRow } from './registrations/OrderRow';
 import { SameRider } from './registrations/SameRider';
-import { ReconciliationDownload } from './registrations/ReconciliationDownload';
+import { FinanceDownloads } from './registrations/FinanceDownloads';
 import { ReservationLookup } from './registrations/ReservationLookup';
 import { Summary } from './registrations/Summary';
 import { Waitlists } from './registrations/Waitlists';
@@ -74,7 +74,7 @@ export function Registrations({ draft }: { draft: Draft }) {
         <p className="note">Riders can register once the event is published. {draft.readOnly ? 'A registration manager or owner publishes it.' : 'Publish from Review and publish.'}</p>
       )}
 
-      {published && can(roles, 'export.ledger') && <ReconciliationDownload key={eventId} eventId={eventId} />}
+      {published && can(roles, 'export.ledger') && <FinanceDownloads key={eventId} eventId={eventId} />}
       {published && <Summary eventId={eventId} refreshKey={orders} />}
       {published && orders !== null && can(roles, 'payments.refund') && <CancellationPreview eventId={eventId} revision={draft.data.revision} publishedVersion={draft.data.publishedVersion} orders={orders} onExecutionSaved={reload} />}
 
