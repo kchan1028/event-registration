@@ -4,7 +4,7 @@ import type { EventConfig } from '../src/shared/schema';
 import { publishReviewed } from './support/publish';
 
 // Management uses the screen; a separate fictional guardian accepts through the existing API.
-for (const recovery of ['refresh', 'retry'] as const) test(`guardians manage invitations and recover an interrupted removal by ${recovery}`, async ({ page, browser }, testInfo) => {
+for (const recovery of ['refresh', 'failed-refresh'] as const) test(`guardians manage invitations and recover an interrupted removal with ${recovery}`, async ({ page, browser }, testInfo) => {
   const recoveryAction = `management-${recovery}`;
   const { eventId } = await (await page.request.post('/api/demo')).json();
   expect((await publishReviewed(page.request, `/api/events/${eventId}`, { acknowledgeWarnings: true })).ok()).toBe(true);
@@ -65,7 +65,9 @@ for (const recovery of ['refresh', 'retry'] as const) test(`guardians manage inv
     await removal.getByRole('checkbox').check();
     await removal.getByRole('button', { name: 'Confirm guardian removal' }).click();
     await expect(management.getByRole('alert')).toContainText('3 to 300 characters');
-    await removal.getByLabel('Reason for removing guardian access', { exact: true }).fill('Fictional access change ' + 'R'.repeat(240));
+    const originalReason = 'Fictional access change ' + 'R'.repeat(240);
+    const reason = removal.getByLabel('Reason for removing guardian access', { exact: true });
+    await reason.fill(originalReason);
     for (const theme of ['light', 'dark']) {
       const toggle = guardian.getByRole('button', { name: `Switch to ${theme} theme` });
       if (await toggle.count()) await toggle.click();
@@ -82,12 +84,45 @@ for (const recovery of ['refresh', 'retry'] as const) test(`guardians manage inv
       if (removalRequests === 1) { expect((await route.fetch()).ok()).toBe(true); await route.abort('failed'); }
       else await route.continue();
     });
-    await removal.getByRole('button', { name: 'Confirm guardian removal' }).click();
-    await expect(management.getByRole('alert')).toContainText('Refresh guardian access');
-    if (recovery === 'refresh') await management.getByRole('button', { name: 'Refresh guardian access' }).click();
-    else await removal.getByRole('button', { name: 'Confirm guardian removal' }).click();
+    const confirm = removal.getByRole('button', { name: 'Confirm guardian removal' });
+    const refresh = management.getByRole('button', { name: 'Refresh guardian access' });
+    const warning = management.getByRole('alert');
+    await confirm.click();
+    await expect(warning).toContainText(`We couldn’t confirm whether guardian access was removed for ${second}.`);
+    await expect(refresh).toBeFocused();
+    await expect(confirm).toBeDisabled();
+
+    if (recovery === 'failed-refresh') {
+      let failRefresh = true;
+      await guardian.route('**/api/rider/juniors/*/guardians', (route) => failRefresh
+        ? route.fulfill({ status: 503, json: { error: 'Fictional status lookup failure' } })
+        : route.continue());
+      await guardian.setViewportSize({ width: 360, height: 900 });
+      await guardian.keyboard.press('Enter');
+      await expect(warning).toContainText(`We couldn’t confirm whether guardian access was removed for ${second}.`);
+      await expect(warning).toContainText('The latest refresh also failed.');
+      await expect(refresh).toBeFocused();
+      await expect(confirm).toBeDisabled();
+      await expect(reason).toHaveValue(originalReason);
+      await expect(removal.getByRole('checkbox')).toBeChecked();
+      for (const width of [360, 1440]) {
+        await guardian.setViewportSize({ width, height: 900 });
+        expect(await guardian.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        await expect(warning).toBeVisible();
+        await expect(refresh).toBeFocused();
+      }
+      expect((await new AxeBuilder({ page: guardian }).include('[aria-label="Guardian access for Sam Example"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+      failRefresh = false;
+    }
+
+    await guardian.keyboard.press('Enter');
+    const result = management.getByRole('status').filter({ hasText: 'Guardian access refreshed' });
+    await expect(result).toBeFocused();
+    await expect(warning).toHaveCount(0);
+    expect(removalRequests).toBe(1);
     await expect(removeButton).toHaveCount(0);
     await expect(removal).toHaveCount(0);
+    await expect(management.getByLabel('Other guardian’s email', { exact: true })).toBeEnabled();
     expect((await page.request.get(`/api/orders/${original.id}`, { headers: headers(second) })).status()).toBe(404);
     const final = await (await page.request.get(`/api/orders/${original.id}`, { headers: headers(parent) })).json();
     expect(final.waiver).toEqual(original.waiver);
@@ -95,6 +130,8 @@ for (const recovery of ['refresh', 'retry'] as const) test(`guardians manage inv
     expect(final.quote).toEqual(original.quote);
     const relationships = await (await page.request.get(`/api/rider/juniors/${sam.id}/guardians`, { headers: headers(parent) })).json();
     expect(relationships.filter((g: { revokedAt: string | null }) => !g.revokedAt)).toHaveLength(1);
-    expect(relationships.filter((g: { removalReason: string | null }) => g.removalReason)).toHaveLength(1);
+    expect(relationships.filter((g: { removalReason: string | null }) => g.removalReason)).toEqual([
+      expect.objectContaining({ email: second, removalReason: originalReason }),
+    ]);
   } finally { await context.close(); }
 });
