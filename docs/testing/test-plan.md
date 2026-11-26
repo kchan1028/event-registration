@@ -184,7 +184,7 @@ Run `e2e/refund-policy-preview.spec.ts` with failed-refund/refund-recovery brows
 
 ### Invitation mail stops
 
-Run `tests/emailSuppression.test.ts` with the auth and delivery regressions. Overlapping requests to send the same open stopped invitation without extending it share one attempt and leave the original deadline and revision intact. A confirmed send failure permits another attempt. Use a fictional provider for these checks.
+Run `tests/emailSuppression.test.ts` with the auth and delivery regressions. Overlapping requests to send the same open stopped invitation without extending it share one attempt and leave the original deadline and revision intact. A confirmed send failure permits another attempt. Check that an uncertain send outside the safe retry window and a cancelled revision are refused without reserving mail, and that late settlement preserves a replacement stop. Use a fictional provider for these checks.
 
 ### Failed refund result recovery
 
