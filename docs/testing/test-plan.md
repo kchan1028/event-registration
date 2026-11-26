@@ -398,7 +398,7 @@ Nothing is deployed today ([deploy runbook](../runbooks/deploy-render.md)). Befo
 
 ## 5. Manual checks
 
-Automated tests do not replace these. Record what was observed separately from what was not tested.
+Existing automated test suites do not replace these checks. Rehearsals are the exception: they run as the automated Playwright rehearsals described next, while the other checks in this table (accessibility with a screen reader and real phone, real-browser compatibility) and named-person sign-off stay manual. Record what was observed separately from what was not tested.
 
 **Rehearsals run as automated Playwright rehearsals** (project owner decision, November 26, 2026). The designated rehearsal runner scripts each rehearsal in this section and its runbook as written, one Playwright step per runbook step, with each fictional role (organizer, lead, volunteer, timer, rider) signed in through its own browser context. That run replaces staff and volunteer participation; no person is asked to run a rehearsal unless the project owner requests a human run. Emulate camera, phone, print, offline and inbox steps (fake media stream, device viewport, print-to-PDF, offline context, the local mail outbox). Record a step that cannot be automated as not rehearsed, with the reason. Running the existing `e2e/` specs alone is not a rehearsal. A rehearsal is not acceptance: the named-person acceptance in the [Phase 3 exit gate](../../roadmap.md#phase-3--make-race-day-operable) and the pilot [handoff measure](../../product.md#success-measures) are unchanged.
 
