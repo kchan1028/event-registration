@@ -1,6 +1,7 @@
 import { ClerkProvider, useAuth, useClerk, useUser } from '@clerk/react';
 import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { setTokenGetter } from './api';
+import { armCheckoutOnTestSignIn, cancelCheckoutFocus, commitCheckoutFocus } from './checkoutFocus';
 import { Field, Pending, ThemeToggle } from './ui';
 
 /**
@@ -79,22 +80,6 @@ export function kioskEventId(): string | null {
 
 const TEST_KEY = 'cyclereg.test-session';
 
-// The test sign-in page replaces the app, so checkout remounts afterwards. Arm focus only
-// when registration was on screen at the moment sign-in was requested, and only after success.
-let registerActive = false;
-let armCheckoutFocus = false;
-let pendingCheckoutFocus = false;
-
-export function setRegisterActive(active: boolean): void {
-  registerActive = active;
-}
-
-export function takePendingCheckoutFocus(): boolean {
-  const pending = pendingCheckoutFocus;
-  pendingCheckoutFocus = false;
-  return pending;
-}
-
 function readTestEmail(): string | null {
   try {
     return sessionStorage.getItem(TEST_KEY);
@@ -113,7 +98,7 @@ function TestSession({ children }: { children: ReactNode }) {
     email,
     signInIdentity: email ? `test:${email.toLowerCase()}` : null,
     signIn: () => {
-      armCheckoutFocus = registerActive;
+      armCheckoutOnTestSignIn();
       setAsking(true);
     },
     signOut: () => {
@@ -131,14 +116,13 @@ function TestSession({ children }: { children: ReactNode }) {
     } catch {
       /* storage blocked: keep the session in memory */
     }
-    pendingCheckoutFocus = armCheckoutFocus;
-    armCheckoutFocus = false;
+    commitCheckoutFocus();
     setEmail(value);
     setAsking(false);
   };
   return (
     <SessionContext.Provider value={session}>
-      {asking && !email ? <TestSignInPage onDone={done} onCancel={() => { armCheckoutFocus = false; setAsking(false); }} /> : children}
+      {asking && !email ? <TestSignInPage onDone={done} onCancel={() => { cancelCheckoutFocus(); setAsking(false); }} /> : children}
     </SessionContext.Provider>
   );
 }
