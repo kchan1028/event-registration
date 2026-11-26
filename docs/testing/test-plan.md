@@ -280,6 +280,8 @@ The timer handoff in `e2e/handoff.spec.ts` uses a separate fictional Timer and e
 
 Run `tests/case-studies.test.ts` to rehearse assigned bibs, repeat-safe check-in and locked start-list exports with the seeded omnium weekend order. Use a fresh fixture database and separate fictional organizer, volunteer and timer accounts. This remains an automated API rehearsal.
 
+In the same API suite, verify distinct missing-waiver and missing-guardian referrals using paid seeded orders in separate disposable databases. Undo the seeded junior check-in before modeling missing acceptance. Change only the isolated waiver record and verify that check-in refuses both cases without assigning a bib.
+
 The desk shift in `e2e/handoff.spec.ts` uses separate fictional volunteer accounts. After the outgoing browser session closes, the incoming volunteer looks up the first rider, sees the existing check-in and bib without an issuance control, and issues the next bib to another rider. Verify the first check-in and bib history remain unchanged.
 
 `tests/transfers.test.ts` verifies that moving a paid entry between fields in one race updates the current timer CSV and reports the category and start-group changes under the same entry and rider IDs. The locked CSV stays byte-identical.
