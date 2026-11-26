@@ -1,3 +1,4 @@
+import { writeCsv } from './csv';
 import { awaitsLicenseReview } from './checkout';
 import type { ExportEntry, ExportOrder } from './exports';
 import { ACTIVE_REFUND_STATUSES } from './refunds';
@@ -181,4 +182,46 @@ export function eventSummary(orders: readonly SummaryOrder[], riderKey: (orderId
     waitlist,
     money: withMoney ? money : null,
   };
+}
+
+/** One row per metric and scope. Money appears only at event scope. */
+export function financeSummaryCsv(summary: EventSummary, eventId: string, generatedAt: string): string {
+  const rows: unknown[][] = [['generated_at', 'event_id', 'scope', 'scope_id', 'scope_name', 'metric', 'value', 'unit']];
+  function add(scope: string, id: string, name: string, metrics: Record<string, number>, unit = 'count') {
+    for (const [metric, value] of Object.entries(metrics)) {
+      rows.push([generatedAt, eventId, scope, id, name, metric, value, unit]);
+    }
+  }
+  add('event', eventId, '', {
+    riders: summary.riders,
+    confirmed_orders: summary.orders.confirmed,
+    held_orders: summary.orders.held,
+    payment_failed_orders: summary.orders.paymentFailed,
+    needs_attention_orders: summary.orders.needsAttention,
+    confirmed_entries: summary.entries.confirmed,
+    held_entries: summary.entries.held,
+    withdrawn_entries: summary.entries.withdrawn,
+    cancelled_entries: summary.entries.cancelled,
+    license_reviews: summary.licenseReviews,
+  });
+  add('waitlist', eventId, '', summary.waitlist);
+  for (const { id, name, entries, riders, orders } of summary.byDay) add('day', id, name, { entries, riders, orders });
+  for (const { id, name, entries, riders, orders } of summary.byRace) add('race', id, name, { entries, riders, orders });
+  for (const { categoryId, categoryName, code, raceName, entries, riders, orders } of summary.byCategory) {
+    add('category', categoryId, `${categoryName} (${raceName}, ${code})`, { entries, riders, orders });
+  }
+  if (summary.money) {
+    const money = summary.money;
+    add('event', eventId, '', {
+      entry_price: money.entryPriceCents,
+      discount: money.discountCents,
+      fee: money.feeCents,
+      received: money.receivedCents,
+      refunded: money.refundedCents,
+      duplicate_charge_refunded: money.duplicateChargeRefundedCents,
+      net: money.netCents,
+      needs_attention: money.needsAttention.cents,
+    }, 'usd_cents');
+  }
+  return writeCsv(rows);
 }
