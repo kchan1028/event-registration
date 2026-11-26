@@ -3,6 +3,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { newId } from '../shared/factory';
 import { can, ROLES } from '../shared/roles';
 import type { Db } from './db';
+import { orderManagerSql } from './juniors';
 
 /** Outgoing email is recorded before sending. Send failures leave the underlying action intact. */
 export interface OutgoingEmail {
@@ -156,12 +157,26 @@ function storedError(err: unknown): string {
   return UNKNOWN_OUTCOME;
 }
 
+// The last check uses current account and family authority, not purchase provenance alone.
+const confirmationReady = `EXISTS (
+  SELECT 1 FROM orders o JOIN accounts a ON a.id = o.account_id
+  LEFT JOIN junior_profiles j ON j.id = o.junior_profile_id
+  WHERE o.id = m.order_id AND o.status = 'confirmed' AND lower(btrim(a.email)) = lower(btrim(m.to_email))
+    AND ${orderManagerSql('a.id')}
+    AND EXISTS (SELECT 1 FROM order_entries e WHERE e.order_id = o.id AND e.status = 'confirmed')
+    AND NOT EXISTS (
+      SELECT 1 FROM email_suppressions s
+      WHERE s.organization_id = m.organization_id AND s.email = lower(btrim(m.to_email)) AND s.cleared_at IS NULL
+    )
+)`;
+const invitationReady = `EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id AND NOT earlier_email)`;
+
 /**
  * Reserves an attempt, then records what the provider did. Never throws for a send failure.
  * Call `reserve` inside the invitation transaction. Call `dispatch` only after that transaction commits.
  */
 export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
-  async function finish(id: string, message: OutgoingEmail, lease: Lease): Promise<EmailStatus> {
+  async function finish(id: string, message: OutgoingEmail, lease: Lease, confirmation: boolean): Promise<EmailStatus> {
     try {
       const providerId = await sender.send(message, id);
       // An acceptance is final whoever holds the lease by now: every send of an attempt shares one key.
@@ -174,14 +189,14 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       // Only the call that first committed started_at may record a definite refusal, and only while it holds the lease.
       const status = lease.first && (err instanceof EmailRefusal || err instanceof EmailNotSent) ? 'failed' : 'uncertain';
       const saved = await db.run(
-        `UPDATE email_messages SET status = $1, error = $2, sending_until = NULL WHERE id = $3 AND status = 'uncertain' AND sending_until = $4::timestamptz`,
-        [status, storedError(err), id, lease.until],
+        `UPDATE email_messages SET status = $1, error = $2, sending_until = CASE WHEN $5 AND $1 = 'uncertain' THEN now() + interval '1 minute' END WHERE id = $3 AND status = 'uncertain' AND sending_until = $4::timestamptz`,
+        [status, storedError(err), id, lease.until, confirmation],
       );
       return saved ? status : 'uncertain';
     }
   }
 
-  return {
+  const mailer = {
     /** Inserts the durable attempt and does not call the provider. Local mode is recorded and never sent. */
     async reserve(kind: 'organizer_invitation', ref: string, organizationId: string, message: OutgoingEmail): Promise<string> {
       const id = newId('eml');
@@ -193,27 +208,43 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       return id;
     },
 
+    async dispatchNextConfirmation(): Promise<void> {
+      if (sender.mode === 'local') return;
+      const next = await db.get<{ id: string }>(
+        `SELECT m.id FROM email_messages m
+         WHERE m.kind = 'registration_confirmation' AND m.status IN ('recorded', 'uncertain')
+           AND m.created_at > $1 AND (m.sending_until IS NULL OR m.sending_until <= now())
+           AND ${confirmationReady}
+         ORDER BY m.sending_until NULLS FIRST, m.created_at, m.seq LIMIT 1`,
+        [new Date(clock().getTime() - RESEND_IDEMPOTENCY_WINDOW_MS).toISOString()],
+      );
+      if (next) await mailer.dispatch(next.id, undefined, 'registration_confirmation');
+    },
+
     /**
      * Sends one reserved attempt after its row has committed.
      * The caller leases the row and commits `started_at` before the provider call, and holds no connection
      * during it. Other callers wait for the lease, then read the committed status.
      * `withheld` means the send cannot be repeated safely (local mode, or past the 24-hour provider window).
-     * `changed` means no invitation pointed at the attempt at the last check before the call, so nothing is sent.
+     * `changed` means the message was no longer eligible at the last check before the call, so nothing is sent.
      * A cancellation after that check cannot recall the send.
      * `refused` means the account retrying it no longer manages the team at that last check, so nothing is sent.
      */
-    async dispatch(id: string, retriedBy?: string): Promise<EmailStatus | 'withheld' | 'changed' | 'refused'> {
+    async dispatch(id: string, retriedBy?: string, kind: 'organizer_invitation' | 'registration_confirmation' = 'organizer_invitation'): Promise<EmailStatus | 'withheld' | 'changed' | 'refused'> {
+      const confirmation = kind === 'registration_confirmation';
+      const ready = confirmation ? confirmationReady : invitationReady;
       for (;;) {
-        const row = await db.get<{ created_at: string; to_email: string; from_email: string | null; subject: string; body_text: string; status: EmailStatus; current: boolean; sending: boolean }>(
-          `SELECT created_at, to_email, from_email, subject, body_text, status,
-             EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = email_messages.id AND NOT earlier_email) AS current,
+        const row = await db.get<{ created_at: string; to_email: string; subject: string; body_text: string; status: EmailStatus; current: boolean; sending: boolean }>(
+          `SELECT created_at, to_email, subject, body_text, status,
+             ${ready} AS current,
              COALESCE(sending_until > now(), false) AS sending
-           FROM email_messages WHERE id = $1`,
-          [id],
+           FROM email_messages m WHERE id = $1 AND kind = $2`,
+          [id, kind],
         );
         if (!row) return 'changed';
-        if (row.status !== 'uncertain') return row.status;
+        if (row.status !== 'uncertain' && !(confirmation && row.status === 'recorded')) return row.status;
         if (row.sending) {
+          if (confirmation) return 'withheld';
           await sleep(LEASE_POLL_MS);
           continue;
         }
@@ -224,30 +255,31 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
         // Checked again in the claim: another caller or a cancellation may have committed since the read.
         const lease = await db.get<Lease>(
           `UPDATE email_messages m
-           SET started_at = COALESCE(m.started_at, $2), sending_until = now() + make_interval(secs => $3)
+           SET started_at = COALESCE(m.started_at, $2), sending_until = now() + make_interval(secs => $3),
+               status = 'uncertain', from_email = CASE WHEN $4 THEN COALESCE(m.from_email, $5) ELSE m.from_email END
            FROM (SELECT id, started_at FROM email_messages WHERE id = $1 FOR UPDATE) was
-           WHERE m.id = was.id AND m.status = 'uncertain' AND (m.sending_until IS NULL OR m.sending_until <= now())
-             AND EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id AND NOT earlier_email)
+           WHERE m.id = was.id AND (m.status = 'uncertain' OR ($4 AND m.status = 'recorded'))
+             AND (m.sending_until IS NULL OR m.sending_until <= now()) AND ${ready}
            RETURNING was.started_at IS NULL AS first, m.sending_until::text AS until`,
-          [id, clock().toISOString(), SEND_LEASE_SECONDS],
+          [id, clock().toISOString(), SEND_LEASE_SECONDS, confirmation, sender.from ?? null],
         );
         if (!lease) continue;
         // The claim took time, so check the lease, the invitation, the retrying account and the window again, in one
         // query with nothing awaited between it and the call.
-        const last = await db.get<{ ready: boolean; allowed: boolean }>(
+        const last = await db.get<{ ready: boolean; allowed: boolean; from_email: string | null }>(
           `SELECT COALESCE(
                m.status = 'uncertain' AND m.sending_until = $2::timestamptz
                AND m.sending_until > now() + make_interval(secs => $3)
-               AND EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id AND NOT earlier_email),
+               AND ${ready},
              false) AS ready,
              ($4::text IS NULL OR EXISTS (
                SELECT 1 FROM organization_members
                WHERE organization_id = m.organization_id AND account_id = $4 AND role IN (SELECT jsonb_array_elements_text($5::jsonb))
-             )) AS allowed
+             )) AS allowed, m.from_email
            FROM email_messages m WHERE m.id = $1`,
           [id, lease.until, SEND_TIMEOUT_MS / 1000, retriedBy ?? null, JSON.stringify(TEAM_MANAGER_ROLES)],
         );
-        if (last?.ready && last.allowed && !pastWindow()) return finish(id, { to: row.to_email, from: row.from_email ?? undefined, subject: row.subject, text: row.body_text }, lease);
+        if (last?.ready && last.allowed && !pastWindow()) return finish(id, { to: row.to_email, from: last.from_email ?? undefined, subject: row.subject, text: row.body_text }, lease, confirmation);
         // No provider call was made, so give the lease back and let the loop report why.
         await db.run(
           `UPDATE email_messages SET sending_until = NULL, started_at = CASE WHEN $3::boolean THEN NULL ELSE started_at END
@@ -255,9 +287,11 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
           [id, lease.until, lease.first],
         );
         if (last && !last.allowed) return 'refused';
+        if (confirmation) return 'withheld';
       }
     },
   };
+  return mailer;
 }
 
 export type Mailer = ReturnType<typeof createMailer>;

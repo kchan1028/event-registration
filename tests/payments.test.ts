@@ -3,6 +3,8 @@ import pg from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 import { paymentsFromEnv, publicAppUrl, stripePayments } from '../src/server/payments';
 import { testApp, testDatabaseUrl } from './support/db';
+import { openDb } from '../src/server/db';
+import { createMailer, EmailUncertain, localEmail } from '../src/server/email';
 import { as, DEFAULT_TEST_ORGANIZER, fakeAuth } from './support/auth';
 import type { EventConfig } from '../src/shared/schema';
 import { publishReviewed } from './support/publish';
@@ -264,6 +266,51 @@ describe('Stripe hosted Checkout (test mode)', () => {
       }]);
     } finally {
       await db.end();
+    }
+  });
+
+  it('dispatches a confirmation with a stable key and sender across an uncertain retry', async () => {
+    const { order, checkout, webhook, paidSession, get, databaseUrl } = await setup();
+    const o = await order(['RR-M35-34']);
+    await checkout(o.id);
+    await webhook('evt_confirmation_delivery', 'checkout.session.completed', paidSession(o));
+    const db = openDb(databaseUrl);
+    try {
+      const message = await db.get<{ id: string; created_at: string }>(
+        'SELECT id, created_at FROM email_messages WHERE order_id = $1', [o.id],
+      );
+      const now = () => new Date(message!.created_at);
+      const send = vi.fn().mockRejectedValueOnce(new EmailUncertain('Fictional timeout.')).mockResolvedValue('re_confirmation');
+      await createMailer(db, localEmail(), now).dispatchNextConfirmation();
+      expect(send).not.toHaveBeenCalled();
+      const sender = { mode: 'resend' as const, from: 'first@example.test', send };
+      const mailer = createMailer(db, sender, now);
+      await mailer.dispatchNextConfirmation();
+      expect((await get(o.id)).status).toBe('confirmed');
+      await mailer.dispatchNextConfirmation();
+      expect(send).toHaveBeenCalledTimes(1);
+      await db.run("UPDATE email_messages SET sending_until = now() - interval '1 second' WHERE id = $1", [message!.id]);
+      const expired = createMailer(db, sender, () => new Date(now().getTime() + 24 * 60 * 60 * 1000));
+      await expired.dispatchNextConfirmation();
+      expect(send).toHaveBeenCalledTimes(1);
+      await db.run(
+        `INSERT INTO email_suppressions (id, organization_id, email, reason, email_id, created_at)
+         SELECT 'test-stop', organization_id, to_email, 'bounced', id, created_at FROM email_messages WHERE id = $1`,
+        [message!.id],
+      );
+      await mailer.dispatchNextConfirmation();
+      expect(send).toHaveBeenCalledTimes(1);
+      await db.run("DELETE FROM email_suppressions WHERE id = 'test-stop'");
+      const restarted = createMailer(db, { ...sender, from: 'second@example.test' }, now);
+      await Promise.all([restarted.dispatchNextConfirmation(), mailer.dispatchNextConfirmation()]);
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send.mock.calls[1]).toEqual(send.mock.calls[0]);
+      expect(send.mock.calls[1][1]).toBe(message!.id);
+      expect(send.mock.calls[1][0]).toMatchObject({ from: sender.from, to: DEFAULT_TEST_ORGANIZER });
+      expect(await db.get('SELECT status, provider_message_id FROM email_messages WHERE id = $1', [message!.id]))
+        .toEqual({ status: 'sent', provider_message_id: 're_confirmation' });
+    } finally {
+      await db.close();
     }
   });
 
