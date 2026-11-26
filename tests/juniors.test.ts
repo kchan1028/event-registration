@@ -312,7 +312,7 @@ describe('guardian invitation records without access grants', () => {
 
 describe('explicit guardian acceptance and shared authority', () => {
   it('requires the invited account and acknowledgement, then shares only that junior while preserving purchase evidence', async () => {
-    const { call, registerJunior, databaseUrl } = await setup();
+    const { call, registerJunior, databaseUrl, eventId } = await setup();
     const orderId = await registerJunior(PARENT, 'Sam');
     const unrelated = await registerJunior(PARENT, 'Alex');
     const sam = (await call(PARENT, 'GET', '/api/rider/juniors')).json().find((p: { firstName: string }) => p.firstName === 'Sam');
@@ -341,6 +341,14 @@ describe('explicit guardian acceptance and shared authority', () => {
     expect(paid.waiverEvidence).toEqual(original.waiverEvidence);
     expect(paid.waiver).toEqual(original.waiver);
     expect(paid.quote).toEqual(original.quote);
+    const secondOrder = await registerJunior(OTHER_PARENT, 'Sam');
+    for (const [who, id] of [[PARENT, unrelated], [OTHER_PARENT, secondOrder]]) {
+      const result = await call(who, 'POST', `/api/orders/${id}/payment`, { attemptId: `participant-group-${id}`, outcome: 'success' });
+      expect(result.statusCode, result.body).toBe(200);
+    }
+    const groups = await call(ORGANIZER, 'GET', `/api/events/${eventId}/participant-groups`);
+    expect(groups.statusCode).toBe(200);
+    expect(groups.json()).toEqual([{ orderIds: [orderId, secondOrder] }, { orderIds: [unrelated] }]);
     expect((await call(PARENT, 'POST', `${invitationUrl}/${invite.id}/cancel`)).statusCode).toBe(409);
     expect((await call(OTHER_PARENT, 'POST', invitationUrl, { email: 'third@guardian.test' })).statusCode).toBe(409);
     const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();

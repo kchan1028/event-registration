@@ -67,6 +67,29 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
   }
 
   return {
+    /**
+     * Reuse existing junior profiles and explicit same-rider links within an event.
+     * A checkout can be placed on someone else's behalf, so the purchaser alone
+     * does not establish adult rider identity.
+     */
+    async participantGroups(eventId: string) {
+      return db.all<{ orderIds: string[] }>(
+        `WITH participant_orders AS (
+           SELECT o.id, o.seq, CASE
+             WHEN o.junior_profile_id IS NOT NULL THEN 'junior:' || o.junior_profile_id
+             ELSE 'order:' || COALESCE(l.rider_key, o.id) END AS participant_key
+           FROM orders o
+           LEFT JOIN rider_links l ON l.order_id = o.id AND l.event_id = o.event_id
+           WHERE o.event_id = $1 AND o.status = 'confirmed'
+         )
+         SELECT array_agg(id ORDER BY seq, id) AS "orderIds"
+         FROM participant_orders
+         GROUP BY participant_key
+         ORDER BY min(seq), min(id)`,
+        [eventId],
+      );
+    },
+
     keyOf,
     groupOf,
     overview,

@@ -369,7 +369,9 @@ Acceptance: two independent builds produce equal configurations and stable IDs; 
 
 ### Participant management
 
-Status: Planned beyond the Implemented event-level Registrations queue and lookup, audited rider corrections, organizer transfers/withdrawals, and check-in lookup. This manages race participants, not volunteer recruitment or staffing.
+Status: Planned beyond the Implemented event-level Registrations queue and lookup, participant grouping, audited rider corrections, organizer transfers/withdrawals, and check-in lookup. This manages race participants, not volunteer recruitment or staffing.
+
+Implemented locally (November 26, 2026): the event participant-groups API returns groups of confirmed order IDs to event owners and registration managers. Junior orders use the existing profile, including orders placed by either guardian and after a profile claim. Orders without a junior profile use the organizer's confirmed same-rider links for that event and otherwise stay separate. The purchaser, name, email, and license number do not establish adult rider identity. The response omits account and junior profile IDs, contact details, and waiver data. The workspace, saved views, and cross-event lookup are Planned.
 
 - Provide a participant workspace across events an organizer is authorized to manage, backed by reusable rider identity. Distinguish people, event registrations, race entries, orders, waitlist records, credits, and payment/readiness states; several entries must not become several unrelated rider profiles.
 - Search by rider, team, permitted license identifier, bib, order, event, or category. Filter by race/day, status, missing waiver/license review, payment exception, waitlist, and package/pass membership. Show a history of registrations, communications, changes, credits, and deferrals with source dates and reasons.
@@ -912,6 +914,10 @@ Phase 0 answers decisions 1 to 6 and 8 with the [discovery kit](docs/discovery/R
 
 9. Interim rule decided 2026-11-15 by the project owner: the local build requires a guardian and guardian signature for every rider with racing age 18 or under, in any category. Racing age is age on December 31, so this catches every rider who may be 17 on race day and also asks some riders who are already 18. Still open: the federation's accepted minor-signature policy and whether a date of birth is needed to decide legal age on race day.
 10. Who owns the initial Berkeley reference study and approved schedule review, and which safe local-device arrangement supports phone/screen-reader testing? Confirm participants and session availability before scheduling; no outreach has occurred.
+
+### Reusable adult rider identity
+
+Open, raised November 26, 2026; owner: project owner. What evidence should attach an adult registration to a reusable rider profile, including checkout on behalf of another adult and the first self-registration after an approved junior claim? Checkout verifies the signed-in purchaser and typed waiver acceptance, and lets the purchaser enter rider details. Treating all orders from one account as the same person would combine different riders. The provisional rule uses existing junior profiles and event-local organizer-confirmed links for orders without a junior profile. The event workspace can proceed on that basis. Reusable adult profiles and linking claimed junior history to adult orders await a decision. Revisit before implementing cross-event participant lookup or adding an adult identity step at checkout.
 
 ### Guardian correction fields
 

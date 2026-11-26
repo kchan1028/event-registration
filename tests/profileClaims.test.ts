@@ -62,6 +62,32 @@ describe('claim calendar age and explicit configuration', () => {
 });
 
 describe('support-approved profile claims', () => {
+  it('preserves the junior registration group after an approved claim', async () => {
+    const s = await setup();
+    s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
+    const { config } = (await s.call(ORGANIZER, 'GET', `/api/events/${s.eventId}`)).json();
+    const adultCategory = config.categories.find((c: { timingCode: string }) => c.timingCode === 'RR-M35-34').id;
+    const adult = await s.call(RIDER, 'POST', `/api/rider/events/${s.eventId}/orders`, {
+      ...s.body,
+      clientRequestId: 'fictional-independent-adult-order',
+      categoryIds: [adultCategory],
+      rider: { ...s.body.rider, firstName: 'Self', email: RIDER, racingAge: 40, licenseCategory: '3', guardian: null },
+      waiver: { ...s.body.waiver, signatureName: 'Self Fictional', signerRole: 'rider' },
+    });
+    expect(adult.statusCode, adult.body).toBe(201);
+    const adultId = adult.json().id;
+    const groupsUrl = `/api/events/${s.eventId}/participant-groups`;
+    const groups = async () => (await s.call(ORGANIZER, 'GET', groupsUrl)).json();
+    expect(await groups()).toEqual([]);
+    for (const [who, id] of [[PARENT, s.order.id], [RIDER, adultId]]) {
+      const payment = await s.call(who, 'POST', `/api/orders/${id}/payment`, { attemptId: `fictional-participant-${id}`, outcome: 'success' });
+      expect(payment.statusCode, payment.body).toBe(200);
+    }
+    expect(await groups()).toEqual([{ orderIds: [s.order.id] }, { orderIds: [adultId] }]);
+    expect((await s.approve()).statusCode).toBe(200);
+    expect(await groups()).toEqual([{ orderIds: [s.order.id] }, { orderIds: [adultId] }]);
+  });
+
   it('preserves the rider-confirmed zone name rather than a runtime canonical alias for durable replay', async () => {
     const s = await setup(); s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
     const first = await s.approve(SUPPORT, { timeZone: 'US/Pacific' });

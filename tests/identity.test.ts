@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { as } from './support/auth';
 import { testApp } from './support/db';
 import { pairKey, suggestMatches, type IdentityOrder } from '../src/shared/riderIdentity';
 import type { EventConfig } from '../src/shared/schema';
@@ -39,18 +40,18 @@ async function setup() {
   const start = new Date('2027-03-01T18:00:00Z').getTime();
   let tick = 0;
   const { app } = await testApp({ now: () => new Date(start + tick++ * 1000), holdMinutes: 10 });
-  const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
+  const { eventId, organizationId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json<{ eventId: string; organizationId: string }>();
   await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   await app.inject({ method: 'PUT', url: `/api/events/${eventId}/bib-settings`, payload: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] } });
   const ev = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
   const code = (c: string) => ev.config.categories.find((x) => x.timingCode === c)!.id;
   const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Demo', signerRole: 'rider' };
   let n = 0;
-  const buy = async (c: string) => {
-    const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: `ident-${++n}-xxxxxx`, categoryIds: [code(c)], rider: RIDER, waiver } });
+  const buy = async (c: string, headers = {}, rider = RIDER) => {
+    const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, headers, payload: { clientRequestId: `ident-${++n}-xxxxxx`, categoryIds: [code(c)], rider, waiver: { ...waiver, signatureName: `${rider.firstName} ${rider.lastName}` } } });
     expect(created.statusCode).toBe(201);
     const id = (created.json() as { id: string }).id;
-    const paid = await app.inject({ method: 'POST', url: `/api/orders/${id}/payment`, payload: { attemptId: `attempt-${n}-xxxx`, outcome: 'success' } });
+    const paid = await app.inject({ method: 'POST', url: `/api/orders/${id}/payment`, headers, payload: { attemptId: `attempt-${n}-xxxx`, outcome: 'success' } });
     expect(paid.statusCode).toBe(200);
     // Clear the license so the rider is ready at check-in.
     for (const e of (paid.json() as { entries: { id: string; dayId: string }[] }).entries) {
@@ -65,8 +66,47 @@ async function setup() {
   const days = ev.config.days.map((d) => d.id);
   const checkInList = async (day: string, q = 'Pat') => (await app.inject({ method: 'GET', url: `/api/events/${eventId}/check-in?${new URLSearchParams({ day, q })}` })).json() as { riders: Card[] };
   const checkIn = (orderId: string, day: string) => app.inject({ method: 'POST', url: `/api/events/${eventId}/check-in/${orderId}`, payload: { dayId: day, bib: null } });
-  return { app, eventId, buy, overview, post, checkInList, days, checkIn };
+  return { app, eventId, organizationId, buy, overview, post, checkInList, days, checkIn };
 }
+
+describe('participant identity API', () => {
+  it('uses explicit rider links and keeps different riders on one account separate', async () => {
+    const { app, eventId, organizationId, buy } = await setup();
+    const rider = as('rider@participants.test');
+    const sameContact = as('separate-account@participants.test');
+    const first = await buy('RR-M35-34', rider);
+    const second = await buy('CR-M35-34', rider);
+    const independent = await buy('CR-M35-34', sameContact);
+    const anotherRider = await buy('RR-M35-34', rider, { ...RIDER, firstName: 'Another' });
+    expect((await app.inject({
+      method: 'POST',
+      url: `/api/events/${eventId}/rider-identity/link`,
+      payload: { orderIds: [first, second] },
+    })).statusCode).toBe(200);
+    const url = `/api/events/${eventId}/participant-groups`;
+    const response = await app.inject({ url });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.json()).toEqual([
+      { orderIds: [first, second] }, { orderIds: [independent] }, { orderIds: [anotherRider] },
+    ]);
+    const separateEvent = await app.inject({
+      method: 'POST',
+      url: `/api/organizations/${organizationId}/events`,
+      payload: { name: 'Another fictional event', template: 'road_race', startDate: '2027-03-07', timeZone: 'America/Los_Angeles' },
+    });
+    expect(separateEvent.statusCode, separateEvent.body).toBe(201);
+    const separateGroups = await app.inject({ url: `/api/events/${separateEvent.json().id}/participant-groups` });
+    expect(separateGroups.statusCode).toBe(200);
+    expect(separateGroups.json()).toEqual([]);
+    expect((await app.inject({ url, headers: rider })).statusCode).toBe(404);
+    for (const [role, statusCode] of [['registration_manager', 200], ['finance', 403]] as const) {
+      const email = `${role}@participants.test`;
+      expect((await app.inject({ method: 'POST', url: `/api/organizations/${organizationId}/members`, payload: { role, email } })).statusCode).toBe(200);
+      expect((await app.inject({ url, headers: as(email) })).statusCode).toBe(statusCode);
+    }
+  });
+});
 
 describe('rider identity API', () => {
   it('suggests two orders for one rider, links them on request, and treats them as one rider', async () => {
