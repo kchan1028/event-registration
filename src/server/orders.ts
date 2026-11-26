@@ -1,3 +1,4 @@
+import { recordRegistrationConfirmation } from './email';
 import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/researchExamples';
 import { randomInt } from 'node:crypto';
 import { canAdmit, remainingForCategory, type LimitUsage } from '../shared/capacity';
@@ -646,6 +647,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
           if (next === 'confirmed') {
             await db.run(`UPDATE orders SET status = 'confirmed', check_in_code = $1, confirmed_at = $2, updated_at = $3 WHERE id = $4`, [checkInCode(), t, t, orderId]);
             await db.run(`UPDATE order_entries SET status = 'confirmed' WHERE order_id = $1`, [orderId]);
+            await recordRegistrationConfirmation(db, orderId, t);
             await db.run(`UPDATE waitlist_entries SET status = 'accepted', updated_at = $1 WHERE order_id = $2 AND status = 'offered'`, [t, orderId]);
           } else {
             await db.run(`UPDATE orders SET status = $1, updated_at = $2 WHERE id = $3`, [next, t, orderId]);

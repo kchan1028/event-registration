@@ -70,6 +70,10 @@ Run `tests/exports.test.ts` and `tests/protectedExportAudit.test.ts` for changes
 
 Run `tests/orders.test.ts` for explicit account-derived confirmation on the adult checkout API, omitted or declined confirmation, guardian checkout refusal with no hold, authorization and organizer responses that omit the new evidence, and repeat requests that preserve the saved confirmation without rewriting waiver evidence. Run the migration and guardian/claim suites when changing order evidence storage or family authority.
 
+### Registration confirmation recording
+
+The signed payment replay case in `tests/payments.test.ts` verifies that one confirmed order produces one recorded confirmation for its purchaser account and no provider delivery evidence.
+
 ### Event participant grouping
 
 Run `tests/identity.test.ts`, `tests/juniors.test.ts`, and `tests/profileClaims.test.ts` when participant grouping changes. Confirm organizer-linked orders group together, different riders registered by one account stay separate, and identical contact details establish no link. Verify junior grouping across guardians and profile claims, confirmed-order filtering, event and role boundaries, and that responses carry order IDs only. Verify that a same-rider link between a junior profile and an adult order or another junior profile combines their check-in cards, leaves participant groups separate, and grants neither buyer access to the other order. Run `e2e/participant-count.spec.ts` for the Event participants section. Verify the expandable section loads on demand, including empty and populated counts, retry after a failed read, owner access and finance denial, and light and dark layouts at 360 pixels. Verify that the explanation covers both grouping rules without revealing junior profile or order details.

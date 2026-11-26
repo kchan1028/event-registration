@@ -823,6 +823,12 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE protected_export_audit ADD CONSTRAINT protected_export_audit_export_kind_check
     CHECK (export_kind IN ('entries', 'ledger', 'reconciliation', 'start_list', 'finance_summary'));`,
   `ALTER TABLE orders ADD COLUMN self_registration_account_id text REFERENCES accounts(id) ON DELETE SET NULL;`,
+  `ALTER TABLE email_messages DROP CONSTRAINT email_messages_kind_check;
+  ALTER TABLE email_messages ADD COLUMN order_id text UNIQUE REFERENCES orders(id) ON DELETE CASCADE;
+  ALTER TABLE email_messages ADD CONSTRAINT email_messages_kind_check CHECK (
+    (kind = 'organizer_invitation' AND order_id IS NULL)
+    OR (kind = 'registration_confirmation' AND order_id IS NOT NULL AND ref = order_id)
+  );`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
