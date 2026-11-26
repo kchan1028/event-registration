@@ -116,7 +116,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const staffHoldRelease = opts.staffHoldRelease ?? staffHoldReleaseFromEnv();
   const emailSender = opts.email ?? emailFromEnv();
   const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10), coupons, juniors, emailSender.mode === 'resend' ? emailSender.from : undefined);
-  const refunds = createRefunds(db, paymentProvider, clock, repo);
+  const refunds = createRefunds(db, paymentProvider, clock, repo, emailSender.mode === 'resend' ? emailSender.from : undefined);
   const identity = createIdentity(db, orders, clock);
   const resolutions = createResolutions(db, orders, clock);
   const startLists = createStartLists(db, repo, orders, clock, identity);

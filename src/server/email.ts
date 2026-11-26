@@ -154,6 +154,45 @@ export function registrationReceiptText(orderNumber: string, amount: string, isD
     : `Receipt ${orderNumber} for ${amount}. Sign in and open My registrations to see it.`;
 }
 
+/** Order number and refund amount only. The organizer's reason stays out of the message. */
+export function refundNoticeText(orderNumber: string, amount: string, isDemo: boolean): string {
+  return isDemo
+    ? `Demo refund ${orderNumber} for ${amount}. Simulated refund: no money was returned. Sign in and open My registrations to see it.`
+    : `Refund ${orderNumber} for ${amount}. Sign in and open My registrations to see it.`;
+}
+
+/** Called when a refund is succeeded. A null sender stays unsent. */
+export async function recordRefundNotice(db: Db, refundId: string, recordedAt: string, senderAddress?: string) {
+  const row = await db.get<{ organization_id: string; order_id: string; email: string; amount_cents: number; is_demo: boolean | null }>(
+    `SELECT e.organization_id, o.id AS order_id, a.email, r.amount_cents,
+            (v.config_json #>> '{event,isDemo}') = 'true' AS is_demo
+     FROM refunds r
+     JOIN orders o ON o.id = r.order_id
+     JOIN events e ON e.id = o.event_id
+     JOIN accounts a ON a.id = o.account_id
+     JOIN event_versions v ON v.event_id = o.event_id AND v.version = o.published_version
+     WHERE r.id = $1 AND r.status = 'succeeded'`,
+    [refundId],
+  );
+  if (!row) return;
+  const isDemo = row.is_demo === true;
+  await db.run(
+    `INSERT INTO email_messages (id, organization_id, kind, ref, refund_id, to_email, subject, body_text, status, created_at, from_email, keyed)
+     VALUES ($1, $2, 'refund_notice', $3, $3, $4, $5, $6, 'recorded', $7, $8, true)
+     ON CONFLICT (refund_id) DO NOTHING`,
+    [
+      newId('eml'),
+      row.organization_id,
+      refundId,
+      row.email,
+      'Your refund',
+      refundNoticeText(formatOrderNumber(row.order_id, isDemo), formatDollars(Number(row.amount_cents)), isDemo),
+      recordedAt,
+      senderAddress ?? null,
+    ],
+  );
+}
+
 /** Same confirm transaction as the confirmation. A null sender stays unsent. */
 export async function recordRegistrationReceipt(db: Db, orderId: string, confirmedAt: string, senderAddress?: string) {
   const row = await db.get<{ organization_id: string; email: string; total_cents: number; is_demo: boolean | null }>(

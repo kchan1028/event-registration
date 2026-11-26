@@ -6,6 +6,7 @@ import { refundableCents, refundCanMove, refundRequestSchema, type RefundStatus,
 import type { Db } from './db';
 import { paidLine } from './orders';
 import type { PaymentProvider, ProviderEvent, ProviderRefund } from './payments';
+import { recordRefundNotice } from './email';
 import { HttpError, type Repo } from './repo';
 
 /**
@@ -47,7 +48,7 @@ interface RefundablePayment {
   remainingCents: number;
 }
 
-export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Date, repo: Repo) {
+export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Date, repo: Repo, senderAddress?: string) {
   const nowIso = () => clock().toISOString();
   const rowsOf = (orderId: string) =>
     db.all<RefundRow>(
@@ -100,10 +101,12 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
       const cur = await db.get<{ status: RefundStatus }>(`SELECT status FROM refunds WHERE id = $1`, [id]);
       if (!cur) return null;
       const next = refundCanMove(cur.status, update.status) ? update.status : cur.status;
+      const t = nowIso();
       await db.run(
         `UPDATE refunds SET status = $1, provider_refund_id = COALESCE(provider_refund_id, $2), failure_reason = COALESCE($3, failure_reason), updated_at = $4 WHERE id = $5`,
-        [next, update.providerId, update.failureReason, nowIso(), id],
+        [next, update.providerId, update.failureReason, t, id],
       );
+      if (next === 'succeeded') await recordRefundNotice(db, id, t, senderAddress);
       return next;
     });
   }
@@ -224,6 +227,7 @@ export function createRefunds(db: Db, provider: PaymentProvider, clock: () => Da
           `INSERT INTO refunds (id, order_id, entry_id, provider, payment_ref, amount_cents, reason, status, requested_by, created_at, updated_at, request_json) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11)`,
           [refundId, orderId, input.entryId, pay.provider, pay.ref, input.amountCents, input.reason, pay.provider === 'simulated' ? 'succeeded' : 'requested', accountId, t, JSON.stringify(input)],
         );
+        if (pay.provider === 'simulated') await recordRefundNotice(db, refundId, t, senderAddress);
         return refundId;
       });
       await send(id);

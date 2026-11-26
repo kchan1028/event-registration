@@ -864,6 +864,16 @@ export const MIGRATIONS: string[] = [
     OR (kind = 'waitlist_offer' AND waitlist_entry_id IS NOT NULL AND ref = waitlist_entry_id AND order_id IS NULL AND waitlist_expiry_entry_id IS NULL)
     OR (kind = 'waitlist_expired' AND waitlist_expiry_entry_id IS NOT NULL AND ref = waitlist_expiry_entry_id AND order_id IS NULL AND waitlist_entry_id IS NULL)
   );`,
+  `ALTER TABLE email_messages ADD COLUMN refund_id text UNIQUE REFERENCES refunds(id) ON DELETE CASCADE;
+  ALTER TABLE email_messages DROP CONSTRAINT email_messages_kind_check;
+  ALTER TABLE email_messages ADD CONSTRAINT email_messages_kind_check CHECK (
+    (kind = 'organizer_invitation' AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL)
+    OR (kind = 'registration_confirmation' AND order_id IS NOT NULL AND ref = order_id AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL)
+    OR (kind = 'registration_receipt' AND order_id IS NOT NULL AND ref = order_id AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL)
+    OR (kind = 'waitlist_offer' AND waitlist_entry_id IS NOT NULL AND ref = waitlist_entry_id AND order_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL)
+    OR (kind = 'waitlist_expired' AND waitlist_expiry_entry_id IS NOT NULL AND ref = waitlist_expiry_entry_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND refund_id IS NULL)
+    OR (kind = 'refund_notice' AND refund_id IS NOT NULL AND ref = refund_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL)
+  );`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
