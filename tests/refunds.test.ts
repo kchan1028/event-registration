@@ -383,6 +383,40 @@ describe('refunds', () => {
       await db.close();
     }
   });
+
+  it('shows a refund notice to registration managers and retries only an uncertain send', async () => {
+    const send = vi.fn().mockResolvedValue('re_refund_retry');
+    const sender: EmailSender = { mode: 'resend', from: 'sender@example.test', send };
+    const s = await setup({ email: sender });
+    const db = openDb(s.databaseUrl);
+    try {
+      const o = await s.order(['RR-M35-34']);
+      await s.paySimulated(o.id);
+      expect((await s.refund(o.id, { amountCents: 500, reason: 'Partial refund' })).statusCode).toBe(200);
+      const refundId = (await s.list(o.id)).refunds[0].id;
+      const url = `/api/events/${s.eventId}/refunds/${refundId}/notice-delivery`;
+      expect((await s.app.inject({ method: 'GET', url, headers: as('outsider@notice.test') })).statusCode).toBe(404);
+      for (const [email, role] of [['finance@notice.test', 'finance'], ['manager@notice.test', 'registration_manager']]) {
+        expect((await s.app.inject({ method: 'POST', url: `/api/organizations/${s.organizationId}/members`, payload: { email, role } })).statusCode).toBe(200);
+      }
+      expect((await s.app.inject({ method: 'GET', url, headers: as('finance@notice.test') })).statusCode).toBe(403);
+      expect((await s.app.inject({ method: 'POST', url: `${url}/retry`, headers: as('finance@notice.test') })).statusCode).toBe(403);
+      expect((await s.app.inject({ method: 'GET', url, headers: as('manager@notice.test') })).json()).toEqual({ notice: { status: 'recorded', delivery: null, canRetry: false } });
+      const recorded = await s.app.inject({ method: 'GET', url });
+      expect(recorded.headers['cache-control']).toBe('no-store');
+      expect(recorded.json()).toEqual({ notice: { status: 'recorded', delivery: null, canRetry: false } });
+      const refused = await s.app.inject({ method: 'POST', url: `${url}/retry` });
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json()).toEqual({ error: 'This refund email cannot be retried now.' });
+      await db.run(`UPDATE email_messages SET status = 'uncertain', sending_until = now() - interval '1 second' WHERE refund_id = $1`, [refundId]);
+      expect((await s.app.inject({ method: 'GET', url })).json()).toEqual({ notice: { status: 'uncertain', delivery: null, canRetry: true } });
+      const retried = await s.app.inject({ method: 'POST', url: `${url}/retry` });
+      expect(retried.json()).toEqual({ notice: { status: 'sent', delivery: null, canRetry: false } });
+      expect(send.mock.calls.at(-1)?.[0]).toMatchObject({ subject: 'Your refund', from: 'sender@example.test' });
+    } finally {
+      await db.close();
+    }
+  });
 });
 
 

@@ -287,8 +287,8 @@ const waitlistExpiryReady = `EXISTS (
     AND ${riderEmailAllowed}
 )`;
 
-export type OrganizerRiderEmailKind = 'registration_confirmation' | 'registration_receipt' | 'waitlist_offer';
-export type RiderEmailKind = OrganizerRiderEmailKind | 'waitlist_expired' | 'refund_notice';
+export type OrganizerRiderEmailKind = 'registration_confirmation' | 'registration_receipt' | 'waitlist_offer' | 'refund_notice';
+export type RiderEmailKind = OrganizerRiderEmailKind | 'waitlist_expired';
 
 // The last check uses current account and family authority, not purchase provenance alone.
 const confirmationReady = `EXISTS (
@@ -318,6 +318,7 @@ const riderEmailSource = {
   registration_confirmation: 'JOIN orders source ON source.id = m.order_id',
   registration_receipt: 'JOIN orders source ON source.id = m.order_id',
   waitlist_offer: 'JOIN waitlist_entries source ON source.id = m.waitlist_entry_id',
+  refund_notice: 'JOIN (SELECT r.id, o.event_id FROM refunds r JOIN orders o ON o.id = r.order_id) source ON source.id = m.refund_id',
 };
 const invitationReady = `EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id AND NOT earlier_email)`;
 
