@@ -116,7 +116,7 @@ describe('participant identity API', () => {
     ]);
     const history = await app.inject({ url: `/api/events/${eventId}/orders/${first}/participant-history` });
     expect(history.statusCode, history.body).toBe(200);
-    expect(history.json()).toEqual({ orderIds: [second, first] });
+    expect(history.json()).toEqual({ orderIds: [second, first], otherEvents: [] });
     const separateEvent = await app.inject({
       method: 'POST',
       url: `/api/organizations/${organizationId}/events`,
