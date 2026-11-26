@@ -77,6 +77,7 @@ export function Registrations({ draft }: { draft: Draft }) {
 
       {published && can(roles, 'export.ledger') && <ReconciliationDownload key={eventId} eventId={eventId} />}
       {published && <Summary eventId={eventId} refreshKey={orders} />}
+      {published && canManage && <ParticipantCount key={eventId} eventId={eventId} refreshKey={orders} />}
       {published && orders !== null && can(roles, 'payments.refund') && <CancellationPreview eventId={eventId} revision={draft.data.revision} publishedVersion={draft.data.publishedVersion} orders={orders} onExecutionSaved={reload} />}
 
       {published && can(roles, 'orders.view') && (
@@ -133,7 +134,6 @@ export function Registrations({ draft }: { draft: Draft }) {
       )}
       {canManage && <ChangesToResolve eventId={eventId} refreshKey={orders} />}
 
-      {published && canManage && orders !== null && <ParticipantCount key={eventId} eventId={eventId} refreshKey={orders} />}
       {canManage && <SameRider eventId={eventId} onChanged={reload} />}
 
       {canManage && <Waitlists draft={draft} onChanged={reload} />}

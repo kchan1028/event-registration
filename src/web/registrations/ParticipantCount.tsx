@@ -1,8 +1,19 @@
-import { useRef, type MouseEvent } from 'react';
+import { useRef, useState, type MouseEvent } from 'react';
 import { api } from '../api';
 import { useLoad } from '../useLoad';
 
 export function ParticipantCount({ eventId, refreshKey }: { eventId: string; refreshKey: unknown }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <details className="settings__section" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary id="participant-count-title" className="lookup-toggle">Event participants</summary>
+      {open && <ParticipantCountContent eventId={eventId} refreshKey={refreshKey} />}
+    </details>
+  );
+}
+
+function ParticipantCountContent({ eventId, refreshKey }: { eventId: string; refreshKey: unknown }) {
   const { data: groups, error, reload } = useLoad(() => api.participantGroups(eventId), [eventId, refreshKey]);
 
   const status = useRef<HTMLParagraphElement>(null);
@@ -12,8 +23,7 @@ export function ParticipantCount({ eventId, refreshKey }: { eventId: string; ref
   };
 
   return (
-    <section className="settings__section" aria-labelledby="participant-count-title">
-      <h3 id="participant-count-title">Event participants</h3>
+    <div role="region" aria-labelledby="participant-count-title">
       <p ref={status} role="status" tabIndex={-1}>
         {!error && (groups === null ? 'Loading participant count…' : (
           <><strong className="num">{groups.length}</strong> {groups.length === 1 ? 'participant' : 'participants'} with confirmed orders</>
@@ -30,6 +40,6 @@ export function ParticipantCount({ eventId, refreshKey }: { eventId: string; ref
         Check-in uses same-rider links for all orders. Linking across junior profiles, or linking a junior order to an adult order, can make one check-in card for two participants.
         Unlinked orders for the same junior profile can make two check-in cards for one participant.
       </p>
-    </section>
+    </div>
   );
 }

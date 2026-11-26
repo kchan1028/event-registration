@@ -11,6 +11,8 @@ test('explains the event participant count to staff with entry management access
   expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).status()).toBe(200);
 
   await page.goto(route);
+  const toggle = page.getByText('Event participants', { exact: true });
+  await toggle.click();
   const section = page.getByRole('region', { name: 'Event participants' });
   await expect(section.getByRole('status')).toHaveText('0 participants with confirmed orders');
 
@@ -38,7 +40,7 @@ test('explains the event participant count to staff with entry management access
     expect(created.status(), await created.text()).toBe(201);
     const { id } = await created.json();
     expect((await page.request.post(`/api/orders/${id}/payment`, {
-      data: { attemptId: `participant-payment-${attempt}`, outcome: 'success' },
+      data: { attemptId: `participant-payment-${eventId}-${attempt}`, outcome: 'success' },
     })).status()).toBe(200);
   }
 
@@ -47,6 +49,7 @@ test('explains the event participant count to staff with entry management access
     failCountRequest ? route.fulfill({ status: 503, json: { error: 'Temporary failure' } }) : route.continue(),
   );
   await page.reload();
+  await toggle.click();
   await expect(section.getByRole('alert')).toHaveText('Could not load the participant count.');
   const retry = section.getByRole('button', { name: 'Retry participant count' });
   await retry.focus();
@@ -65,7 +68,7 @@ test('explains the event participant count to staff with entry management access
     expect((await new AxeBuilder({ page }).include('[aria-labelledby="participant-count-title"]').analyze()).violations).toEqual([]);
   }
 
-  const email = 'participant-count-finance@example.test';
+  const email = `participant-count-finance-${eventId}@example.test`;
   const context = await browser.newContext({ extraHTTPHeaders: { Authorization: `Bearer test:${email}` } });
   try {
     await context.request.get('/api/me');
@@ -74,7 +77,7 @@ test('explains the event participant count to staff with entry management access
     await member.addInitScript((address) => sessionStorage.setItem('cyclereg.test-session', address), email);
     await member.goto(route);
     await expect(member.getByRole('heading', { name: 'Registrations', exact: true })).toBeVisible();
-    await expect(member.getByRole('region', { name: 'Event participants' })).toHaveCount(0);
+    await expect(member.getByText('Event participants', { exact: true })).toHaveCount(0);
     expect((await context.request.get(`${eventUrl}/participant-groups`)).status()).toBe(403);
   } finally {
     await context.close();
