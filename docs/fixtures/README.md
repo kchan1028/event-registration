@@ -103,8 +103,7 @@ A November 26, 2026 local API rehearsal in [case-studies.test.ts](../../tests/ca
 
 A November 26, 2026 local API rehearsal in [case-studies.test.ts](../../tests/case-studies.test.ts) started with the full seeded Harbor Masters field. In a disposable database, the organizer enabled that field’s waitlist, a fictional rider joined, and the first attempt to offer a place was refused while the field was full. After the organizer added one place, checkout without the offer was refused and the rider redeemed the offer with simulated payment. The normal seed keeps the waitlist off and contains no offer.
 
-The remaining development and rehearsal case is absent from the reusable seed.
-
+The reusable seed still has no missing-waiver case.
 
 | Missing case | Why it is not seeded |
 |---|---|

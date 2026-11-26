@@ -261,8 +261,12 @@ describe('generated race case studies', () => {
     expect(joined.statusCode, joined.body).toBe(201);
     const entry = joined.json<{ id: string }>();
     expect(entry).toMatchObject({ status: 'waiting', position: 1 });
-    const offer = () => app.inject({ method: 'POST', url: `${base}/waitlist/${entry.id}/offer` });
-    expect((await offer()).statusCode).toBe(409);
+    const offerUrl = `${base}/waitlist/${entry.id}/offer`;
+    expect((await app.inject({ method: 'POST', url: offerUrl, headers })).statusCode).toBe(404);
+    const offer = () => app.inject({ method: 'POST', url: offerUrl });
+    const full = await offer();
+    expect(full.statusCode).toBe(409);
+    expect(full.json()).toMatchObject({ error: expect.stringContaining('has no free place to offer') });
 
     await openWaitlist(capacity + 1);
     expect((await publicEvent()).remaining[field.id]).toBe(0);
@@ -282,7 +286,9 @@ describe('generated race case studies', () => {
         waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Sky Example', signerRole: 'rider' },
       },
     });
-    expect((await reserve()).statusCode).toBe(409);
+    const publicCheckout = await reserve();
+    expect(publicCheckout.statusCode).toBe(409);
+    expect(publicCheckout.json()).toMatchObject({ error: expect.stringContaining('Places go to riders on the waitlist first') });
     const reserved = await reserve(offerToken);
     expect(reserved.statusCode, reserved.body).toBe(201);
     const order = reserved.json<{ id: string }>();
