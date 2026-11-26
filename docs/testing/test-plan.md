@@ -68,7 +68,7 @@ Run `tests/exports.test.ts` and `tests/protectedExportAudit.test.ts` for changes
 
 ### Adult self-registration evidence
 
-Run `tests/orders.test.ts` for explicit account-derived confirmation on the adult checkout API, omitted or declined confirmation, guardian checkout refusal with no hold, authorization and organizer responses that omit the new evidence, and repeat requests that preserve the saved confirmation without rewriting waiver evidence. Run the migration and guardian/claim suites when changing order evidence storage or family authority.
+Run `tests/orders.test.ts` for explicit account-derived confirmation on the adult checkout API, omitted or declined confirmation, guardian checkout refusal with no hold, authorization and organizer responses that omit the new evidence, and repeat requests that preserve the saved confirmation without rewriting waiver evidence. Run the migration and guardian/claim suites when changing order evidence storage or family authority. Run `e2e/checkout.spec.ts` and `e2e/walkup.spec.ts` for the optional unchecked control, keyboard and 360px accessibility, guardian and kiosk exclusion, fresh confirmation after a definitive rejection, and exact replay after an interrupted hold, tab refresh and account switch.
 
 ### Registration confirmation recording
 

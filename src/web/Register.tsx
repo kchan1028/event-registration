@@ -57,6 +57,7 @@ interface Draft {
   pendingReservation: {
     request: Parameters<typeof api.createOrder>[1];
     waiverText: string;
+    selfRegistrationIdentity?: string;
     addenda?: ReservationAddendum[];
   } | null;
   /** Private link token from a waitlist offer; lets this rider take the reserved place. */
@@ -536,7 +537,7 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
         ) : (
           <>
         {draft.step === 'details' && <DetailsStep config={config} draft={draft} update={update} goTo={goTo} kiosk={kiosk} />}
-        {draft.step === 'waiver' && <Waiver ev={ev} draft={draft} update={update} goTo={goTo} setEvent={setEv} />}
+        {draft.step === 'waiver' && <Waiver key={session.signInIdentity} ev={ev} draft={draft} update={update} goTo={goTo} setEvent={setEv} selfRegistrationIdentity={kiosk ? null : session.signInIdentity} />}
         {draft.step === 'review' && draft.orderId && (
           <section className="reg__panel" aria-labelledby="review-title">
             <h2 id="review-title" tabIndex={-1} data-checkout-step>Review your order</h2>
@@ -1339,10 +1340,15 @@ function DetailsStep({ config, draft, update, goTo, kiosk }: { config: EventConf
 
 /* Step 3: waiver, typed signature, then hold places ----------------------- */
 
-function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft: Draft; update: Update; goTo: (s: Step) => void; setEvent: (event: PublicEvent) => void }) {
+function Waiver({ ev, draft, update, goTo, setEvent, selfRegistrationIdentity }: { ev: PublicEvent; draft: Draft; update: Update; goTo: (s: Step) => void; setEvent: (event: PublicEvent) => void; selfRegistrationIdentity: string | null }) {
   const { config } = ev;
   const pending = draft.pendingReservation;
   const needsGuardian = pending ? pending.request.waiver.signerRole === 'guardian' : guardianNeeded(config, draft.selected, draft.profile.racingAge);
+  const canConfirmSelf = !pending && selfRegistrationIdentity !== null && draft.profile.racingAge !== null && !needsGuardian;
+  const confirmedForDifferentAccount = pending?.request.selfRegistrationConfirmed === true && pending.selfRegistrationIdentity !== selfRegistrationIdentity;
+  const [confirmedRequestId, setConfirmedRequestId] = useState<string | null>(null);
+  const selfRegistrationConfirmed = canConfirmSelf && confirmedRequestId === draft.clientRequestId;
+
   const signer = needsGuardian ? (draft.details.guardian?.name ?? '') : `${draft.details.firstName} ${draft.details.lastName}`.trim();
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<{ id: string; message: string }[]>([]);
@@ -1380,7 +1386,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
     });
 
   const hold = async () => {
-    if (busy) return;
+    if (busy || confirmedForDifferentAccount) return;
     // Recovery must reach server idempotency before validating newly published requirements.
     if (!pending) {
       const errs: { id: string; message: string }[] = [];
@@ -1396,6 +1402,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
     const submission = pending ?? {
       request: {
         clientRequestId: draft.clientRequestId,
+        ...(selfRegistrationConfirmed && { selfRegistrationConfirmed: true as const }),
         categoryIds: draft.selected,
         bundleIntent: draft.bundleIntent,
         rider: riderFrom(draft, needsGuardian) as RiderDetails,
@@ -1409,6 +1416,7 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
         couponCode: draft.coupon?.code ?? null,
       },
       waiverText: config.registration.waiverText,
+      ...(selfRegistrationConfirmed && selfRegistrationIdentity !== null && { selfRegistrationIdentity }),
       addenda: acceptedAddenda,
     };
     setBusy(true);
@@ -1418,11 +1426,14 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
       const changedWaiver = submission.request.waiver.version !== config.registration.waiverVersion || submission.waiverText !== config.registration.waiverText;
       update((x) => ({ ...x, orderId: order.id, pendingReservation: null, step: 'review', reached: Math.max(x.reached, 3), waiver: changedWaiver ? { ...x.waiver, read: false, agreed: false } : x.waiver }));
     } catch (e) {
-      setErrors([{ id: 'reservation-status', message: (e as ApiError).message }]);
-      if (e instanceof ApiError && e.status >= 400 && e.status < 500 && ![401, 403, 408, 425, 429].includes(e.status)) {
+      const rejected = e instanceof ApiError && e.status >= 400 && e.status < 500 && ![401, 403, 408, 425, 429].includes(e.status);
+      const confirmAgain = rejected && submission.request.selfRegistrationConfirmed ? ' Review your self-registration choice before trying again.' : '';
+      const message = `${(e as ApiError).message}${confirmAgain}`;
+      setErrors([{ id: 'reservation-status', message }]);
+      if (rejected) {
         const latest = await api.publicEvent(ev.eventId).catch(() => null);
         if (latest) setEvent(latest);
-        else setErrors([{ id: 'reservation-status', message: `${(e as ApiError).message} Reload this page to get the latest event information before trying again.` }]);
+        else setErrors([{ id: 'reservation-status', message: `${message} Reload this page to get the latest event information before trying again.` }]);
         const changedWaiver = !latest || submission.request.waiver.version !== latest.config.registration.waiverVersion || submission.waiverText !== latest.config.registration.waiverText;
         update((x) => ({ ...x, pendingReservation: null, clientRequestId: crypto.randomUUID(), waiver: changedWaiver ? { ...x.waiver, read: false, agreed: false } : x.waiver }));
       }
@@ -1504,11 +1515,34 @@ function Waiver({ ev, draft, update, goTo, setEvent }: { ev: PublicEvent; draft:
           {needsGuardian ? 'As parent or guardian, I agree to this waiver for the rider' : 'I agree to this waiver'}
         </label>
       </fieldset>
+      {canConfirmSelf && (
+        <div>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={selfRegistrationConfirmed}
+              aria-describedby="self-registration-hint"
+              onChange={(event) => setConfirmedRequestId(event.target.checked ? draft.clientRequestId : null)}
+            />
+            I’m registering myself
+          </label>
+          <p className="muted small" id="self-registration-hint">
+            This records your signed-in account as the rider on this order. Leave unchecked when registering another rider.
+          </p>
+        </div>
+      )}
+      {pending?.request.selfRegistrationConfirmed && (
+        <p className="note">
+          {confirmedForDifferentAccount
+            ? 'Sign back in with the account that confirmed self-registration to retry this reservation.'
+            : 'Your self-registration confirmation is saved with this pending request.'}
+        </p>
+      )}
       <div className="form-actions">
         <button className="btn btn--ghost" disabled={busy || !!draft.pendingReservation} onClick={() => goTo('details')}>
           <Icon name="arrow-left" /> Back
         </button>
-        <button className="btn btn--primary" disabled={busy} onClick={hold}>
+        <button className="btn btn--primary" disabled={busy || confirmedForDifferentAccount} onClick={hold}>
           {busy ? 'Holding your places…' : draft.pendingReservation ? 'Retry reservation' : 'Sign and review the order'}
         </button>
       </div>

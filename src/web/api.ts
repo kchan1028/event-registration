@@ -384,7 +384,7 @@ export const api = {
   releaseReservation: (eventId: string, input: { reference: string; reason: string; riderRequested: true }) =>
     request<ReservationLookupResult>('POST', `/api/events/${eventId}/reservation-release`, input),
   publicEvent: (id: string) => request<PublicEvent>('GET', `/api/public/events/${id}`),
-  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; bundleIntent?: string | null; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null; extras?: OrderExtras; couponCode?: string | null }) =>
+  createOrder: (eventId: string, body: { clientRequestId: string; categoryIds: string[]; selfRegistrationConfirmed?: true; bundleIntent?: string | null; rider: RiderDetails; waiver: WaiverAcceptance; offerToken?: string | null; extras?: OrderExtras; couponCode?: string | null }) =>
     request<OrderView>('POST', `/api/rider/events/${eventId}/orders`, body),
   checkCoupon: (eventId: string, code: string) => request<CouponTerms>('POST', `/api/rider/events/${eventId}/coupons/check`, { code }),
   coupons: (eventId: string) => request<CouponView[]>('GET', `/api/events/${eventId}/coupons`),
