@@ -200,6 +200,45 @@ describe('organizer-managed waitlist API', () => {
     }
   });
 
+  it('sends one expiry notice for a previously sent offer and skips removed, active-checkout or never-sent offers', async () => {
+    const send = vi.fn().mockResolvedValueOnce('re_offer').mockResolvedValueOnce('re_removed_offer').mockResolvedValueOnce('re_checkout_offer').mockResolvedValue('re_expiry');
+    const sender = { mode: 'resend' as const, from: 'sender@example.test', send };
+    const s = await setup(sender);
+    const entries = await Promise.all([1, 2, 3, 4].map(async (n) => (await s.join(joiner(n))).json<Entry>()));
+    await s.setCap(s.used + entries.length);
+    const offers = [];
+    for (const entry of entries) {
+      const offered = await s.offer(entry.id);
+      expect(offered.statusCode).toBe(200);
+      offers.push(offered.json<Entry>());
+    }
+    const db = openDb(s.databaseUrl);
+    try {
+      const mailer = createMailer(db, sender, s.now);
+      await mailer.dispatchNextRiderEmail();
+      await mailer.dispatchNextRiderEmail();
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(3);
+      expect((await s.order({ offerToken: offers[2].offerToken })).statusCode).toBe(201);
+      expect((await s.remove(entries[1].id)).statusCode).toBe(200);
+      await db.run("UPDATE waitlist_entries SET offer_expires_at = now() - interval '1 second' WHERE id = ANY($1)", [entries.map((entry) => entry.id)]);
+      s.advanceHours(24);
+      const before = await s.list();
+      const otherWorker = createMailer(db, sender, s.now);
+      await Promise.all([mailer.dispatchNextRiderEmail(), otherWorker.dispatchNextRiderEmail()]);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(4);
+      const [message, key] = send.mock.calls[3];
+      expect(message).toMatchObject({ to: DEFAULT_TEST_ORGANIZER, subject: 'Your waitlist offer expired' });
+      expect(message.text).not.toContain('?offer=');
+      expect(await db.all("SELECT id, waitlist_expiry_entry_id AS waitlist_entry_id, status FROM email_messages WHERE kind = 'waitlist_expired'"))
+        .toEqual([{ id: key, waitlist_entry_id: entries[0].id, status: 'sent' }]);
+      expect(await s.list()).toEqual(before);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('an unused offer expires after 24 hours and frees the place for the next rider', async () => {
     const s = await setup();
     const a = (await s.join(joiner(1))).json() as Entry;
