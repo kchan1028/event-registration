@@ -2,6 +2,8 @@
 
 **Scope update (November 19, 2026):** References below to timing-software format acceptance, import or round trips as launch or phase requirements reflect the earlier scope. Those checks are deferred for possible future development. See [current product scope](../../product.md#out-of-scope-initially).
 
+**Rehearsal update (November 26, 2026):** References below to staff-run or human-run rehearsals as Phase 3 evidence reflect the earlier plan. The project owner decided that rehearsals run as [automated Playwright rehearsals](../testing/test-plan.md#5-manual-checks) with fictional role accounts, unless the owner asks for a human run. Unaided operation by real staff is measured at the pilot ([handoff measure](../../product.md#success-measures)), and named-person sign-off stays with the [Phase 3 exit gate](../../roadmap.md#phase-3--make-race-day-operable).
+
 Research date: November 16, 2026. Author: Codex. Status: **Proposed recommendations**, with implementation and verification evidence identified separately. Reviewed application baseline: `028d7e2` (`main`). This report supports [product requirements](../../product.md), the [roadmap](../../roadmap.md), [audit register](../../AUDIT.md), and [test plan](../testing/test-plan.md); it does not approve requirements, reorder phases, or authorize launch.
 
 ## Executive recommendation
