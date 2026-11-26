@@ -46,7 +46,7 @@ async function setup(now?: () => Date) {
     expect(res.statusCode, res.body).toBe(201);
     return (res.json() as { id: string }).id;
   };
-  return { call, registerJunior, databaseUrl, eventId };
+  return { call, registerJunior, databaseUrl, eventId, config };
 }
 
 describe('guardian and junior access', () => {
@@ -309,6 +309,61 @@ describe('guardian invitation records without access grants', () => {
   });
 });
 
+
+describe('participant grouping across junior profile boundaries', () => {
+  it.each(['adult order', 'second junior profile'] as const)('preserves separate participant groups for a linked %s', async (caseName) => {
+    const { call, registerJunior, eventId, config } = await setup();
+    const first = await registerJunior(PARENT, 'Sam');
+    const secondBuyer = OTHER_PARENT;
+    let second: string;
+    if (caseName === 'adult order') {
+      const category = config.categories.find((row) => row.timingCode === 'RR-M35-34')!;
+      const created = await call(secondBuyer, 'POST', `/api/rider/events/${eventId}/orders`, {
+        clientRequestId: 'participant-adult-order',
+        categoryIds: [category.id],
+        rider: {
+          firstName: 'Sam', lastName: 'Example', email: secondBuyer, team: '',
+          racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men',
+          collegiateDivision: null, guardian: null,
+          emergencyContact: { name: 'Pat Example', phone: '555-555-0199' },
+        },
+        waiver: {
+          version: config.registration.waiverVersion, read: true, agreed: true,
+          signatureName: 'Sam Example', signerRole: 'rider',
+        },
+      });
+      expect(created.statusCode, created.body).toBe(201);
+      second = created.json<{ id: string }>().id;
+    } else {
+      second = await registerJunior(secondBuyer, 'Sam');
+    }
+    for (const [buyer, orderId] of [[PARENT, first], [secondBuyer, second]]) {
+      const paid = await call(buyer, 'POST', `/api/orders/${orderId}/payment`, {
+        attemptId: `participant-payment-${orderId}`, outcome: 'success',
+      });
+      expect(paid.statusCode, paid.body).toBe(200);
+    }
+
+    const eventUrl = `/api/events/${eventId}`;
+    const checkInUrl = `${eventUrl}/check-in?${new URLSearchParams({ day: config.days[0].id, q: 'Sam' })}`;
+    const beforeLink = await call(ORGANIZER, 'GET', checkInUrl);
+    expect(beforeLink.statusCode, beforeLink.body).toBe(200);
+    expect(beforeLink.json().riders).toHaveLength(2);
+    const linked = await call(ORGANIZER, 'POST', `${eventUrl}/rider-identity/link`, { orderIds: [first, second] });
+    expect(linked.statusCode, linked.body).toBe(200);
+
+    const checkIn = await call(ORGANIZER, 'GET', checkInUrl);
+    expect(checkIn.statusCode, checkIn.body).toBe(200);
+    expect(checkIn.json().riders).toHaveLength(1);
+
+    const groups = await call(ORGANIZER, 'GET', `${eventUrl}/participant-groups`);
+    expect(groups.statusCode, groups.body).toBe(200);
+    expect(groups.json<{ orderIds: string[] }[]>()).toEqual(expect.arrayContaining([{ orderIds: [first] }, { orderIds: [second] }]));
+    expect(groups.json()).toHaveLength(2);
+    expect((await call(PARENT, 'GET', `/api/orders/${second}`)).statusCode).toBe(404);
+    expect((await call(secondBuyer, 'GET', `/api/orders/${first}`)).statusCode).toBe(404);
+  });
+});
 
 describe('explicit guardian acceptance and shared authority', () => {
   it('requires the invited account and acknowledgement, then shares only that junior while preserving purchase evidence', async () => {
