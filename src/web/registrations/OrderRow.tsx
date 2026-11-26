@@ -26,7 +26,7 @@ const STATUS_TONE: Record<OrderStatus, string> = {
  * One order in the registrations list. `canManage` (entries.manage) shows transfers, withdrawals,
  * license reviews, and corrections; `canRefund` (payments.refund) shows Refund. Others see the record only.
  */
-export function OrderRow({ order, categories, canManage, canRefund, onChange }: { order: OrderView; categories: Category[]; canManage: boolean; canRefund: boolean; onChange: (o: OrderView) => void }) {
+export function OrderRow({ order, categories, canManage, canRefund, onChange, participantHistory }: { order: OrderView; categories: Category[]; canManage: boolean; canRefund: boolean; onChange: (o: OrderView) => void; participantHistory?: ReactNode }) {
   // Display only: money returned or on its way back. Readiness and entry status do not change with a refund.
   const session = useSession();
   const refunded = refundedCents(order.totalCents, order.refunds);
@@ -60,6 +60,7 @@ export function OrderRow({ order, categories, canManage, canRefund, onChange }: 
       {canManage && (order.status === 'confirmed' || order.checkInCode) && (
         <RiderEmailDeliveryPanel key={session.email?.toLowerCase()} eventId={order.eventId} recordId={order.id} kind="confirmation" />
       )}
+      {participantHistory}
       {(order.answers.length > 0 || order.addenda.length > 0) && (
         <ul className="small order__answers">
           {order.answers.map((a) => (
