@@ -1,10 +1,11 @@
-import { RiderEmailDeliveryPanel } from './RiderEmailDeliveryPanel';
 import { OFFER_HOURS } from '../../shared/waitlist';
 import { api, type ApiError, type WaitlistEntryView } from '../api';
 import { href } from '../App';
 import type { Draft } from '../Builder';
 import { formatDateTime } from '../format';
 import { useLoad } from '../useLoad';
+import { useSession } from '../auth';
+import { RiderEmailDeliveryPanel } from './RiderEmailDeliveryPanel';
 
 const WL_LABEL: Record<WaitlistEntryView['status'], string> = { waiting: 'Waiting', offered: 'Offer open', expired: 'Offer expired', accepted: 'Registered', removed: 'Removed' };
 
@@ -12,7 +13,8 @@ const WL_LABEL: Record<WaitlistEntryView['status'], string> = { waiting: 'Waitin
 /** `onChanged`: called after an offer or removal, so the page can refresh what depends on the waitlist. */
 export function Waitlists({ draft, onChanged }: { draft: Draft; onChanged: () => void }) {
   const eventId = draft.data.id;
-  const { data, error, setError, reload } = useLoad(() => api.waitlist(eventId), [eventId]);
+  const { email } = useSession();
+  const { data, error, setError, reload } = useLoad(() => api.waitlist(eventId), [eventId, email]);
   const entries = data?.entries ?? null;
   const act = async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -57,7 +59,7 @@ export function Waitlists({ draft, onChanged }: { draft: Draft; onChanged: () =>
                     Offer link (until {formatDateTime(w.offerExpiresAt!)}): <code className="code">{link(w.offerToken)}</code>
                   </p>
                 )}
-                {w.offeredAt && <RiderEmailDeliveryPanel eventId={eventId} recordId={w.id} kind="offer" />}
+                {w.offeredAt && <RiderEmailDeliveryPanel key={email?.toLowerCase()} eventId={eventId} recordId={w.id} kind="offer" />}
                 <p className="order__entry-actions">
                   {w.status === 'waiting' && (
                     <button className="btn btn--primary btn--small" onClick={() => act(() => api.offerWaitlistPlace(eventId, w.id))}>
