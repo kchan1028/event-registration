@@ -88,6 +88,22 @@ Each version an organizer publishes records the publishing account from the sess
 
 New orders record the authenticated accepting account ID, validated declared racing age and server acceptance timestamp beside the original waiver. Client-supplied evidence is ignored; checkout replay and rider corrections preserve the original snapshot. Historical records remain null rather than being reconstructed. Existing private order-access rules govern this evidence, including read-only junior viewing; no public field, access override or federation approval is added. Demo/case-study fixture orders, including organizer demo actions, have no inferred accepting account. Preservation is enforced by application writes, not a database immutability trigger. Retention, real identity and legal/minor acceptance remain launch gates.
 
+### Current order evidence by viewer
+
+The waiver acceptance records the accepted version, signature name and signer role. Its separate server evidence records the accepting account ID, declared racing age and acceptance time. The API sends the following fields when the caller qualifies for access. This describes the local build. Minimum necessary exposure for real minor data still needs product-owner approval.
+
+| Caller | Current response |
+|---|---|
+| Placing account for an order without a linked junior profile, or an active guardian or approved claimant of the linked profile | Order detail and My registrations return the waiver and server evidence, along with the rider's emergency contact. |
+| Junior's separately authorized read-only login | The same waiver and server evidence and emergency contact are returned in order detail and My registrations. The registration list marks that the login cannot manage the order. |
+| Event owner, registration manager or finance role with `orders.view` | Order detail and the event's registration list include the waiver and server evidence. These ordinary order responses remove the emergency contact and redact its correction values and reason. The separate, audited emergency-contact lookup uses its own permission. |
+| Check-in volunteer or timer/export role alone | No access to the full order response. The separately authorized desk or start-list view shows racing age. Both roles can use the audited emergency-contact lookup. |
+| Unrelated account, removed guardian without another source of access, or pending guardian invitee | The relationship does not grant access to the order or its waiver evidence. |
+| Allowlisted support approver acting only in that capacity | The claim approval endpoint returns the claim ID and approval time. It does not grant order access or return stored claim-review inputs. |
+| Public event visitor | Public event detail does not return individual order evidence. |
+
+See the [minor-data approval decision](product.md#minor-data-approval) for the outstanding policy and operating evidence.
+
 ## Explicit guardian authority (Implemented locally)
 
 Migration 30 promotes active `junior_guardians` records on unmerged profiles to the authority for linked junior orders. The placing account stays provenance; it alone cannot authorize a linked order. Shared SQL controls private order reads, payment/cancellation and registration lists, and checkout nonce replay rechecks current authority. Adult orders without a junior profile retain placing-account authorization. A junior viewer stays read-only. Organization permissions remain separate and never grant family invitation authority.
