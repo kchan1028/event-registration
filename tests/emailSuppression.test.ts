@@ -277,39 +277,41 @@ describe('invitation mail stops', () => {
       const invitation = { email: ADDRESS, role: 'finance', revision: row.revision };
 
       // Observe the retry waiting on the invitation row. It already holds the membership
-      // lock at this point, so cancel cannot invalidate the revision before reservation.
-      await client.query('BEGIN');
+      // lock at this point, so cancel cannot invalidate the revision before the attempt is selected.
+      let sending: ReturnType<typeof call> | undefined;
       try {
-        await client.query(
-          'SELECT 1 FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 FOR UPDATE',
-          [orgId, ADDRESS, invitation.role],
-        );
-        const sending = call('POST', `/api/organizations/${orgId}/invitations/send-without-extending`, invitation);
-        await vi.waitFor(async () => {
-          const waiting = await client.query<{ blocked: boolean }>(
-            `SELECT EXISTS (
-               SELECT 1 FROM pg_stat_activity
-               WHERE datname = current_database() AND pg_backend_pid() = ANY(pg_blocking_pids(pid))
-             ) AS blocked`,
+        await client.query('BEGIN');
+        try {
+          await client.query(
+            'SELECT 1 FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 FOR UPDATE',
+            [orgId, ADDRESS, invitation.role],
           );
-          expect(waiting.rows[0].blocked).toBe(true);
-        }, { timeout: 3_000 });
-        await client.query('COMMIT');
+          sending = call('POST', `/api/organizations/${orgId}/invitations/send-without-extending`, invitation);
+          await vi.waitFor(async () => {
+            const waiting = await client.query<{ blocked: boolean }>(
+              `SELECT EXISTS (
+                 SELECT 1 FROM pg_stat_activity
+                 WHERE datname = current_database() AND pg_backend_pid() = ANY(pg_blocking_pids(pid))
+               ) AS blocked`,
+            );
+            expect(waiting.rows[0].blocked).toBe(true);
+          }, { timeout: 3_000 });
+        } finally {
+          await client.query('ROLLBACK');
+        }
 
         const cancelled = await call('POST', `/api/organizations/${orgId}/invitations/cancel`, invitation);
         expect(cancelled.statusCode).toBe(200);
+      } finally {
         await client.query('UPDATE email_messages SET sending_until = NULL WHERE id = $1', [attemptId]);
-        const result = await sending;
-        expect(result.statusCode).toBe(409);
-        expect(result.json()).toEqual({ error: CHANGED });
-        expect(sends).toBe(1);
-        expect(await team()).toMatchObject({ invitations: [], stoppedEmails: [{ email: ADDRESS, reason: 'bounced' }] });
-        expect((await client.query('SELECT count(*)::int AS n FROM email_messages')).rows[0].n).toBe(2);
-      } catch (error) {
-        await client.query('ROLLBACK');
-        await client.query('UPDATE email_messages SET sending_until = NULL WHERE id = $1', [attemptId]);
-        throw error;
+        await sending?.catch(() => undefined);
       }
+      const result = await sending!;
+      expect(result.statusCode).toBe(409);
+      expect(result.json()).toEqual({ error: CHANGED });
+      expect(sends).toBe(1);
+      expect(await team()).toMatchObject({ invitations: [], stoppedEmails: [{ email: ADDRESS, reason: 'bounced' }] });
+      expect((await client.query('SELECT count(*)::int AS n FROM email_messages')).rows[0].n).toBe(2);
     } finally {
       await client.end();
     }
@@ -354,6 +356,7 @@ describe('invitation mail stops', () => {
         expect((await team()).stoppedEmails).toEqual([{ email: ADDRESS, reason: 'complained' }]);
       } finally {
         releaseEarlier();
+        await earlier.catch(() => undefined);
       }
       expect((await earlier).statusCode).toBe(200);
       const after = await team();
