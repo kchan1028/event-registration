@@ -373,6 +373,7 @@ export const api = {
   publicEvents: () => request<PublicEventSummary[]>('GET', '/api/public/events'),
   joinWaitlist: (eventId: string, body: WaitlistJoin) => request<WaitlistEntryView>('POST', `/api/rider/events/${eventId}/waitlist`, body),
   waitlistOffer: (token: string) => request<WaitlistOffer>('GET', `/api/rider/offers/${encodeURIComponent(token)}`),
+  eventParticipantHistory: (eventId: string, orderId: string) => request<{ orderIds: string[] }>('GET', `/api/events/${eventId}/orders/${orderId}/participant-history`),
   participantGroups: (eventId: string) => request<{ orderIds: string[] }[]>('GET', `/api/events/${eventId}/participant-groups`),
   riderIdentity: (eventId: string) => request<RiderIdentityOverview>('GET', `/api/events/${eventId}/rider-identity`),
   linkRiders: (eventId: string, a: string, b: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/link`, { orderIds: [a, b] }),

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { awaitsLicenseReview } from '../shared/checkout';
 import { matchesRegistration } from '../shared/lookup';
 import { can } from '../shared/roles';
@@ -12,6 +12,7 @@ import { CancellationPreview } from './registrations/CancellationPreview';
 import { ChangesToResolve } from './registrations/ChangesToResolve';
 import { OrderRow } from './registrations/OrderRow';
 import { ParticipantCount } from './registrations/ParticipantCount';
+import { OrganizerParticipantHistory } from './registrations/OrganizerParticipantHistory';
 import { SameRider } from './registrations/SameRider';
 import { FinanceDownloads } from './registrations/FinanceDownloads';
 import { ReservationLookup } from './registrations/ReservationLookup';
@@ -36,11 +37,12 @@ function needsLicenseReview(o: OrderView): boolean {
 /** Registration exception queue: one list, filtered by what needs a person. Each section shows only for roles that can use it. */
 export function Registrations({ draft }: { draft: Draft }) {
   const eventId = draft.data.id;
-  const { email } = useSession();
+  const { email, signInIdentity } = useSession();
   const { roles } = draft.data;
   const { data: orders, setData: setOrders, error, reload } = useLoad(() => api.orders(eventId), [eventId]);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
+  const ordersById = useMemo(() => new Map(orders?.map((order) => [order.id, order])), [orders]);
 
   // Search narrows the list first; the filter chips and their counts apply to what it found.
   const found = (orders ?? []).filter((o) => matchesRegistration(o, query));
@@ -144,7 +146,17 @@ export function Registrations({ draft }: { draft: Draft }) {
 
       <ul className="orders" aria-label="Registrations">
         {shown.map((o) => (
-          <OrderRow key={o.id} order={o} categories={draft.config.categories} canManage={canManage} canRefund={can(roles, 'payments.refund')} onChange={(next) => setOrders((list) => (list ?? []).map((x) => (x.id === next.id ? next : x)))} />
+          <OrderRow
+            key={o.id}
+            order={o}
+            categories={draft.config.categories}
+            canManage={canManage}
+            canRefund={can(roles, 'payments.refund')}
+            onChange={(next) => setOrders((list) => (list ?? []).map((x) => (x.id === next.id ? next : x)))}
+            participantHistory={published && canManage && o.status === 'confirmed' && (
+              <OrganizerParticipantHistory key={`${eventId}:${signInIdentity}`} order={o} ordersById={ordersById} />
+            )}
+          />
         ))}
       </ul>
     </div>
