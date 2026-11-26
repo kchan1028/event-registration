@@ -39,8 +39,29 @@ for (const recovery of ['refresh', 'failed-refresh'] as const) test(`guardians m
     await management.getByLabel('Other guardian’s email', { exact: true }).fill(junior);
     await management.getByRole('button', { name: 'Record guardian invitation' }).click();
     await expect(management.getByRole('alert')).toContainText('different guardian email');
-    await invite();
-    await expect(management.getByRole('status').filter({ hasText: 'Guardian invitation recorded' })).toBeFocused();
+    if (recovery === 'failed-refresh') {
+      const endpoint = `**/api/rider/juniors/${sam.id}/guardian-invitations`;
+      await guardian.route(endpoint, async (route) => {
+        if (route.request().method() !== 'POST') return route.continue();
+        await route.fetch();
+        await route.abort('failed');
+      });
+      const email = management.getByLabel('Other guardian’s email', { exact: true });
+      await email.fill(second);
+      await management.getByRole('button', { name: 'Record guardian invitation' }).click();
+      await expect(management.getByRole('alert')).toContainText(`We couldn’t confirm whether the invitation for ${second} was recorded.`);
+      await expect(email).toHaveValue(second);
+      await expect(email).toBeDisabled();
+      const refreshInvitation = management.getByRole('button', { name: 'Refresh guardian access' });
+      await expect(refreshInvitation).toBeFocused();
+      await guardian.unroute(endpoint);
+      await guardian.keyboard.press('Enter');
+      await expect(management.getByRole('button', { name: `Cancel invitation for ${second}` })).toBeVisible();
+      await expect(email).toHaveValue('');
+    } else {
+      await invite();
+      await expect(management.getByRole('status').filter({ hasText: 'Guardian invitation recorded' })).toBeFocused();
+    }
     expect((await guardian.request.get(`/api/orders/${original.id}`, { headers: headers(second) })).status()).toBe(404);
     await management.getByRole('button', { name: `Cancel invitation for ${second}` }).click();
     await expect(management.getByRole('status').filter({ hasText: 'cancelled' })).toBeVisible();
@@ -50,9 +71,11 @@ for (const recovery of ['refresh', 'failed-refresh'] as const) test(`guardians m
     expect(history).toHaveLength(2);
     const pending = history.find((i: { status: string }) => i.status === 'pending');
     expect((await page.request.post(`/api/rider/guardian-invitations/${pending.id}/accept`, { headers: headers(second), data: { acknowledge: true } })).ok()).toBe(true);
-    await management.getByRole('button', { name: 'Refresh guardian access' }).click();
+    const refreshAccess = management.getByRole('button', { name: 'Refresh guardian access' });
+    await refreshAccess.click();
     const removeButton = management.getByRole('button', { name: `Remove guardian access for ${second}` });
     await expect(removeButton).toBeVisible();
+    await expect(refreshAccess).toBeFocused();
     await expect(management.getByRole('button', { name: `Remove guardian access for ${parent}` })).toHaveCount(0);
     await removeButton.click();
     await management.getByRole('button', { name: 'Keep guardian access' }).click();

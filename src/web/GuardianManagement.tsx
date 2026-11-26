@@ -27,9 +27,13 @@ export function GuardianManagement({ junior }: { junior: JuniorProfile }) {
   const refresh = async () => {
     if (busy) return;
     setBusy(true); setError(null);
+    if (!unconfirmed) setRemoving(null);
     try {
       if (await reload()) {
-        if (unconfirmed) setNotice('Guardian access refreshed. Check current guardians and history before taking another action.');
+        if (unconfirmed) {
+          setEmail('');
+          setNotice('Guardian access refreshed. Check current guardians and history before taking another action.');
+        }
         setUnconfirmed(null); setRemoving(null); setReason(''); setReasonError(null); setAcknowledge(false);
       }
     } finally { setBusy(false); }
@@ -44,7 +48,7 @@ export function GuardianManagement({ junior }: { junior: JuniorProfile }) {
     } catch (e) {
       const error = e as ApiError;
       if (error.status === 0 || error.status >= 500) setUnconfirmed(unknownOutcome);
-      else setError(error.message);
+      else setError(error.status === 409 ? `${error.message} Refresh guardian access before trying again.` : error.message);
     } finally { setBusy(false); }
   };
   const invite = (event: FormEvent) => {
@@ -70,7 +74,7 @@ export function GuardianManagement({ junior }: { junior: JuniorProfile }) {
         {unconfirmed}{error ? ' The latest refresh also failed.' : ''} Select Refresh guardian access to check who has access.
       </p>
     ) : error && <p className="alert alert--error" role="alert">{error}</p>}
-    <button ref={refreshButton} className="btn btn--secondary" type="button" disabled={busy} aria-describedby={unconfirmed ? warningId : undefined} onClick={refresh}>Refresh guardian access</button>
+    <button ref={refreshButton} className="btn btn--secondary" type="button" aria-disabled={busy || undefined} aria-describedby={unconfirmed ? warningId : undefined} onClick={refresh}>Refresh guardian access</button>
     {active && <ul className="orders" aria-label={`Current guardians for ${junior.firstName}`}>
       {active.map((g) => <li key={g.id}>
         <p>{g.email}{g.isYou ? ' (you)' : ''}</p>
