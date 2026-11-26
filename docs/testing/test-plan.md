@@ -72,7 +72,7 @@ Run `tests/orders.test.ts` for explicit account-derived confirmation on the adul
 
 ### Registration confirmation recording
 
-The signed payment replay case in `tests/payments.test.ts` verifies that one confirmed order produces one recorded confirmation for its purchaser account and no provider delivery evidence. The dispatch case uses an injected sender to verify local mode, the retry delay and time limit, organization suppression, a stable retry payload and key, and concurrent attempts.
+The signed payment replay case in `tests/payments.test.ts` verifies that one confirmed order produces one recorded confirmation for its purchaser account and no provider delivery evidence. The dispatch case uses an injected sender to verify local mode, the retry delay and time limit, organization suppression, a stable retry payload and key, and concurrent attempts. The organizer API case verifies event authorization, recipient-free status, cooldown and terminal refusals, unchanged resend evidence, and the actor-attributed retry request.
 
 ### Event participant grouping
 

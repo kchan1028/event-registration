@@ -753,6 +753,29 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     return (await orders.listOrders(id, q ?? '')).map(omitStaffEmergencyContact);
   });
 
+  const confirmationParams = z.object({ id: idStr, orderId: idStr });
+  app.get('/api/events/:id/orders/:orderId/confirmation-delivery', async (req, reply) => {
+    const { id, orderId } = await onEvent(req, 'entries.manage', confirmationParams);
+    reply.header('Cache-Control', 'no-store');
+    return { confirmation: await mailer.confirmationStatus(id, orderId) };
+  });
+
+  app.post('/api/events/:id/orders/:orderId/confirmation-delivery/retry', async (req, reply) => {
+    const { id, orderId } = confirmationParams.parse(req.params);
+    const account = me(req);
+    const attempt = await db.transaction(async () => {
+      await access.requireEventUntilSaved(account, id, 'entries.manage');
+      return mailer.recordConfirmationRetry(id, orderId, account.id);
+    });
+    if (!attempt) throw new HttpError(409, 'This confirmation cannot be retried now.');
+    const result = await mailer.dispatch(attempt.id, account.id, 'registration_confirmation');
+    if (result === 'refused') throw new HttpError(403, 'Your role in this organization does not allow this.');
+    // Recheck access before returning delivery evidence, including after a slow provider response.
+    await access.requireEvent(account, id, 'entries.manage');
+    reply.header('Cache-Control', 'no-store');
+    return { confirmation: await mailer.confirmationStatus(id, orderId) };
+  });
+
   // Organizer corrections to rider details. A reason is required and every correction is kept.
   app.post('/api/orders/:id/rider-corrections', async (req) => {
     const { id } = idParam.parse(req.params);
