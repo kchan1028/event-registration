@@ -57,7 +57,7 @@ interface Draft {
   pendingReservation: {
     request: Parameters<typeof api.createOrder>[1];
     waiverText: string;
-    selfRegistrationEmail?: string;
+    selfRegistrationIdentity?: string;
     addenda?: ReservationAddendum[];
   } | null;
   /** Private link token from a waitlist offer; lets this rider take the reserved place. */
@@ -537,7 +537,7 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
         ) : (
           <>
         {draft.step === 'details' && <DetailsStep config={config} draft={draft} update={update} goTo={goTo} kiosk={kiosk} />}
-        {draft.step === 'waiver' && <Waiver key={session.email} ev={ev} draft={draft} update={update} goTo={goTo} setEvent={setEv} selfRegistrationEmail={kiosk ? null : session.email} />}
+        {draft.step === 'waiver' && <Waiver key={session.signInIdentity} ev={ev} draft={draft} update={update} goTo={goTo} setEvent={setEv} selfRegistrationIdentity={kiosk ? null : session.signInIdentity} />}
         {draft.step === 'review' && draft.orderId && (
           <section className="reg__panel" aria-labelledby="review-title">
             <h2 id="review-title" tabIndex={-1} data-checkout-step>Review your order</h2>
@@ -1340,12 +1340,12 @@ function DetailsStep({ config, draft, update, goTo, kiosk }: { config: EventConf
 
 /* Step 3: waiver, typed signature, then hold places ----------------------- */
 
-function Waiver({ ev, draft, update, goTo, setEvent, selfRegistrationEmail }: { ev: PublicEvent; draft: Draft; update: Update; goTo: (s: Step) => void; setEvent: (event: PublicEvent) => void; selfRegistrationEmail: string | null }) {
+function Waiver({ ev, draft, update, goTo, setEvent, selfRegistrationIdentity }: { ev: PublicEvent; draft: Draft; update: Update; goTo: (s: Step) => void; setEvent: (event: PublicEvent) => void; selfRegistrationIdentity: string | null }) {
   const { config } = ev;
   const pending = draft.pendingReservation;
   const needsGuardian = pending ? pending.request.waiver.signerRole === 'guardian' : guardianNeeded(config, draft.selected, draft.profile.racingAge);
-  const canConfirmSelf = !pending && selfRegistrationEmail !== null && draft.profile.racingAge !== null && !needsGuardian;
-  const confirmedForDifferentAccount = pending?.request.selfRegistrationConfirmed === true && pending.selfRegistrationEmail !== selfRegistrationEmail;
+  const canConfirmSelf = !pending && selfRegistrationIdentity !== null && draft.profile.racingAge !== null && !needsGuardian;
+  const confirmedForDifferentAccount = pending?.request.selfRegistrationConfirmed === true && pending.selfRegistrationIdentity !== selfRegistrationIdentity;
   const [confirmedRequestId, setConfirmedRequestId] = useState<string | null>(null);
   const selfRegistrationConfirmed = canConfirmSelf && confirmedRequestId === draft.clientRequestId;
 
@@ -1416,7 +1416,7 @@ function Waiver({ ev, draft, update, goTo, setEvent, selfRegistrationEmail }: { 
         couponCode: draft.coupon?.code ?? null,
       },
       waiverText: config.registration.waiverText,
-      ...(selfRegistrationConfirmed && selfRegistrationEmail !== null && { selfRegistrationEmail }),
+      ...(selfRegistrationConfirmed && selfRegistrationIdentity !== null && { selfRegistrationIdentity }),
       addenda: acceptedAddenda,
     };
     setBusy(true);
@@ -1426,11 +1426,14 @@ function Waiver({ ev, draft, update, goTo, setEvent, selfRegistrationEmail }: { 
       const changedWaiver = submission.request.waiver.version !== config.registration.waiverVersion || submission.waiverText !== config.registration.waiverText;
       update((x) => ({ ...x, orderId: order.id, pendingReservation: null, step: 'review', reached: Math.max(x.reached, 3), waiver: changedWaiver ? { ...x.waiver, read: false, agreed: false } : x.waiver }));
     } catch (e) {
-      setErrors([{ id: 'reservation-status', message: (e as ApiError).message }]);
-      if (e instanceof ApiError && e.status >= 400 && e.status < 500 && ![401, 403, 408, 425, 429].includes(e.status)) {
+      const rejected = e instanceof ApiError && e.status >= 400 && e.status < 500 && ![401, 403, 408, 425, 429].includes(e.status);
+      const confirmAgain = rejected && submission.request.selfRegistrationConfirmed ? ' Review your self-registration choice before trying again.' : '';
+      const message = `${(e as ApiError).message}${confirmAgain}`;
+      setErrors([{ id: 'reservation-status', message }]);
+      if (rejected) {
         const latest = await api.publicEvent(ev.eventId).catch(() => null);
         if (latest) setEvent(latest);
-        else setErrors([{ id: 'reservation-status', message: `${(e as ApiError).message} Reload this page to get the latest event information before trying again.` }]);
+        else setErrors([{ id: 'reservation-status', message: `${message} Reload this page to get the latest event information before trying again.` }]);
         const changedWaiver = !latest || submission.request.waiver.version !== latest.config.registration.waiverVersion || submission.waiverText !== latest.config.registration.waiverText;
         update((x) => ({ ...x, pendingReservation: null, clientRequestId: crypto.randomUUID(), waiver: changedWaiver ? { ...x.waiver, read: false, agreed: false } : x.waiver }));
       }

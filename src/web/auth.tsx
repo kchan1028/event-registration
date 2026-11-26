@@ -18,6 +18,7 @@ import { Field, Pending, ThemeToggle } from './ui';
 export interface Session {
   status: 'loading' | 'signed-out' | 'signed-in' | 'unconfigured';
   email: string | null;
+  signInIdentity: string | null;
   signIn: () => void;
   signOut: () => void;
 }
@@ -52,12 +53,12 @@ export function AuthRoot({ children }: { children: ReactNode }) {
         <ClerkSession>{children}</ClerkSession>
       </ClerkProvider>
     );
-  const none: Session = { status: 'unconfigured', email: null, signIn: () => undefined, signOut: () => undefined };
+  const none: Session = { status: 'unconfigured', email: null, signInIdentity: null, signIn: () => undefined, signOut: () => undefined };
   return <SessionContext.Provider value={none}>{children}</SessionContext.Provider>;
 }
 
 function ClerkSession({ children }: { children: ReactNode }) {
-  const { isLoaded, isSignedIn, getToken, signOut } = useAuth();
+  const { isLoaded, isSignedIn, userId, getToken, signOut } = useAuth();
   const { user } = useUser();
   const clerk = useClerk();
   // Set during render, before any child effect fetches, so the first request already carries the token.
@@ -65,6 +66,7 @@ function ClerkSession({ children }: { children: ReactNode }) {
   const session: Session = {
     status: !isLoaded ? 'loading' : isSignedIn ? 'signed-in' : 'signed-out',
     email: user?.primaryEmailAddress?.emailAddress ?? null,
+    signInIdentity: isSignedIn && userId ? `clerk:${userId}` : null,
     signIn: () => clerk.openSignIn(),
     signOut: () => void signOut(),
   };
@@ -93,6 +95,7 @@ function TestSession({ children }: { children: ReactNode }) {
   const session: Session = {
     status: email ? 'signed-in' : 'signed-out',
     email,
+    signInIdentity: email ? `test:${email.toLowerCase()}` : null,
     signIn: () => setAsking(true),
     signOut: () => {
       try {

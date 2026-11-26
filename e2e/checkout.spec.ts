@@ -97,6 +97,9 @@ test('adult self-registration requires a fresh choice and retries the same signe
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await continueToWaiver.click();
   await expect(self).not.toBeChecked();
+  await self.check();
+  await page.reload();
+  await expect(self).not.toBeChecked();
   await page.setViewportSize({ width: 360, height: 800 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   expect((await new AxeBuilder({ page }).include('[aria-labelledby="waiver-title"]').analyze()).violations).toEqual([]);
@@ -124,6 +127,7 @@ test('adult self-registration requires a fresh choice and retries the same signe
   await expect(page.getByRole('button', { name: 'Retry reservation' })).toBeEnabled();
   const switchAccount = async (email: string) => {
     await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page.getByRole('button', { name: 'Retry reservation' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Sign in with email' }).click();
     await page.getByLabel('Test email').fill(email);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -896,8 +900,12 @@ test('a rejected reservation keeps details editable and rapid submission creates
   await page.route('**/api/rider/events/*/orders', async (route) => {
     await route.fulfill({ status: 422, json: { error: 'Reservation rejected. Review your entries.' } });
   }, { times: 1 });
+  const self = page.getByRole('checkbox', { name: 'I’m registering myself' });
+  await self.check();
   await signAndReview(page, 'Alex Demo');
   await expect(page.locator('.error-summary')).toContainText('Reservation rejected');
+  await expect(page.locator('.error-summary')).toContainText('Review your self-registration choice');
+  await expect(self).not.toBeChecked();
   await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeEnabled();
   await expect(page.getByLabel(/Type your full name to sign/)).toBeEnabled();
   let posts = 0;
