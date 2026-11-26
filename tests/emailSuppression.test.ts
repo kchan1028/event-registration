@@ -82,6 +82,19 @@ async function stop(app: { inject: (opts: object) => Promise<{ statusCode: numbe
   await postBounce(app, providerId, eventId, type);
 }
 
+// Persist the state a worker leaves after claiming the allowed attempt.
+async function attachInterruptedAttempt(client: pg.Client, orgId: string, originalId: string) {
+  const attemptId = 'eml_interrupted';
+  await client.query(
+    `INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at, started_at, keyed, allowed_stop_id)
+     SELECT $1, m.organization_id, m.kind, m.ref, m.to_email, m.subject, m.body_text, 'uncertain', $2, $2, true, s.id
+     FROM email_messages m JOIN email_suppressions s ON s.email_id = m.id WHERE m.id = $3`,
+    [attemptId, NOW, originalId],
+  );
+  await client.query('UPDATE organization_invitations SET email_attempt_id = $1 WHERE organization_id = $2', [attemptId, orgId]);
+  return attemptId;
+}
+
 describe('invitation mail stops', () => {
   it('keeps the first bounce or complaint, and only in that organization', async () => {
     const { app, client, call, orgId, team } = await harness();
@@ -222,6 +235,105 @@ describe('invitation mail stops', () => {
       expect(sends).toBe(2);
       expect((await client.query(`SELECT count(*)::int AS n FROM email_messages WHERE organization_id = $1`, [orgId])).rows[0].n).toBe(2);
       expect((await team()).invitations[0]).toMatchObject({ expiresAt: row.expiresAt, revision: row.revision, suppressed: null, lastEmail: { status: 'sent' } });
+    } finally {
+      await client.end();
+    }
+  });
+
+  it('preserves the stop when an uncertain send is past its safe retry window', async () => {
+    let now = NOW;
+    let sends = 0;
+    const email: EmailSender = { mode: 'resend', async send() { sends++; return 'msg-expired-retry'; } };
+    const { app, client, call, orgId, team } = await harness(email, () => now);
+    try {
+      const row = await invite(call, orgId);
+      await postBounce(app, 'msg-expired-retry', 'evt-expired-retry');
+      const attemptId = await attachInterruptedAttempt(client, orgId, row.lastEmail!.attemptId);
+      now = new Date(NOW.getTime() + DAY);
+      const result = await call('POST', `/api/organizations/${orgId}/invitations/send-without-extending`, {
+        email: ADDRESS, role: 'finance', revision: row.revision,
+      });
+      expect(result.statusCode).toBe(409);
+      expect(result.json()).toEqual({ error: 'The earlier invitation email might have been sent. To send a new email, cancel the invitation and allow a new one.' });
+      expect(sends).toBe(1);
+      expect((await team()).invitations[0]).toMatchObject({
+        expiresAt: row.expiresAt, revision: row.revision, suppressed: 'bounced', lastEmail: { attemptId, status: 'uncertain' },
+      });
+      expect((await client.query('SELECT count(*)::int AS n FROM email_messages')).rows[0].n).toBe(2);
+    } finally {
+      await client.end();
+    }
+  });
+
+  it('refuses an attempt when the invitation is cancelled during retry', async () => {
+    let markRetry = () => {};
+    const retryStarted = new Promise<void>((resolve) => { markRetry = resolve; });
+    let watchRetry = false;
+    let sends = 0;
+    const email: EmailSender = { mode: 'resend', async send() { sends++; return 'msg-cancelled-send'; } };
+    const { app, client, call, orgId, team } = await harness(email, () => {
+      if (watchRetry) markRetry();
+      return NOW;
+    });
+    try {
+      const row = await invite(call, orgId);
+      await postBounce(app, 'msg-cancelled-send', 'evt-cancelled-send');
+      const attemptId = await attachInterruptedAttempt(client, orgId, row.lastEmail!.attemptId);
+      await client.query("UPDATE email_messages SET sending_until = now() + interval '1 minute' WHERE id = $1", [attemptId]);
+      const invitation = { email: ADDRESS, role: 'finance', revision: row.revision };
+      watchRetry = true;
+      const sending = call('POST', `/api/organizations/${orgId}/invitations/send-without-extending`, invitation);
+      try {
+        await retryStarted;
+        // Cancel waits for the retry's membership transaction to finish.
+        expect((await call('POST', `/api/organizations/${orgId}/invitations/cancel`, invitation)).statusCode).toBe(200);
+      } finally {
+        await client.query('UPDATE email_messages SET sending_until = NULL WHERE id = $1', [attemptId]);
+      }
+      const result = await sending;
+      expect(result.statusCode).toBe(409);
+      expect(result.json()).toEqual({ error: CHANGED });
+      expect(sends).toBe(1);
+      expect(await team()).toMatchObject({ invitations: [], stoppedEmails: [{ email: ADDRESS, reason: 'bounced' }] });
+      expect((await client.query('SELECT count(*)::int AS n FROM email_messages')).rows[0].n).toBe(2);
+    } finally {
+      await client.end();
+    }
+  });
+
+  it('does not clear a replacement stop when the earlier send settles', async () => {
+    let sends = 0;
+    let beforeAcceptance: () => Promise<void>;
+    const email: EmailSender = {
+      mode: 'resend',
+      async send() {
+        if (++sends === 1) return 'msg-original-stop';
+        if (sends === 2) return 'msg-replacement-stop';
+        await beforeAcceptance();
+        return 'msg-late-acceptance';
+      },
+    };
+    const { app, client, call, orgId, team } = await harness(email);
+    try {
+      const row = await invite(call, orgId);
+      const second = await invite(call, orgId, ADDRESS, 'timer_export');
+      await postBounce(app, 'msg-original-stop', 'evt-original-stop');
+      beforeAcceptance = async () => {
+        // Establish the state left by another completed settlement while this send is in flight.
+        await client.query(
+          `UPDATE email_suppressions SET cleared_at = $1, cleared_by = (SELECT id FROM accounts WHERE email = $2), cleared_email_id = $3
+           WHERE organization_id = $4 AND cleared_at IS NULL`,
+          [NOW, OWNER, second.lastEmail!.attemptId, orgId],
+        );
+        await postBounce(app, 'msg-replacement-stop', 'evt-replacement-stop', 'email.complained');
+      };
+      const result = await call('POST', `/api/organizations/${orgId}/invitations/send-without-extending`, {
+        email: ADDRESS, role: 'finance', revision: row.revision,
+      });
+      expect(result.statusCode).toBe(200);
+      const after = await team();
+      expect(after.stoppedEmails).toEqual([{ email: ADDRESS, reason: 'complained' }]);
+      expect(after.invitations.find((item) => item.role === 'finance')).toMatchObject({ revision: row.revision, expiresAt: row.expiresAt, lastEmail: { status: 'sent' } });
     } finally {
       await client.end();
     }
