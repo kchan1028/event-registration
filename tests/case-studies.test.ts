@@ -6,6 +6,7 @@ import { checkSelection, findConflicts, profileOf } from '../src/shared/checkout
 import { parseCsv } from '../src/shared/csv';
 import type { CheckInList, CheckInRider } from '../src/shared/checkin';
 import type { OrderView } from '../src/server/orders';
+import type { StartLists } from '../src/server/startlists';
 import { categoryPrice, quote } from '../src/shared/pricing';
 import type { EventConfig } from '../src/shared/schema';
 import { openDb } from '../src/server/db';
@@ -237,6 +238,10 @@ describe('generated race case studies', () => {
     const checkIn = await get<CheckInList>(`${base}/check-in`);
     const { config, organizationId } = await get<{ config: EventConfig; organizationId: string }>(base);
     expect(checkIn.days).toHaveLength(2);
+    expect(weekend.entries.map((entry) => entry.dayId).sort()).toEqual(checkIn.days.map((day) => day.id).sort());
+    expect(checkIn.riders.find((row) => row.orderId === weekend.id)).toMatchObject({ bib: null, checkedInAt: null });
+    const overview = await get<Awaited<ReturnType<StartLists['overview']>>>(`${base}/start-lists`);
+    expect(overview.races.every((race) => race.lock === null)).toBe(true);
     expect((await app.inject({
       method: 'PUT', url: `${base}/bib-settings`, payload: { scope: 'weekend', ranges: [{ scope: 'weekend', first: 100, last: 199 }] },
     })).statusCode).toBe(200);
@@ -251,9 +256,11 @@ describe('generated race case studies', () => {
     for (const [email, role] of [['seeded-weekend-desk@example.test', 'check_in_volunteer'], ['seeded-weekend-timer@example.test', 'timer_export']]) {
       expect((await app.inject({ method: 'POST', url: `/api/organizations/${organizationId}/members`, payload: { email, role } })).statusCode).toBe(200);
     }
+    const copies: { url: string; body: string }[] = [];
     for (const entry of weekend.entries) {
       const payload = { dayId: entry.dayId, bib: null };
-      const roster = await get<CheckInList>(`${base}/check-in?day=${entry.dayId}`, volunteer);
+      const rosterUrl = `${base}/check-in?day=${entry.dayId}`;
+      const roster = await get<CheckInList>(rosterUrl, volunteer);
       expect(roster.riders.find((row) => row.orderId === weekend.id)).toMatchObject({ bib: 100, result: { ready: true } });
       const issue = () => app.inject({ method: 'POST', url: `${base}/check-in/${weekend.id}`, payload, headers: volunteer });
       const checked = await issue();
@@ -264,17 +271,28 @@ describe('generated race case studies', () => {
       const repeated = await issue();
       expect(repeated.statusCode).toBe(200);
       expect(repeated.json()).toMatchObject({ bib: 100, checkedInAt });
+      const after = await get<CheckInList>(rosterUrl, volunteer);
+      expect(after.riders.filter((row) => row.orderId === weekend.id)).toEqual([expect.objectContaining({ bib: 100, checkedInAt })]);
 
       const raceId = config.categories.find((row) => row.id === entry.categoryId)!.raceId;
       const startList = `${base}/start-lists/${raceId}`;
+      expect((await app.inject({ method: 'POST', url: `${startList}/lock`, headers: volunteer })).statusCode).toBe(403);
+      expect((await app.inject({ method: 'POST', url: `${base}/check-in/${weekend.id}`, payload, headers: timer })).statusCode).toBe(403);
       const locked = await app.inject({ method: 'POST', url: `${startList}/lock`, headers: timer });
       expect(locked.statusCode, locked.body).toBe(201);
       const { version } = locked.json<{ version: number }>();
-      const csv = await app.inject({ method: 'GET', url: `${startList}/csv?snapshot=${version}`, headers: timer });
+      const url = `${startList}/csv?snapshot=${version}`;
+      const csv = await app.inject({ method: 'GET', url, headers: timer });
       expect(csv.statusCode, csv.body).toBe(200);
       const [header, ...rows] = parseCsv(csv.body);
       const recorded = rows.filter((row) => row[header.indexOf('entry_id')] === entry.id);
       expect(recorded.map((row) => [row[header.indexOf('bib')], row[header.indexOf('checked_in')]])).toEqual([['100', 'Y']]);
+      copies.push({ url, body: csv.body });
+    }
+    for (const copy of copies) {
+      const saved = await app.inject({ method: 'GET', url: copy.url, headers: timer });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.body).toBe(copy.body);
     }
   });
 
