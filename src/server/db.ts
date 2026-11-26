@@ -844,6 +844,8 @@ export const MIGRATIONS: string[] = [
     OR (kind = 'registration_confirmation' AND order_id IS NOT NULL AND ref = order_id AND waitlist_entry_id IS NULL)
     OR (kind = 'waitlist_offer' AND waitlist_entry_id IS NOT NULL AND ref = waitlist_entry_id AND order_id IS NULL)
   );`,
+  `ALTER TABLE confirmation_retry_requests RENAME TO rider_email_retry_requests;
+  ALTER INDEX confirmation_retry_requests_by_email RENAME TO rider_email_retry_requests_by_email;`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

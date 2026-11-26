@@ -4,6 +4,7 @@ import { matchesRegistration } from '../shared/lookup';
 import { can } from '../shared/roles';
 import { api, type OrderView } from './api';
 import { href } from './App';
+import { useSession } from './auth';
 import type { Draft } from './Builder';
 import { Coupons } from './Coupons';
 import { refundedCents } from './format';
@@ -35,6 +36,7 @@ function needsLicenseReview(o: OrderView): boolean {
 /** Registration exception queue: one list, filtered by what needs a person. Each section shows only for roles that can use it. */
 export function Registrations({ draft }: { draft: Draft }) {
   const eventId = draft.data.id;
+  const { email } = useSession();
   const { roles } = draft.data;
   const { data: orders, setData: setOrders, error, reload } = useLoad(() => api.orders(eventId), [eventId]);
   const [filter, setFilter] = useState<Filter>('all');
@@ -136,7 +138,7 @@ export function Registrations({ draft }: { draft: Draft }) {
 
       {canManage && <SameRider eventId={eventId} onChanged={reload} />}
 
-      {canManage && <Waitlists draft={draft} onChanged={reload} />}
+      {canManage && <Waitlists key={`${eventId}:${email?.toLowerCase() ?? ''}`} draft={draft} onChanged={reload} />}
 
       {!draft.readOnly && <Coupons eventId={eventId} categories={draft.config.categories} races={draft.config.races} />}
 

@@ -1,4 +1,4 @@
-import { ConfirmationDeliveryPanel } from './ConfirmationDeliveryPanel';
+import { RiderEmailDeliveryPanel } from './RiderEmailDeliveryPanel';
 import { useState, type ReactNode } from 'react';
 import { licenseLabel } from '../../shared/eligibility';
 import { formatCents } from '../../shared/format';
@@ -58,7 +58,7 @@ export function OrderRow({ order, categories, canManage, canRefund, onChange }: 
         </p>
       )}
       {canManage && (order.status === 'confirmed' || order.checkInCode) && (
-        <ConfirmationDeliveryPanel key={session.email?.toLowerCase()} eventId={order.eventId} orderId={order.id} />
+        <RiderEmailDeliveryPanel key={session.email?.toLowerCase()} eventId={order.eventId} recordId={order.id} kind="confirmation" />
       )}
       {(order.answers.length > 0 || order.addenda.length > 0) && (
         <ul className="small order__answers">

@@ -22,7 +22,7 @@ Owners and registration managers can read status or request a retry for an order
 
 ## Waitlist offer links
 
-Offer lookup and checkout require the account that joined the waitlist. A forwarded token gives another signed-in account neither rider details nor a reservation. Offer lookups use `Cache-Control: no-store`. Test mode sends only to the joining account’s saved address through the allowlisted sender. Dispatch rechecks the current address, live offer and rider email suppression. Offer bounces and complaints stop later rider email to that address within the organization and stay out of the invitation stop list. Rows without a saved account cannot be opened or redeemed through the rider link.
+Offer lookup and checkout require the account that joined the waitlist. A forwarded token gives another signed-in account neither rider details nor a reservation. Offer lookups use `Cache-Control: no-store`. Test mode sends only to the joining account’s saved address through the allowlisted sender. Dispatch rechecks the current address, live offer and rider email suppression. Offer bounces and complaints stop later rider email to that address within the organization and stay out of the invitation stop list. Owners and registration managers can read delivery status and request an auditable same-message retry for a live offer in their event. Responses omit the recipient, offer token and provider reference. Rows without a saved account cannot be opened or redeemed through the rider link.
 
 ## Expired invitation guidance (Implemented locally)
 

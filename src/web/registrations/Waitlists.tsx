@@ -4,6 +4,7 @@ import { href } from '../App';
 import type { Draft } from '../Builder';
 import { formatDateTime } from '../format';
 import { useLoad } from '../useLoad';
+import { RiderEmailDeliveryPanel } from './RiderEmailDeliveryPanel';
 
 const WL_LABEL: Record<WaitlistEntryView['status'], string> = { waiting: 'Waiting', offered: 'Offer open', expired: 'Offer expired', accepted: 'Registered', removed: 'Removed' };
 
@@ -56,6 +57,7 @@ export function Waitlists({ draft, onChanged }: { draft: Draft; onChanged: () =>
                     Offer link (until {formatDateTime(w.offerExpiresAt!)}): <code className="code">{link(w.offerToken)}</code>
                   </p>
                 )}
+                {w.offeredAt && <RiderEmailDeliveryPanel eventId={eventId} recordId={w.id} kind="offer" />}
                 <p className="order__entry-actions">
                   {w.status === 'waiting' && (
                     <button className="btn btn--primary btn--small" onClick={() => act(() => api.offerWaitlistPlace(eventId, w.id))}>
