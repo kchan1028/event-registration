@@ -4586,16 +4586,16 @@ fieldset:disabled .field label {
 .roster__cancellation h2 { font-size: 1rem; margin: 0 0 6px; }
 .roster__cancellation p { margin: 6px 0 0; }
 
-.reconciliation-download__button {
+.finance-download__button {
   min-height: 44px;
 }
 
-.reconciliation-download__button[aria-disabled='true'] {
+.finance-download__button[aria-disabled='true'] {
   background: var(--pending-bg);
   color: var(--pending);
   cursor: wait;
 }
 
-.reconciliation-download__button[aria-disabled='true']:active {
+.finance-download__button[aria-disabled='true']:active {
   transform: none;
 }

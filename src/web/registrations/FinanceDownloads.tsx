@@ -1,7 +1,17 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { downloadFile } from '../api';
 
-const financeSummary = {
+type FinanceReport = {
+  id: string;
+  title: string;
+  description: string;
+  limits: ReactNode;
+  button: string;
+  progress: string;
+  file: string;
+};
+
+const financeSummary: FinanceReport = {
   id: 'finance-summary',
   title: 'Finance summary',
   description: 'Event-wide counts by day, race and category, with event-level ledger totals in USD cents. Registration search and filters do not narrow this file.',
@@ -28,7 +38,7 @@ export function FinanceDownloads({ eventId }: { eventId: string }) {
   </>;
 }
 
-function FinanceDownload({ eventId, report }: { eventId: string; report: typeof financeSummary }) {
+function FinanceDownload({ eventId, report }: { eventId: string; report: FinanceReport }) {
   const inFlight = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +55,7 @@ function FinanceDownload({ eventId, report }: { eventId: string; report: typeof 
     <h3 id={`${report.id}-title`}>{report.title}</h3>
     <p className="small">{report.description}</p>
     <p className="small" id={`${report.id}-limits`}>{report.limits}</p>
-    <button type="button" className="btn btn--secondary btn--small reconciliation-download__button" aria-describedby={`${report.id}-limits`} aria-disabled={busy || undefined} aria-busy={busy || undefined} onClick={download}>{busy ? 'Preparing CSV…' : report.button}</button>
+    <button type="button" className="btn btn--secondary btn--small finance-download__button" aria-describedby={`${report.id}-limits`} aria-disabled={busy || undefined} aria-busy={busy || undefined} onClick={download}>{busy ? 'Preparing CSV…' : report.button}</button>
     <p className="small" role="status">{busy ? report.progress : requested ? 'Download requested. Check your browser downloads.' : ''}</p>
     {error && <p className="field__error" role="alert">{error} Refresh this page to check your access.</p>}
   </section>;
