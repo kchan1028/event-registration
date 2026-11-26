@@ -15,7 +15,8 @@ import { api, ApiError, type OrderView, type PaymentMode, type PublicEvent, type
 import { href, navigate } from './App';
 import { formatDateTime, refundedCents } from './format';
 import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
-import { AccountMenu, setRegisterActive, SignInPrompt, takePendingCheckoutFocus, useSession } from './auth';
+import { AccountMenu, SignInPrompt, useSession } from './auth';
+import { retainCheckoutFocus, setRegisterActive } from './checkoutFocus';
 import { useLoad } from './useLoad';
 import { availableWalkUpCategories, categorySelectionStatus, WALK_UP_CATEGORY_PARAM } from './walkUpSelection';
 import { refundPolicyLines } from '../shared/refundPolicy';
@@ -252,7 +253,7 @@ export function Register({ eventId, onKioskOrder }: { eventId: string; onKioskOr
   const resumeCheckoutFocus = useRef(false);
   useEffect(() => {
     setRegisterActive(true);
-    if (takePendingCheckoutFocus()) resumeCheckoutFocus.current = true;
+    retainCheckoutFocus(resumeCheckoutFocus);
     return () => setRegisterActive(false);
   }, []);
 
