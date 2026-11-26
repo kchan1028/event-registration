@@ -543,12 +543,23 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         }
         if (q.coupon?.unappliedReason) throw new HttpError(422, `${q.coupon.unappliedReason} Go back to Choose races and remove the code to continue. Nothing was held.`);
         if (accountId && rider.guardian) await juniors.requireRegistrationAllowed(accountId, rider);
+        let adultHistoryClaimId: string | null = null;
+        if (selfRegistrationAccountId) {
+          await juniors.lockProfiles();
+          const claims = await db.all<{ id: string }>(
+            `SELECT c.id FROM junior_profile_claims c JOIN junior_profiles j ON j.id = c.junior_profile_id
+             WHERE c.rider_account_id = $1 AND j.merged_into_id IS NULL LIMIT 2`,
+            [selfRegistrationAccountId],
+          );
+          // More than one claim requires support resolution. Checkout can proceed with adult evidence alone.
+          if (claims.length === 1) adultHistoryClaimId = claims[0].id;
+        }
         const t = nowIso();
         const expires = new Date(clock().getTime() + holdMinutes * 60_000).toISOString();
         await db.run(
-          `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json, coupon_id, account_id, waiver_evidence_json, stripe_checkout_tracked, self_registration_account_id)
-           VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true, $16)`,
-          [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null, accountId, JSON.stringify({ signerAccountId: accountId, riderRacingAge: rider.racingAge, acceptedAt: t } satisfies WaiverEvidence), selfRegistrationAccountId],
+          `INSERT INTO orders (id, event_id, published_version, client_request_id, status, rider_json, waiver_json, quote_json, total_cents, hold_expires_at, created_at, updated_at, extras_json, coupon_id, account_id, waiver_evidence_json, stripe_checkout_tracked, self_registration_account_id, adult_history_claim_id)
+           VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true, $16, $17)`,
+          [id, eventId, version, input.clientRequestId, JSON.stringify(rider), JSON.stringify(waiver), JSON.stringify(q), q.totalCents, expires, t, t, JSON.stringify(extras), coupon?.id ?? null, accountId, JSON.stringify({ signerAccountId: accountId, riderRacingAge: rider.racingAge, acceptedAt: t } satisfies WaiverEvidence), selfRegistrationAccountId, adultHistoryClaimId],
         );
         // A guardian's junior order links to the explicitly managed profile; placing account and waiver remain provenance.
         if (accountId && rider.guardian) await juniors.adopt(accountId);
