@@ -110,6 +110,8 @@ it('never makes an email from before migration 40 an attempt, and withholds a re
     await db.run(`INSERT INTO email_messages (id, organization_id, kind, ref, to_email, subject, body_text, status, created_at)
       VALUES ('lost', 'org_earlier', 'organizer_invitation', 'lost', 'lost@example.test', 'Subject', 'Body', 'uncertain', '2027-04-02T12:00:00Z')`);
     await expect(db.run(`UPDATE email_messages SET status = 'queued' WHERE id = 'lost'`)).rejects.toMatchObject({ code: '23514' });
+    await expect(db.run(`UPDATE email_messages SET kind = 'registration_confirmation' WHERE id = 'lost'`))
+      .rejects.toMatchObject({ code: '23514', constraint: 'email_messages_kind_check' });
   } finally {
     await db.close();
   }
