@@ -59,9 +59,16 @@ describe('registration takes the flag in its mount effect', () => {
   const auth = readFileSync(new URL('../src/web/auth.tsx', import.meta.url), 'utf8');
 
   it('calls retainCheckoutFocus once, from the mount effect', () => {
-    const body = register.slice(register.indexOf('export function Register'));
+    const start = register.indexOf('export function Register(');
+    const functionAt = register.indexOf('\nfunction ', start + 1);
+    const exportAt = register.indexOf('\nexport function ', start + 1);
+    const ends = [functionAt, exportAt].filter((index) => index >= 0);
+    const next = ends.length ? Math.min(...ends) : -1;
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(next).toBeGreaterThan(start);
+    const body = register.slice(start, next);
     expect(body).not.toContain('takePendingCheckoutFocus');
-    expect(body.split('retainCheckoutFocus(').length - 1).toBe(1);
+    expect(body.match(/retainCheckoutFocus\s*\(/g)?.length ?? 0).toBe(1);
     const effectStart = body.indexOf('useEffect(() => {\n    setRegisterActive(true);');
     const effect = body.slice(effectStart, body.indexOf('}, []);', effectStart));
     expect(effect).toContain('retainCheckoutFocus(resumeCheckoutFocus)');
