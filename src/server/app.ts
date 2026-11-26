@@ -114,7 +114,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const juniors = createJuniors(db, clock);
   const profileClaims = createProfileClaims(db, clock, claimSettings);
   const staffHoldRelease = opts.staffHoldRelease ?? staffHoldReleaseFromEnv();
-  const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10), coupons, juniors);
+  const emailSender = opts.email ?? emailFromEnv();
+  const orders = createOrders(db, repo, clock, opts.holdMinutes ?? Number(process.env.HOLD_MINUTES ?? 10), coupons, juniors, emailSender.mode === 'resend' ? emailSender.from : undefined);
   const refunds = createRefunds(db, paymentProvider, clock, repo);
   const identity = createIdentity(db, orders, clock);
   const resolutions = createResolutions(db, orders, clock);
@@ -123,9 +124,9 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const emergencyContacts = createEmergencyContacts(db, clock);
   const waitlist = createWaitlist(db, repo, clock);
   const caseStudies = createCaseStudyFixtures(db, repo, orders, refunds, checkIn);
-  const emailSender = opts.email ?? emailFromEnv();
+  const mailer = createMailer(db, emailSender, clock);
   // Senders need a public URL for the invitation sign-in link.
-  const access = createAccess(db, provider, clock, createMailer(db, emailSender, clock), appUrl || (emailSender.mode !== 'local' ? publicAppUrl() : ''));
+  const access = createAccess(db, provider, clock, mailer, appUrl || (emailSender.mode !== 'local' ? publicAppUrl() : ''));
   const automaticBibs = createAutomaticBibs(db, repo, checkIn, access, clock);
   const cancellationAllocations = createCancellationAllocations(db, repo, clock);
   const cancellationImpact = createCancellationImpact(db, repo, cancellationAllocations, clock);
@@ -162,6 +163,24 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     clearTimeout(bibTimer);
     await bibWork;
   });
+  if (emailSender.mode === 'resend') {
+    let stopping = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let work: Promise<void> = Promise.resolve();
+    function pollConfirmations() {
+      work = mailer.dispatchNextConfirmation().catch(() => {
+        app.log.error('Registration confirmation worker failed; check database availability.');
+      }).finally(() => {
+        if (!stopping) timer = setTimeout(pollConfirmations, 5_000);
+      });
+    }
+    app.addHook('onListen', async () => { pollConfirmations(); });
+    app.addHook('preClose', async () => {
+      stopping = true;
+      clearTimeout(timer);
+      await work;
+    });
+  }
   app.addHook('onClose', async () => db.close());
 
   // Sign-in is required for every API route unless the route is marked public. Default deny:

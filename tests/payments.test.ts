@@ -3,6 +3,8 @@ import pg from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 import { paymentsFromEnv, publicAppUrl, stripePayments } from '../src/server/payments';
 import { testApp, testDatabaseUrl } from './support/db';
+import { openDb } from '../src/server/db';
+import { createMailer, EmailUncertain, localEmail, type EmailSender } from '../src/server/email';
 import { as, DEFAULT_TEST_ORGANIZER, fakeAuth } from './support/auth';
 import type { EventConfig } from '../src/shared/schema';
 import { publishReviewed } from './support/publish';
@@ -18,9 +20,9 @@ const RIDER = { firstName: 'Test', lastName: 'Rider', email: 'test.rider@example
 
 type Order = { id: string; status: string; totalCents: number; paidWith: string | null; entries: { status: string }[] };
 
-async function setup(opts: { holdMinutes?: number; client?: Stripe; onSessionCreated?: (session: { id: string }) => Promise<void> } = {}) {
+async function setup(opts: { holdMinutes?: number; client?: Stripe; email?: EmailSender; onSessionCreated?: (session: { id: string }) => Promise<void> } = {}) {
   let now = new Date('2027-03-01T18:00:00Z');
-  const clock = { advance: (min: number) => (now = new Date(now.getTime() + min * 60_000)) };
+  const clock = { now: () => now, advance: (min: number) => (now = new Date(now.getTime() + min * 60_000)) };
   const client = opts.client ?? new Stripe('sk_test_fictional', { maxNetworkRetries: 0 });
   let n = 0;
   const create = vi.spyOn(client.checkout.sessions, 'create');
@@ -33,7 +35,7 @@ async function setup(opts: { holdMinutes?: number; client?: Stripe; onSessionCre
   vi.spyOn(client.refunds, 'create').mockImplementation((async () => ({ id: 're_test_1', status: 'pending', failure_reason: null }) as unknown as Stripe.Refund) as never);
   const payments = stripePayments({ secretKey: 'sk_test_fictional', webhookSecret: WEBHOOK_SECRET, client });
   const databaseUrl = await testDatabaseUrl();
-  const { app } = await testApp({ databaseUrl, now: () => now, holdMinutes: opts.holdMinutes ?? 10, payments, appUrl: 'http://app.test' });
+  const { app } = await testApp({ databaseUrl, now: () => now, holdMinutes: opts.holdMinutes ?? 10, payments, email: opts.email, appUrl: 'http://app.test' });
   const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
   await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
@@ -238,7 +240,7 @@ describe('Stripe hosted Checkout (test mode)', () => {
   });
 
   it('confirms on a signed paid notification exactly once, even when Stripe repeats it', async () => {
-    const { order, checkout, webhook, paidSession, get, attempts, databaseUrl } = await setup();
+    const { order, checkout, webhook, paidSession, get, attempts, databaseUrl, clock } = await setup();
     const o = await order(['RR-M35-34']);
     await checkout(o.id);
     const a = await webhook('evt_test_paid', 'checkout.session.completed', paidSession(o));
@@ -264,6 +266,66 @@ describe('Stripe hosted Checkout (test mode)', () => {
       }]);
     } finally {
       await db.end();
+    }
+    const mailDb = openDb(databaseUrl);
+    try {
+      const send = vi.fn().mockResolvedValue('unexpected-send');
+      await createMailer(mailDb, { mode: 'resend', from: 'test@example.test', send }, clock.now).dispatchNextConfirmation();
+      expect(send).not.toHaveBeenCalled();
+    } finally {
+      await mailDb.close();
+    }
+  });
+
+  it('dispatches a confirmation with a stable key and sender across an uncertain retry', async () => {
+    const send = vi.fn().mockRejectedValueOnce(new EmailUncertain('Fictional timeout.')).mockResolvedValue('re_confirmation');
+    const sender = { mode: 'resend' as const, from: 'first@example.test', send };
+    const { order, checkout, webhook, paidSession, get, databaseUrl } = await setup({ email: sender });
+    const o = await order(['RR-M35-34']);
+    await checkout(o.id);
+    await webhook('evt_confirmation_delivery', 'checkout.session.completed', paidSession(o));
+    const db = openDb(databaseUrl);
+    try {
+      const message = await db.get<{ id: string; created_at: string }>(
+        'SELECT id, created_at FROM email_messages WHERE order_id = $1', [o.id],
+      );
+      const now = () => new Date(message!.created_at);
+      await createMailer(db, localEmail(), now).dispatchNextConfirmation();
+      expect(send).not.toHaveBeenCalled();
+      const mailer = createMailer(db, sender, now);
+      await mailer.dispatchNextConfirmation();
+      expect((await get(o.id)).status).toBe('confirmed');
+      await mailer.dispatchNextConfirmation();
+      expect(send).toHaveBeenCalledTimes(1);
+      await db.run("UPDATE email_messages SET sending_until = now() - interval '1 second' WHERE id = $1", [message!.id]);
+      const expired = createMailer(db, sender, () => new Date(now().getTime() + 24 * 60 * 60 * 1000));
+      await expired.dispatchNextConfirmation();
+      expect(send).toHaveBeenCalledTimes(1);
+      await db.run(
+        `INSERT INTO email_suppressions (id, organization_id, email, reason, email_id, created_at)
+         SELECT 'test-stop', organization_id, to_email, 'bounced', id, created_at FROM email_messages WHERE id = $1`,
+        [message!.id],
+      );
+      await mailer.dispatchNextConfirmation();
+      expect(send).toHaveBeenCalledTimes(1);
+      await db.run("DELETE FROM email_suppressions WHERE id = 'test-stop'");
+      await db.run(
+        `INSERT INTO email_delivery_events (id, email_id, kind, occurred_at) VALUES ('test-bounce', $1, 'bounced', $2)`,
+        [message!.id, message!.created_at],
+      );
+      await mailer.dispatchNextConfirmation();
+      expect(send).toHaveBeenCalledTimes(1);
+      await db.run("DELETE FROM email_delivery_events WHERE id = 'test-bounce'");
+      const restarted = createMailer(db, { ...sender, from: 'second@example.test' }, now);
+      await Promise.all([restarted.dispatchNextConfirmation(), mailer.dispatchNextConfirmation()]);
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send.mock.calls[1]).toEqual(send.mock.calls[0]);
+      expect(send.mock.calls[1][1]).toBe(message!.id);
+      expect(send.mock.calls[1][0]).toMatchObject({ from: sender.from, to: DEFAULT_TEST_ORGANIZER });
+      expect(await db.get('SELECT status, provider_message_id FROM email_messages WHERE id = $1', [message!.id]))
+        .toEqual({ status: 'sent', provider_message_id: 're_confirmation' });
+    } finally {
+      await db.close();
     }
   });
 
