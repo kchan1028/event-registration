@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { JuniorProfile } from '../shared/juniors';
 import { api, ApiError } from './api';
-import { AccountMenu } from './auth';
+import { AccountMenu, useSession } from './auth';
 import { GuardianInvitations } from './GuardianInvitations';
 import { href } from './App';
 import { formatDateTime, RELEASED_BY_STAFF } from './format';
@@ -23,8 +23,16 @@ const STATUS_LABEL: Record<string, string> = {
  * login (named by the guardian) sees that junior's registrations here, read-only.
  */
 export function MyRegistrations() {
+  const { signInIdentity } = useSession();
+  return <RegistrationsForAccount key={signInIdentity} />;
+}
+
+type RiderRegistration = Awaited<ReturnType<typeof api.myRegistrations>>[number];
+
+function RegistrationsForAccount() {
   const { data: orders, error, setData: setOrders, setError: setOrdersError } = useLoad(() => api.myRegistrations(), []);
   const { data: juniors, setData: setJuniors } = useLoad(() => api.juniors(), []);
+  const receipts = new Map(orders?.map((order) => [order.id, order]));
   return (
     <div className="home">
       <header className="home__bar">
@@ -54,14 +62,10 @@ export function MyRegistrations() {
           <ul className="orders" aria-label="Your registrations">
             {orders.map((o) => (
               <li key={o.id} className="my-reg">
-                <a href={href({ page: 'order', orderId: o.id })} className="my-reg__link">
-                  <span className="my-reg__event">{o.eventName}</span>
-                  <span className="muted small">
-                    {o.rider.firstName} {o.rider.lastName} · {o.orderNumber} · <time dateTime={o.createdAt}>{formatDateTime(o.createdAt)}</time>
-                  </span>
-                </a>
+                <RegistrationReceiptLink order={o} />
                 <span className="tag">{o.status === 'cancelled' && o.releasedByStaff ? RELEASED_BY_STAFF : STATUS_LABEL[o.status] ?? o.status}</span>
                 {!o.placedByYou && <span className="muted small">{o.canManage ? 'Registered by another account' : 'Registered by your guardian'}</span>}
+                {o.canViewParticipantHistory && <RegistrationHistory order={o} receipts={receipts} />}
               </li>
             ))}
           </ul>
@@ -85,6 +89,48 @@ export function MyRegistrations() {
         )}
       </main>
     </div>
+  );
+}
+
+function RegistrationReceiptLink({ order }: { order: RiderRegistration }) {
+  return (
+    <a href={href({ page: 'order', orderId: order.id })} className="my-reg__link">
+      <span className="my-reg__event">{order.eventName}</span>
+      <span className="muted small">
+        {order.rider.firstName} {order.rider.lastName} · {order.orderNumber} · <time dateTime={order.createdAt}>{formatDateTime(order.createdAt)}</time>
+      </span>
+    </a>
+  );
+}
+
+function RegistrationHistory({ order, receipts }: { order: RiderRegistration; receipts: ReadonlyMap<string, RiderRegistration> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="my-reg-history" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary className="lookup-toggle" aria-label={`Registration history for ${order.orderNumber}`}>Registration history</summary>
+      {open && <RegistrationHistoryReceipts orderId={order.id} receipts={receipts} />}
+    </details>
+  );
+}
+
+function RegistrationHistoryReceipts({ orderId, receipts }: { orderId: string; receipts: ReadonlyMap<string, RiderRegistration> }) {
+  const { data, error } = useLoad(() => api.participantHistory(orderId), [orderId]);
+  if (error) return <p className="alert alert--error" role="alert">Could not load registration history. Close and reopen it to try again.</p>;
+  if (!data) return <p role="status">Loading registration history…</p>;
+
+  const visibleReceipts = data.orders.flatMap(({ orderId: id, eventId }) => {
+    const receipt = receipts.get(id);
+    return receipt?.eventId === eventId && receipt.status === 'confirmed' ? [receipt] : [];
+  });
+  return (
+    <>
+      {visibleReceipts.length > 0 && (
+        <ul className="orders" aria-label="Confirmed registration history">
+          {visibleReceipts.map((order) => <li key={order.id}><RegistrationReceiptLink order={order} /></li>)}
+        </ul>
+      )}
+      {visibleReceipts.length < data.orders.length && <p className="muted small">Refresh My registrations to see the latest receipts.</p>}
+    </>
   );
 }
 

@@ -49,6 +49,7 @@ interface OrderRow {
   rider_json: RiderDetails;
   waiver_json: WaiverAcceptance;
   waiver_evidence_json: WaiverEvidence | null;
+  self_registration_account_id: string | null;
   quote_json: Quote;
   total_cents: number;
   hold_expires_at: string;
@@ -694,7 +695,13 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         [account.id, account.email.toLowerCase()],
       );
       const views = await viewsOf(rows);
-      return views.map((v, i) => ({ ...v, placedByYou: rows[i].account_id === account.id, canManage: rows[i].can_manage === true } satisfies RegistrationAccess));
+      return views.map((v, i) => {
+        const row = rows[i];
+        const placedByYou = row.account_id === account.id;
+        const canManage = row.can_manage === true;
+        const canViewParticipantHistory = placedByYou && canManage && row.self_registration_account_id === account.id && v.status === 'confirmed';
+        return { ...v, placedByYou, canManage, ...(canViewParticipantHistory && { canViewParticipantHistory: true }) } satisfies RegistrationAccess;
+      });
     },
 
     /** The adult order selects a saved history group; current order authority still controls every result. */
