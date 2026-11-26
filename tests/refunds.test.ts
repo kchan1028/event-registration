@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { describe, expect, it, vi } from 'vitest';
 import { openDb } from '../src/server/db';
-import { refundNoticeText, type EmailSender } from '../src/server/email';
+import { createMailer, refundNoticeText, type EmailSender } from '../src/server/email';
 import { stripePayments } from '../src/server/payments';
 import { formatDollars } from '../src/shared/format';
 import { formatOrderNumber } from '../src/shared/lookup';
@@ -305,6 +305,75 @@ describe('refunds', () => {
       } finally {
         await stripeDb.close();
       }
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('dispatches a succeeded refund notice once and skips one that no longer succeeded', async () => {
+    const send = vi.fn()
+      .mockResolvedValueOnce('re_confirmation')
+      .mockResolvedValueOnce('re_receipt')
+      .mockResolvedValueOnce('re_refund')
+      .mockResolvedValueOnce('re_refund_again')
+      .mockResolvedValue('re_refund_after_stop');
+    const sender: EmailSender = { mode: 'resend', from: 'sender@example.test', send };
+    const { order, paySimulated, refund, databaseUrl } = await setup({ email: sender });
+    const db = openDb(databaseUrl);
+    const atRecorded = () => new Date('2027-03-01T18:00:00Z');
+    try {
+      const o = await order(['RR-M35-34']);
+      await paySimulated(o.id);
+      expect((await refund(o.id, { amountCents: 2000, reason: 'Withdrew before the deadline' })).statusCode).toBe(200);
+      const notice = await db.get<{ id: string }>(`SELECT id FROM email_messages WHERE kind = 'refund_notice'`);
+      const localSend = vi.fn().mockResolvedValue('local-should-not-send');
+      await createMailer(db, { mode: 'local', send: localSend }, atRecorded).dispatchNextRiderEmail();
+      expect(localSend).not.toHaveBeenCalled();
+      await db.run(`UPDATE email_messages SET from_email = NULL WHERE id = $1`, [notice!.id]);
+      const mailer = createMailer(db, sender, atRecorded);
+      await mailer.dispatchNextRiderEmail();
+      await mailer.dispatchNextRiderEmail();
+      expect(send.mock.calls.map((call) => call[0].subject)).toEqual(['Registration confirmed', 'Your receipt']);
+      expect(await db.get(`SELECT status FROM email_messages WHERE id = $1`, [notice!.id])).toEqual({ status: 'recorded' });
+      await db.run(`UPDATE email_messages SET from_email = $2 WHERE id = $1`, [notice!.id, 'sender@example.test']);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(3);
+      expect(send.mock.calls[2][1]).toBe(notice!.id);
+      expect(send.mock.calls[2][0]).toMatchObject({
+        from: sender.from,
+        to: DEFAULT_TEST_ORGANIZER,
+        subject: 'Your refund',
+        text: refundNoticeText(formatOrderNumber(o.id, true), formatDollars(2000), true),
+      });
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(3);
+
+      expect((await refund(o.id, { amountCents: 500, reason: 'Second partial' })).statusCode).toBe(200);
+      const second = await db.get<{ id: string; refund_id: string }>(
+        `SELECT id, refund_id FROM email_messages WHERE kind = 'refund_notice' AND status = 'recorded'`,
+      );
+      await db.run(`UPDATE refunds SET status = 'failed' WHERE id = $1`, [second!.refund_id]);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(3);
+      await db.run(`UPDATE refunds SET status = 'succeeded' WHERE id = $1`, [second!.refund_id]);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(4);
+      expect(send.mock.calls[3][0]).toMatchObject({
+        subject: 'Your refund',
+        text: refundNoticeText(formatOrderNumber(o.id, true), formatDollars(500), true),
+      });
+
+      await db.run(
+        `INSERT INTO email_delivery_events (id, email_id, kind, occurred_at) VALUES ('refund-notice-bounce', $1, 'bounced', $2)`,
+        [notice!.id, '2027-03-01T18:00:00Z'],
+      );
+      expect((await refund(o.id, { amountCents: 500, reason: 'After a bounce' })).statusCode).toBe(200);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(4);
+      await db.run(`DELETE FROM email_delivery_events WHERE id = 'refund-notice-bounce'`);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(5);
+      expect(send.mock.calls[4][0]).toMatchObject({ subject: 'Your refund' });
     } finally {
       await db.close();
     }
