@@ -65,6 +65,7 @@ const SEND_LEASE_SECONDS = SEND_TIMEOUT_MS / 1000 + 5;
 const LEASE_POLL_MS = 200;
 /** The roles that may retry an invitation email. */
 const TEAM_MANAGER_ROLES = ROLES.filter((role) => can([role], 'members.manage'));
+const REGISTRATION_MANAGER_ROLES = ROLES.filter((role) => can([role], 'entries.manage'));
 
 export type EmailStatus = 'recorded' | 'sent' | 'failed' | 'uncertain';
 
@@ -213,6 +214,29 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
       return id;
     },
 
+    async confirmationStatus(eventId: string, orderId: string) {
+      return await db.get<{ status: EmailStatus; delivery: EmailDelivery | null; canRetry: boolean }>(
+        `SELECT m.status, m.delivery_status AS delivery,
+           ($3 AND m.status = 'uncertain' AND m.created_at > $4
+             AND (m.sending_until IS NULL OR m.sending_until <= now()) AND ${confirmationReady}) AS "canRetry"
+         FROM email_messages m JOIN orders o ON o.id = m.order_id
+         WHERE o.event_id = $1 AND o.id = $2 AND m.kind = 'registration_confirmation'`,
+        [eventId, orderId, sender.mode === 'resend', new Date(clock().getTime() - RESEND_IDEMPOTENCY_WINDOW_MS).toISOString()],
+      ) ?? null;
+    },
+
+    /** Call inside the transaction that verifies and locks the organizer's current membership. */
+    async recordConfirmationRetry(eventId: string, orderId: string, accountId: string) {
+      if (!(await mailer.confirmationStatus(eventId, orderId))?.canRetry) return undefined;
+      return db.get<{ id: string }>(
+        `INSERT INTO confirmation_retry_requests (id, email_id, actor_account_id, requested_at)
+         SELECT $1, m.id, $2, $3 FROM email_messages m JOIN orders o ON o.id = m.order_id
+         WHERE o.event_id = $4 AND o.id = $5 AND m.kind = 'registration_confirmation'
+         RETURNING email_id AS id`,
+        [newId('crr'), accountId, clock().toISOString(), eventId, orderId],
+      );
+    },
+
     async dispatchNextConfirmation(): Promise<void> {
       if (sender.mode === 'local') return;
       const next = await db.get<{ id: string }>(
@@ -282,7 +306,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
                WHERE organization_id = m.organization_id AND account_id = $4 AND role IN (SELECT jsonb_array_elements_text($5::jsonb))
              )) AS allowed, m.from_email
            FROM email_messages m WHERE m.id = $1`,
-          [id, lease.until, SEND_TIMEOUT_MS / 1000, retriedBy ?? null, JSON.stringify(TEAM_MANAGER_ROLES)],
+          [id, lease.until, SEND_TIMEOUT_MS / 1000, retriedBy ?? null, JSON.stringify(confirmation ? REGISTRATION_MANAGER_ROLES : TEAM_MANAGER_ROLES)],
         );
         if (last?.ready && last.allowed && !pastWindow()) return finish(id, { to: row.to_email, from: last.from_email ?? undefined, subject: row.subject, text: row.body_text }, lease, confirmation);
         // No provider call was made, so give the lease back and let the loop report why.

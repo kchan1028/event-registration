@@ -329,6 +329,42 @@ describe('Stripe hosted Checkout (test mode)', () => {
     }
   });
 
+  it('limits confirmation visibility and auditable retry to authorized event staff', async () => {
+    const send = vi.fn().mockRejectedValueOnce(new EmailUncertain('Fictional timeout.')).mockResolvedValue('re_staff_retry');
+    const sender = { mode: 'resend' as const, from: 'sender@example.test', send };
+    const { app, clock, eventId, order, checkout, webhook, paidSession, databaseUrl } = await setup({ email: sender });
+    const o = await order(['RR-M35-34']);
+    await checkout(o.id);
+    await webhook('evt_staff_retry', 'checkout.session.completed', paidSession(o));
+    const url = `/api/events/${eventId}/orders/${o.id}/confirmation-delivery`;
+    const db = openDb(databaseUrl);
+    try {
+      await createMailer(db, sender, clock.now).dispatchNextConfirmation();
+      expect((await app.inject({ method: 'GET', url, headers: as('outsider@example.test') })).statusCode).toBe(404);
+      expect((await app.inject({ method: 'POST', url: `${url}/retry`, headers: as('outsider@example.test') })).statusCode).toBe(404);
+      expect((await app.inject({ method: 'GET', url })).json()).toEqual({
+        confirmation: { status: 'uncertain', delivery: null, canRetry: false },
+      });
+      expect((await app.inject({ method: 'POST', url: `${url}/retry` })).statusCode).toBe(409);
+      await db.run("UPDATE email_messages SET sending_until = now() - interval '1 second' WHERE order_id = $1", [o.id]);
+      const status = await app.inject({ method: 'GET', url });
+      expect(status.headers['cache-control']).toBe('no-store');
+      expect(status.json()).toEqual({ confirmation: { status: 'uncertain', delivery: null, canRetry: true } });
+      const retried = await app.inject({ method: 'POST', url: `${url}/retry` });
+      expect(retried.json()).toEqual({ confirmation: { status: 'sent', delivery: null, canRetry: false } });
+      expect((await app.inject({ method: 'POST', url: `${url}/retry` })).statusCode).toBe(409);
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send.mock.calls[0]).toEqual(send.mock.calls[1]);
+      expect(await db.all(
+        `SELECT a.email FROM confirmation_retry_requests r
+         JOIN accounts a ON a.id = r.actor_account_id JOIN email_messages m ON m.id = r.email_id WHERE m.order_id = $1`,
+        [o.id],
+      )).toEqual([{ email: DEFAULT_TEST_ORGANIZER }]);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('rejects a bad signature without needing sign-in, and changes nothing', async () => {
     const { order, checkout, webhook, paidSession, get } = await setup();
     const o = await order(['RR-M35-34']);
