@@ -92,6 +92,8 @@ New orders record the authenticated accepting account ID, validated declared rac
 
 `GET /api/events/:id/participant-groups` requires current event `entries.manage` permission (owner or registration manager). It returns confirmed order IDs grouped within the authorized event and sets `Cache-Control: no-store`. Account IDs, junior profile IDs, names, and other personal or waiver data are omitted. Grouping grants no authority over an order. The Event participants section uses the same permission and displays only the count and a general explanation.
 
+Adult self-registration evidence comes from the signed-in account after an explicit checkout API confirmation. A known declared adult racing age and the existing no-guardian checkout path are required. The create-order response includes the confirmation flag only for a saved link and only to the placing account. Organizer responses omit the state and its account reference. The reference grants no access to orders, junior profiles, waivers or payments. Existing retention and real-identity gates apply.
+
 ### Current order evidence by viewer
 
 The waiver acceptance records the accepted version, signature name and signer role. Its separate server evidence records the accepting account ID, declared racing age and acceptance time. The API sends the following fields when the caller qualifies for access. This describes the local build. Minimum necessary exposure for real minor data still needs product-owner approval.

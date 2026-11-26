@@ -8,6 +8,36 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const TEXT_TIMESTAMPS = `SELECT table_name, column_name FROM information_schema.columns
   WHERE table_schema = 'public' AND data_type = 'text' AND (column_name LIKE '%\\_at' OR column_name LIKE '%expires%')`;
 
+it('leaves a signed-in adult order unlinked when upgrading to migration 49', async () => {
+  const url = await testDatabaseUrl({ empty: true });
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  const waiverEvidence = { signerAccountId: 'adult_account', riderRacingAge: 40, acceptedAt: '2026-01-01T00:00:00.000Z' };
+  try {
+    await client.query('CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+    for (let version = 1; version <= 48; version++) {
+      await client.query(MIGRATIONS[version - 1]);
+      await client.query('INSERT INTO schema_migrations(version) VALUES ($1)', [version]);
+    }
+    await client.query(`INSERT INTO accounts(id,provider_user_id,email,created_at) VALUES ('adult_account','fictional-adult','adult@migration.test',now());
+      INSERT INTO organizations(id,name,created_at) VALUES ('old_org','Fictional migration club',now());
+      INSERT INTO events(id,organization_id,draft_json,revision,created_at,updated_at) VALUES ('old_event','old_org','{}',1,now(),now());`);
+    await client.query(`INSERT INTO orders(id,event_id,published_version,client_request_id,status,rider_json,waiver_json,waiver_evidence_json,quote_json,total_cents,account_id,hold_expires_at,created_at,updated_at)
+      VALUES ('old_order','old_event',1,'old_request','confirmed','{"racingAge":40}','{"signerRole":"rider"}',$1,'{}',1000,'adult_account',now(),now(),now())`, [JSON.stringify(waiverEvidence)]);
+  } finally {
+    await client.end();
+  }
+  const db = openDb(url);
+  try {
+    await db.migrate();
+    expect(await db.get(`SELECT account_id, self_registration_account_id, waiver_evidence_json FROM orders WHERE id = 'old_order'`)).toEqual({
+      account_id: 'adult_account', self_registration_account_id: null, waiver_evidence_json: waiverEvidence,
+    });
+  } finally {
+    await db.close();
+  }
+});
+
 it('adds protected export auditing on upgrade without backfilling requests', async () => {
   const url = await testDatabaseUrl({ empty: true });
   const client = new pg.Client({ connectionString: url });
