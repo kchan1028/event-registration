@@ -132,6 +132,92 @@ for (const trigger of ['deadline', 'visibility'] as const) {
   });
 }
 
+for (const action of ['closing Team', 'cancelling the invitation'] as const) {
+  test(`Team ignores a delayed visibility refresh after ${action}`, async ({ page }) => {
+    const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
+    const base = `/api/organizations/${organizationId}`;
+    const asOf = '2027-05-01T12:00:00.000Z';
+    const expiresAt = '2027-05-01T12:04:00.000Z';
+    const invitation = { email: 'original@example.test', role: 'finance', expiresAt, revision: 'rev_original', earlierEmail: false, suppressed: null, lastEmail: null };
+    const initial = { asOf, members: [], invitations: [invitation], stoppedEmails: [], history: [] };
+    const newer = { ...initial, invitations: [] };
+    const stale = { ...initial, invitations: [{ ...invitation, email: 'stale@example.test' }] };
+    let reads = 0;
+    let releaseRefresh: (() => void) | undefined;
+    await page.route(`**${base}/members`, async (route) => {
+      if (++reads === 1) return route.fulfill({ json: initial });
+      await new Promise<void>((resolve) => { releaseRefresh = resolve; });
+      await route.fulfill({ json: stale });
+    });
+    await page.route(`**${base}/invitations/cancel`, (route) => route.fulfill({ json: newer }));
+
+    await page.clock.install({ time: new Date(asOf) });
+    await page.goto('/');
+    await page.evaluate(() => {
+      const browser: Window = window;
+      const set = browser.setTimeout;
+      const clear = browser.clearTimeout;
+      let deadlineTimer: number | undefined;
+      browser.setTimeout = (...args) => {
+        const id = set(...args);
+        // The fixture's four-minute invitation is the only timer in this range.
+        if (args[1] !== undefined && args[1] > 230_000 && args[1] <= 240_000) {
+          deadlineTimer = id;
+          document.documentElement.dataset.testDeadlineTimer = 'scheduled';
+        }
+        return id;
+      };
+      browser.clearTimeout = (id) => {
+        if (deadlineTimer !== undefined && id === deadlineTimer) {
+          document.documentElement.dataset.testDeadlineTimer = 'cancelled';
+        }
+        clear(id);
+      };
+    });
+
+    const organization = page.getByRole('article').filter({ has: page.locator(`a[href="#/events/${eventId}"]`) });
+    const openTeam = organization.getByRole('button', { name: 'Team and roles', exact: true });
+    const team = organization.getByRole('region', { name: /^Team and roles for / });
+    await openTeam.click();
+    await expect(team.getByText(invitation.email, { exact: true })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-test-deadline-timer', 'scheduled');
+
+    const changeVisibility = (state: DocumentVisibilityState) => page.evaluate((visibility) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: visibility });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, state);
+    const hiddenRequest = page.waitForRequest((request) => request.url().endsWith(`${base}/members`), { timeout: 400 });
+    await changeVisibility('hidden');
+    await expect(hiddenRequest).rejects.toThrow('Timeout');
+    expect(reads).toBe(1);
+    await changeVisibility('visible');
+    await expect.poll(() => reads).toBe(2);
+
+    try {
+      if (action === 'closing Team') {
+        await team.getByRole('button', { name: 'Close', exact: true }).click();
+        await expect(team).toHaveCount(0);
+        await expect(page.locator('html')).toHaveAttribute('data-test-deadline-timer', 'cancelled');
+      } else {
+        await team.getByRole('button', { name: `Cancel invitation for ${invitation.email}` }).click();
+        await expect(team.getByText(invitation.email, { exact: true })).toHaveCount(0);
+      }
+    } finally {
+      const received = page.waitForResponse((response) => response.url().endsWith(`${base}/members`));
+      releaseRefresh?.();
+      await (await received).finished();
+    }
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+
+    if (action === 'closing Team') {
+      await expect(page.locator('html')).toHaveAttribute('data-test-deadline-timer', 'cancelled');
+      await openTeam.click();
+      await expect(team.getByText(invitation.email, { exact: true })).toBeVisible();
+    }
+    await expect(team.getByText('stale@example.test', { exact: true })).toHaveCount(0);
+  });
+}
+
 test('Resend names the invitation on screen and refreshes when it has changed', async ({ page }) => {
   const { organizationId, eventId } = await (await page.request.post('/api/demo')).json();
   const members = `/api/organizations/${organizationId}/members`;
