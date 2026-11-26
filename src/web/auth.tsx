@@ -79,9 +79,15 @@ export function kioskEventId(): string | null {
 
 const TEST_KEY = 'cyclereg.test-session';
 
-// The test sign-in page replaces the app, so checkout remounts afterwards. One successful
-// sign-in asks that remount to focus the restored step. Cancel does not.
+// The test sign-in page replaces the app, so checkout remounts afterwards. Arm focus only
+// when registration was on screen at the moment sign-in was requested, and only after success.
+let registerActive = false;
+let armCheckoutFocus = false;
 let pendingCheckoutFocus = false;
+
+export function setRegisterActive(active: boolean): void {
+  registerActive = active;
+}
 
 export function takePendingCheckoutFocus(): boolean {
   const pending = pendingCheckoutFocus;
@@ -106,7 +112,10 @@ function TestSession({ children }: { children: ReactNode }) {
     status: email ? 'signed-in' : 'signed-out',
     email,
     signInIdentity: email ? `test:${email.toLowerCase()}` : null,
-    signIn: () => setAsking(true),
+    signIn: () => {
+      armCheckoutFocus = registerActive;
+      setAsking(true);
+    },
     signOut: () => {
       try {
         if (!kiosk) sessionStorage.removeItem(TEST_KEY);
@@ -122,14 +131,14 @@ function TestSession({ children }: { children: ReactNode }) {
     } catch {
       /* storage blocked: keep the session in memory */
     }
-    const hash = window.location.hash;
-    pendingCheckoutFocus = hash.startsWith('#/register/') || new URLSearchParams(window.location.search).has('kiosk');
+    pendingCheckoutFocus = armCheckoutFocus;
+    armCheckoutFocus = false;
     setEmail(value);
     setAsking(false);
   };
   return (
     <SessionContext.Provider value={session}>
-      {asking && !email ? <TestSignInPage onDone={done} onCancel={() => setAsking(false)} /> : children}
+      {asking && !email ? <TestSignInPage onDone={done} onCancel={() => { armCheckoutFocus = false; setAsking(false); }} /> : children}
     </SessionContext.Provider>
   );
 }
