@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import pg from 'pg';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { EmailRefusal, EmailUncertain, localEmail, type EmailSender } from '../src/server/email';
 import { INVITATION_DAYS } from '../src/shared/roles';
 import { as, fakeAuth } from './support/auth';
@@ -266,31 +266,47 @@ describe('invitation mail stops', () => {
   });
 
   it('refuses an attempt when the invitation is cancelled during retry', async () => {
-    let markRetry = () => {};
-    const retryStarted = new Promise<void>((resolve) => { markRetry = resolve; });
-    let watchRetry = false;
     let sends = 0;
     const email: EmailSender = { mode: 'resend', async send() { sends++; return 'msg-cancelled-send'; } };
-    const { app, client, call, orgId, team } = await harness(email, () => {
-      if (watchRetry) markRetry();
-      return NOW;
-    });
+    const { app, client, call, orgId, team } = await harness(email);
     try {
       const row = await invite(call, orgId);
       await postBounce(app, 'msg-cancelled-send', 'evt-cancelled-send');
       const attemptId = await attachInterruptedAttempt(client, orgId, row.lastEmail!.attemptId);
       await client.query("UPDATE email_messages SET sending_until = now() + interval '1 minute' WHERE id = $1", [attemptId]);
       const invitation = { email: ADDRESS, role: 'finance', revision: row.revision };
-      watchRetry = true;
-      const sending = call('POST', `/api/organizations/${orgId}/invitations/send-without-extending`, invitation);
+
+      // Observe the retry waiting on the invitation row. It already holds the membership
+      // lock at this point, so cancel cannot invalidate the revision before the attempt is selected.
+      let sending: ReturnType<typeof call> | undefined;
       try {
-        await retryStarted;
-        // Cancel waits for the retry's membership transaction to finish.
-        expect((await call('POST', `/api/organizations/${orgId}/invitations/cancel`, invitation)).statusCode).toBe(200);
+        await client.query('BEGIN');
+        try {
+          await client.query(
+            'SELECT 1 FROM organization_invitations WHERE organization_id = $1 AND email = $2 AND role = $3 FOR UPDATE',
+            [orgId, ADDRESS, invitation.role],
+          );
+          sending = call('POST', `/api/organizations/${orgId}/invitations/send-without-extending`, invitation);
+          await vi.waitFor(async () => {
+            const waiting = await client.query<{ blocked: boolean }>(
+              `SELECT EXISTS (
+                 SELECT 1 FROM pg_stat_activity
+                 WHERE datname = current_database() AND pg_backend_pid() = ANY(pg_blocking_pids(pid))
+               ) AS blocked`,
+            );
+            expect(waiting.rows[0].blocked).toBe(true);
+          }, { timeout: 3_000 });
+        } finally {
+          await client.query('ROLLBACK');
+        }
+
+        const cancelled = await call('POST', `/api/organizations/${orgId}/invitations/cancel`, invitation);
+        expect(cancelled.statusCode).toBe(200);
       } finally {
         await client.query('UPDATE email_messages SET sending_until = NULL WHERE id = $1', [attemptId]);
+        await sending?.catch(() => undefined);
       }
-      const result = await sending;
+      const result = await sending!;
       expect(result.statusCode).toBe(409);
       expect(result.json()).toEqual({ error: CHANGED });
       expect(sends).toBe(1);
@@ -303,37 +319,51 @@ describe('invitation mail stops', () => {
 
   it('does not clear a replacement stop when the earlier send settles', async () => {
     let sends = 0;
-    let beforeAcceptance: () => Promise<void>;
+    let markStarted = () => {};
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    let releaseEarlier = () => {};
+    const earlierMayFinish = new Promise<void>((resolve) => { releaseEarlier = resolve; });
     const email: EmailSender = {
       mode: 'resend',
       async send() {
-        if (++sends === 1) return 'msg-original-stop';
-        if (sends === 2) return 'msg-replacement-stop';
-        await beforeAcceptance();
-        return 'msg-late-acceptance';
+        switch (++sends) {
+          case 1: return 'msg-original-stop';
+          case 2: return 'msg-other-invitation';
+          case 3:
+            markStarted();
+            await earlierMayFinish;
+            return 'msg-late-acceptance';
+          default: return 'msg-replacement-stop';
+        }
       },
     };
     const { app, client, call, orgId, team } = await harness(email);
     try {
-      const row = await invite(call, orgId);
+      const first = await invite(call, orgId);
       const second = await invite(call, orgId, ADDRESS, 'timer_export');
       await postBounce(app, 'msg-original-stop', 'evt-original-stop');
-      beforeAcceptance = async () => {
-        // Establish the state left by another completed settlement while this send is in flight.
-        await client.query(
-          `UPDATE email_suppressions SET cleared_at = $1, cleared_by = (SELECT id FROM accounts WHERE email = $2), cleared_email_id = $3
-           WHERE organization_id = $4 AND cleared_at IS NULL`,
-          [NOW, OWNER, second.lastEmail!.attemptId, orgId],
-        );
-        await postBounce(app, 'msg-replacement-stop', 'evt-replacement-stop', 'email.complained');
-      };
-      const result = await call('POST', `/api/organizations/${orgId}/invitations/send-without-extending`, {
-        email: ADDRESS, role: 'finance', revision: row.revision,
+
+      const send = (row: Invitation) => call('POST', `/api/organizations/${orgId}/invitations/send-without-extending`, {
+        email: row.email, role: row.role, revision: row.revision,
       });
-      expect(result.statusCode).toBe(200);
+      const earlier = send(first);
+      try {
+        await started;
+        const accepted = await send(second);
+        expect(accepted.statusCode).toBe(200);
+        expect((accepted.json() as Team).stoppedEmails).toEqual([]);
+        await postBounce(app, 'msg-replacement-stop', 'evt-replacement-stop', 'email.complained');
+        expect((await team()).stoppedEmails).toEqual([{ email: ADDRESS, reason: 'complained' }]);
+      } finally {
+        releaseEarlier();
+        await earlier.catch(() => undefined);
+      }
+      expect((await earlier).statusCode).toBe(200);
       const after = await team();
       expect(after.stoppedEmails).toEqual([{ email: ADDRESS, reason: 'complained' }]);
-      expect(after.invitations.find((item) => item.role === 'finance')).toMatchObject({ revision: row.revision, expiresAt: row.expiresAt, lastEmail: { status: 'sent' } });
+      expect(after.invitations.find((item) => item.role === 'finance')).toMatchObject({ revision: first.revision, expiresAt: first.expiresAt, lastEmail: { status: 'sent' } });
+      expect(sends).toBe(4);
+      expect((await client.query('SELECT count(*)::int AS n FROM email_messages')).rows[0].n).toBe(4);
     } finally {
       await client.end();
     }
