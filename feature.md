@@ -13,7 +13,7 @@ Use this map to find a workflow and its requirements. The feature tables below d
 | Workflow | Where to start | Requirements |
 |---|---|---|
 | Set up a race and publish registration | Event setup and the category builder · [Organizer features](#organizer-features) | [Category builder](product.md#1a-road-race-and-criterium-category-builder--p0) |
-| Find an event, enter, and pay | Public event list and rider registration · [Rider features](#rider-features) | [Capacity and entry integrity](product.md#3-capacity-and-entry-integrity), [Money and reporting](product.md#6-money-and-reporting) |
+| Find an event, enter, and pay | Find a race and Race registration · [Rider features](#rider-features) | [Capacity and entry integrity](product.md#3-capacity-and-entry-integrity), [Money and reporting](product.md#6-money-and-reporting) |
 | Find a receipt or manage guardian access | My registrations · [Rider features](#rider-features) | [Rider self-service](product.md#rider-self-service), [Sign-in and account security](product.md#sign-in-and-account-security) |
 | Find riders, resolve entries, and manage waitlists | Registrations · [Organizer features](#organizer-features) | [Participant management](product.md#participant-management), [Capacity and entry integrity](product.md#3-capacity-and-entry-integrity) |
 | Invite staff or check email delivery | Team and roles for invitations, Registrations for confirmation and offer email · [Organizer features](#organizer-features) | [Sign-in and account security](product.md#sign-in-and-account-security), [Communications](product.md#communications) |
