@@ -88,6 +88,73 @@ describe('support-approved profile claims', () => {
     expect(await groups()).toEqual([{ orderIds: [s.order.id] }, { orderIds: [adultId] }]);
   });
 
+  it('saves a history-only link for one approved claim and leaves ambiguous or earlier orders unlinked', async () => {
+    const s = await setup();
+    s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
+    const eventUrl = `/api/events/${s.eventId}`;
+    const { config } = (await s.call(ORGANIZER, 'GET', eventUrl)).json();
+    const category = config.categories.find((row: { timingCode: string }) => row.timingCode === 'RR-M35-34');
+    const placeAdult = async (clientRequestId: string, selfRegistrationConfirmed: boolean) => {
+      const response = await s.call(RIDER, 'POST', `/api/rider/events/${s.eventId}/orders`, {
+        clientRequestId,
+        selfRegistrationConfirmed,
+        categoryIds: [category.id],
+        rider: { ...s.body.rider, firstName: 'Adult', racingAge: 40, licenseCategory: '3', email: RIDER, guardian: null },
+        waiver: { ...s.body.waiver, signatureName: 'Adult Fictional', signerRole: 'rider' },
+      });
+      expect(response.statusCode, response.body).toBe(201);
+      return response.json();
+    };
+
+    const beforeClaim = await placeAdult('adult-before-claim', true);
+    const approval = await s.approve();
+    expect(approval.statusCode, approval.body).toBe(200);
+    const { claimId } = approval.json();
+
+    const linked = await placeAdult('adult-with-one-claim', true);
+    expect(linked.selfRegistrationConfirmed).toBe(true);
+    expect(linked).not.toHaveProperty('adultHistoryClaimId');
+    const proxy = await placeAdult('adult-for-someone-else', false);
+    expect(await placeAdult('adult-before-claim', true)).toEqual(beforeClaim);
+
+    const secondJunior = await s.call(SECOND, 'POST', `/api/rider/events/${s.eventId}/orders`, {
+      ...s.body,
+      clientRequestId: 'another-fictional-junior',
+      rider: { ...s.body.rider, guardian: { ...s.body.rider.guardian, email: SECOND } },
+    });
+    expect(secondJunior.statusCode, secondJunior.body).toBe(201);
+    const [secondProfile] = (await s.call(SECOND, 'GET', '/api/rider/juniors')).json();
+    const secondApproval = await s.call(SUPPORT, 'POST', `/api/support/juniors/${secondProfile.id}/claim`, {
+      ...s.input, clientRequestId: 'another-fictional-support-claim',
+    });
+    expect(secondApproval.statusCode, secondApproval.body).toBe(200);
+
+    const ambiguous = await placeAdult('adult-with-duplicate-claims', true);
+    expect(ambiguous.selfRegistrationConfirmed).toBe(true);
+    expect(await placeAdult('adult-with-one-claim', false)).toEqual(linked);
+    for (const who of [PARENT, SECOND, VIEWER]) {
+      expect((await s.call(who, 'GET', `/api/orders/${linked.id}`)).statusCode).toBe(404);
+    }
+    const staffOrder = await s.call(ORGANIZER, 'GET', `/api/orders/${linked.id}`);
+    expect(staffOrder.statusCode).toBe(200);
+    expect(staffOrder.json()).not.toHaveProperty('adultHistoryClaimId');
+    const paid = await s.call(RIDER, 'POST', `/api/orders/${linked.id}/payment`, { attemptId: 'adult-claim-link-payment', outcome: 'success' });
+    expect(paid.statusCode, paid.body).toBe(200);
+    expect(paid.json().waiverEvidence).toEqual(linked.waiverEvidence);
+
+    const db = new pg.Client({ connectionString: s.databaseUrl });
+    await db.connect();
+    try {
+      const stored = (await db.query(`SELECT account_id, junior_profile_id, adult_history_claim_id FROM orders WHERE id = ANY($1) ORDER BY seq`,
+        [[beforeClaim.id, linked.id, proxy.id, ambiguous.id]])).rows;
+      expect(stored).toEqual([null, claimId, null, null].map((historyClaimId) => ({
+        account_id: s.account.id, junior_profile_id: null, adult_history_claim_id: historyClaimId,
+      })));
+    } finally {
+      await db.end();
+    }
+  });
+
   it('preserves the rider-confirmed zone name rather than a runtime canonical alias for durable replay', async () => {
     const s = await setup(); s.now.setTime(new Date('2026-03-01T08:00:00Z').getTime());
     const first = await s.approve(SUPPORT, { timeZone: 'US/Pacific' });
