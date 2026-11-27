@@ -18,6 +18,7 @@ import { dayHue, Field, Icon, IntInput, Pending, ThemeToggle } from './ui';
 import { AccountMenu, SignInPrompt, useSession } from './auth';
 import { retainCheckoutFocus, setRegisterActive } from './checkoutFocus';
 import { useLoad } from './useLoad';
+import { WithdrawalRequestControl } from './WithdrawalRequest';
 import { availableWalkUpCategories, categorySelectionStatus, WALK_UP_CATEGORY_PARAM } from './walkUpSelection';
 import { refundPolicyLines } from '../shared/refundPolicy';
 
@@ -1808,6 +1809,7 @@ export function OrderPage({ orderId, kiosk = false }: { orderId: string; kiosk?:
                   ))}
                 </ul>
               )}
+              {confirmed && e.status === 'confirmed' && !kiosk && <WithdrawalRequestControl entryId={e.id} categoryName={e.categoryName} />}
             </li>
           ))}
         </ul>
