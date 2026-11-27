@@ -14,6 +14,8 @@ A third follow-up the same day added the walk-up exceptions script. Application 
 
 A fourth follow-up the same day added the junior walk-up script. Application source: `0929ffda6bb1df17a0ddcdce7b64e93da48c4931`. Result: 1 passed.
 
+A fifth follow-up the same day added the shared kiosk script. Application source: `99459efe957cad0513acc592ac5bcc21812ecf9c`. Result: 1 passed.
+
 ## Race-day desk
 
 Passed on the published demo weekend with fictional accounts (organizer, registration manager, two check-in volunteers, timer export):
@@ -50,7 +52,19 @@ Not rehearsed: physical bib stock and recovering a handed-out bib. A refused ove
 
 Passed on a published fictional criterium: a phone-sized rider session completed simulated checkout, staff marked that entry as a walk-up and issued bib 100, and a separate kiosk session signed in and ended back at the kiosk sign-in.
 
-Not rehearsed: a suggestion QR on a second physical phone, continuing a draft on that phone, a second full kiosk checkout, five idle minutes, and hosted payment.
+Not rehearsed: a suggestion QR on a second physical phone, continuing a draft on that phone, and hosted payment.
+
+## Shared test kiosk
+
+Passed with a dedicated phone-sized kiosk browser and the browser clock standing in for real idle minutes ([walk-up guide](../runbooks/walkup-registration.md#run-the-shared-test-kiosk)):
+
+- The Test kiosk address came from the walk-up panel. The first rider signed in with their own account, completed simulated checkout, and chose **End kiosk session**. The kiosk returned to **Sign in to register** with no receipt and nothing in session storage.
+- The second rider signed in to an empty draft. After four idle minutes the one-minute warning appeared. **Keep working** and then Escape each kept the draft.
+- The second rider reached payment. The payment was saved, but its response was held back. After five idle minutes the kiosk signed out, showed the message pointing to **My registrations** on the rider's own device, and cleared the draft.
+- On a personal browser, the second rider's **My registrations** listed one confirmed order.
+- The next kiosk session started with no draft and no receipt.
+
+Not rehearsed: five real idle minutes, a hosted kiosk, hosted sign-in and payment return, and staff staying with the device through handover.
 
 ## Walk-up exceptions
 
