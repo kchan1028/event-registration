@@ -47,12 +47,13 @@ export function WithdrawalRequestControl({ entryId, categoryName }: { entryId: s
 
   if (loadError) return <p className="small text-error">Withdrawal options could not load. Refresh this page to try again.</p>;
   if (!state) return null;
-  // The current preview names the category; the page's copy can be stale if the organizer moved the entry.
+  // The current preview names the category for a new request; the page's copy can be stale if the organizer moved the entry.
+  // A sent request keeps the category the rider asked about.
   const category = state.preview.categoryName || categoryName;
   if (state.openRequest) {
     return (
       <p ref={waiting} tabIndex={-1} className="note small" role="status">
-        You asked to withdraw from {category}. The organizer has not decided yet, and this entry still races until they do.
+        You asked to withdraw from {state.openRequest.policy.categoryName}. The organizer has not decided yet, and this entry still races until they do.
       </p>
     );
   }

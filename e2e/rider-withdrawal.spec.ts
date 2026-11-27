@@ -57,6 +57,13 @@ test('a rider sees the policy effect, asks to withdraw an entry, and the request
     await expect(rider.getByRole('status').filter({ hasText: 'The organizer has not decided yet' })).toBeVisible();
     const requests = await (await page.request.get(`${eventUrl}/withdrawal-requests`)).json();
     expect(requests).toEqual([expect.objectContaining({ orderId, status: 'open', reason: 'Injured, cannot race' })]);
+
+    // If the organizer then moves the entry, the waiting message still names the category the rider asked about.
+    const other = config.categories.find((row: { timingCode: string }) => row.timingCode === 'CR-M35-34');
+    const entryId = (await (await page.request.get(`/api/orders/${orderId}`)).json()).entries[0].id;
+    expect((await page.request.post(`/api/order-entries/${entryId}/transfer`, { data: { toCategoryId: other.id, reason: 'Organizer moved the rider' } })).status()).toBe(200);
+    await rider.reload();
+    await expect(rider.getByRole('status').filter({ hasText: `You asked to withdraw from ${category.name}.` })).toBeVisible();
   } finally {
     await context.close();
   }
