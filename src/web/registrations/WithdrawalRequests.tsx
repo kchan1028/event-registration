@@ -88,7 +88,8 @@ function RequestRow({ eventId, item, onDecided }: { eventId: string; item: Withd
         <div className="review-form" role="group" aria-label={`Confirm withdrawal for ${who}`}>
           <span className="small">This withdraws the entry now. No refund is sent.</span>
           <button type="button" className="btn btn--primary btn--small" disabled={busy} onClick={() => void approve()}>{busy ? 'Withdrawing…' : 'Withdraw entry'}</button>
-          <button type="button" className="btn btn--ghost btn--small" onClick={() => { setMode('none'); setErr(null); }}>Cancel</button>
+          {/* Once sent, the server may still withdraw the entry, so the approval cannot be cancelled from here. */}
+          <button type="button" className="btn btn--ghost btn--small" disabled={busy} onClick={() => { setMode('none'); setErr(null); }}>Cancel</button>
           {err && <span className="text-error small" role="alert">{err}</span>}
         </div>
       )}

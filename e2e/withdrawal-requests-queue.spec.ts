@@ -49,7 +49,17 @@ test('an organizer approves one rider withdrawal request and declines another wi
   await section.getByRole('button', { name: `Approve withdrawal for Robin Fictional, ${category.name}` }).click();
   const confirm = section.getByRole('group', { name: `Confirm withdrawal for Robin Fictional, ${category.name}` });
   await expect(confirm).toContainText('No refund is sent.');
+  // While the approval is in flight, Cancel cannot make it look undone.
+  let releaseApproval: (() => void) | null = null;
+  await page.route('**/api/events/*/withdrawal-requests/*/approve', async (route) => {
+    await new Promise<void>((resolve) => { releaseApproval = resolve; });
+    await route.continue();
+  }, { times: 1 });
   await confirm.getByRole('button', { name: 'Withdraw entry' }).click();
+  await expect(confirm.getByRole('button', { name: 'Withdrawing…' })).toBeDisabled();
+  await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  await expect.poll(() => releaseApproval !== null).toBe(true);
+  releaseApproval!();
   await expect(section.getByRole('heading', { name: 'Withdrawal requests (1)' })).toBeVisible();
 
   await section.getByRole('button', { name: `Decline withdrawal for Casey Fictional, ${category.name}` }).click();
