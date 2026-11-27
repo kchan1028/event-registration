@@ -68,6 +68,7 @@ interface OrderRow {
 type ReservationRow = Pick<OrderRow, 'id' | 'published_version' | 'status' | 'hold_expires_at' | 'staff_released_at' | 'stripe_checkout_started_at' | 'stripe_checkout_tracked'>;
 
 interface ChangeRow {
+  id: string;
   order_id: string;
   entry_id: string;
   kind: 'transfer' | 'withdraw';
@@ -211,7 +212,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     const entries = groupByOrder(await db.all<EntryRow>(`SELECT * FROM order_entries WHERE order_id = ANY($1) ORDER BY seq`, [ids]));
     const changes = groupByOrder(
       await db.all<ChangeRow>(
-        `SELECT order_id, entry_id, kind, from_category_id, to_category_id, amount_paid_cents, new_price_cents, difference_cents, reason, created_at FROM entry_changes WHERE order_id = ANY($1) ORDER BY created_at, seq`,
+        `SELECT id, order_id, entry_id, kind, from_category_id, to_category_id, amount_paid_cents, new_price_cents, difference_cents, reason, created_at FROM entry_changes WHERE order_id = ANY($1) ORDER BY created_at, seq`,
         [ids],
       ),
     );
@@ -313,6 +314,7 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         changes: changes
           .filter((c) => c.entry_id === e.id)
           .map((c) => ({
+            id: c.id,
             kind: c.kind,
             fromCategoryName: findCat(c.from_category_id)?.name ?? 'Removed category',
             toCategoryName: c.to_category_id ? (findCat(c.to_category_id)?.name ?? 'Removed category') : null,

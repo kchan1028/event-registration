@@ -6,7 +6,7 @@ import { parseCsv } from '../src/shared/csv';
 import { blankPath } from '../src/shared/factory';
 import type { EventConfig } from '../src/shared/schema';
 import type { StartLists } from '../src/server/startlists';
-import { DEFAULT_TEST_ORGANIZER } from './support/auth';
+import { as, DEFAULT_TEST_ORGANIZER } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
 import { publishReviewed } from './support/publish';
 
@@ -348,6 +348,53 @@ describe('entry change notices', () => {
       });
       await mailer.dispatchNextRiderEmail();
       expect(send).toHaveBeenCalledTimes(4);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('shows an entry-change notice to registration managers and retries only an uncertain send', async () => {
+    const send = vi.fn().mockResolvedValue('re_entry_change_retry');
+    const sender: EmailSender = { mode: 'resend', from: 'sender@example.test', send };
+    const now = new Date('2027-03-01T18:00:00Z');
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => now, holdMinutes: 10, email: sender });
+    const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
+    await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
+    const event = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig; organizationId: string };
+    const from = event.config.categories.find((item) => item.timingCode === 'RR-M35-34')!;
+    const waiver = { version: event.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
+    const rider = { firstName: 'Test', lastName: 'Rider', email: 'test.rider@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Test Contact', phone: '555-555-0199' } };
+    const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: 'req-change-panel', categoryIds: [from.id], rider, waiver } });
+    expect(created.statusCode).toBe(201);
+    const order = created.json() as { id: string; entries: { id: string }[] };
+    expect((await app.inject({ method: 'POST', url: `/api/orders/${order.id}/payment`, payload: { attemptId: 'attempt-change-panel', outcome: 'success' } })).statusCode).toBe(200);
+    const db = openDb(databaseUrl);
+    try {
+      expect((await app.inject({ method: 'POST', url: `/api/order-entries/${order.entries[0].id}/withdraw`, payload: { reason: 'Injured, asked to withdraw' } })).statusCode).toBe(200);
+      const changeId = (await db.get<{ id: string }>(`SELECT id FROM entry_changes WHERE order_id = $1 AND kind = 'withdraw'`, [order.id]))!.id;
+      const listed = (await app.inject({ method: 'GET', url: `/api/events/${eventId}/orders` })).json() as { entries: { changes: { id: string }[] }[] }[];
+      expect(listed.flatMap((row) => row.entries.flatMap((entry) => entry.changes.map((change) => change.id)))).toContain(changeId);
+      const url = `/api/events/${eventId}/entry-changes/${changeId}/notice-delivery`;
+      expect((await app.inject({ method: 'GET', url, headers: as('outsider@notice.test') })).statusCode).toBe(404);
+      for (const [email, role] of [['finance@notice.test', 'finance'], ['manager@notice.test', 'registration_manager']]) {
+        expect((await app.inject({ method: 'POST', url: `/api/organizations/${event.organizationId}/members`, payload: { email, role } })).statusCode).toBe(200);
+      }
+      expect((await app.inject({ method: 'GET', url, headers: as('finance@notice.test') })).statusCode).toBe(403);
+      expect((await app.inject({ method: 'POST', url: `${url}/retry`, headers: as('finance@notice.test') })).statusCode).toBe(403);
+      expect((await app.inject({ method: 'GET', url, headers: as('manager@notice.test') })).json()).toEqual({ notice: { status: 'recorded', delivery: null, canRetry: false } });
+      const recorded = await app.inject({ method: 'GET', url });
+      expect(recorded.headers['cache-control']).toBe('no-store');
+      expect(recorded.json()).toEqual({ notice: { status: 'recorded', delivery: null, canRetry: false } });
+      const refused = await app.inject({ method: 'POST', url: `${url}/retry` });
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json()).toEqual({ error: 'This entry change email cannot be retried now.' });
+      await db.run(`UPDATE email_messages SET status = 'uncertain', sending_until = now() - interval '1 second' WHERE entry_change_id = $1`, [changeId]);
+      expect((await app.inject({ method: 'GET', url })).json()).toEqual({ notice: { status: 'uncertain', delivery: null, canRetry: true } });
+      const retried = await app.inject({ method: 'POST', url: `${url}/retry` });
+      expect(retried.json()).toEqual({ notice: { status: 'sent', delivery: null, canRetry: false } });
+      expect(send.mock.calls.filter((call) => call[0].subject === 'Your entry change')).toHaveLength(1);
+      expect(send.mock.calls.at(-1)?.[0]).toMatchObject({ subject: 'Your entry change', from: 'sender@example.test' });
     } finally {
       await db.close();
     }
