@@ -302,7 +302,7 @@ In the same API suite, verify distinct missing-waiver and missing-guardian refer
 
 The desk shift in `e2e/handoff.spec.ts` uses separate fictional volunteer accounts. After the outgoing browser session closes, the incoming volunteer looks up the first rider, sees the existing check-in and bib without an issuance control, and issues the next bib to another rider. Verify the first check-in and bib history remain unchanged.
 
-`tests/transfers.test.ts` verifies that moving a paid entry between fields in one race updates the current timer CSV and reports the category and start-group changes under the same entry and rider IDs. The locked CSV stays byte-identical.
+`tests/transfers.test.ts` verifies that moving a paid entry between fields in one race updates the current timer CSV and reports the category and start-group changes under the same entry and rider IDs. The locked CSV stays byte-identical. The same file records one entry-change notice per transfer and one per withdrawal, with the order number and category names, without the reason or rider private fields. Test mode dispatches each notice once when the purchaser address still matches and the address is not stopped. Local mode does not send it. A changed address or a bounce of an earlier entry-change notice holds the send. The same file shows the notice to registration managers, refuses it to finance, and retries only an uncertain send. `e2e/entry-change-notice-delivery.spec.ts` opens that panel on Registrations, including a narrow viewport and an interrupted retry.
 
 ### Check-in navigation targets
 

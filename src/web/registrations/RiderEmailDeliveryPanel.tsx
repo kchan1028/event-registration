@@ -19,12 +19,14 @@ const panelCopy = {
   offer: { summary: 'Offer email', retry: 'Retry offer email', className: 'offer-email-delivery' },
   receipt: { summary: 'Receipt email', retry: 'Retry receipt email', className: 'receipt-email-delivery' },
   refund: { summary: 'Refund email', retry: 'Retry refund email', className: 'refund-email-delivery' },
+  entryChange: { summary: 'Entry change email', retry: 'Retry entry change email', className: 'entry-change-email-delivery' },
 } as const;
 
 async function readDelivery(kind: keyof typeof panelCopy, eventId: string, recordId: string, action: 'refresh' | 'retry') {
   if (kind === 'offer') return (await (action === 'retry' ? api.retryWaitlistOfferEmail : api.waitlistOfferEmail)(eventId, recordId)).offerEmail;
   if (kind === 'receipt') return (await (action === 'retry' ? api.retryReceiptDelivery : api.receiptDelivery)(eventId, recordId)).receipt;
   if (kind === 'refund') return (await (action === 'retry' ? api.retryRefundNotice : api.noticeDelivery)(eventId, recordId)).notice;
+  if (kind === 'entryChange') return (await (action === 'retry' ? api.retryEntryChangeNotice : api.entryChangeNotice)(eventId, recordId)).notice;
   return (await (action === 'retry' ? api.retryConfirmation : api.confirmationDelivery)(eventId, recordId)).confirmation;
 }
 

@@ -176,6 +176,45 @@ export async function recordGuardianInvitation(db: Db, invitationId: string, ema
   );
 }
 
+/** Order number and the category change only. The organizer's reason stays out of the message. */
+export function entryChangeNoticeText(orderNumber: string, summary: string, isDemo: boolean): string {
+  return isDemo
+    ? `Demo entry change ${orderNumber}: ${summary}. Simulated registration: no money was moved. Sign in and open My registrations to see it.`
+    : `Entry change ${orderNumber}: ${summary}. Sign in and open My registrations to see it.`;
+}
+
+/** Called when an organizer transfer or withdrawal is saved. A null sender stays unsent. This step does not send. */
+export async function recordEntryChangeNotice(db: Db, changeId: string, recordedAt: string, summary: string, senderAddress?: string) {
+  const row = await db.get<{ organization_id: string; order_id: string; email: string; is_demo: boolean | null }>(
+    `SELECT e.organization_id, o.id AS order_id, a.email,
+            (v.config_json #>> '{event,isDemo}') = 'true' AS is_demo
+     FROM entry_changes c
+     JOIN orders o ON o.id = c.order_id
+     JOIN events e ON e.id = o.event_id
+     JOIN accounts a ON a.id = o.account_id
+     JOIN event_versions v ON v.event_id = o.event_id AND v.version = o.published_version
+     WHERE c.id = $1 AND c.kind IN ('transfer', 'withdraw')`,
+    [changeId],
+  );
+  if (!row) return;
+  const isDemo = row.is_demo === true;
+  await db.run(
+    `INSERT INTO email_messages (id, organization_id, kind, ref, entry_change_id, to_email, subject, body_text, status, created_at, from_email, keyed)
+     VALUES ($1, $2, 'entry_change_notice', $3, $3, $4, $5, $6, 'recorded', $7, $8, true)
+     ON CONFLICT (entry_change_id) DO NOTHING`,
+    [
+      newId('eml'),
+      row.organization_id,
+      changeId,
+      row.email,
+      'Your entry change',
+      entryChangeNoticeText(formatOrderNumber(row.order_id, isDemo), summary, isDemo),
+      recordedAt,
+      senderAddress ?? null,
+    ],
+  );
+}
+
 /** Called when a refund is succeeded. A null sender stays unsent. */
 export async function recordRefundNotice(db: Db, refundId: string, recordedAt: string, senderAddress?: string) {
   const row = await db.get<{ organization_id: string; order_id: string; email: string; amount_cents: number; is_demo: boolean | null }>(
@@ -274,7 +313,7 @@ const riderEmailAllowed = `NOT EXISTS (
     )
     AND NOT EXISTS (
       SELECT 1 FROM email_messages previous JOIN email_delivery_events d ON d.email_id = previous.id
-      WHERE previous.organization_id = m.organization_id AND previous.kind IN ('registration_confirmation', 'registration_receipt', 'waitlist_offer', 'waitlist_expired', 'refund_notice')
+      WHERE previous.organization_id = m.organization_id AND previous.kind IN ('registration_confirmation', 'registration_receipt', 'waitlist_offer', 'waitlist_expired', 'refund_notice', 'entry_change_notice')
         AND lower(btrim(previous.to_email)) = lower(btrim(m.to_email)) AND d.kind IN ('bounced', 'complained')
     )`;
 
@@ -302,7 +341,7 @@ const waitlistExpiryReady = `EXISTS (
     AND ${riderEmailAllowed}
 )`;
 
-export type OrganizerRiderEmailKind = 'registration_confirmation' | 'registration_receipt' | 'waitlist_offer' | 'refund_notice';
+export type OrganizerRiderEmailKind = 'registration_confirmation' | 'registration_receipt' | 'waitlist_offer' | 'refund_notice' | 'entry_change_notice';
 export type RiderEmailKind = OrganizerRiderEmailKind | 'waitlist_expired';
 
 // The last check uses current account and family authority, not purchase provenance alone.
@@ -322,18 +361,28 @@ const refundNoticeReady = `EXISTS (
     AND lower(btrim(a.email)) = lower(btrim(m.to_email))
     AND ${riderEmailAllowed}
 )`;
+const entryChangeNoticeReady = `EXISTS (
+  SELECT 1 FROM entry_changes c
+  JOIN orders o ON o.id = c.order_id
+  JOIN accounts a ON a.id = o.account_id
+  WHERE c.id = m.entry_change_id AND c.kind IN ('transfer', 'withdraw') AND m.from_email IS NOT NULL
+    AND lower(btrim(a.email)) = lower(btrim(m.to_email))
+    AND ${riderEmailAllowed}
+)`;
 const riderEmailReady = {
   registration_confirmation: confirmationReady,
   registration_receipt: confirmationReady,
   waitlist_offer: waitlistOfferReady,
   waitlist_expired: waitlistExpiryReady,
   refund_notice: refundNoticeReady,
+  entry_change_notice: entryChangeNoticeReady,
 };
 const riderEmailSource = {
   registration_confirmation: 'JOIN orders source ON source.id = m.order_id',
   registration_receipt: 'JOIN orders source ON source.id = m.order_id',
   waitlist_offer: 'JOIN waitlist_entries source ON source.id = m.waitlist_entry_id',
   refund_notice: 'JOIN (SELECT r.id, o.event_id FROM refunds r JOIN orders o ON o.id = r.order_id) source ON source.id = m.refund_id',
+  entry_change_notice: 'JOIN (SELECT c.id, o.event_id FROM entry_changes c JOIN orders o ON o.id = c.order_id) source ON source.id = m.entry_change_id',
 };
 const invitationReady = `EXISTS (SELECT 1 FROM organization_invitations WHERE email_attempt_id = m.id AND NOT earlier_email)`;
 
@@ -426,7 +475,8 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
              OR (m.kind = 'registration_receipt' AND ${confirmationReady})
              OR (m.kind = 'waitlist_offer' AND ${waitlistOfferReady})
              OR (m.kind = 'waitlist_expired' AND ${waitlistExpiryReady})
-             OR (m.kind = 'refund_notice' AND ${refundNoticeReady}))
+             OR (m.kind = 'refund_notice' AND ${refundNoticeReady})
+             OR (m.kind = 'entry_change_notice' AND ${entryChangeNoticeReady}))
          ORDER BY m.sending_until NULLS FIRST, m.created_at, m.seq LIMIT 1`,
         [new Date(clock().getTime() - RESEND_IDEMPOTENCY_WINDOW_MS).toISOString()],
       );
