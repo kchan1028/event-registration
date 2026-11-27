@@ -276,7 +276,7 @@ Status: Planned documentation only. The current app does not support time trials
 
 ### Rider self-service
 
-Status: Partly Implemented locally (November 27, 2026): a rider-requested withdrawal API. The rest is Planned; organizer transfers and withdrawals already exist in the local build.
+Status: Partly Implemented locally (November 27, 2026): rider withdrawal requests with organizer approval. The rest is Planned; open decisions: [direct rider withdrawal](#direct-rider-withdrawal-without-approval) and [transfer to another person](#rider-transfer-to-another-person); organizer transfers and withdrawals already exist in the local build.
 
 Rider-requested withdrawal, first slice (Implemented locally: API, the rider's request on the receipt page, and the organizer's **Withdrawal requests** section in Registrations, where an owner or registration manager approves after a confirm step that says no refund is sent, or declines with a reason). On the receipt, each paid, active entry offers **Ask to withdraw**, which shows the policy sentence and a reason field and then shows the request as waiting for the organizer; the kiosk and a junior viewing their own registration do not offer it. A signed-in rider who manages a paid order sees, for one paid, active entry, the amount paid and what the accepted refund policy would return that day, then asks to withdraw with a reason. This follows the organizer-approval path: an owner or registration manager approves, which runs the existing organizer withdrawal and records the change and the rider notice, or declines with a reason, which leaves the entry, payment and readiness unchanged. One request per entry can be open; an exact retry returns the same request. Approval never refunds or issues credit: a refund stays a separate finance step. The rider's request carries the category and policy amount they were shown; if the entry moved to another category or the policy step changed since (for example, a refund deadline passed), the request is refused so they can review the new amount. The saved request keeps that amount. Unpaid or inactive entries have no withdrawal preview. If the organizer transfers the entry to another category before deciding, approval is refused; the organizer declines and checks with the rider. A direct self-withdrawal without approval, category changes and transfers stay Planned.
 
@@ -932,6 +932,34 @@ Resolved November 26, 2026 by the project owner (raised the same day). The organ
 ### Demo orders in organizer history
 
 Resolved November 26, 2026 by the project owner (raised the same day). The organizer history read includes confirmed orders from demo events in the same organization. Participant history in Registrations shows the other events and labels a demo event's orders as demo. The read does not leave those orders out. The Demo label follows the event's current published version. The order number follows the published version stored on the order, the same way a receipt does.
+
+### Direct rider withdrawal without approval
+
+Open, raised November 27, 2026; owner: project owner. Riders can now ask to withdraw a paid entry, and an owner or registration manager approves or declines ([Rider self-service](#rider-self-service)). The requirement says a policy decides whether a change completes directly or needs organizer approval. Should an organizer be able to let riders withdraw on their own, with no approval step, and if so what is the default for a new event?
+
+Why it matters: a direct withdrawal frees the place at once and records the change with no person checking it. It does not refund; a refund stays a separate finance step. Turning it on by default would change every new event's behaviour; leaving it off keeps today's approval path.
+
+Provisional assumption: every rider withdrawal needs organizer approval. No event setting for direct withdrawal exists.
+
+What can proceed: withdrawal requests with approval, the decline email, and category-change requests that also go through approval.
+
+What stays blocked: a per-event setting for direct rider withdrawal, and any rider withdrawal that skips approval.
+
+Revisit when the project owner says whether direct withdrawal is allowed and what the default is.
+
+### Rider transfer to another person
+
+Open, raised November 27, 2026; owner: project owner. The requirement allows a rider to transfer an entry to another person only under an explicit event policy, with the recipient's separate consent and eligibility, and a new waiver signed by the recipient. It does not say who may offer a transfer (every event, or only events that turn it on), whether a fee or price difference applies, whether the recipient must already have an account, or what happens to a bib already issued.
+
+Why it matters: a transfer changes who holds a paid place and who has signed the waiver. Each open point changes money, personal data, or race-day records.
+
+Provisional assumption: no rider-to-person transfer. Organizer category transfers of the same rider stay as they are.
+
+What can proceed: withdrawal requests and category-change requests for the same rider.
+
+What stays blocked: any rider-initiated transfer to another person.
+
+Revisit when the project owner sets the transfer policy: who may offer it, money, recipient account and consent, and bib handling.
 
 ### Duplicate junior claim resolution
 
