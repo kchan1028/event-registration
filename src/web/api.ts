@@ -350,6 +350,7 @@ export interface RiderEmailDelivery {
 
 export const api = {
   expiredInvitations: () => request<ExpiredInvitationNotice[]>('GET', '/api/rider/expired-invitations'),
+  dismissExpiredInvitation: (id: string) => request<ExpiredInvitationNotice[]>('POST', `/api/rider/expired-invitations/${encodeURIComponent(id)}/dismiss`),
   members: (orgId: string) => request<MemberList>('GET', `/api/organizations/${orgId}/members`),
   addMember: (orgId: string, email: string, role: Role) => request<MemberList>('POST', `/api/organizations/${orgId}/members`, { email, role }),
   resendInvitation: (orgId: string, email: string, role: Role, revision: string) => request<MemberList>('POST', `/api/organizations/${orgId}/invitations/resend`, { email, role, revision }),

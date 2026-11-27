@@ -905,6 +905,13 @@ export const MIGRATIONS: string[] = [
     OR (kind = 'entry_change_notice' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND entry_change_id IS NOT NULL AND ref = entry_change_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL)
     OR (kind = 'guardian_invitation' AND organization_id IS NULL AND guardian_invitation_id IS NOT NULL AND ref = guardian_invitation_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL)
   );`,
+  // 60: a recipient hid an expired-invitation notice. The audit row stays; a later expiry is a new notice.
+  `CREATE TABLE expired_invitation_dismissals (
+    account_id text NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    membership_change_id text NOT NULL REFERENCES membership_changes(id) ON DELETE CASCADE,
+    dismissed_at timestamptz NOT NULL,
+    PRIMARY KEY (account_id, membership_change_id)
+  );`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

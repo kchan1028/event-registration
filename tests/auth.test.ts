@@ -483,6 +483,32 @@ describe('organizer roles', () => {
     expect((await call(late, 'GET', '/api/rider/expired-invitations')).json()).toEqual([]);
   });
 
+  it('lets only the recipient dismiss an expired-invitation notice, without granting a role', async () => {
+    const DAY = 86_400_000;
+    let now = new Date('2027-03-01T18:00:00Z');
+    const { app } = await testApp({ auth: fakeAuth(), now: () => now });
+    const call = (email: string, method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(email), payload });
+    const org = (await call(OWNER, 'POST', '/api/organizations', { name: 'Valley Velo' })).json() as { id: string };
+    const late = 'dismiss@valley.test';
+    await call(OWNER, 'POST', `/api/organizations/${org.id}/members`, { email: late, role: 'finance' });
+    now = new Date(now.getTime() + (INVITATION_DAYS + 1) * DAY);
+    const notices = (await call(late, 'GET', '/api/rider/expired-invitations')).json() as { id: string }[];
+    expect(notices).toHaveLength(1);
+    const dismissUrl = `/api/rider/expired-invitations/${notices[0].id}/dismiss`;
+    // Another account cannot hide someone else's notice.
+    expect((await call(OWNER, 'POST', dismissUrl)).statusCode).toBe(404);
+    expect((await call(late, 'GET', '/api/rider/expired-invitations')).json()).toHaveLength(1);
+    const dismissed = await call(late, 'POST', dismissUrl);
+    expect(dismissed.statusCode, dismissed.body).toBe(200);
+    expect(dismissed.json()).toEqual([]);
+    expect((await call(late, 'GET', '/api/rider/expired-invitations')).json()).toEqual([]);
+    expect((await call(late, 'POST', dismissUrl)).statusCode).toBe(404);
+    // Dismissing grants nothing and keeps the audit history.
+    expect(((await call(late, 'GET', '/api/me')).json() as { memberships: unknown[] }).memberships).toEqual([]);
+    const history = (await call(OWNER, 'GET', `/api/organizations/${org.id}/members`)).json() as { history: { action: string; email: string }[] };
+    expect(history.history.filter((row) => row.email === late).map((row) => row.action)).toContain('invitation_expired');
+  });
+
   it('emails an invitation through the configured sender, records failures, and never emails for a seed script', async () => {
     const sent: { to: string; subject: string; text: string }[] = [];
     let fail = false;

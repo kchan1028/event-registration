@@ -695,12 +695,25 @@ export function createAccess(db: Db, provider: AuthProvider, clock: () => Date, 
        FROM (SELECT DISTINCT ON (organization_id, role) id, organization_id, role, action, created_at
          FROM membership_changes WHERE email = $1 ORDER BY organization_id, role, created_at DESC, seq DESC) c
        JOIN organizations o ON o.id = c.organization_id
-       WHERE c.action = 'invitation_expired' ORDER BY c.created_at DESC, c.id`,
-      [account.email.toLowerCase()],
+       WHERE c.action = 'invitation_expired'
+         AND NOT EXISTS (SELECT 1 FROM expired_invitation_dismissals d WHERE d.account_id = $2 AND d.membership_change_id = c.id)
+       ORDER BY c.created_at DESC, c.id`,
+      [account.email.toLowerCase(), account.id],
     );
   }
 
-  return { accountFor, requireOrg, requireEvent, requireEventUntilSaved, requireOrderAccess, memberships, grant, listMembers, addMember, retryInvitation, sendWithoutExtending, allowInvitation, removeMember, cancelInvitation, transferOwnership, expiredInvitations };
+  /** Hides one of the caller's own expired-invitation notices. It grants nothing and leaves the audit history unchanged. */
+  async function dismissExpiredInvitation(account: Account, noticeId: string): Promise<ExpiredInvitationNotice[]> {
+    const current = await expiredInvitations(account);
+    if (!current.some((notice) => notice.id === noticeId)) throw new HttpError(404, 'That notice is not on your list.');
+    await db.run(
+      'INSERT INTO expired_invitation_dismissals (account_id, membership_change_id, dismissed_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+      [account.id, noticeId, nowIso()],
+    );
+    return expiredInvitations(account);
+  }
+
+  return { accountFor, requireOrg, requireEvent, requireEventUntilSaved, requireOrderAccess, memberships, grant, listMembers, addMember, retryInvitation, sendWithoutExtending, allowInvitation, removeMember, cancelInvitation, transferOwnership, expiredInvitations, dismissExpiredInvitation };
 }
 
 export type Access = ReturnType<typeof createAccess>;
