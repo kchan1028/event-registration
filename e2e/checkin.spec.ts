@@ -282,9 +282,11 @@ test('a paid rider can receive a bib only on a day they entered', async ({ page 
   } });
   expect(reservation.status()).toBe(201);
   const order = await reservation.json();
-  expect((await api.post(`/api/orders/${order.id}/payment`, {
-    data: { attemptId: 'wrong-day-payment', outcome: 'success' },
-  })).ok()).toBe(true);
+  // Payment attempt ids are unique across orders, so tie this one to the order to keep repeated runs independent.
+  const paid = await api.post(`/api/orders/${order.id}/payment`, {
+    data: { attemptId: `wrong-day-payment-${order.id}`, outcome: 'success' },
+  });
+  expect(paid.ok(), await paid.text()).toBe(true);
   expect((await api.post(`/api/order-entries/${order.entries[0].id}/license-review`, {
     data: { note: 'Fictional license reviewed for race-day rehearsal' },
   })).ok()).toBe(true);
