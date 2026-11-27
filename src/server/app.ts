@@ -834,6 +834,9 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     const body = z.object({
       clientRequestId: z.string().min(8).max(128),
       reason: z.string().trim().min(3, 'Write why you want to withdraw.').max(300),
+      // What the rider was shown; a changed policy amount is refused so they can review it.
+      expectedReturnAs: z.enum(['cash', 'credit', 'rider_choice']).nullable(),
+      expectedAmountCents: z.number().int().nonnegative().nullable(),
     }).parse(req.body);
     reply.code(201);
     return withdrawalRequests.request(id, account.id, body);

@@ -10,7 +10,8 @@ const RIDER = { firstName: 'Pat', lastName: 'Demo', email: 'pat.withdraw@example
 const RIDER_EMAIL = 'pat.withdraw@example.test';
 
 async function setup() {
-  const { app } = await testApp({ now: () => new Date('2027-03-01T18:00:00Z'), holdMinutes: 10 });
+  let now = new Date('2027-03-01T18:00:00Z');
+  const { app } = await testApp({ now: () => now, holdMinutes: 10 });
   const { eventId, organizationId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json<{ eventId: string; organizationId: string }>();
   await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const ev = (await app.inject({ url: `/api/events/${eventId}` })).json() as { config: EventConfig };
@@ -25,11 +26,19 @@ async function setup() {
   const paid = await app.inject({ method: 'POST', url: `/api/orders/${orderId}/payment`, headers: rider, payload: { attemptId: `withdraw-pay-${orderId}`, outcome: 'success' } });
   expect(paid.statusCode, paid.body).toBe(200);
   const entryId = paid.json<{ entries: { id: string }[] }>().entries[0].id;
-  const ask = (reason: string, clientRequestId = 'withdraw-request-0001', who: Record<string, string> = rider) => app.inject({
-    method: 'POST', url: `/api/rider/order-entries/${entryId}/withdrawal-requests`, headers: who, payload: { clientRequestId, reason },
-  });
+  // The rider sends back what the preview showed them.
+  const shown = async () => {
+    const entitlement = (await app.inject({ url: `/api/rider/order-entries/${entryId}/withdrawal`, headers: rider })).json<{ preview: { entitlement: { returnAs: string; amountCents: number } | null } }>().preview.entitlement;
+    return { expectedReturnAs: entitlement?.returnAs ?? null, expectedAmountCents: entitlement?.amountCents ?? null };
+  };
+  let expected: { expectedReturnAs: string | null; expectedAmountCents: number | null } | null = null;
+  const ask = async (reason: string, clientRequestId = 'withdraw-request-0001', who: Record<string, string> = rider) => {
+    expected ??= await shown();
+    return app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/withdrawal-requests`, headers: who, payload: { clientRequestId, reason, ...expected } });
+  };
+  const setNow = (iso: string) => { now = new Date(iso); expected = null; };
   const entryStatus = async () => (await app.inject({ url: `/api/orders/${orderId}` })).json<{ entries: { id: string; status: string }[] }>().entries.find((e) => e.id === entryId)!.status;
-  return { app, eventId, organizationId, orderId, entryId, rider, ask, entryStatus, category };
+  return { app, eventId, organizationId, orderId, entryId, rider, ask, entryStatus, category, shown, setNow, ev };
 }
 
 describe('rider withdrawal requests', () => {
@@ -64,6 +73,33 @@ describe('rider withdrawal requests', () => {
     expect((await app.inject({ method: 'POST', url: `${listUrl}/${first.json().id}/approve`, headers: as(volunteer) })).statusCode).toBe(403);
     const reread = await app.inject({ url: `/api/rider/order-entries/${entryId}/withdrawal`, headers: rider });
     expect(reread.json().openRequest).toMatchObject({ id: first.json().id, status: 'open' });
+  });
+
+  it('refuses a request whose policy amount changed after the rider looked, and an unpaid entry has no preview', async () => {
+    const { app, entryId, rider, shown, setNow, eventId, ev, category } = await setup();
+    const before = await shown();
+    expect(before).toEqual({ expectedReturnAs: 'cash', expectedAmountCents: expect.any(Number) });
+    expect(before.expectedAmountCents).toBeGreaterThan(0);
+    // The full-refund step ends 7 days before the first race day; the rider then submits what they saw earlier.
+    setNow('2027-04-20T18:00:00Z');
+    const stale = await app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/withdrawal-requests`, headers: rider, payload: { clientRequestId: 'withdraw-request-stale', reason: 'Saw a refund earlier', ...before } });
+    expect(stale.statusCode, stale.body).toBe(409);
+    expect(stale.json().error).toContain('has changed since you looked');
+    const after = await shown();
+    expect(after).toEqual({ expectedReturnAs: 'cash', expectedAmountCents: 0 });
+    const fresh = await app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/withdrawal-requests`, headers: rider, payload: { clientRequestId: 'withdraw-request-fresh', reason: 'Withdrawing anyway', ...after } });
+    expect(fresh.statusCode, fresh.body).toBe(201);
+    expect(fresh.json().policy.entitlement).toMatchObject({ percent: 0, amountCents: 0 });
+
+    // An unpaid reservation has no withdrawal preview.
+    const unpaidRider = as('unpaid.withdraw@example.test');
+    const held = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, headers: unpaidRider, payload: {
+      clientRequestId: 'withdraw-unpaid-xxxx', categoryIds: [category.id], rider: { ...RIDER, email: 'unpaid.withdraw@example.test', licenseNumber: 'DEMO-902' },
+      waiver: { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Demo', signerRole: 'rider' },
+    } });
+    expect(held.statusCode, held.body).toBe(201);
+    const heldEntry = held.json<{ entries: { id: string }[] }>().entries[0].id;
+    expect((await app.inject({ url: `/api/rider/order-entries/${heldEntry}/withdrawal`, headers: unpaidRider })).statusCode).toBe(409);
   });
 
   it('approving withdraws the entry with a change record and no refund; a decided request cannot be decided again', async () => {

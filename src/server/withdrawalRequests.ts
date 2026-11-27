@@ -12,13 +12,15 @@ import { eventLock, HttpError, type Repo } from './repo';
  * withdrawal runs) or declines with a reason. Nothing here refunds: a refund stays a separate finance step.
  */
 
+export type WithdrawalReturn = 'cash' | 'credit' | 'rider_choice';
+
 export interface WithdrawalPolicyPreview {
   entryId: string;
   categoryName: string;
   amountPaidCents: number;
   onDate: string;
   /** Null when the order was sold without structured refund rules. */
-  entitlement: { returnAs: 'cash' | 'credit' | 'rider_choice'; percent: number; amountCents: number } | null;
+  entitlement: { returnAs: WithdrawalReturn; percent: number; amountCents: number } | null;
 }
 
 export interface WithdrawalRequest {
@@ -72,9 +74,10 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
     return e;
   }
 
-  /** What the accepted policy would return for this one entry today. Read-only; reserves nothing. */
+  /** What the accepted policy would return for this one paid, active entry today. Read-only; reserves nothing. */
   async function preview(entryId: string): Promise<WithdrawalPolicyPreview> {
     const e = await facts(entryId);
+    if (e.order_status !== 'confirmed' || e.entry_status !== 'confirmed') throw new HttpError(409, 'Only a paid, active entry can be withdrawn.');
     const config = await repo.getVersion(e.event_id, e.published_version);
     const amountPaidCents = paidLine(e.quote_json, e)?.totalCents ?? 0;
     const onDate = todayIn(config.event.timeZone, clock());
@@ -104,7 +107,11 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
     },
 
     /** A rider asks to withdraw a paid, active entry. One open request per entry; an exact retry returns the same request. */
-    async request(entryId: string, accountId: string, body: { clientRequestId: string; reason: string }): Promise<WithdrawalRequest> {
+    async request(
+      entryId: string,
+      accountId: string,
+      body: { clientRequestId: string; reason: string; expectedReturnAs: WithdrawalReturn | null; expectedAmountCents: number | null },
+    ): Promise<WithdrawalRequest> {
       return db.transaction(async () => {
         const { event_id } = await facts(entryId);
         await db.lock(eventLock(event_id));
@@ -118,11 +125,16 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
         if (await db.get(`SELECT 1 FROM withdrawal_requests WHERE entry_id = $1 AND status = 'open'`, [entryId])) {
           throw new HttpError(409, 'A withdrawal request for this entry is already waiting for the organizer.');
         }
+        // The rider confirms the amount they were shown; if the policy step changed since (a deadline passed), they review it again.
+        const policy = await preview(entryId);
+        if ((policy.entitlement?.returnAs ?? null) !== body.expectedReturnAs || (policy.entitlement?.amountCents ?? null) !== body.expectedAmountCents) {
+          throw new HttpError(409, 'What withdrawing returns has changed since you looked. Review the new amount and send your request again.');
+        }
         const id = newId('wdr');
         await db.run(
           `INSERT INTO withdrawal_requests (id, event_id, order_id, entry_id, requested_by, client_request_id, reason, policy_json, status, created_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open', $9)`,
-          [id, e.event_id, e.order_id, entryId, accountId, body.clientRequestId, body.reason, JSON.stringify(await preview(entryId)), clock().toISOString()],
+          [id, e.event_id, e.order_id, entryId, accountId, body.clientRequestId, body.reason, JSON.stringify(policy), clock().toISOString()],
         );
         return toView(await one(id));
       });
