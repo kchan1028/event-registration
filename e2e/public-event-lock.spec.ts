@@ -1,7 +1,8 @@
 // @covers src/server/orders.ts
 // @covers src/server/db.ts
 import pg from 'pg';
-import { expect, test, type APIResponse, type Page } from './fixtures';
+import type { APIResponse } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import { publishReviewed } from './support/publish';
 
 const EVENT_NAME = 'Example Valley Omnium (demonstration)';
