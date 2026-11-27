@@ -91,7 +91,9 @@ export function OrderRow({ order, categories, canManage, canRefund, onChange, pa
         ))}
       </ul>
       <ul className="order__entries">
-        {order.entries.flatMap((e) => e.changes.map((c, i) => <ChangeLine key={`${e.id}-${i}`} change={c} />))}
+        {order.entries.flatMap((e) => e.changes.map((c) => (
+          <ChangeLine key={`${e.id}-${c.id}`} change={c} eventId={order.eventId} canManage={canManage} sessionEmail={session.email} />
+        )))}
       </ul>
     </li>
   );
@@ -247,7 +249,7 @@ function RiderCorrections({ order, canManage, onChange }: { order: OrderView; ca
 }
 
 /** One logged transfer or withdrawal, with the money difference stated plainly. Neither one moves money by itself. */
-function ChangeLine({ change: c }: { change: EntryView['changes'][number] }) {
+function ChangeLine({ change: c, eventId, canManage, sessionEmail }: { change: EntryView['changes'][number]; eventId: string; canManage: boolean; sessionEmail: string | null }) {
   const money =
     c.kind === 'withdraw'
       ? `Paid ${formatCents(c.amountPaidCents)} for this entry. A withdrawal does not refund by itself: use Refund on this order to return money.`
@@ -263,6 +265,9 @@ function ChangeLine({ change: c }: { change: EntryView['changes'][number] }) {
         <br />
         {money}
       </span>
+      {canManage && (
+        <RiderEmailDeliveryPanel key={`entry-change:${sessionEmail?.toLowerCase()}:${c.id}`} eventId={eventId} recordId={c.id} kind="entryChange" />
+      )}
     </li>
   );
 }
