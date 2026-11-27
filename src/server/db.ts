@@ -27,6 +27,12 @@ export interface Db {
    * event's lock first, so two requests for the last place give exactly one entry.
    */
   lock(key: string): Promise<void>;
+  /**
+   * A shared lock on the same key for read-only transactions: readers do not wait for each other,
+   * but still wait for, and hold off, a writer's `lock`. Never take `lock` on the same key later
+   * in a transaction that took this one; two such transactions would deadlock.
+   */
+  lockShared(key: string): Promise<void>;
   /** Applies pending migrations once per process; safe when several instances start together. */
   migrate(): Promise<void>;
   close(): Promise<void>;
@@ -1043,6 +1049,11 @@ export function openDb(connectionString: string, onPoolError?: (err: Error) => v
     async lock(key: string) {
       if (!tx.getStore()) throw new Error('db.lock() must be called inside a transaction.');
       await query('SELECT pg_advisory_xact_lock(hashtext($1))', [key]);
+    },
+
+    async lockShared(key: string) {
+      if (!tx.getStore()) throw new Error('db.lockShared() must be called inside a transaction.');
+      await query('SELECT pg_advisory_xact_lock_shared(hashtext($1))', [key]);
     },
 
     migrate() {
