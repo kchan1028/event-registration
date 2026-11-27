@@ -37,7 +37,12 @@ test('an organizer approves one rider withdrawal request and declines another wi
   const section = page.getByRole('region', { name: /Withdrawal requests/ });
   await expect(section.getByRole('heading', { name: 'Withdrawal requests (2)' })).toBeVisible();
   await expect(section).toContainText('Reason: Injured, cannot race');
-  await expect(section).toContainText('the policy returned');
+  // The policy line follows the amount the policy gave on the day the rider asked (it is zero after the refund deadline).
+  const [asked] = (await (await page.request.get(`${eventUrl}/withdrawal-requests`)).json()).filter((r: { orderId: string }) => r.orderId === robin.orderId);
+  const amount = asked.policy.entitlement?.amountCents ?? 0;
+  await expect(section).toContainText(amount === 0
+    ? 'The policy returned nothing'
+    : `the policy returned $${(amount / 100).toFixed(2).replace(/\.00$/, '')} (${asked.policy.entitlement.percent}%) as a refund`);
   expect((await new AxeBuilder({ page }).include('[aria-labelledby="withdrawal-requests-title"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
 
   // Approve needs a second, explicit step that says no refund is sent.
