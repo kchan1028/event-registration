@@ -4,6 +4,7 @@ import type { GuardianInvitation } from '../src/shared/juniors';
 import type { EventConfig } from '../src/shared/schema';
 import { as, fakeAuth } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
+import type { EmailSender } from '../src/server/email';
 import { openDb } from '../src/server/db';
 import { createJuniors } from '../src/server/juniors';
 import { publishReviewed } from './support/publish';
@@ -18,9 +19,9 @@ const JUNIOR = 'sam@family-a.test';
 
 type Method = 'GET' | 'POST';
 
-async function setup(now?: () => Date) {
+async function setup(now?: () => Date, email?: EmailSender) {
   const databaseUrl = await testDatabaseUrl();
-  const { app } = await testApp({ auth: fakeAuth(), databaseUrl, now });
+  const { app } = await testApp({ auth: fakeAuth(), databaseUrl, now, email });
   const call = (who: string, method: Method, url: string, payload?: object) => app.inject({ method, url, headers: as(who), payload });
   const { eventId } = (await call(ORGANIZER, 'POST', '/api/demo')).json() as { eventId: string };
   await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true }, as(ORGANIZER));
@@ -187,7 +188,7 @@ describe('guardian and junior access', () => {
 
 
 describe('guardian invitation records without access grants', () => {
-  it('normalizes a pending invitation, preserves replay identity and grants no account access or email', async () => {
+  it('records one invitation email, preserves replay identity and grants no account access', async () => {
     let time = new Date('2027-01-01T12:00:00Z');
     const { call, registerJunior, databaseUrl } = await setup(() => time);
     const order = await registerJunior(PARENT, 'Sam');
@@ -209,7 +210,39 @@ describe('guardian invitation records without access grants', () => {
     const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();
     try {
       expect((await client.query(`SELECT id FROM junior_guardians`)).rowCount).toBe(1);
-      expect((await client.query(`SELECT id FROM email_messages`)).rowCount).toBe(0);
+      const recorded = (await client.query(`SELECT kind, organization_id, ref, guardian_invitation_id, to_email, subject, body_text, status, from_email FROM email_messages`)).rows;
+      expect(recorded).toEqual([{
+        kind: 'guardian_invitation', organization_id: null, ref: invite.id, guardian_invitation_id: invite.id,
+        to_email: OTHER_PARENT, subject: 'You are invited to CycleReg', status: 'recorded', from_email: null,
+        body_text: `You have an invitation on CycleReg. It ends at ${invite.expiresAt}. Sign in with this address and open My registrations to accept it.`,
+      }]);
+      const replaced = await call(PARENT, 'POST', url, { email: 'second.guardian@example.test' });
+      expect(replaced.statusCode, replaced.body).toBe(200);
+      const [open] = replaced.json() as GuardianInvitation[];
+      const both = (await client.query<{ ref: string; to_email: string; body_text: string }>(`SELECT ref, to_email, body_text FROM email_messages ORDER BY created_at, seq`)).rows;
+      expect(both.map((row) => [row.ref, row.to_email])).toEqual([[invite.id, OTHER_PARENT], [open.id, 'second.guardian@example.test']]);
+      for (const row of both) {
+        expect(row.body_text).not.toContain('Sam');
+        expect(row.body_text).not.toContain('Pat');
+        expect(row.body_text).not.toContain(PARENT);
+        expect(row.body_text).not.toContain(order);
+        expect(row.body_text).not.toContain('@');
+      }
+    } finally { await client.end(); }
+  });
+
+  it('saves the test sender on a guardian invitation and does not send it', async () => {
+    let sent = 0;
+    const sender: EmailSender = { mode: 'resend', from: 'sender@example.test', async send() { sent += 1; return 're_unused'; } };
+    const { call, registerJunior, databaseUrl } = await setup(undefined, sender);
+    await registerJunior(PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    const res = await call(PARENT, 'POST', `/api/rider/juniors/${sam.id}/guardian-invitations`, { email: OTHER_PARENT });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(sent).toBe(0);
+    const client = new pg.Client({ connectionString: databaseUrl }); await client.connect();
+    try {
+      expect((await client.query(`SELECT status, from_email FROM email_messages`)).rows).toEqual([{ status: 'recorded', from_email: 'sender@example.test' }]);
     } finally { await client.end(); }
   });
 

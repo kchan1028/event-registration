@@ -161,6 +161,21 @@ export function refundNoticeText(orderNumber: string, amount: string, isDemo: bo
     : `Refund ${orderNumber} for ${amount}. Sign in and open My registrations to see it.`;
 }
 
+/** Expiry only. No junior name, order, or contact fields. */
+export function guardianInvitationText(expiresAt: string): string {
+  return `You have an invitation on CycleReg. It ends at ${expiresAt}. Sign in with this address and open My registrations to accept it.`;
+}
+
+/** Called in the transaction that creates a guardian invitation. A null sender stays unsent. */
+export async function recordGuardianInvitation(db: Db, invitationId: string, email: string, expiresAt: string, recordedAt: string, senderAddress?: string) {
+  await db.run(
+    `INSERT INTO email_messages (id, organization_id, kind, ref, guardian_invitation_id, to_email, subject, body_text, status, created_at, from_email, keyed)
+     VALUES ($1, NULL, 'guardian_invitation', $2, $2, $3, $4, $5, 'recorded', $6, $7, true)
+     ON CONFLICT (guardian_invitation_id) DO NOTHING`,
+    [newId('eml'), invitationId, email, 'You are invited to CycleReg', guardianInvitationText(expiresAt), recordedAt, senderAddress ?? null],
+  );
+}
+
 /** Order number and the category change only. The organizer's reason stays out of the message. */
 export function entryChangeNoticeText(orderNumber: string, summary: string, isDemo: boolean): string {
   return isDemo

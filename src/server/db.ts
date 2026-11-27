@@ -885,6 +885,20 @@ export const MIGRATIONS: string[] = [
     OR (kind = 'refund_notice' AND refund_id IS NOT NULL AND ref = refund_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND entry_change_id IS NULL)
     OR (kind = 'entry_change_notice' AND entry_change_id IS NOT NULL AND ref = entry_change_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL)
   );`,
+  // 59: one recorded guardian invitation email, with no organization. Sending stays a later step.
+  `ALTER TABLE email_messages ADD COLUMN guardian_invitation_id text UNIQUE REFERENCES junior_guardian_invitations(id) ON DELETE CASCADE;
+  ALTER TABLE email_messages ALTER COLUMN organization_id DROP NOT NULL;
+  ALTER TABLE email_messages DROP CONSTRAINT email_messages_kind_check;
+  ALTER TABLE email_messages ADD CONSTRAINT email_messages_kind_check CHECK (
+    (kind = 'organizer_invitation' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL)
+    OR (kind = 'registration_confirmation' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND order_id IS NOT NULL AND ref = order_id AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL)
+    OR (kind = 'registration_receipt' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND order_id IS NOT NULL AND ref = order_id AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL)
+    OR (kind = 'waitlist_offer' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND waitlist_entry_id IS NOT NULL AND ref = waitlist_entry_id AND order_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL)
+    OR (kind = 'waitlist_expired' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND waitlist_expiry_entry_id IS NOT NULL AND ref = waitlist_expiry_entry_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL)
+    OR (kind = 'refund_notice' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND refund_id IS NOT NULL AND ref = refund_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND entry_change_id IS NULL)
+    OR (kind = 'entry_change_notice' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND entry_change_id IS NOT NULL AND ref = entry_change_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL)
+    OR (kind = 'guardian_invitation' AND organization_id IS NULL AND guardian_invitation_id IS NOT NULL AND ref = guardian_invitation_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL)
+  );`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

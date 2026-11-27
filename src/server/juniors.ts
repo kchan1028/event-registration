@@ -17,7 +17,7 @@ const nameKey = (firstName: string, lastName: string) => `${normalizeText(firstN
 export const FAMILY_LOCK = 'junior-access';
 type Profile = { id: string; name_key: string; first_name: string; last_name: string; viewer_email: string | null };
 
-export function createJuniors(db: Db, clock: () => Date) {
+export function createJuniors(db: Db, clock: () => Date, senderAddress?: string) {
   const at = () => clock().toISOString();
   async function requireGuardian(accountId: string, profileId: string) {
     const profile = await db.get<Profile>(`SELECT j.id,j.name_key,j.first_name,j.last_name,j.viewer_email FROM junior_profiles j WHERE j.id = $1 AND ${juniorManagerSql('$2')}`, [profileId, accountId]);
@@ -138,7 +138,12 @@ export function createJuniors(db: Db, clock: () => Date) {
         const current = await db.get<{ email: string; expires_at: string }>(`SELECT email,expires_at FROM junior_guardian_invitations WHERE junior_profile_id = $1 AND cancelled_at IS NULL AND accepted_at IS NULL`, [profileId]);
         if (current?.email === normalized && current.expires_at > now.toISOString()) return invitationRows(profileId);
         await cancelInvitations(profileId, account.id, 'replaced', null);
-        await db.run(`INSERT INTO junior_guardian_invitations(id,junior_profile_id,email,invited_by,created_at,expires_at) VALUES ($1,$2,$3,$4,$5,$6)`, [newId('jinv'), profileId, normalized, account.id, now.toISOString(), new Date(now.getTime() + INVITATION_DAYS * 86_400_000).toISOString()]);
+        const invitationId = newId('jinv');
+        const expiresAt = new Date(now.getTime() + INVITATION_DAYS * 86_400_000).toISOString();
+        await db.run(`INSERT INTO junior_guardian_invitations(id,junior_profile_id,email,invited_by,created_at,expires_at) VALUES ($1,$2,$3,$4,$5,$6)`, [invitationId, profileId, normalized, account.id, now.toISOString(), expiresAt]);
+        // email.ts already imports this module, so load the recorder when the invitation is saved.
+        const { recordGuardianInvitation } = await import('./email');
+        await recordGuardianInvitation(db, invitationId, normalized, expiresAt, now.toISOString(), senderAddress);
         return invitationRows(profileId);
       });
     },
