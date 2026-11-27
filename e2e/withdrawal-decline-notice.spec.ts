@@ -90,11 +90,12 @@ async function ask(page: Page, eventId: string, config: { categories: { id: stri
   return { email, orderId: order.id as string, entryId, requestId: request.id as string, categoryName: preview.categoryName as string };
 }
 
-async function declineNotices(requestId: string) {
+/** Every decline notice for this rider's address, so a wrongly linked or unlinked notice is still counted. */
+async function declineNotices(email: string) {
   return query<NoticeRow>(
     `SELECT kind, to_email, subject, body_text, status, ref, from_email, withdrawal_request_id, organization_id
-     FROM email_messages WHERE withdrawal_request_id = $1`,
-    [requestId],
+     FROM email_messages WHERE kind = 'withdrawal_decline_notice' AND lower(to_email) = lower($1)`,
+    [email],
   );
 }
 
@@ -117,7 +118,7 @@ test('declining a kept entry records one notice for the rider and leaves the org
   expect(decision).toMatchObject({ id: rider.requestId, status: 'declined', decisionReason: ORGANIZER_REASON });
   expect((await (await page.request.get(`/api/orders/${rider.orderId}`)).json()).entries[0].status).toBe('confirmed');
 
-  const notices = await declineNotices(rider.requestId);
+  const notices = await declineNotices(rider.email);
   expect(notices).toEqual([expect.objectContaining({
     kind: 'withdrawal_decline_notice',
     to_email: rider.email,
@@ -135,7 +136,7 @@ test('declining a kept entry records one notice for the rider and leaves the org
 
   // A second decline does not write another notice.
   expect((await page.request.post(`${eventUrl}/withdrawal-requests/${rider.requestId}/decline`, { data: { reason: 'Said again' } })).status()).toBe(409);
-  expect(await declineNotices(rider.requestId)).toHaveLength(1);
+  expect(await declineNotices(rider.email)).toHaveLength(1);
 });
 
 test('declining after the organizer already withdrew the entry does not say the entry was kept', { tag: '@smoke' }, async ({ page }) => {
@@ -144,7 +145,7 @@ test('declining after the organizer already withdrew the entry does not say the 
   expect((await page.request.post(`/api/order-entries/${rider.entryId}/withdraw`, { data: { reason: 'Organizer withdrew first' } })).status()).toBe(200);
   const declined = await page.request.post(`${eventUrl}/withdrawal-requests/${rider.requestId}/decline`, { data: { reason: ORGANIZER_REASON } });
   expect(declined.status(), await declined.text()).toBe(200);
-  expect(await declineNotices(rider.requestId)).toEqual([]);
+  expect(await declineNotices(rider.email)).toEqual([]);
   const changes = await entryChangeNotices(rider.entryId);
   expect(changes).toHaveLength(1);
   expect(changes[0].to_email).toBe(rider.email);
@@ -160,7 +161,7 @@ test('declining after the entry moved to another category does not say it was ke
   const declined = await page.request.post(`${eventUrl}/withdrawal-requests/${rider.requestId}/decline`, { data: { reason: ORGANIZER_REASON } });
   expect(declined.status(), await declined.text()).toBe(200);
   expect((await declined.json()).status).toBe('declined');
-  expect(await declineNotices(rider.requestId)).toEqual([]);
+  expect(await declineNotices(rider.email)).toEqual([]);
   expect(await entryChangeNotices(rider.entryId)).toHaveLength(1);
   expect((await (await page.request.get(`/api/orders/${rider.orderId}`)).json()).entries[0]).toMatchObject({ status: 'confirmed', categoryId: other.id });
 });
@@ -171,7 +172,7 @@ test('approving a withdrawal request records the entry-change notice, not a decl
   const approved = await page.request.post(`${eventUrl}/withdrawal-requests/${rider.requestId}/approve`);
   expect(approved.status(), await approved.text()).toBe(200);
   expect((await approved.json()).status).toBe('approved');
-  expect(await declineNotices(rider.requestId)).toEqual([]);
+  expect(await declineNotices(rider.email)).toEqual([]);
   expect(await entryChangeNotices(rider.entryId)).toHaveLength(1);
   expect((await (await page.request.get(`/api/orders/${rider.orderId}`)).json()).entries[0].status).toBe('withdrawn');
 });
@@ -204,7 +205,7 @@ test('a live event uses the live decline wording', async ({ page }) => {
   const rider = await ask(page, draft.id, live.config, 'Nora');
   const declined = await page.request.post(`${eventUrl}/withdrawal-requests/${rider.requestId}/decline`, { data: { reason: ORGANIZER_REASON } });
   expect(declined.status(), await declined.text()).toBe(200);
-  const notices = await declineNotices(rider.requestId);
+  const notices = await declineNotices(rider.email);
   expect(notices).toHaveLength(1);
   expect(notices[0].body_text).toBe(declineNoticeText(rider.orderId, rider.categoryName, false));
   expect(notices[0].body_text).not.toContain('Demo registration');
