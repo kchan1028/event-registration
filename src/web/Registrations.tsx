@@ -10,6 +10,7 @@ import { Coupons } from './Coupons';
 import { refundedCents } from './format';
 import { CancellationPreview } from './registrations/CancellationPreview';
 import { ChangesToResolve } from './registrations/ChangesToResolve';
+import { WithdrawalRequests } from './registrations/WithdrawalRequests';
 import { OrderRow } from './registrations/OrderRow';
 import { ParticipantCount } from './registrations/ParticipantCount';
 import { OrganizerParticipantHistory } from './registrations/OrganizerParticipantHistory';
@@ -136,6 +137,7 @@ export function Registrations({ draft }: { draft: Draft }) {
           </p>
         </div>
       )}
+      {canManage && <WithdrawalRequests eventId={eventId} refreshKey={orders} onChanged={reload} />}
       {canManage && <ChangesToResolve eventId={eventId} refreshKey={orders} />}
 
       {canManage && <SameRider eventId={eventId} onChanged={reload} />}
