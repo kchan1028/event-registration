@@ -41,17 +41,25 @@ describe('public event read lock', () => {
   });
 
   it('waits for a writer holding the event lock and answers once it commits', async () => {
-    const { hold, read, waiters, close } = await setup();
+    const { other, hold, read, waiters, close } = await setup();
     try {
       const release = await hold('exclusive');
       let answered = false;
       const pending = read().then((response) => { answered = true; return response; });
-      // The read is queued on the held event lock in PostgreSQL, not merely slow.
-      await expect.poll(waiters).toBe(1);
-      expect(answered).toBe(false);
-      await release();
-      const response = await pending;
-      expect(response.statusCode, response.body).toBe(200);
+      // Handled now so a rejection while polling is not reported as unhandled; the test awaits it below.
+      pending.catch(() => undefined);
+      try {
+        // The read is queued on the held event lock in PostgreSQL, not merely slow.
+        await expect.poll(waiters).toBe(1);
+        expect(answered).toBe(false);
+        await release();
+        const response = await pending;
+        expect(response.statusCode, response.body).toBe(200);
+      } finally {
+        // Release the lock before waiting, so a failed assertion cannot leave the request stuck.
+        await other.query('ROLLBACK').catch(() => undefined);
+        await pending.catch(() => undefined);
+      }
     } finally {
       await close();
     }

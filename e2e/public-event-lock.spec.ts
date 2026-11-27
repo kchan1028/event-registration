@@ -104,6 +104,8 @@ test('public event read waits for a writer holding the event lock', async ({ pag
     answered = true;
     return response;
   });
+  // Handled now so a rejection while polling is not reported as unhandled; the test awaits it below.
+  pending.catch(() => undefined);
   try {
     // The read is queued on the held event lock in PostgreSQL, not merely slow.
     await expect.poll(() => advisoryWaiters(eventId)).toBe(1);
