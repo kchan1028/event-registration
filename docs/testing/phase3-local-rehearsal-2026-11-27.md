@@ -8,6 +8,8 @@ Environment: local Playwright, `playwright.rehearsal.config.ts`, loopback port 3
 
 A follow-up run of the race-day script the same day passed after the timer steps were extended. Application source was still `f0c36cf58d3c418a164cd18b9c72a382dacedb33`. Result: 1 passed.
 
+A second follow-up the same day added the bib-operations script. Application source: `b282e6bad7591cd4d16a2d83749a22b5a269cc13`. Result: 1 passed.
+
 ## Race-day desk
 
 Passed on the published demo weekend with fictional accounts (organizer, registration manager, two check-in volunteers, timer export):
@@ -26,6 +28,19 @@ Passed on the published demo weekend with fictional accounts (organizer, registr
 - On the follow-up run, the timer account downloaded the current CSV and the locked CSV for Alex Demo's race. The two files matched, with bib 100. The organizer then changed that checked-in bib to 150. The timer session showed the revision, the current CSV showed bib 150, and a repeat download of the locked CSV was byte-identical. Check-in and the finance ledger returned HTTP 403.
 
 Not rehearsed: physical bib stock, the paper desk contact sheet, a paper waiver, a physical camera, phone, or printer, and real sign-in delivery. Typed lookup was used. Camera emulation was not required for that path.
+
+## Bib ranges, repeated check-in and bulk allocation
+
+Passed on the published demo weekend with a registration manager and a check-in volunteer, each in their own session ([race-day check-in guide](../runbooks/race-day-check-in.md)):
+
+- With no bib range, the volunteer's issue was refused and nothing was recorded for the rider.
+- The lead saved a range of 100–100 in **Bib ranges**. The volunteer retried and issued bib 100.
+- The next rider was refused because every bib from 100 to 100 was in use, and nothing was recorded. The lead extended the range to 100–199, and the retry issued bib 101.
+- A third check-in was saved, but the response was dropped. The desk showed "Check-in could not be confirmed." and offered no issue button. A fresh lookup by check-in code showed bib 102 and no second issue.
+- Returning to each of the three riders showed the same bib, each with one history entry, and no two riders shared a bib.
+- The volunteer saw no **Assign bibs** control and the bulk preview API returned HTTP 403. The lead previewed and applied bib 103 to a paid rider who was not ready. That rider stayed not ready and not checked in, and the desk offered no issue.
+
+Not rehearsed: physical bib stock and recovering a handed-out bib. A refused overlapping batch and protected manual assignments stay with the local API tests.
 
 ## Walk-up registration and test kiosk
 
