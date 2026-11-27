@@ -101,7 +101,11 @@ test('@rehearsal shared kiosk: two checkouts, the idle warning, and sign-out at 
       await saved;
       await kiosk.clock.fastForward(4 * minute + 1_000);
       await expect(warning).toBeVisible();
-      await kiosk.clock.fastForward(minute);
+      // Two seconds before the five-minute deadline the session is still open.
+      await kiosk.clock.fastForward(minute - 3_000);
+      await expect(warning).toBeVisible();
+      await expect(start).toHaveCount(0);
+      await kiosk.clock.fastForward(3_000);
       await expect(start).toBeFocused();
       await expect(kiosk.getByRole('status')).toContainText('My registrations on your own device');
       await expect(kiosk.getByRole('heading', { name: 'Review your order' })).toHaveCount(0);
