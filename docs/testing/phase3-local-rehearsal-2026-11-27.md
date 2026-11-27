@@ -38,11 +38,11 @@ Not rehearsed: named-person acceptance, unaided operation, Clerk delivery, bank 
 
 ## Support coverage and freeze windows
 
-Passed on the published fictional criterium. The registration manager released an unpaid hold the rider asked for. A later paid order kept a race-week name correction with a reason and an audit line. A separate incoming session saw that registration.
+Passed on the published fictional criterium. The registration manager released an unpaid hold the rider asked for. A later paid order kept a name correction with a reason and an audit line. That correction used the session clock on November 27, 2026, outside both freeze windows below. A separate incoming session saw that registration.
 
 Recorded from the Harbor criterium case study: America/Los_Angeles, category registration opens 2027-01-01T09:00, first start 2027-04-17T09:00. The pre-opening freeze starts 48 hours before that opening. The race-week freeze starts 72 hours before that first start. Window end times are not assigned.
 
-Not rehearsed: alert paging, deputy paging, live routing, a delivered alert, and a freeze gate that holds a configuration change. Nobody was paged. Local health returned HTTP 200 during the run. HTTP 503 recovery is covered by `tests/health.test.ts` (6 passed on a disposable database the same day) and is not a hosted monitoring check.
+Not rehearsed: alert paging, deputy paging, live routing, a delivered alert, a freeze gate that holds a configuration change, and a name correction inside the race-week freeze. Nobody was paged. Local health returned HTTP 200 during the run. HTTP 503 recovery is covered by `tests/health.test.ts` (6 passed on a disposable database the same day) and is not a hosted monitoring check.
 
 ## Local logical restore
 

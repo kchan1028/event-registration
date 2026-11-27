@@ -75,13 +75,13 @@ test('@rehearsal walk-up registration and shared test kiosk', async ({ page, bro
 
     await test.step('Suggest races 1: Prepare race choices opens on the walk-up panel', async () => {
       await page.getByRole('button', { name: 'Prepare race choices' }).click();
-      await expect(page.getByRole('button', { name: 'Prepare race choices' })).toBeVisible();
+      await expect(page.getByRole('group', { name: 'Race choices for the selected day' })).toBeVisible();
       await shot(page, '06-choices');
     });
 
     testInfo.annotations.push({
       type: 'not-rehearsed',
-      description: 'Suggest races 2 and 3: sharing a suggestion QR with a second physical phone, and continuing an existing draft on that phone, were not rehearsed. The choices panel opened on the staff screen.',
+      description: 'Suggest races 2 and 3: sharing a suggestion QR with a second physical phone, and continuing an existing draft on that phone, were not rehearsed. The staff screen showed the race-choice fieldset.',
     });
 
     await test.step('Kiosk 1: copy the test kiosk address into a dedicated browser', async () => {

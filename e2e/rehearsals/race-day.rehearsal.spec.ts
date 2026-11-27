@@ -231,7 +231,6 @@ test('@rehearsal race-day desk, roster, exceptions, outage, shift and timer hand
       await shot(volunteer.page, 'walk-up');
     });
 
-    let printedBib = '';
     await test.step('Outage 1: prepare an unreviewed rider, a changed bib and one saved check-in', async () => {
       const gray = byName('Gray Demo');
       await lead.page.goto(`/#/events/${demo.eventId}/check-in`);
@@ -241,7 +240,6 @@ test('@rehearsal race-day desk, roster, exceptions, outage, shift and timer hand
       const leadDetail = lead.page.getByRole('region', { name: 'Rider check-in' });
       await leadDetail.getByRole('button', { name: 'Check in and issue next bib', exact: true }).click();
       await expect(leadDetail.locator('.ci-bib__number')).toHaveText('103');
-      printedBib = '103';
       const change = {
         mode: 'manual' as const,
         acknowledgeCheckedIn: true,
@@ -280,7 +278,6 @@ test('@rehearsal race-day desk, roster, exceptions, outage, shift and timer hand
       const current = detail.locator('.ci-bib__number');
       await expect(current).toBeVisible();
       await expect(current).toHaveText('140');
-      expect(printedBib).toBe('103');
       await shot(volunteer.page, 'outage-03-reconnected');
     });
 

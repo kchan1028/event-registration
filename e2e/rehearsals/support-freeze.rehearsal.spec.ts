@@ -122,7 +122,7 @@ test('@rehearsal support coverage and freeze windows use fictional roles', async
     }
   });
 
-  await test.step('Race-week correction: an authorized rider-level change keeps a reason and an audit line', async () => {
+  await test.step('Name correction: an authorized rider-level change keeps a reason and an audit line', async () => {
     await page.unroute('**/api/rider/events/*/orders');
     const retry = page.getByRole('button', { name: 'Retry reservation' });
     if (await retry.isVisible()) await retry.click();
@@ -144,10 +144,10 @@ test('@rehearsal support coverage and freeze windows use fictional roles', async
       await expect(order).toHaveCount(1);
       await order.getByRole('button', { name: 'Correct details for Alex Demo' }).click();
       await order.getByLabel('Last name').fill('Demos');
-      await order.getByLabel('Reason for the correction (required)').fill('Fictional race-week spelling correction');
+      await order.getByLabel('Reason for the correction (required)').fill('Fictional spelling correction');
       await order.getByRole('button', { name: 'Save correction' }).click();
       await expect(order.locator('.order__name')).toContainText('Alex Demos');
-      await expect(order.getByRole('list', { name: 'Corrections to Alex Demos' })).toContainText('Fictional race-week spelling correction');
+      await expect(order.getByRole('list', { name: 'Corrections to Alex Demos' })).toContainText('Fictional spelling correction');
       await shot(lead.page, '04-correction');
     } finally {
       await lead.close();
