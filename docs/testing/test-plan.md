@@ -216,7 +216,7 @@ Run `e2e/uncertain-invitation.spec.ts` for Team changes. A stopped invitation sh
 
 ### Guardian invitation records
 
-Run `tests/juniors.test.ts`, `tests/auth.test.ts`, `tests/orders.test.ts` and `tests/migrations.test.ts` for private invitation creation/list/cancellation, schema upgrade without inferred invitations, normalized address validation, exact expiry boundary, same-address concurrent replay without extending the period, concurrent replacement with one pending record, and cancellation replay not closing a replacement. Check household/viewer/organizer isolation, no access on recipient sign-in, one recorded guardian invitation that is not sent, and no extra grant, and source-profile merge cancellation/history preservation with the correcting actor. Recipient acceptance, removal and management screen coverage are described below. No real email-provider behavior is established.
+Run `tests/juniors.test.ts`, `tests/auth.test.ts`, `tests/orders.test.ts` and `tests/migrations.test.ts` for private invitation creation/list/cancellation, schema upgrade without inferred invitations, normalized address validation, exact expiry boundary, same-address concurrent replay without extending the period, concurrent replacement with one pending record, and cancellation replay not closing a replacement. Check household/viewer/organizer isolation, no access on recipient sign-in, one guardian invitation that test mode sends once while it is open and local mode does not send, and no extra grant, and source-profile merge cancellation/history preservation with the correcting actor. Recipient acceptance, removal and management screen coverage are described below. No real email-provider behavior is established.
 
 ### Explicit guardian acceptance and shared access
 

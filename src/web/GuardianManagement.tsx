@@ -94,7 +94,7 @@ export function GuardianManagement({ junior }: { junior: JuniorProfile }) {
       </div>
     </form>}
     {active && active.length < 2 && <form className="guardian-invitation" onSubmit={invite} aria-label={`Invite a guardian for ${junior.firstName}`}>
-      <p className="small">No invitation email is sent yet. Ask the invited person to sign in with this exact address and open My registrations to accept. A new address replaces any open invitation.</p>
+      <p className="small">The invited person still has to sign in with this exact address and open My registrations to accept. A new address replaces any open invitation.</p>
       {pending && <p className="small">Open invitation: {pending.email}. Expires {formatDateTime(pending.expiresAt)}.</p>}
       <Field label="Other guardian’s email" hint="Use their own sign-in address, not the junior’s viewer email.">
         {(id, description) => <input id={id} aria-describedby={description} className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required maxLength={254} disabled={actionsDisabled} />}

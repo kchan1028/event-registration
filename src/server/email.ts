@@ -166,7 +166,7 @@ export function guardianInvitationText(expiresAt: string): string {
   return `You have an invitation on CycleReg. It ends at ${expiresAt}. Sign in with this address and open My registrations to accept it.`;
 }
 
-/** Called in the transaction that creates a guardian invitation. A null sender stays unsent. */
+/** Called in the transaction that creates a guardian invitation. A null sender stays unsent. This insert does not send. */
 export async function recordGuardianInvitation(db: Db, invitationId: string, email: string, expiresAt: string, recordedAt: string, senderAddress?: string) {
   await db.run(
     `INSERT INTO email_messages (id, organization_id, kind, ref, guardian_invitation_id, to_email, subject, body_text, status, created_at, from_email, keyed)
@@ -342,7 +342,7 @@ const waitlistExpiryReady = `EXISTS (
 )`;
 
 export type OrganizerRiderEmailKind = 'registration_confirmation' | 'registration_receipt' | 'waitlist_offer' | 'refund_notice' | 'entry_change_notice';
-export type RiderEmailKind = OrganizerRiderEmailKind | 'waitlist_expired';
+export type RiderEmailKind = OrganizerRiderEmailKind | 'waitlist_expired' | 'guardian_invitation';
 
 // The last check uses current account and family authority, not purchase provenance alone.
 const confirmationReady = `EXISTS (
@@ -361,6 +361,21 @@ const refundNoticeReady = `EXISTS (
     AND lower(btrim(a.email)) = lower(btrim(m.to_email))
     AND ${riderEmailAllowed}
 )`;
+// Family-scoped: there is no organization, so an organizer stop does not apply.
+const guardianInvitationReady = `EXISTS (
+  SELECT 1 FROM junior_guardian_invitations i
+  WHERE i.id = m.guardian_invitation_id
+    AND i.cancelled_at IS NULL AND i.accepted_at IS NULL AND i.expires_at > now()
+    AND m.from_email IS NOT NULL
+    AND lower(btrim(i.email)) = lower(btrim(m.to_email))
+    AND NOT EXISTS (
+      SELECT 1 FROM email_messages previous
+      JOIN email_delivery_events d ON d.email_id = previous.id
+      WHERE previous.kind = 'guardian_invitation'
+        AND lower(btrim(previous.to_email)) = lower(btrim(m.to_email))
+        AND d.kind IN ('bounced', 'complained')
+    )
+)`;
 const entryChangeNoticeReady = `EXISTS (
   SELECT 1 FROM entry_changes c
   JOIN orders o ON o.id = c.order_id
@@ -375,6 +390,7 @@ const riderEmailReady = {
   waitlist_offer: waitlistOfferReady,
   waitlist_expired: waitlistExpiryReady,
   refund_notice: refundNoticeReady,
+  guardian_invitation: guardianInvitationReady,
   entry_change_notice: entryChangeNoticeReady,
 };
 const riderEmailSource = {
@@ -476,6 +492,7 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
              OR (m.kind = 'waitlist_offer' AND ${waitlistOfferReady})
              OR (m.kind = 'waitlist_expired' AND ${waitlistExpiryReady})
              OR (m.kind = 'refund_notice' AND ${refundNoticeReady})
+             OR (m.kind = 'guardian_invitation' AND ${guardianInvitationReady})
              OR (m.kind = 'entry_change_notice' AND ${entryChangeNoticeReady}))
          ORDER BY m.sending_until NULLS FIRST, m.created_at, m.seq LIMIT 1`,
         [new Date(clock().getTime() - RESEND_IDEMPOTENCY_WINDOW_MS).toISOString()],
