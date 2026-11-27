@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { formatDate } from '../shared/format';
 import type { Template } from '../shared/schema';
 import { api, ApiError } from './api';
@@ -18,7 +18,51 @@ const TEMPLATE_LABELS: Record<Template, { title: string; detail: string }> = {
 
 export function Home() {
   const { data: orgs, error, setError, reload: load } = useLoad(() => api.organizations(), []);
-  const { data: expiredInvitations, error: invitationError } = useLoad(() => api.expiredInvitations(), []);
+  const { data: expiredInvitations, setData: setExpiredInvitations, error: invitationError } = useLoad(() => api.expiredInvitations(), []);
+  const [dismissing, setDismissing] = useState<string | null>(null);
+  const [dismissStatus, setDismissStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const hideButtons = useRef(new Map<string, HTMLButtonElement>());
+  const organizationsHeading = useRef<HTMLHeadingElement>(null);
+  // After a hide, focus moves to the next notice's Hide button, or to the organizations heading when none remain,
+  // but only if focus is still on the pressed button or fell to the page when it was removed.
+  const [focusAfterHide, setFocusAfterHide] = useState<{ index: number; trigger: Element | null } | null>(null);
+  useEffect(() => {
+    if (!focusAfterHide || !expiredInvitations) return;
+    const active = document.activeElement;
+    if (active === focusAfterHide.trigger || active === document.body || active === null) {
+      const next = expiredInvitations[Math.min(focusAfterHide.index, expiredInvitations.length - 1)];
+      (next ? hideButtons.current.get(next.id) : organizationsHeading.current)?.focus();
+    }
+    setFocusAfterHide(null);
+  }, [focusAfterHide, expiredInvitations]);
+
+  async function dismissNotice(id: string, label: string) {
+    if (dismissing) return;
+    const index = expiredInvitations?.findIndex((notice) => notice.id === id) ?? 0;
+    const trigger = document.activeElement;
+    setDismissing(id);
+    setDismissStatus(null);
+    try {
+      setExpiredInvitations(await api.dismissExpiredInvitation(id));
+      setFocusAfterHide({ index: Math.max(index, 0), trigger });
+      setDismissStatus({ ok: true, text: `Hid the expired ${label} invitation.` });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) {
+        // Already hidden in another tab, or cleared by a new grant: show the current list instead of a stale notice.
+        try {
+          setExpiredInvitations(await api.expiredInvitations());
+          setFocusAfterHide({ index: Math.max(index, 0), trigger });
+          setDismissStatus({ ok: true, text: `The expired ${label} invitation was already hidden or no longer applies.` });
+          return;
+        } catch {
+          // Fall through to the error below.
+        }
+      }
+      setDismissStatus({ ok: false, text: `The notice could not be hidden. ${(e as ApiError).message}` });
+    } finally {
+      setDismissing(null);
+    }
+  }
   const [busy, setBusy] = useState(false);
 
   async function loadDemo(which: 'omnium' | 'example') {
@@ -71,14 +115,30 @@ export function Home() {
           <section className="settings__section" aria-labelledby="expired-invitations-title">
             <h2 id="expired-invitations-title">Invitation expired</h2>
             <p>Ask the organization's owner to add your role again. Signing in does not renew an expired invitation.</p>
-            <ul>
-              {expiredInvitations.map((i) => <li key={i.id}>{i.organizationName} · {ROLE_LABELS[i.role]}</li>)}
+            <ul className="home__expired">
+              {expiredInvitations.map((i) => {
+                const label = `${i.organizationName} ${ROLE_LABELS[i.role]}`;
+                return (
+                  <li key={i.id}>
+                    <span>{i.organizationName} · {ROLE_LABELS[i.role]}</span>{' '}
+                    <button
+                      ref={(element) => { if (element) hideButtons.current.set(i.id, element); else hideButtons.current.delete(i.id); }}
+                      className="btn btn--ghost btn--small" type="button" aria-disabled={dismissing !== null}
+                      onClick={() => void dismissNotice(i.id, label)} aria-label={`Hide the expired ${label} invitation`}
+                    >
+                      {dismissing === i.id ? 'Hiding…' : 'Hide'}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
+        <p className="sr-only" role="status">{dismissStatus?.ok ? dismissStatus.text : ''}</p>
+        {dismissStatus && !dismissStatus.ok && <p className="alert alert--error" role="alert">{dismissStatus.text}</p>}
         <section className="home__grid">
           <div className="home__col">
-            <h2>Your organizations</h2>
+            <h2 ref={organizationsHeading} tabIndex={-1}>Your organizations</h2>
             {orgs === null && !error && <div className="skeleton" aria-label="Loading organizations" />}
             {orgs?.length === 0 && (
               <div className="empty">

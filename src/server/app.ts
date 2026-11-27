@@ -262,6 +262,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   });
 
   app.get('/api/rider/expired-invitations', async (req) => access.expiredInvitations(me(req)));
+  app.post('/api/rider/expired-invitations/:id/dismiss', async (req) => access.dismissExpiredInvitation(me(req), idParam.parse(req.params).id));
 
   // Only the organizations the caller belongs to, with the caller's roles in each.
   app.get('/api/organizations', async (req) => {

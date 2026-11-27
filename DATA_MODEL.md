@@ -173,6 +173,16 @@ Add (an invitation, a renewal or a direct grant) and Resend take the `org-member
 
 The person who creates an organization becomes its owner. The last owner cannot be removed. Whoever loads a demonstration organization (fictional data) becomes an owner of it. An owner can hand ownership to a signed-in account that already has a role in the same organization: in one transaction under the organization's member lock, the successor gains `owner` and the caller loses it (other roles stay). Someone with only an invitation cannot take ownership.
 
+### expired_invitation_dismissals
+
+Migration 60. One row when a signed-in recipient hides one of their expired-invitation notices on Home. The notice list leaves out rows that have a dismissal for the caller's account. The `membership_changes` row is not changed, and a later expiry of the same role is a new row, so it shows as a new notice.
+
+| Column | Notes |
+|---|---|
+| `account_id` | References `accounts`; cascades on delete. Part of the primary key |
+| `membership_change_id` | The `invitation_expired` row that was hidden. References `membership_changes`; cascades on delete. Part of the primary key |
+| `dismissed_at` | When the notice was hidden |
+
 ### organization_invitations
 
 A role granted to an email with no account yet (migration 16). Primary key (`organization_id`, `email`, `role`); emails are stored lowercase. An invitation stays open for `INVITATION_DAYS` (14, in `src/shared/roles.ts`). Adding the same email and role again renews it, including after it expired: `expires_at` starts over and `invited_by` becomes the person who renewed it. When someone first signs in with that verified email, each open invitation becomes an `organization_members` row; every invitation for the email is then deleted, expired ones included, because from then on an owner adds that person directly.
