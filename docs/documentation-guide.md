@@ -52,6 +52,7 @@ Each fact has one home. Other documents link to it instead of copying it, so the
 | Usability test plan, scripts, tasks, and results | [usability/](usability/README.md) | Kit implemented; results summaries are added after sessions, with participant codes only |
 | Reusable organizer template research | [case studies](case-studies/organizer-templates/README.md) | Dated source observations and proposed setup exercises; not approved templates or a competing roadmap |
 | Demo and category configuration fixtures | [fixtures/](fixtures/README.md) | Fake, illustrative data only. Demo purchase flow fixtures exist; category configuration fixtures are in use |
+| Which documentation templates this repository's rules files are compared with | [scaffold-config.json](scaffold-config.json) | Read by the shared `project-docs-scaffold` check (`--check`), which `docs-drift-check` runs; it lists rules sections here that the templates lack, so generic rules can be ported to the templates |
 
 Detailed competitor profiles and raw research snapshots stay in the ignored local `competitor-profiles/` folder. Do not add tracked links to those files; keep dated public source citations in product.md so the repository remains understandable without local research.
 

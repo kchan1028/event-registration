@@ -1,0 +1,41 @@
+{
+  "projectName": "CycleReg",
+  "oneLine": "Local registration and race-day platform build for U.S. road races and criteriums.",
+  "repoSlug": "kchan1028/event-registration",
+  "ownerRole": "project owner",
+  "riskAreas": "money, eligibility, permissions, or personal data",
+  "areaLabels": [
+    "area:payments",
+    "area:auth",
+    "area:registration",
+    "area:race-day"
+  ],
+  "sharedDir": "src/shared/",
+  "commands": {
+    "install": "npm ci",
+    "dev": "npm run dev",
+    "typecheck": "npm run typecheck",
+    "testFile": "npx vitest run tests/<file>.test.ts",
+    "testAll": "npm test",
+    "check": "npm run check",
+    "e2eFile": "npm run test:e2e -- e2e/<spec>.spec.ts",
+    "e2e": "npm run test:e2e",
+    "docs": "npm run check:docs"
+  },
+  "features": [
+    "ui",
+    "db",
+    "public",
+    "agents",
+    "rehearsal"
+  ],
+  "check": {
+    "extra": true,
+    "files": [
+      "AGENTS.md",
+      "CONTRIBUTING.md",
+      "docs/documentation-guide.md",
+      ".github/pull_request_template.md"
+    ]
+  }
+}
