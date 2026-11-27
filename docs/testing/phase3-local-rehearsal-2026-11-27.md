@@ -10,6 +10,8 @@ A follow-up run of the race-day script the same day passed after the timer steps
 
 A second follow-up the same day added the bib-operations script. Application source: `b282e6bad7591cd4d16a2d83749a22b5a269cc13`. Result: 1 passed.
 
+A third follow-up the same day added the walk-up exceptions script. Application source: `b282e6bad7591cd4d16a2d83749a22b5a269cc13`. Result: 1 passed.
+
 ## Race-day desk
 
 Passed on the published demo weekend with fictional accounts (organizer, registration manager, two check-in volunteers, timer export):
@@ -47,6 +49,18 @@ Not rehearsed: physical bib stock and recovering a handed-out bib. A refused ove
 Passed on a published fictional criterium: a phone-sized rider session completed simulated checkout, staff marked that entry as a walk-up and issued bib 100, and a separate kiosk session signed in and ended back at the kiosk sign-in.
 
 Not rehearsed: a suggestion QR on a second physical phone, continuing a draft on that phone, a second full kiosk checkout, five idle minutes, and hosted payment.
+
+## Walk-up exceptions
+
+Passed on a published fictional criterium with a check-in volunteer and two rider phone sessions ([walk-up guide](../runbooks/walkup-registration.md)):
+
+- Alex Demo's simulated payment was declined. The desk showed "Payment not complete" and offered no bib.
+- Alex completed simulated payment on the same order. Alex's account held one order for the event, and the desk found one confirmed rider.
+- The volunteer marked the entry as a walk-up. A repeated mark returned the same entry with no bib and no check-in. The volunteer then issued bib 100, and Alex appeared once on the start lists.
+- The organizer then closed the 45+ field by time and kept the full 35+ field's waitlist open (facilitator setup, not a desk step). A second rider could not select the closed category and joined the 35+ waitlist as number 1. Continuing without a race was refused, and the rider had no order.
+- The desk found no entry for the waitlisted rider, the waitlist held one waiting entry, and the start lists were unchanged.
+
+Not rehearsed: the conversation that refers a rider to the registration lead, physical QR scanning, and a junior guardian walk-up.
 
 ## Organizer handoff
 
