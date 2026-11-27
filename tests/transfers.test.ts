@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { openDb } from '../src/server/db';
-import { entryChangeNoticeText, type EmailSender } from '../src/server/email';
+import { createMailer, entryChangeNoticeText, type EmailSender } from '../src/server/email';
 import { formatOrderNumber } from '../src/shared/lookup';
 import { parseCsv } from '../src/shared/csv';
 import { blankPath } from '../src/shared/factory';
@@ -266,6 +266,88 @@ describe('entry change notices', () => {
         expect(notice.body_text).not.toContain(rider.firstName);
       }
       expect(send).not.toHaveBeenCalled();
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('dispatches a transfer notice and a withdrawal notice once, and skips a stopped address', async () => {
+    const send = vi.fn()
+      .mockResolvedValueOnce('re_confirmation')
+      .mockResolvedValueOnce('re_receipt')
+      .mockResolvedValueOnce('re_transfer')
+      .mockResolvedValueOnce('re_withdraw');
+    const sender: EmailSender = { mode: 'resend', from: 'sender@example.test', send };
+    const now = new Date('2027-03-01T18:00:00Z');
+    const databaseUrl = await testDatabaseUrl();
+    const { app } = await testApp({ databaseUrl, now: () => now, holdMinutes: 10, email: sender });
+    const { eventId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json() as { eventId: string };
+    await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
+    const ev = (await app.inject({ method: 'GET', url: `/api/events/${eventId}` })).json() as { config: EventConfig };
+    const category = (code: string) => ev.config.categories.find((item) => item.timingCode === code)!;
+    const from = category('RR-M35-34');
+    const to = category('RR-D23');
+    const waiver = { version: ev.config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Test Rider', signerRole: 'rider' };
+    const rider = { firstName: 'Test', lastName: 'Rider', email: 'test.rider@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Test Contact', phone: '555-555-0199' } };
+    const created = await app.inject({ method: 'POST', url: `/api/rider/events/${eventId}/orders`, payload: { clientRequestId: 'req-change-dispatch', categoryIds: [from.id], rider, waiver } });
+    expect(created.statusCode).toBe(201);
+    const order = created.json() as { id: string; entries: { id: string }[] };
+    expect((await app.inject({ method: 'POST', url: `/api/orders/${order.id}/payment`, payload: { attemptId: 'attempt-change-dispatch', outcome: 'success' } })).statusCode).toBe(200);
+    const db = openDb(databaseUrl);
+    const atRecorded = () => now;
+    try {
+      expect((await app.inject({ method: 'POST', url: `/api/order-entries/${order.entries[0].id}/transfer`, payload: { toCategoryId: to.id, reason: 'Moved at rider request' } })).statusCode).toBe(200);
+      const transferNotice = await db.get<{ id: string }>(`SELECT id FROM email_messages WHERE kind = 'entry_change_notice'`);
+      const localSend = vi.fn().mockResolvedValue('local-should-not-send');
+      await createMailer(db, { mode: 'local', send: localSend }, atRecorded).dispatchNextRiderEmail();
+      expect(localSend).not.toHaveBeenCalled();
+      await db.run(`UPDATE email_messages SET from_email = NULL WHERE id = $1`, [transferNotice!.id]);
+      const mailer = createMailer(db, sender, atRecorded);
+      await mailer.dispatchNextRiderEmail();
+      await mailer.dispatchNextRiderEmail();
+      expect(send.mock.calls.map((call) => call[0].subject)).toEqual(['Registration confirmed', 'Your receipt']);
+      expect(await db.get(`SELECT status FROM email_messages WHERE id = $1`, [transferNotice!.id])).toEqual({ status: 'recorded' });
+      await db.run(`UPDATE email_messages SET from_email = $2 WHERE id = $1`, [transferNotice!.id, 'sender@example.test']);
+      await db.run(`UPDATE accounts SET email = 'moved@example.test' WHERE email = $1`, [DEFAULT_TEST_ORGANIZER]);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(2);
+      await db.run(`UPDATE accounts SET email = $1 WHERE email = 'moved@example.test'`, [DEFAULT_TEST_ORGANIZER]);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(3);
+      const orderNumber = formatOrderNumber(order.id, true);
+      expect(send.mock.calls[2][1]).toBe(transferNotice!.id);
+      expect(send.mock.calls[2][0]).toMatchObject({
+        from: sender.from,
+        to: DEFAULT_TEST_ORGANIZER,
+        subject: 'Your entry change',
+        text: entryChangeNoticeText(orderNumber, `moved from ${from.name} to ${to.name}`, true),
+      });
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(3);
+
+      await db.run(
+        `INSERT INTO email_delivery_events (id, email_id, kind, occurred_at) VALUES ('entry-change-bounce', $1, 'bounced', $2)`,
+        [transferNotice!.id, now.toISOString()],
+      );
+      expect((await app.inject({ method: 'POST', url: `/api/order-entries/${order.entries[0].id}/withdraw`, payload: { reason: 'Injured, asked to withdraw' } })).statusCode).toBe(200);
+      const withdrawal = await db.get<{ id: string; status: string }>(
+        `SELECT id, status FROM email_messages WHERE kind = 'entry_change_notice' AND status = 'recorded'`,
+      );
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(3);
+      expect(await db.get(`SELECT status FROM email_messages WHERE id = $1`, [withdrawal!.id])).toEqual({ status: 'recorded' });
+      await db.run(`DELETE FROM email_delivery_events WHERE id = 'entry-change-bounce'`);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(4);
+      expect(send.mock.calls[3][1]).toBe(withdrawal!.id);
+      expect(send.mock.calls[3][0]).toMatchObject({
+        from: sender.from,
+        to: DEFAULT_TEST_ORGANIZER,
+        subject: 'Your entry change',
+        text: entryChangeNoticeText(orderNumber, `withdrawn from ${to.name}`, true),
+      });
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(4);
     } finally {
       await db.close();
     }

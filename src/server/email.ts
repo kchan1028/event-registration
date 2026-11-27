@@ -298,7 +298,7 @@ const riderEmailAllowed = `NOT EXISTS (
     )
     AND NOT EXISTS (
       SELECT 1 FROM email_messages previous JOIN email_delivery_events d ON d.email_id = previous.id
-      WHERE previous.organization_id = m.organization_id AND previous.kind IN ('registration_confirmation', 'registration_receipt', 'waitlist_offer', 'waitlist_expired', 'refund_notice')
+      WHERE previous.organization_id = m.organization_id AND previous.kind IN ('registration_confirmation', 'registration_receipt', 'waitlist_offer', 'waitlist_expired', 'refund_notice', 'entry_change_notice')
         AND lower(btrim(previous.to_email)) = lower(btrim(m.to_email)) AND d.kind IN ('bounced', 'complained')
     )`;
 
@@ -327,7 +327,7 @@ const waitlistExpiryReady = `EXISTS (
 )`;
 
 export type OrganizerRiderEmailKind = 'registration_confirmation' | 'registration_receipt' | 'waitlist_offer' | 'refund_notice';
-export type RiderEmailKind = OrganizerRiderEmailKind | 'waitlist_expired';
+export type RiderEmailKind = OrganizerRiderEmailKind | 'waitlist_expired' | 'entry_change_notice';
 
 // The last check uses current account and family authority, not purchase provenance alone.
 const confirmationReady = `EXISTS (
@@ -346,12 +346,21 @@ const refundNoticeReady = `EXISTS (
     AND lower(btrim(a.email)) = lower(btrim(m.to_email))
     AND ${riderEmailAllowed}
 )`;
+const entryChangeNoticeReady = `EXISTS (
+  SELECT 1 FROM entry_changes c
+  JOIN orders o ON o.id = c.order_id
+  JOIN accounts a ON a.id = o.account_id
+  WHERE c.id = m.entry_change_id AND c.kind IN ('transfer', 'withdraw') AND m.from_email IS NOT NULL
+    AND lower(btrim(a.email)) = lower(btrim(m.to_email))
+    AND ${riderEmailAllowed}
+)`;
 const riderEmailReady = {
   registration_confirmation: confirmationReady,
   registration_receipt: confirmationReady,
   waitlist_offer: waitlistOfferReady,
   waitlist_expired: waitlistExpiryReady,
   refund_notice: refundNoticeReady,
+  entry_change_notice: entryChangeNoticeReady,
 };
 const riderEmailSource = {
   registration_confirmation: 'JOIN orders source ON source.id = m.order_id',
@@ -450,7 +459,8 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
              OR (m.kind = 'registration_receipt' AND ${confirmationReady})
              OR (m.kind = 'waitlist_offer' AND ${waitlistOfferReady})
              OR (m.kind = 'waitlist_expired' AND ${waitlistExpiryReady})
-             OR (m.kind = 'refund_notice' AND ${refundNoticeReady}))
+             OR (m.kind = 'refund_notice' AND ${refundNoticeReady})
+             OR (m.kind = 'entry_change_notice' AND ${entryChangeNoticeReady}))
          ORDER BY m.sending_until NULLS FIRST, m.created_at, m.seq LIMIT 1`,
         [new Date(clock().getTime() - RESEND_IDEMPOTENCY_WINDOW_MS).toISOString()],
       );
