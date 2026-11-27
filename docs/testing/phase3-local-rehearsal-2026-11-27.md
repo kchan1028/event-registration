@@ -89,6 +89,20 @@ Passed on a published fictional criterium with a check-in volunteer and a guardi
 
 Not rehearsed: a junior whose guardian has not signed (this checkout requires the guardian to sign before payment) and physical QR scanning.
 
+## Manual license and waiver exceptions
+
+A follow-up run the same day added this script. Application source: `99459efe957cad0513acc592ac5bcc21812ecf9c`. Result: 1 passed. It followed the four [manual exception steps](../runbooks/race-day-check-in.md#manual-license-and-waiver-exceptions) with a registration manager and a check-in volunteer, each in their own session.
+
+Facilitator setup: ordinary checkout always records an accepted waiver, so the script altered two waiver records in the disposable rehearsal database. Alex Demo's signature was cleared, and Casey Demo's waiver was re-signed by the junior instead of a guardian.
+
+- The volunteer saw "Waiver not accepted" for Alex and "Guardian has not accepted the waiver" for Casey. Each showed Not ready and offered no bib.
+- Dana Demo showed "License needs review". The lead marked both license reviews without a typed note.
+- The lead left Gray Demo's license unreviewed as stale or mismatched evidence. Gray stayed blocked, and a direct check-in request returned HTTP 409 with no bib.
+- With no accepted signing procedure on screen, Alex and Casey kept their blockers. Direct check-in requests for both returned HTTP 409 with no bib.
+- Back at check-in, Alex and Casey were still held. Dana showed Ready to race and received bib 100.
+
+Not rehearsed: checking evidence against an approved license source, sending a disputed case to the official, and a paper waiver or guardian form. CycleReg cannot record a paper waiver.
+
 ## Organizer handoff
 
 Passed with a fictional successor who had already signed in and held a role. Ownership moved once. The published event version and name stayed the same. The outgoing account kept registration-manager access and lost owner access.
