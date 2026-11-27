@@ -247,6 +247,30 @@ export interface TestEntryResult {
   blockedBy: LimitUsage | null;
 }
 
+/** What the accepted refund policy would return for one entry today (src/server/withdrawalRequests.ts). */
+export interface WithdrawalPolicyPreview {
+  entryId: string;
+  categoryId: string;
+  categoryName: string;
+  amountPaidCents: number;
+  onDate: string;
+  entitlement: { returnAs: 'cash' | 'credit' | 'rider_choice'; percent: number; amountCents: number } | null;
+}
+
+export interface WithdrawalRequest {
+  id: string;
+  eventId: string;
+  orderId: string;
+  entryId: string;
+  riderName: string;
+  reason: string;
+  policy: WithdrawalPolicyPreview;
+  status: 'open' | 'approved' | 'declined';
+  decisionReason: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -452,6 +476,8 @@ export const api = {
   orders: (eventId: string) => request<OrderView[]>('GET', `/api/events/${eventId}/orders`),
   transferEntry: (entryId: string, toCategoryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/transfer`, { toCategoryId, reason }),
   withdrawEntry: (entryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/withdraw`, { reason }),
+  withdrawalStatus: (entryId: string) => request<{ preview: WithdrawalPolicyPreview; openRequest: WithdrawalRequest | null }>('GET', `/api/rider/order-entries/${encodeURIComponent(entryId)}/withdrawal`),
+  requestWithdrawal: (entryId: string, body: { clientRequestId: string; reason: string; expectedCategoryId: string; expectedReturnAs: 'cash' | 'credit' | 'rider_choice' | null; expectedAmountCents: number | null }) => request<WithdrawalRequest>('POST', `/api/rider/order-entries/${encodeURIComponent(entryId)}/withdrawal-requests`, body),
   correctRider: (orderId: string, changes: RiderCorrection, reason: string) => request<OrderView>('POST', `/api/orders/${orderId}/rider-corrections`, { changes, reason }),
   reviewLicense: (entryId: string, note?: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/license-review`, { note }),
   viewEmergencyContact: (eventId: string, body: { orderId: string } | { entryId: string }) =>
