@@ -47,16 +47,18 @@ export function WithdrawalRequestControl({ entryId, categoryName }: { entryId: s
 
   if (loadError) return <p className="small text-error">Withdrawal options could not load. Refresh this page to try again.</p>;
   if (!state) return null;
+  // The current preview names the category; the page's copy can be stale if the organizer moved the entry.
+  const category = state.preview.categoryName || categoryName;
   if (state.openRequest) {
     return (
       <p ref={waiting} tabIndex={-1} className="note small" role="status">
-        You asked to withdraw from {categoryName}. The organizer has not decided yet, and this entry still races until they do.
+        You asked to withdraw from {category}. The organizer has not decided yet, and this entry still races until they do.
       </p>
     );
   }
   if (!open) {
     return (
-      <button type="button" className="btn btn--ghost btn--small" aria-label={`Ask to withdraw from ${categoryName}`} onClick={() => setOpen(true)}>
+      <button type="button" className="btn btn--ghost btn--small" aria-label={`Ask to withdraw from ${category}`} onClick={() => setOpen(true)}>
         Ask to withdraw
       </button>
     );
@@ -66,8 +68,8 @@ export function WithdrawalRequestControl({ entryId, categoryName }: { entryId: s
     <div ref={formHost}>
       <ReasonForm
         variant="block"
-        label={`Ask to withdraw from ${categoryName}`}
-        intro={<>{withdrawalPolicySentence(state.preview)} The organizer reviews your request; nothing changes until they approve it.</>}
+        label={`Ask to withdraw from ${category}`}
+        intro={<><strong>{category}.</strong> {withdrawalPolicySentence(state.preview)} The organizer reviews your request; nothing changes until they approve it.</>}
         reasonLabel="Why do you want to withdraw?"
         submitLabel="Send request"
         busyLabel="Sending…"
