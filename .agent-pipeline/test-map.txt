@@ -8,3 +8,4 @@ src/web/Register.tsx=e2e/rider-withdrawal.spec.ts
 src/web/WithdrawalRequest.tsx=e2e/rider-withdrawal.spec.ts
 src/web/api.ts=e2e/rider-withdrawal.spec.ts
 src/web/registrations/OrganizerParticipantHistory.tsx=e2e/organizer-participant-history.spec.ts
+src/web/registrations/WithdrawalRequests.tsx=e2e/withdrawal-requests-queue.spec.ts
