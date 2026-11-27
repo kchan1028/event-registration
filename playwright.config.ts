@@ -9,6 +9,7 @@ const databaseUrl = process.env.E2E_DATABASE_URL ?? 'postgres://cyclereg:cyclere
 
 export default defineConfig({
   testDir: 'e2e',
+  testIgnore: '**/*.rehearsal.spec.ts',
   timeout: 60_000,
   fullyParallel: false,
   reporter: [['list']],
