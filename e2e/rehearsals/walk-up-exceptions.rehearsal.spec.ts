@@ -40,6 +40,7 @@ test('@rehearsal walk-up declined payment, a closed category and a full field le
   };
 
   let address = '';
+  let declinedOrderId = '';
   const rider = await phone(RIDER);
   try {
     await test.step('At the desk 1-2: the volunteer opens Register a walk-up and the rider opens the address on their own phone', async () => {
@@ -69,6 +70,10 @@ test('@rehearsal walk-up declined payment, a closed category and a full field le
       await deskLookup('Alex Demo');
       await expect(desk).toContainText('Payment not complete');
       await expect(desk.getByRole('button', { name: /Check in and issue/ })).toHaveCount(0);
+      const unpaid = await findAlex();
+      expect(unpaid).toHaveLength(1);
+      expect(unpaid[0].payment).not.toBe('confirmed');
+      declinedOrderId = unpaid[0].orderId;
       await shot(volunteer.page, '03-desk-unpaid');
     });
 
@@ -79,7 +84,7 @@ test('@rehearsal walk-up declined payment, a closed category and a full field le
       expect(mine.filter((order) => order.eventId === eventId)).toHaveLength(1);
       const riders = await findAlex();
       expect(riders).toHaveLength(1);
-      expect(riders[0].payment).toBe('confirmed');
+      expect(riders[0]).toMatchObject({ orderId: declinedOrderId, payment: 'confirmed' });
       await shot(rider.page, '04-paid');
     });
   } finally {
@@ -122,7 +127,8 @@ test('@rehearsal walk-up declined payment, a closed category and a full field le
   try {
     await test.step('Unavailable registration: a category past its closing time cannot be selected', async () => {
       await late.page.goto(address);
-      await late.page.getByLabel('Racing age').fill('40');
+      // 46 is eligible for both the 45+ and 35+ fields, so only the closing time and the full field block them.
+      await late.page.getByLabel('Racing age').fill('46');
       await late.page.getByLabel('License category').selectOption('4');
       await late.page.getByLabel('Competition class').selectOption({ label: 'Men' });
       const closedOption = late.page.getByRole('checkbox', { name: /DVC-M45/ });
