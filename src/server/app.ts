@@ -29,6 +29,7 @@ import { createEmergencyContacts, omitStaffEmergencyContact } from './emergencyC
 import { createCaseStudyFixtures } from './caseStudies';
 import { createIdentity } from './identity';
 import { createResolutions } from './resolutions';
+import { createWithdrawalRequests } from './withdrawalRequests';
 import { createStartLists, slug } from './startlists';
 import { createCoupons } from './coupons';
 import { createOrders, isLiveOrder, type Orders } from './orders';
@@ -119,6 +120,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const refunds = createRefunds(db, paymentProvider, clock, repo, emailSender.mode === 'resend' ? emailSender.from : undefined);
   const identity = createIdentity(db, orders, clock);
   const resolutions = createResolutions(db, orders, clock);
+  const withdrawalRequests = createWithdrawalRequests(db, repo, orders, clock);
   const startLists = createStartLists(db, repo, orders, clock, identity);
   const checkIn = createCheckIn(db, repo, orders, clock, identity, startLists);
   const emergencyContacts = createEmergencyContacts(db, clock);
@@ -818,6 +820,39 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     await access.requireOrderAccess(me(req), { entryId: id }, { permission: 'entries.manage' });
     const body = z.object({ toCategoryId: z.string().min(1).max(64), reason: z.string().trim().min(3, 'Write why the entry is moving.').max(300) }).parse(req.body);
     return omitStaffEmergencyContact(await orders.transferEntry(id, body.toCategoryId, body.reason));
+  });
+  // Rider-requested withdrawal: the rider sees the policy effect and asks; an organizer decides. No refund happens here.
+  app.get('/api/rider/order-entries/:id/withdrawal', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrderAccess(me(req), { entryId: id }, { rider: true });
+    return { preview: await withdrawalRequests.preview(id), openRequest: await withdrawalRequests.openFor(id) };
+  });
+  app.post('/api/rider/order-entries/:id/withdrawal-requests', async (req, reply) => {
+    const { id } = idParam.parse(req.params);
+    const account = me(req);
+    await access.requireOrderAccess(account, { entryId: id }, { rider: true });
+    const body = z.object({
+      clientRequestId: z.string().min(8).max(128),
+      reason: z.string().trim().min(3, 'Write why you want to withdraw.').max(300),
+      // What the rider was shown; a changed category or policy amount is refused so they can review it.
+      expectedCategoryId: z.string().min(1).max(64),
+      expectedReturnAs: z.enum(['cash', 'credit', 'rider_choice']).nullable(),
+      expectedAmountCents: z.number().int().nonnegative().nullable(),
+    }).parse(req.body);
+    reply.code(201);
+    return withdrawalRequests.request(id, account.id, body);
+  });
+  app.get('/api/events/:id/withdrawal-requests', async (req) => withdrawalRequests.list((await onEvent(req, 'entries.manage')).id));
+  app.post('/api/events/:id/withdrawal-requests/:rid/approve', async (req) => {
+    const { id } = await onEvent(req, 'entries.manage');
+    const { rid } = z.object({ rid: idStr }).parse(req.params);
+    return withdrawalRequests.approve(id, rid, me(req).id);
+  });
+  app.post('/api/events/:id/withdrawal-requests/:rid/decline', async (req) => {
+    const { id } = await onEvent(req, 'entries.manage');
+    const { rid } = z.object({ rid: idStr }).parse(req.params);
+    const body = z.object({ reason: z.string().trim().min(3, 'Write why the entry stays.').max(300) }).parse(req.body);
+    return withdrawalRequests.decline(id, rid, me(req).id, body.reason);
   });
   app.post('/api/order-entries/:id/withdraw', async (req) => {
     const { id } = idParam.parse(req.params);
