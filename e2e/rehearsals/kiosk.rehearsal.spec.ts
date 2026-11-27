@@ -99,6 +99,8 @@ test('@rehearsal shared kiosk: two checkouts, the idle warning, and sign-out at 
       });
       await kiosk.getByRole('button', { name: /Complete simulated payment/ }).click();
       await saved;
+      // Pause the browser clock so only the explicit advances below count toward expiry.
+      await kiosk.clock.pauseAt(await kiosk.evaluate(() => Date.now() + 100));
       await kiosk.clock.fastForward(4 * minute + 1_000);
       await expect(warning).toBeVisible();
       // Two seconds before the five-minute deadline the session is still open.
@@ -113,6 +115,10 @@ test('@rehearsal shared kiosk: two checkouts, the idle warning, and sign-out at 
       await shot(kiosk, '05-idle-ended');
       releaseResponse();
       await kiosk.unrouteAll({ behavior: 'wait' });
+      await kiosk.clock.resume();
+      // The late payment response must not bring the receipt back between riders.
+      await expect(start).toBeVisible();
+      await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toHaveCount(0);
     });
 
     await test.step('Kiosk 4: the second rider finds the one saved order in My registrations on a personal browser', async () => {
