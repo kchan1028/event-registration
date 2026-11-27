@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createMailer, type EmailSender } from '../src/server/email';
+import { openDb } from '../src/server/db';
 import { as } from './support/auth';
-import { testApp } from './support/db';
+import { testApp, testDatabaseUrl } from './support/db';
 import { publishReviewed } from './support/publish';
 import type { EventConfig } from '../src/shared/schema';
 
@@ -9,9 +11,9 @@ import type { EventConfig } from '../src/shared/schema';
 const RIDER = { firstName: 'Pat', lastName: 'Demo', email: 'pat.withdraw@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', licenseNumber: 'DEMO-901', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Demo Contact', phone: '555-555-0199' } };
 const RIDER_EMAIL = 'pat.withdraw@example.test';
 
-async function setup() {
+async function setup(opts: { email?: EmailSender; databaseUrl?: string } = {}) {
   let now = new Date('2027-03-01T18:00:00Z');
-  const { app } = await testApp({ now: () => now, holdMinutes: 10 });
+  const { app } = await testApp({ now: () => now, holdMinutes: 10, ...opts });
   const { eventId, organizationId } = (await app.inject({ method: 'POST', url: '/api/demo' })).json<{ eventId: string; organizationId: string }>();
   await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true });
   const ev = (await app.inject({ url: `/api/events/${eventId}` })).json() as { config: EventConfig };
@@ -163,5 +165,36 @@ describe('rider withdrawal requests', () => {
     const list = (await app.inject({ url: `/api/events/${eventId}/withdrawal-requests` })).json<{ id: string; status: string }[]>();
     expect(list).toEqual([expect.objectContaining({ id: request.id, status: 'open' })]);
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${request.id}/decline`, payload: { reason: 'Already withdrawn by the organizer' } })).statusCode).toBe(200);
+  });
+
+  it('declining records one notice for the rider, without the organizer\'s reason, and the sender delivers it', async () => {
+    const send = vi.fn<EmailSender['send']>(async () => 're_decline');
+    const sender: EmailSender = { mode: 'resend', from: 'sender@example.test', send };
+    const databaseUrl = await testDatabaseUrl();
+    const { app, eventId, ask } = await setup({ email: sender, databaseUrl });
+    const request = (await ask('Schedule clash')).json<{ id: string }>();
+    const reason = 'Private note: start list already sent to the timer';
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${request.id}/decline`, payload: { reason } })).statusCode).toBe(200);
+    const db = openDb(databaseUrl);
+    try {
+      const notices = await db.all<{ id: string; to_email: string; subject: string; body_text: string; status: string }>(
+        `SELECT id, to_email, subject, body_text, status FROM email_messages WHERE kind = 'withdrawal_decline_notice'`,
+      );
+      expect(notices).toHaveLength(1);
+      expect(notices[0]).toMatchObject({ to_email: RIDER_EMAIL, subject: 'Your withdrawal request', status: 'recorded' });
+      expect(notices[0].body_text).toContain('kept your');
+      expect(notices[0].body_text).not.toContain('Private note');
+      // The worker sends rider notices oldest first; drain until the decline notice has gone out.
+      const mailer = createMailer(db, sender, () => new Date('2027-03-01T18:00:00Z'));
+      for (let i = 0; i < 5; i++) await mailer.dispatchNextRiderEmail();
+      expect(send.mock.calls.map((call) => call[1])).toContain(notices[0].id);
+      expect(send.mock.calls.find((call) => call[1] === notices[0].id)![0]).toMatchObject({ to: RIDER_EMAIL, subject: 'Your withdrawal request' });
+      // Approving another request sends the existing entry-change notice, not a decline notice.
+      const again = (await ask('Leaving after all', 'withdraw-request-0010')).json<{ id: string }>();
+      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${again.id}/approve` })).statusCode).toBe(200);
+      expect((await db.all(`SELECT id FROM email_messages WHERE kind = 'withdrawal_decline_notice'`))).toHaveLength(1);
+    } finally {
+      await db.close();
+    }
   });
 });

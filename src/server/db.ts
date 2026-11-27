@@ -936,6 +936,20 @@ export const MIGRATIONS: string[] = [
   );
   CREATE UNIQUE INDEX withdrawal_requests_one_open ON withdrawal_requests(entry_id) WHERE status = 'open';
   CREATE INDEX withdrawal_requests_by_event ON withdrawal_requests(event_id, status, created_at);`,
+  // 62: a declined withdrawal request tells the rider; the organizer's reason stays out of the message.
+  `ALTER TABLE email_messages ADD COLUMN withdrawal_request_id text UNIQUE REFERENCES withdrawal_requests(id) ON DELETE CASCADE;
+  ALTER TABLE email_messages DROP CONSTRAINT email_messages_kind_check;
+  ALTER TABLE email_messages ADD CONSTRAINT email_messages_kind_check CHECK (
+    (kind = 'organizer_invitation' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL AND withdrawal_request_id IS NULL)
+    OR (kind = 'registration_confirmation' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND order_id IS NOT NULL AND ref = order_id AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL AND withdrawal_request_id IS NULL)
+    OR (kind = 'registration_receipt' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND order_id IS NOT NULL AND ref = order_id AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL AND withdrawal_request_id IS NULL)
+    OR (kind = 'waitlist_offer' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND waitlist_entry_id IS NOT NULL AND ref = waitlist_entry_id AND order_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL AND withdrawal_request_id IS NULL)
+    OR (kind = 'waitlist_expired' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND waitlist_expiry_entry_id IS NOT NULL AND ref = waitlist_expiry_entry_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL AND withdrawal_request_id IS NULL)
+    OR (kind = 'refund_notice' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND refund_id IS NOT NULL AND ref = refund_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND entry_change_id IS NULL AND withdrawal_request_id IS NULL)
+    OR (kind = 'entry_change_notice' AND organization_id IS NOT NULL AND guardian_invitation_id IS NULL AND entry_change_id IS NOT NULL AND ref = entry_change_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND withdrawal_request_id IS NULL)
+    OR (kind = 'guardian_invitation' AND organization_id IS NULL AND guardian_invitation_id IS NOT NULL AND ref = guardian_invitation_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL AND withdrawal_request_id IS NULL)
+    OR (kind = 'withdrawal_decline_notice' AND organization_id IS NOT NULL AND withdrawal_request_id IS NOT NULL AND ref = withdrawal_request_id AND guardian_invitation_id IS NULL AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL)
+  );`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */
