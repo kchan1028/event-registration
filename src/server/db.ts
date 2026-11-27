@@ -919,6 +919,7 @@ export const MIGRATIONS: string[] = [
     event_id text NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     order_id text NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     entry_id text NOT NULL REFERENCES order_entries(id) ON DELETE CASCADE,
+    category_id text NOT NULL,
     requested_by text REFERENCES accounts(id) ON DELETE SET NULL,
     client_request_id text NOT NULL,
     reason text NOT NULL,

@@ -772,6 +772,7 @@ Migration 61. A rider's request to withdraw one paid entry, and the organizer's 
 | `id` | Primary key (`wdr_...`) |
 | `seq` | Insertion order |
 | `event_id`, `order_id`, `entry_id` | The entry asked about. Cascade on delete |
+| `category_id` | The entry's category when the rider asked. Approval is refused if the entry has since been transferred to another category |
 | `requested_by` | Account that asked; null if that account is deleted |
 | `client_request_id` | Retry key; unique per entry. The same key with a different reason is refused |
 | `reason` | The rider's reason (3–300 characters) |

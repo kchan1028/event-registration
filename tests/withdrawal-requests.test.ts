@@ -130,6 +130,18 @@ describe('rider withdrawal requests', () => {
     expect(list.map((r) => r.status)).toEqual(['open', 'declined']);
   });
 
+  it('approving after the organizer transferred the entry is refused, so the new category is not withdrawn', async () => {
+    const { app, eventId, entryId, ask, entryStatus, ev } = await setup();
+    const request = (await ask('Leaving the 35+ race')).json<{ id: string }>();
+    const target = ev.config.categories.find((c) => c.timingCode === 'CR-M35-34')!;
+    const moved = await app.inject({ method: 'POST', url: `/api/order-entries/${entryId}/transfer`, payload: { toCategoryId: target.id, reason: 'Organizer moved the rider' } });
+    expect(moved.statusCode, moved.body).toBe(200);
+    const approve = await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${request.id}/approve` });
+    expect(approve.statusCode).toBe(409);
+    expect(approve.json().error).toContain('moved to another category');
+    expect(await entryStatus()).toBe('confirmed');
+  });
+
   it('approving after the organizer already withdrew the entry is refused and leaves the request open', async () => {
     const { app, eventId, entryId, ask } = await setup();
     const request = (await ask('Feeling unwell')).json<{ id: string }>();

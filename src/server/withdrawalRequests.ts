@@ -49,7 +49,7 @@ interface EntryFacts {
 }
 
 interface Row {
-  id: string; event_id: string; order_id: string; entry_id: string; client_request_id: string; reason: string;
+  id: string; event_id: string; order_id: string; entry_id: string; category_id: string; client_request_id: string; reason: string;
   policy_json: WithdrawalPolicyPreview; status: WithdrawalRequest['status']; decision_reason: string | null;
   created_at: string; decided_at: string | null; rider_name: string;
 }
@@ -132,9 +132,9 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
         }
         const id = newId('wdr');
         await db.run(
-          `INSERT INTO withdrawal_requests (id, event_id, order_id, entry_id, requested_by, client_request_id, reason, policy_json, status, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open', $9)`,
-          [id, e.event_id, e.order_id, entryId, accountId, body.clientRequestId, body.reason, JSON.stringify(policy), clock().toISOString()],
+          `INSERT INTO withdrawal_requests (id, event_id, order_id, entry_id, category_id, requested_by, client_request_id, reason, policy_json, status, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open', $10)`,
+          [id, e.event_id, e.order_id, entryId, e.category_id, accountId, body.clientRequestId, body.reason, JSON.stringify(policy), clock().toISOString()],
         );
         return toView(await one(id));
       });
@@ -152,6 +152,10 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
         const row = await one(id);
         if (row.event_id !== eventId) throw new HttpError(404, 'Withdrawal request not found.');
         if (row.status !== 'open') throw new HttpError(409, `This request was already ${row.status}.`);
+        // The rider asked about one category; if the entry has since been transferred, they have not asked to leave the new one.
+        if ((await facts(row.entry_id)).category_id !== row.category_id) {
+          throw new HttpError(409, 'This entry moved to another category after the rider asked. Decline this request and check with the rider.');
+        }
         await orders.withdrawEntry(row.entry_id, `Rider request: ${row.reason}`.slice(0, 300));
         const change = await db.get<{ id: string }>(
           `SELECT id FROM entry_changes WHERE entry_id = $1 AND kind = 'withdraw' ORDER BY seq DESC LIMIT 1`, [row.entry_id],
