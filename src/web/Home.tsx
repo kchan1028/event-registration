@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { formatDate } from '../shared/format';
 import type { Template } from '../shared/schema';
 import { api, ApiError } from './api';
@@ -21,12 +21,25 @@ export function Home() {
   const { data: expiredInvitations, setData: setExpiredInvitations, error: invitationError } = useLoad(() => api.expiredInvitations(), []);
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [dismissStatus, setDismissStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const hideButtons = useRef(new Map<string, HTMLButtonElement>());
+  const organizationsHeading = useRef<HTMLHeadingElement>(null);
+  // After a hide, keyboard focus moves to the next notice's Hide button, or to the organizations heading when none remain.
+  const [focusAfterHide, setFocusAfterHide] = useState<{ index: number } | null>(null);
+  useEffect(() => {
+    if (!focusAfterHide || !expiredInvitations) return;
+    const next = expiredInvitations[Math.min(focusAfterHide.index, expiredInvitations.length - 1)];
+    (next ? hideButtons.current.get(next.id) : organizationsHeading.current)?.focus();
+    setFocusAfterHide(null);
+  }, [focusAfterHide, expiredInvitations]);
 
   async function dismissNotice(id: string, label: string) {
+    if (dismissing) return;
+    const index = expiredInvitations?.findIndex((notice) => notice.id === id) ?? 0;
     setDismissing(id);
     setDismissStatus(null);
     try {
       setExpiredInvitations(await api.dismissExpiredInvitation(id));
+      setFocusAfterHide({ index: Math.max(index, 0) });
       setDismissStatus({ ok: true, text: `Hid the expired ${label} invitation.` });
     } catch (e) {
       setDismissStatus({ ok: false, text: `The notice could not be hidden. ${(e as ApiError).message}` });
@@ -92,7 +105,11 @@ export function Home() {
                 return (
                   <li key={i.id}>
                     <span>{i.organizationName} · {ROLE_LABELS[i.role]}</span>{' '}
-                    <button className="btn btn--ghost btn--small" type="button" disabled={dismissing !== null} onClick={() => void dismissNotice(i.id, label)} aria-label={`Hide the expired ${label} invitation`}>
+                    <button
+                      ref={(element) => { if (element) hideButtons.current.set(i.id, element); else hideButtons.current.delete(i.id); }}
+                      className="btn btn--ghost btn--small" type="button" aria-disabled={dismissing !== null}
+                      onClick={() => void dismissNotice(i.id, label)} aria-label={`Hide the expired ${label} invitation`}
+                    >
                       {dismissing === i.id ? 'Hiding…' : 'Hide'}
                     </button>
                   </li>
@@ -105,7 +122,7 @@ export function Home() {
         {dismissStatus && !dismissStatus.ok && <p className="alert alert--error" role="alert">{dismissStatus.text}</p>}
         <section className="home__grid">
           <div className="home__col">
-            <h2>Your organizations</h2>
+            <h2 ref={organizationsHeading} tabIndex={-1}>Your organizations</h2>
             {orgs === null && !error && <div className="skeleton" aria-label="Loading organizations" />}
             {orgs?.length === 0 && (
               <div className="empty">

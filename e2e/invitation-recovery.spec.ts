@@ -53,19 +53,27 @@ test('a recipient can hide an expired-invitation notice, and a failed hide says 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   expect((await new AxeBuilder({ page }).include('[aria-labelledby="expired-invitations-title"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
 
+  const first = notice.getByRole('button', { name: 'Hide the expired Fictional Velo Club Finance invitation' });
+  const second = notice.getByRole('button', { name: /Hide the expired Sample Wheelers/ });
   failDismiss = true;
-  await notice.getByRole('button', { name: 'Hide the expired Fictional Velo Club Finance invitation' }).click();
+  await first.focus();
+  await page.keyboard.press('Enter');
   await expect(page.getByRole('alert')).toContainText('The notice could not be hidden');
   await expect(notice.getByRole('listitem')).toHaveCount(2);
+  await expect(first).toBeFocused();
 
   failDismiss = false;
-  await notice.getByRole('button', { name: 'Hide the expired Fictional Velo Club Finance invitation' }).click();
+  await page.keyboard.press('Enter');
   await expect(notice.getByRole('listitem')).toHaveCount(1);
+  // Keyboard focus moves to the next notice's Hide button.
+  await expect(second).toBeFocused();
   await expect(notice).toContainText('Sample Wheelers');
   await expect(page.getByRole('status').filter({ hasText: 'Hid the expired Fictional Velo Club Finance invitation.' })).toHaveCount(1);
   await expect(page.getByRole('alert')).toHaveCount(0);
   await notice.screenshot({ path: 'test-results/invitation-hide-390.png' });
 
-  await notice.getByRole('button', { name: /Hide the expired Sample Wheelers/ }).click();
+  await page.keyboard.press('Enter');
   await expect(page.getByRole('region', { name: 'Invitation expired' })).toHaveCount(0);
+  // With no notices left, focus moves to the organizations heading instead of the page body.
+  await expect(page.getByRole('heading', { name: 'Your organizations' })).toBeFocused();
 });
