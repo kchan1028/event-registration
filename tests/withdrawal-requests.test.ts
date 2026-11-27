@@ -158,13 +158,22 @@ describe('rider withdrawal requests', () => {
   });
 
   it('approving after the organizer already withdrew the entry is refused and leaves the request open', async () => {
-    const { app, eventId, entryId, ask } = await setup();
+    const databaseUrl = await testDatabaseUrl();
+    const { app, eventId, entryId, ask } = await setup({ databaseUrl });
     const request = (await ask('Feeling unwell')).json<{ id: string }>();
     expect((await app.inject({ method: 'POST', url: `/api/order-entries/${entryId}/withdraw`, payload: { reason: 'Organizer withdrew first' } })).statusCode).toBe(200);
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${request.id}/approve` })).statusCode).toBe(409);
     const list = (await app.inject({ url: `/api/events/${eventId}/withdrawal-requests` })).json<{ id: string; status: string }[]>();
     expect(list).toEqual([expect.objectContaining({ id: request.id, status: 'open' })]);
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${request.id}/decline`, payload: { reason: 'Already withdrawn by the organizer' } })).statusCode).toBe(200);
+    // The entry was not kept, so no "your entry was kept" email is recorded; the withdrawal's own notice told the rider.
+    const db = openDb(databaseUrl);
+    try {
+      expect(await db.all(`SELECT id FROM email_messages WHERE kind = 'withdrawal_decline_notice'`)).toEqual([]);
+      expect((await db.all(`SELECT id FROM email_messages WHERE kind = 'entry_change_notice'`))).toHaveLength(1);
+    } finally {
+      await db.close();
+    }
   });
 
   it('declining records one notice for the rider, without the organizer\'s reason, and the sender delivers it', async () => {

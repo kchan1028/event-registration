@@ -183,6 +183,14 @@ export function entryChangeNoticeText(orderNumber: string, summary: string, isDe
     : `Entry change ${orderNumber}: ${summary}. Sign in and open My registrations to see it.`;
 }
 
+/**
+ * The message says the entry was kept, so it is only true while the entry is still active in the category the rider
+ * asked about. If the organizer already withdrew or moved it, the entry-change notice has told the rider instead.
+ */
+const declinedEntryKept = (w: string) => `EXISTS (
+  SELECT 1 FROM order_entries kept WHERE kept.id = ${w}.entry_id AND kept.status = 'confirmed' AND kept.category_id = ${w}.category_id
+)`;
+
 /** Order number and category only. The organizer's reason stays out of the message; the rider reads it on My registrations. */
 export function withdrawalDeclineNoticeText(orderNumber: string, categoryName: string, isDemo: boolean): string {
   return isDemo
@@ -201,7 +209,7 @@ export async function recordWithdrawalDeclineNotice(db: Db, requestId: string, r
      JOIN events e ON e.id = o.event_id
      JOIN accounts a ON a.id = o.account_id
      JOIN event_versions v ON v.event_id = o.event_id AND v.version = o.published_version
-     WHERE w.id = $1 AND w.status = 'declined'`,
+     WHERE w.id = $1 AND w.status = 'declined' AND ${declinedEntryKept('w')}`,
     [requestId],
   );
   if (!row) return;
@@ -420,7 +428,7 @@ const withdrawalDeclineNoticeReady = `EXISTS (
   SELECT 1 FROM withdrawal_requests w
   JOIN orders o ON o.id = w.order_id
   JOIN accounts a ON a.id = o.account_id
-  WHERE w.id = m.withdrawal_request_id AND w.status = 'declined' AND m.from_email IS NOT NULL
+  WHERE w.id = m.withdrawal_request_id AND w.status = 'declined' AND ${declinedEntryKept('w')} AND m.from_email IS NOT NULL
     AND lower(btrim(a.email)) = lower(btrim(m.to_email))
     AND ${riderEmailAllowed}
 )`;
