@@ -315,7 +315,7 @@ test('@rehearsal race-day desk, roster, exceptions, outage, shift and timer hand
       await shot(incoming.page, 'shift-incoming');
     });
 
-    await test.step('Timer handoff: lock a start list, then a later bib change leaves the locked CSV unchanged', async () => {
+    await test.step('Timer handoff: lock a start list and download the locked CSV', async () => {
       const lists = await (await timer.page.request.get(`${eventUrl}/start-lists`)).json() as { races: { raceId: string; raceName: string; rows: { entryId: string }[] }[] };
       const race = lists.races.find((r) => r.rows.some((row) => row.entryId === alex.entries[0].id));
       expect(race, 'Alex must be on a start list').toBeTruthy();
