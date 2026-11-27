@@ -23,25 +23,41 @@ export function Home() {
   const [dismissStatus, setDismissStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const hideButtons = useRef(new Map<string, HTMLButtonElement>());
   const organizationsHeading = useRef<HTMLHeadingElement>(null);
-  // After a hide, keyboard focus moves to the next notice's Hide button, or to the organizations heading when none remain.
-  const [focusAfterHide, setFocusAfterHide] = useState<{ index: number } | null>(null);
+  // After a hide, focus moves to the next notice's Hide button, or to the organizations heading when none remain,
+  // but only if focus is still on the pressed button or fell to the page when it was removed.
+  const [focusAfterHide, setFocusAfterHide] = useState<{ index: number; trigger: Element | null } | null>(null);
   useEffect(() => {
     if (!focusAfterHide || !expiredInvitations) return;
-    const next = expiredInvitations[Math.min(focusAfterHide.index, expiredInvitations.length - 1)];
-    (next ? hideButtons.current.get(next.id) : organizationsHeading.current)?.focus();
+    const active = document.activeElement;
+    if (active === focusAfterHide.trigger || active === document.body || active === null) {
+      const next = expiredInvitations[Math.min(focusAfterHide.index, expiredInvitations.length - 1)];
+      (next ? hideButtons.current.get(next.id) : organizationsHeading.current)?.focus();
+    }
     setFocusAfterHide(null);
   }, [focusAfterHide, expiredInvitations]);
 
   async function dismissNotice(id: string, label: string) {
     if (dismissing) return;
     const index = expiredInvitations?.findIndex((notice) => notice.id === id) ?? 0;
+    const trigger = document.activeElement;
     setDismissing(id);
     setDismissStatus(null);
     try {
       setExpiredInvitations(await api.dismissExpiredInvitation(id));
-      setFocusAfterHide({ index: Math.max(index, 0) });
+      setFocusAfterHide({ index: Math.max(index, 0), trigger });
       setDismissStatus({ ok: true, text: `Hid the expired ${label} invitation.` });
     } catch (e) {
+      if (e instanceof ApiError && e.status === 404) {
+        // Already hidden in another tab, or cleared by a new grant: show the current list instead of a stale notice.
+        try {
+          setExpiredInvitations(await api.expiredInvitations());
+          setFocusAfterHide({ index: Math.max(index, 0), trigger });
+          setDismissStatus({ ok: true, text: `The expired ${label} invitation was already hidden or no longer applies.` });
+          return;
+        } catch {
+          // Fall through to the error below.
+        }
+      }
       setDismissStatus({ ok: false, text: `The notice could not be hidden. ${(e as ApiError).message}` });
     } finally {
       setDismissing(null);

@@ -39,11 +39,16 @@ test('a recipient can hide an expired-invitation notice, and a failed hide says 
     { id: 'mch_fake_two', organizationName: 'Sample Wheelers', role: 'timer_export', at: '2027-03-15T18:00:00.000Z' },
   ];
   let failDismiss = false;
+  let goneElsewhere = false;
+  let releaseSlow: (() => void) | null = null;
   await page.route('**/api/rider/expired-invitations', (route) => route.fulfill({ json: notices }));
-  await page.route('**/api/rider/expired-invitations/*/dismiss', (route) => {
+  await page.route('**/api/rider/expired-invitations/*/dismiss', async (route) => {
     if (failDismiss) return route.fulfill({ status: 503, json: { error: 'Fictional temporary failure' } });
     const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/').at(-2) ?? '');
     notices = notices.filter((notice) => notice.id !== id);
+    // Hidden in another tab first: the list no longer has it and this request is refused.
+    if (goneElsewhere) return route.fulfill({ status: 404, json: { error: 'That notice is not on your list.' } });
+    if (releaseSlow === null) await new Promise<void>((resolve) => { releaseSlow = resolve; });
     return route.fulfill({ json: notices });
   });
   await page.goto('/');
@@ -64,16 +69,23 @@ test('a recipient can hide an expired-invitation notice, and a failed hide says 
 
   failDismiss = false;
   await page.keyboard.press('Enter');
+  // While the hide is slow, the user moves focus elsewhere; the finished hide must not pull it back.
+  const elsewhere = page.getByRole('button', { name: /Switch to/ });
+  await elsewhere.focus();
+  releaseSlow!();
   await expect(notice.getByRole('listitem')).toHaveCount(1);
-  // Keyboard focus moves to the next notice's Hide button.
-  await expect(second).toBeFocused();
+  await expect(elsewhere).toBeFocused();
   await expect(notice).toContainText('Sample Wheelers');
   await expect(page.getByRole('status').filter({ hasText: 'Hid the expired Fictional Velo Club Finance invitation.' })).toHaveCount(1);
   await expect(page.getByRole('alert')).toHaveCount(0);
   await notice.screenshot({ path: 'test-results/invitation-hide-390.png' });
 
+  goneElsewhere = true;
+  await second.focus();
   await page.keyboard.press('Enter');
+  // A 404 refreshes the list, so the stale notice disappears instead of failing on every retry.
   await expect(page.getByRole('region', { name: 'Invitation expired' })).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
   // With no notices left, focus moves to the organizations heading instead of the page body.
   await expect(page.getByRole('heading', { name: 'Your organizations' })).toBeFocused();
 });
