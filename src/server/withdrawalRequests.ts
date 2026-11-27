@@ -16,6 +16,7 @@ export type WithdrawalReturn = 'cash' | 'credit' | 'rider_choice';
 
 export interface WithdrawalPolicyPreview {
   entryId: string;
+  categoryId: string;
   categoryName: string;
   amountPaidCents: number;
   onDate: string;
@@ -84,6 +85,7 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
     const firstDay = config.days.map((d) => d.date).sort()[0];
     return {
       entryId,
+      categoryId: e.category_id,
       categoryName: config.categories.find((c) => c.id === e.category_id)?.name ?? 'This entry',
       amountPaidCents,
       onDate,
@@ -110,7 +112,7 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
     async request(
       entryId: string,
       accountId: string,
-      body: { clientRequestId: string; reason: string; expectedReturnAs: WithdrawalReturn | null; expectedAmountCents: number | null },
+      body: { clientRequestId: string; reason: string; expectedCategoryId: string; expectedReturnAs: WithdrawalReturn | null; expectedAmountCents: number | null },
     ): Promise<WithdrawalRequest> {
       return db.transaction(async () => {
         const { event_id } = await facts(entryId);
@@ -127,6 +129,9 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
         }
         // The rider confirms the amount they were shown; if the policy step changed since (a deadline passed), they review it again.
         const policy = await preview(entryId);
+        if (policy.categoryId !== body.expectedCategoryId) {
+          throw new HttpError(409, 'This entry moved to another category since you looked. Review it and send your request again.');
+        }
         if ((policy.entitlement?.returnAs ?? null) !== body.expectedReturnAs || (policy.entitlement?.amountCents ?? null) !== body.expectedAmountCents) {
           throw new HttpError(409, 'What withdrawing returns has changed since you looked. Review the new amount and send your request again.');
         }

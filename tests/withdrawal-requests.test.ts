@@ -28,10 +28,10 @@ async function setup() {
   const entryId = paid.json<{ entries: { id: string }[] }>().entries[0].id;
   // The rider sends back what the preview showed them.
   const shown = async () => {
-    const entitlement = (await app.inject({ url: `/api/rider/order-entries/${entryId}/withdrawal`, headers: rider })).json<{ preview: { entitlement: { returnAs: string; amountCents: number } | null } }>().preview.entitlement;
-    return { expectedReturnAs: entitlement?.returnAs ?? null, expectedAmountCents: entitlement?.amountCents ?? null };
+    const { preview } = (await app.inject({ url: `/api/rider/order-entries/${entryId}/withdrawal`, headers: rider })).json<{ preview: { categoryId: string; entitlement: { returnAs: string; amountCents: number } | null } }>();
+    return { expectedCategoryId: preview.categoryId, expectedReturnAs: preview.entitlement?.returnAs ?? null, expectedAmountCents: preview.entitlement?.amountCents ?? null };
   };
-  let expected: { expectedReturnAs: string | null; expectedAmountCents: number | null } | null = null;
+  let expected: { expectedCategoryId: string; expectedReturnAs: string | null; expectedAmountCents: number | null } | null = null;
   const ask = async (reason: string, clientRequestId = 'withdraw-request-0001', who: Record<string, string> = rider) => {
     expected ??= await shown();
     return app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/withdrawal-requests`, headers: who, payload: { clientRequestId, reason, ...expected } });
@@ -78,7 +78,7 @@ describe('rider withdrawal requests', () => {
   it('refuses a request whose policy amount changed after the rider looked, and an unpaid entry has no preview', async () => {
     const { app, entryId, rider, shown, setNow, eventId, ev, category } = await setup();
     const before = await shown();
-    expect(before).toEqual({ expectedReturnAs: 'cash', expectedAmountCents: expect.any(Number) });
+    expect(before).toEqual({ expectedCategoryId: expect.any(String), expectedReturnAs: 'cash', expectedAmountCents: expect.any(Number) });
     expect(before.expectedAmountCents).toBeGreaterThan(0);
     // The full-refund step ends 7 days before the first race day; the rider then submits what they saw earlier.
     setNow('2027-04-20T18:00:00Z');
@@ -86,7 +86,7 @@ describe('rider withdrawal requests', () => {
     expect(stale.statusCode, stale.body).toBe(409);
     expect(stale.json().error).toContain('has changed since you looked');
     const after = await shown();
-    expect(after).toEqual({ expectedReturnAs: 'cash', expectedAmountCents: 0 });
+    expect(after).toEqual({ expectedCategoryId: before.expectedCategoryId, expectedReturnAs: 'cash', expectedAmountCents: 0 });
     const fresh = await app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/withdrawal-requests`, headers: rider, payload: { clientRequestId: 'withdraw-request-fresh', reason: 'Withdrawing anyway', ...after } });
     expect(fresh.statusCode, fresh.body).toBe(201);
     expect(fresh.json().policy.entitlement).toMatchObject({ percent: 0, amountCents: 0 });
@@ -140,6 +140,19 @@ describe('rider withdrawal requests', () => {
     expect(approve.statusCode).toBe(409);
     expect(approve.json().error).toContain('moved to another category');
     expect(await entryStatus()).toBe('confirmed');
+  });
+
+  it('refuses a request sent from a preview of the category the entry has since left', async () => {
+    const { app, entryId, rider, shown, ev } = await setup();
+    const before = await shown();
+    const target = ev.config.categories.find((c) => c.timingCode === 'CR-M35-34')!;
+    expect((await app.inject({ method: 'POST', url: `/api/order-entries/${entryId}/transfer`, payload: { toCategoryId: target.id, reason: 'Organizer moved the rider' } })).statusCode).toBe(200);
+    const stale = await app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/withdrawal-requests`, headers: rider, payload: { clientRequestId: 'withdraw-request-moved', reason: 'Leaving', ...before } });
+    expect(stale.statusCode, stale.body).toBe(409);
+    expect(stale.json().error).toContain('moved to another category since you looked');
+    const after = await shown();
+    expect(after.expectedCategoryId).toBe(target.id);
+    expect((await app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/withdrawal-requests`, headers: rider, payload: { clientRequestId: 'withdraw-request-moved-2', reason: 'Leaving', ...after } })).statusCode).toBe(201);
   });
 
   it('approving after the organizer already withdrew the entry is refused and leaves the request open', async () => {
