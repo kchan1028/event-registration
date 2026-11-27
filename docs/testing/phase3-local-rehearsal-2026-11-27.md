@@ -12,6 +12,8 @@ A second follow-up the same day added the bib-operations script. Application sou
 
 A third follow-up the same day added the walk-up exceptions script. Application source: `b282e6bad7591cd4d16a2d83749a22b5a269cc13`. Result: 1 passed.
 
+A fourth follow-up the same day added the junior walk-up script. Application source: `0929ffda6bb1df17a0ddcdce7b64e93da48c4931`. Result: 1 passed.
+
 ## Race-day desk
 
 Passed on the published demo weekend with fictional accounts (organizer, registration manager, two check-in volunteers, timer export):
@@ -60,7 +62,18 @@ Passed on a published fictional criterium with a check-in volunteer and two ride
 - The organizer then closed the 45+ field by time and kept the full 35+ field's waitlist open (facilitator setup, not a desk step). A second rider could not select the closed category and joined the 35+ waitlist as number 1. Continuing without a race was refused, and the rider had no order.
 - The desk found no entry for the waitlisted rider, the waitlist held one waiting entry, and the start lists were unchanged.
 
-Not rehearsed: the conversation that refers a rider to the registration lead, physical QR scanning, and a junior guardian walk-up.
+Not rehearsed: the conversation that refers a rider to the registration lead and physical QR scanning.
+
+## Junior walk-up with a guardian
+
+Passed on a published fictional criterium with a check-in volunteer and a guardian phone session ([walk-up guide](../runbooks/walkup-registration.md)):
+
+- The guardian opened the walk-up address on their own phone, entered Casey Walkup in the junior field with their own name and email, and signed the waiver as parent or guardian.
+- Before payment, the desk found Casey with "Payment not complete", no guardian warning, and no bib.
+- The guardian completed simulated payment. Their account held one order for Casey, placed by them. The volunteer's account held none.
+- The desk read Ready to race, marked the walk-up and issued bib 100, with one history entry.
+
+Not rehearsed: a junior whose guardian has not signed (this checkout requires the guardian to sign before payment) and physical QR scanning.
 
 ## Organizer handoff
 
