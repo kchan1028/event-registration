@@ -63,7 +63,7 @@ Details and limits: [category builder](product.md#1a-road-race-and-criterium-cat
 
 | Feature | Status | What it does |
 |---|---|---|
-| Expired invitation recovery | Implemented locally; [verification](https://github.com/kchan1028/event-registration/pull/162) | Home shows only the signed-in recipient’s expired organization/role notices, explains owner-assisted renewal and clears a notice after a later grant of the same role; expiry never grants access |
+| Expired invitation recovery | Implemented locally; [verification](https://github.com/kchan1028/event-registration/pull/162) | Home shows only the signed-in recipient’s expired organization/role notices, explains owner-assisted renewal, lets the recipient hide a notice, and clears a notice after a later grant of the same role; expiry never grants access |
 | Browse published events | Implemented | View already-published events and schedules; browsing does not create demo fixtures |
 | Walk-up phone handoff | Implemented locally | Check-in shares a published event registration QR/address; the rider/guardian registers on their own phone/account. Staff explicitly mark confirmed walk-up entries and check readiness before first desk bib assignment. Staff may share suggested categories for the selected race day |
 | Shared walk-up test kiosk | Implemented locally | A dedicated test browser uses fictional rider or guardian sign-in and simulated payments. Ending the session, reloading, or reaching five idle minutes clears the kiosk for the next rider. A warning lets the rider extend the session. |

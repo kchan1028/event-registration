@@ -31,3 +31,41 @@ test('an expired-invitation notice explains recovery and disappears after access
   await page.reload();
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
+
+test('a recipient can hide an expired-invitation notice, and a failed hide says so', async ({ page }) => {
+  // API tests cover real expiry, recipient isolation and the saved dismissal; this fixture checks presentation.
+  let notices = [
+    { id: 'mch_fake_one', organizationName: 'Fictional Velo Club', role: 'finance', at: '2027-03-16T18:00:00.000Z' },
+    { id: 'mch_fake_two', organizationName: 'Sample Wheelers', role: 'timer_export', at: '2027-03-15T18:00:00.000Z' },
+  ];
+  let failDismiss = false;
+  await page.route('**/api/rider/expired-invitations', (route) => route.fulfill({ json: notices }));
+  await page.route('**/api/rider/expired-invitations/*/dismiss', (route) => {
+    if (failDismiss) return route.fulfill({ status: 503, json: { error: 'Fictional temporary failure' } });
+    const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/').at(-2) ?? '');
+    notices = notices.filter((notice) => notice.id !== id);
+    return route.fulfill({ json: notices });
+  });
+  await page.goto('/');
+  const notice = page.getByRole('region', { name: 'Invitation expired' });
+  await expect(notice.getByRole('listitem')).toHaveCount(2);
+  await page.setViewportSize({ width: 390, height: 900 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  expect((await new AxeBuilder({ page }).include('[aria-labelledby="expired-invitations-title"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+
+  failDismiss = true;
+  await notice.getByRole('button', { name: 'Hide the expired Fictional Velo Club Finance invitation' }).click();
+  await expect(page.getByRole('alert')).toContainText('The notice could not be hidden');
+  await expect(notice.getByRole('listitem')).toHaveCount(2);
+
+  failDismiss = false;
+  await notice.getByRole('button', { name: 'Hide the expired Fictional Velo Club Finance invitation' }).click();
+  await expect(notice.getByRole('listitem')).toHaveCount(1);
+  await expect(notice).toContainText('Sample Wheelers');
+  await expect(page.getByRole('status').filter({ hasText: 'Hid the expired Fictional Velo Club Finance invitation.' })).toHaveCount(1);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await notice.screenshot({ path: 'test-results/invitation-hide-390.png' });
+
+  await notice.getByRole('button', { name: /Hide the expired Sample Wheelers/ }).click();
+  await expect(page.getByRole('region', { name: 'Invitation expired' })).toHaveCount(0);
+});

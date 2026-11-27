@@ -26,7 +26,7 @@ Offer lookup and checkout require the account that joined the waitlist. A forwar
 
 ## Expired invitation guidance (Implemented locally)
 
-The signed-in recipient reads only their own latest expiry notices through `/api/rider/expired-invitations`. Authenticated account email scopes organization/role history, without revealing the team or granting access. A later grant of the same role supersedes its notice. Real identity-provider acceptance remains open.
+The signed-in recipient reads only their own latest expiry notices through `/api/rider/expired-invitations`. Authenticated account email scopes organization/role history, without revealing the team or granting access. A later grant of the same role supersedes its notice. The recipient can hide a notice through `POST /api/rider/expired-invitations/:id/dismiss`, which accepts only an id from the caller's own current list (otherwise 404), grants nothing and leaves the team history unchanged. Real identity-provider acceptance remains open.
 
 ## Organization ownership transfer (Implemented locally)
 

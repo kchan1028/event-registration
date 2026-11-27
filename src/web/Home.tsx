@@ -18,7 +18,22 @@ const TEMPLATE_LABELS: Record<Template, { title: string; detail: string }> = {
 
 export function Home() {
   const { data: orgs, error, setError, reload: load } = useLoad(() => api.organizations(), []);
-  const { data: expiredInvitations, error: invitationError } = useLoad(() => api.expiredInvitations(), []);
+  const { data: expiredInvitations, setData: setExpiredInvitations, error: invitationError } = useLoad(() => api.expiredInvitations(), []);
+  const [dismissing, setDismissing] = useState<string | null>(null);
+  const [dismissStatus, setDismissStatus] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function dismissNotice(id: string, label: string) {
+    setDismissing(id);
+    setDismissStatus(null);
+    try {
+      setExpiredInvitations(await api.dismissExpiredInvitation(id));
+      setDismissStatus({ ok: true, text: `Hid the expired ${label} invitation.` });
+    } catch (e) {
+      setDismissStatus({ ok: false, text: `The notice could not be hidden. ${(e as ApiError).message}` });
+    } finally {
+      setDismissing(null);
+    }
+  }
   const [busy, setBusy] = useState(false);
 
   async function loadDemo(which: 'omnium' | 'example') {
@@ -71,11 +86,23 @@ export function Home() {
           <section className="settings__section" aria-labelledby="expired-invitations-title">
             <h2 id="expired-invitations-title">Invitation expired</h2>
             <p>Ask the organization's owner to add your role again. Signing in does not renew an expired invitation.</p>
-            <ul>
-              {expiredInvitations.map((i) => <li key={i.id}>{i.organizationName} · {ROLE_LABELS[i.role]}</li>)}
+            <ul className="home__expired">
+              {expiredInvitations.map((i) => {
+                const label = `${i.organizationName} ${ROLE_LABELS[i.role]}`;
+                return (
+                  <li key={i.id}>
+                    <span>{i.organizationName} · {ROLE_LABELS[i.role]}</span>{' '}
+                    <button className="btn btn--ghost btn--small" type="button" disabled={dismissing !== null} onClick={() => void dismissNotice(i.id, label)} aria-label={`Hide the expired ${label} invitation`}>
+                      {dismissing === i.id ? 'Hiding…' : 'Hide'}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
+        <p className="sr-only" role="status">{dismissStatus?.ok ? dismissStatus.text : ''}</p>
+        {dismissStatus && !dismissStatus.ok && <p className="alert alert--error" role="alert">{dismissStatus.text}</p>}
         <section className="home__grid">
           <div className="home__col">
             <h2>Your organizations</h2>
