@@ -19,7 +19,9 @@ async function setup() {
     return () => other.query('COMMIT');
   };
   const read = () => app.inject({ url: `/api/public/events/${eventId}` });
-  return { other, hold, read };
+  // Sessions in this database queued for an advisory lock they have not been granted.
+  const waiters = async () => (await other.query(`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`)).rows[0].n as number;
+  return { other, hold, read, waiters };
 }
 
 describe('public event read lock', () => {
@@ -36,12 +38,13 @@ describe('public event read lock', () => {
   });
 
   it('waits for a writer holding the event lock and answers once it commits', async () => {
-    const { other, hold, read } = await setup();
+    const { other, hold, read, waiters } = await setup();
     try {
       const release = await hold('exclusive');
       let answered = false;
       const pending = read().then((response) => { answered = true; return response; });
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // The read is queued on the held event lock in PostgreSQL, not merely slow.
+      await expect.poll(waiters).toBe(1);
       expect(answered).toBe(false);
       await release();
       const response = await pending;
