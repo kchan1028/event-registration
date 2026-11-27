@@ -97,10 +97,11 @@ test('@rehearsal shared kiosk: two checkouts, the idle warning, and sign-out at 
         await held;
         await route.fulfill({ response });
       });
+      // Pause the browser clock so server latency and the explicit advances below are the only time that counts.
+      await kiosk.clock.pauseAt(await kiosk.evaluate(() => Date.now() + 100));
+      const lateResponse = kiosk.waitForResponse('**/api/orders/*/payment');
       await kiosk.getByRole('button', { name: /Complete simulated payment/ }).click();
       await saved;
-      // Pause the browser clock so only the explicit advances below count toward expiry.
-      await kiosk.clock.pauseAt(await kiosk.evaluate(() => Date.now() + 100));
       await kiosk.clock.fastForward(4 * minute + 1_000);
       await expect(warning).toBeVisible();
       // Two seconds before the five-minute deadline the session is still open.
@@ -114,9 +115,11 @@ test('@rehearsal shared kiosk: two checkouts, the idle warning, and sign-out at 
       expect(await kiosk.evaluate(() => Object.keys(sessionStorage))).toEqual([]);
       await shot(kiosk, '05-idle-ended');
       releaseResponse();
+      await lateResponse;
       await kiosk.unrouteAll({ behavior: 'wait' });
       await kiosk.clock.resume();
-      // The late payment response must not bring the receipt back between riders.
+      // Let the app handle the late response and render before checking it did not bring the receipt back.
+      await kiosk.evaluate(() => new Promise<void>((resolve) => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve())), 0)));
       await expect(start).toBeVisible();
       await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toHaveCount(0);
     });
