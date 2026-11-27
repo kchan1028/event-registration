@@ -1,9 +1,13 @@
 // @covers src/web/WithdrawalRequest.tsx
+// @covers src/web/Register.tsx
+// @covers src/web/api.ts
 import AxeBuilder from '@axe-core/playwright';
+import { formatDollars } from '../src/shared/format';
 import { expect, test } from './fixtures';
 import { publishReviewed } from './support/publish';
+import { seedRegistrationCase } from './support/registration-case';
 
-test('a rider sees the policy effect, asks to withdraw an entry, and the request waits for the organizer', async ({ page, browser, baseURL }) => {
+test('a rider sees the policy effect, asks to withdraw an entry, and the request waits for the organizer', { tag: '@smoke' }, async ({ page, browser, baseURL }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
   const eventUrl = `/api/events/${eventId}`;
   expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).status()).toBe(200);
@@ -37,6 +41,8 @@ test('a rider sees the policy effect, asks to withdraw an entry, and the request
     await ask.click();
     const form = rider.getByRole('form', { name: `Ask to withdraw from ${category.name}` });
     await expect(form).toContainText("Under this event's refund policy, withdrawing today returns");
+    const paidCents = (await (await page.request.get(`/api/orders/${orderId}`)).json()).quote.lines[0].totalCents as number;
+    await expect(form).toContainText(`withdrawing today returns ${formatDollars(paidCents)} (100% of the ${formatDollars(paidCents)} you paid; fees are not returned) as a refund.`);
     await expect(form.getByRole('textbox', { name: 'Why do you want to withdraw?' })).toBeFocused();
     expect(await rider.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     expect((await new AxeBuilder({ page: rider }).include('form.correction').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
@@ -64,6 +70,13 @@ test('a rider sees the policy effect, asks to withdraw an entry, and the request
     expect((await page.request.post(`/api/order-entries/${entryId}/transfer`, { data: { toCategoryId: other.id, reason: 'Organizer moved the rider' } })).status()).toBe(200);
     await rider.reload();
     await expect(rider.getByRole('status').filter({ hasText: `You asked to withdraw from ${category.name}.` })).toBeVisible();
+
+    // Declining leaves the entry in the race. The rider can ask again, about the category it is in now.
+    expect((await page.request.post(`${eventUrl}/withdrawal-requests/${requests[0].id}/decline`, { data: { reason: 'The entry stays in the race' } })).status()).toBe(200);
+    await rider.reload();
+    await expect(rider.getByRole('status').filter({ hasText: 'The organizer has not decided yet' })).toHaveCount(0);
+    await expect(rider.getByRole('button', { name: `Ask to withdraw from ${other.name}` })).toBeVisible();
+    await expect(rider.getByText('Withdrawn by the organizer')).toHaveCount(0);
   } finally {
     await context.close();
   }
@@ -109,5 +122,129 @@ test('if the organizer moves the entry while the rider is asking, the form shows
     expect((await (await page.request.get(`${eventUrl}/withdrawal-requests`)).json())).toEqual([expect.objectContaining({ status: 'open', policy: expect.objectContaining({ categoryId: to.id }) })]);
   } finally {
     await context.close();
+  }
+});
+
+test('a shared kiosk receipt does not offer withdrawal; the rider’s own receipt does', async ({ page, browser, baseURL }) => {
+  const eventId = await seedRegistrationCase(page.request, 'criterium');
+  const email = `kiosk.withdraw.${eventId}@example.test`;
+  const kioskContext = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 }, extraHTTPHeaders: {} });
+  try {
+    const kiosk = await kioskContext.newPage();
+    await kiosk.goto(`/?kiosk=${eventId}`);
+    await kiosk.getByRole('button', { name: 'Sign in to register' }).click();
+    await kiosk.getByLabel('Test email').fill(email);
+    await kiosk.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await kiosk.getByLabel('Use a demo rider (fake data)').selectOption('rider-alex');
+    await kiosk.getByRole('checkbox', { name: /DVC-M45/ }).check();
+    await kiosk.getByRole('button', { name: 'Continue to racer details' }).click();
+    await kiosk.getByRole('button', { name: 'Continue to the waiver' }).click();
+    await kiosk.getByLabel('I have read the whole waiver').check();
+    await kiosk.getByLabel(/Type your full name to sign/).fill('Alex Demo');
+    await kiosk.getByLabel('I agree to this waiver', { exact: true }).check();
+    await kiosk.getByRole('button', { name: 'Sign and review the order' }).click();
+    await kiosk.getByRole('button', { name: /Complete simulated payment/ }).click();
+    await expect(kiosk.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
+    await expect(kiosk.getByRole('button', { name: /Ask to withdraw/ })).toHaveCount(0);
+    await expect(kiosk.getByRole('form', { name: /Ask to withdraw/ })).toHaveCount(0);
+    expect((await (await page.request.get(`/api/events/${eventId}/withdrawal-requests`)).json())).toEqual([]);
+
+    const orders = await kiosk.request.get('/api/rider/registrations', { headers: { Authorization: `Bearer test:${email}` } });
+    expect(orders.ok()).toBe(true);
+    const [order] = await orders.json();
+    const own = await browser.newContext({ baseURL, extraHTTPHeaders: { Authorization: `Bearer test:${email}` } });
+    try {
+      await own.addInitScript((account) => sessionStorage.setItem('cyclereg.test-session', account), email);
+      const rider = await own.newPage();
+      await rider.goto(`/#/orders/${order.id}`);
+      await expect(rider.getByRole('button', { name: /Ask to withdraw from / })).toBeVisible();
+    } finally {
+      await own.close();
+    }
+  } finally {
+    await kioskContext.close();
+  }
+});
+
+test('a junior viewing their own registration cannot ask to withdraw, and the guardian can until they cancel', async ({ page, browser, baseURL }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  const event = await (await page.request.get(eventUrl)).json();
+  event.config.registration.refundRules = { tiers: [{ daysBefore: 0, percent: 100 }], returnAs: 'credit', organizerCancellation: 'credit' };
+  expect((await page.request.put(`${eventUrl}/config`, { data: { revision: event.revision, config: event.config } })).status()).toBe(200);
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).status()).toBe(200);
+  const { config } = await (await page.request.get(eventUrl)).json();
+  const category = config.categories.find((row: { timingCode: string }) => row.timingCode === 'RR-J1516');
+  const parent = `parent-withdraw-${eventId}@example.test`;
+  const juniorEmail = `junior-withdraw-${eventId}@example.test`;
+  const headers = { Authorization: `Bearer test:${parent}` };
+  const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { headers, data: {
+    clientRequestId: `junior-withdraw-${eventId}`.slice(0, 64),
+    categoryIds: [category.id],
+    rider: {
+      firstName: 'Sam', lastName: 'Fictional', email: '', team: '', racingAge: 16, licenseCategory: null, licenseType: 'annual',
+      competitionClass: 'men', collegiateDivision: null, guardian: { name: 'Pat Fictional', relationship: 'Parent', email: parent, phone: '' },
+      emergencyContact: { name: 'Pat Fictional', phone: '555-555-0199' },
+    },
+    waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Fictional', signerRole: 'guardian' },
+  } });
+  expect(created.status(), await created.text()).toBe(201);
+  const { id: orderId } = await created.json();
+
+  const guardianContext = await browser.newContext({ baseURL, extraHTTPHeaders: headers });
+  await guardianContext.addInitScript((account) => sessionStorage.setItem('cyclereg.test-session', account), parent);
+  const guardian = await guardianContext.newPage();
+  try {
+    await guardian.goto(`/#/orders/${orderId}`);
+    await expect(guardian.getByRole('heading', { name: 'Registration not finished' })).toBeVisible();
+    await expect(guardian.getByRole('button', { name: /Ask to withdraw/ })).toHaveCount(0);
+
+    const paid = await page.request.post(`/api/orders/${orderId}/payment`, { headers, data: { attemptId: `junior-withdraw-paid-${orderId}`, outcome: 'success' } });
+    expect(paid.status(), await paid.text()).toBe(200);
+    const entryId = (await paid.json()).entries[0].id as string;
+    const paidCents = (await (await page.request.get(`/api/orders/${orderId}`)).json()).quote.lines[0].totalCents as number;
+    const [sam] = await (await page.request.get('/api/rider/juniors', { headers })).json();
+    expect((await page.request.post(`/api/rider/juniors/${sam.id}/viewer`, { headers, data: { email: juniorEmail } })).ok()).toBe(true);
+
+    const juniorContext = await browser.newContext({ baseURL, extraHTTPHeaders: { Authorization: `Bearer test:${juniorEmail}` } });
+    try {
+      await juniorContext.addInitScript((account) => sessionStorage.setItem('cyclereg.test-session', account), juniorEmail);
+      const junior = await juniorContext.newPage();
+      const denied = junior.waitForResponse((res) => res.url().includes(`/api/rider/order-entries/${entryId}/withdrawal`) && res.request().method() === 'GET');
+      await junior.goto(`/#/orders/${orderId}`);
+      expect((await denied).status()).toBe(404);
+      await expect(junior.getByRole('heading', { name: 'You’re entered' })).toBeVisible();
+      await expect(junior.getByRole('button', { name: /Ask to withdraw/ })).toHaveCount(0);
+      await expect(junior.getByRole('form', { name: /Ask to withdraw/ })).toHaveCount(0);
+    } finally {
+      await juniorContext.close();
+    }
+
+    await guardian.reload();
+    const ask = guardian.getByRole('button', { name: `Ask to withdraw from ${category.name}` });
+    await expect(ask).toBeVisible();
+    await ask.click();
+    const form = guardian.getByRole('form', { name: `Ask to withdraw from ${category.name}` });
+    const amount = formatDollars(paidCents);
+    await expect(form).toContainText(`withdrawing today returns ${amount} (100% of the ${amount} you paid; fees are not returned) as credit toward a later event by this organizer.`);
+    await form.getByRole('textbox', { name: 'Why do you want to withdraw?' }).fill('Cannot travel');
+    await form.getByRole('button', { name: 'Cancel' }).click();
+    await expect(form).toHaveCount(0);
+    await expect(ask).toBeVisible();
+    expect((await (await page.request.get(`${eventUrl}/withdrawal-requests`)).json())).toEqual([]);
+
+    await guardian.route(`**/api/rider/order-entries/${entryId}/withdrawal`, (route) => route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Fictional withdrawal status failure' }),
+    }));
+    await guardian.reload();
+    await expect(guardian.getByText('Withdrawal options could not load. Refresh this page to try again.')).toBeVisible();
+    await expect(guardian.getByRole('button', { name: /Ask to withdraw/ })).toHaveCount(0);
+    await guardian.unroute(`**/api/rider/order-entries/${entryId}/withdrawal`);
+    await guardian.reload();
+    await expect(guardian.getByRole('button', { name: `Ask to withdraw from ${category.name}` })).toBeVisible();
+  } finally {
+    await guardianContext.close();
   }
 });
