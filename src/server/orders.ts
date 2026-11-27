@@ -1,4 +1,4 @@
-import { recordRegistrationConfirmation, recordRegistrationReceipt } from './email';
+import { recordEntryChangeNotice, recordRegistrationConfirmation, recordRegistrationReceipt } from './email';
 import { isResearchExample, RESEARCH_REGISTRATION_MESSAGE } from '../shared/researchExamples';
 import { randomInt } from 'node:crypto';
 import { canAdmit, remainingForCategory, type LimitUsage } from '../shared/capacity';
@@ -834,11 +834,14 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         const paid = paidLine(row.quote_json, e)?.totalCents ?? 0;
         const newPrice = quote(config, [target.id], todayIn(config.event.timeZone, clock()), null, profileOf(rider)).lines[0].priceCents;
         const t = nowIso();
+        const fromName = config.categories.find((c) => c.id === e.category_id)?.name ?? 'the previous category';
+        const changeId = newId('chg');
         await db.run(`UPDATE order_entries SET original_category_id = COALESCE(original_category_id, category_id), category_id = $1 WHERE id = $2`, [target.id, e.id]);
         await db.run(
           `INSERT INTO entry_changes (id, event_id, order_id, entry_id, kind, from_category_id, to_category_id, amount_paid_cents, new_price_cents, difference_cents, reason, created_at) VALUES ($1, $2, $3, $4, 'transfer', $5, $6, $7, $8, $9, $10, $11)`,
-          [newId('chg'), e.event_id, e.order_id, e.id, e.category_id, target.id, paid, newPrice, newPrice - paid, reason, t],
+          [changeId, e.event_id, e.order_id, e.id, e.category_id, target.id, paid, newPrice, newPrice - paid, reason, t],
         );
+        await recordEntryChangeNotice(db, changeId, t, `moved from ${fromName} to ${target.name}`, confirmationSender);
         return view(e.order_id);
       });
     },
@@ -853,11 +856,14 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
         if (effectiveStatus(row) !== 'confirmed' || e.status !== 'confirmed') throw new HttpError(409, 'Only a paid, active entry can be withdrawn.');
         const paid = paidLine(row.quote_json, e)?.totalCents ?? 0;
         const t = nowIso();
+        const fromName = (await repo.getPublished(e.event_id)).config.categories.find((c) => c.id === e.category_id)?.name ?? 'the previous category';
+        const changeId = newId('chg');
         await db.run(`UPDATE order_entries SET status = 'withdrawn', withdrawn_at = $1 WHERE id = $2`, [t, e.id]);
         await db.run(
           `INSERT INTO entry_changes (id, event_id, order_id, entry_id, kind, from_category_id, to_category_id, amount_paid_cents, new_price_cents, difference_cents, reason, created_at) VALUES ($1, $2, $3, $4, 'withdraw', $5, NULL, $6, NULL, NULL, $7, $8)`,
-          [newId('chg'), e.event_id, e.order_id, e.id, e.category_id, paid, reason, t],
+          [changeId, e.event_id, e.order_id, e.id, e.category_id, paid, reason, t],
         );
+        await recordEntryChangeNotice(db, changeId, t, `withdrawn from ${fromName}`, confirmationSender);
         return view(e.order_id);
       });
     },

@@ -161,6 +161,45 @@ export function refundNoticeText(orderNumber: string, amount: string, isDemo: bo
     : `Refund ${orderNumber} for ${amount}. Sign in and open My registrations to see it.`;
 }
 
+/** Order number and the category change only. The organizer's reason stays out of the message. */
+export function entryChangeNoticeText(orderNumber: string, summary: string, isDemo: boolean): string {
+  return isDemo
+    ? `Demo entry change ${orderNumber}: ${summary}. Simulated registration: no money was moved. Sign in and open My registrations to see it.`
+    : `Entry change ${orderNumber}: ${summary}. Sign in and open My registrations to see it.`;
+}
+
+/** Called when an organizer transfer or withdrawal is saved. A null sender stays unsent. This step does not send. */
+export async function recordEntryChangeNotice(db: Db, changeId: string, recordedAt: string, summary: string, senderAddress?: string) {
+  const row = await db.get<{ organization_id: string; order_id: string; email: string; is_demo: boolean | null }>(
+    `SELECT e.organization_id, o.id AS order_id, a.email,
+            (v.config_json #>> '{event,isDemo}') = 'true' AS is_demo
+     FROM entry_changes c
+     JOIN orders o ON o.id = c.order_id
+     JOIN events e ON e.id = o.event_id
+     JOIN accounts a ON a.id = o.account_id
+     JOIN event_versions v ON v.event_id = o.event_id AND v.version = o.published_version
+     WHERE c.id = $1 AND c.kind IN ('transfer', 'withdraw')`,
+    [changeId],
+  );
+  if (!row) return;
+  const isDemo = row.is_demo === true;
+  await db.run(
+    `INSERT INTO email_messages (id, organization_id, kind, ref, entry_change_id, to_email, subject, body_text, status, created_at, from_email, keyed)
+     VALUES ($1, $2, 'entry_change_notice', $3, $3, $4, $5, $6, 'recorded', $7, $8, true)
+     ON CONFLICT (entry_change_id) DO NOTHING`,
+    [
+      newId('eml'),
+      row.organization_id,
+      changeId,
+      row.email,
+      'Your entry change',
+      entryChangeNoticeText(formatOrderNumber(row.order_id, isDemo), summary, isDemo),
+      recordedAt,
+      senderAddress ?? null,
+    ],
+  );
+}
+
 /** Called when a refund is succeeded. A null sender stays unsent. */
 export async function recordRefundNotice(db: Db, refundId: string, recordedAt: string, senderAddress?: string) {
   const row = await db.get<{ organization_id: string; order_id: string; email: string; amount_cents: number; is_demo: boolean | null }>(
