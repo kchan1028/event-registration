@@ -1,10 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
+import { REHEARSAL_DATABASE_URL } from './e2e/rehearsals/database';
 
 // Isolated rehearsal runner. The default Playwright config ignores *.rehearsal.spec.ts
 // so the regular suite does not treat a rehearsal as a regression test.
 // This file uses its own port and a database whose name ends in _e2e.
 const port = 3417;
-const databaseUrl = process.env.REHEARSAL_DATABASE_URL ?? 'postgres://cyclereg:cyclereg@127.0.0.1:5432/cyclereg_phase3_rehearsal_e2e';
+const databaseUrl = REHEARSAL_DATABASE_URL;
 
 export default defineConfig({
   testDir: 'e2e/rehearsals',
