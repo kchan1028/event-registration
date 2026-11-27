@@ -1,8 +1,15 @@
 // Rehearsal: race-day desk. Runbooks: docs/runbooks/race-day-check-in.md, docs/runbooks/walkup-registration.md. Fictional data only.
 import { E2E_ORGANIZER, expect, test } from '../fixtures';
 import type { CheckInList } from '../../src/shared/checkin';
+import { parseCsv } from '../../src/shared/csv';
 import { publishReviewed } from '../support/publish';
 import { rolePage } from './roles';
+
+function csvField(text: string, entryId: string, column: string): string | undefined {
+  const [columns, ...rows] = parseCsv(text);
+  const row = rows.find((cells) => cells[columns.indexOf('entry_id')] === entryId);
+  return row?.[columns.indexOf(column)];
+}
 
 test.use({ trace: 'on', screenshot: 'on' });
 
@@ -38,6 +45,10 @@ test('@rehearsal race-day desk, roster, exceptions, outage, shift and timer hand
   const volunteer = await rolePage(browser, baseURL, VOLUNTEER);
   const incoming = await rolePage(browser, baseURL, INCOMING);
   const timer = await rolePage(browser, baseURL, TIMER);
+  let lockedCsv = '';
+  let lockedVersion = 0;
+  let lockedRaceId = '';
+  let lockedRaceName = '';
   try {
     await test.step('Before the desk 1: each staff member uses their own account and opens Check-in', async () => {
       await volunteer.page.goto(`/#/events/${demo.eventId}/check-in`);
@@ -312,23 +323,64 @@ test('@rehearsal race-day desk, roster, exceptions, outage, shift and timer hand
       await shot(incoming.page, 'shift-incoming');
     });
 
-    await test.step('Timer handoff: lock a start list and download the locked CSV', async () => {
+    await test.step('Timer handoff: download the current CSV, lock the list, and download the locked CSV', async () => {
       const lists = await (await timer.page.request.get(`${eventUrl}/start-lists`)).json() as { races: { raceId: string; raceName: string; rows: { entryId: string }[] }[] };
       const race = lists.races.find((r) => r.rows.some((row) => row.entryId === alex.entries[0].id));
       expect(race, 'Alex must be on a start list').toBeTruthy();
+      lockedRaceId = race!.raceId;
+      lockedRaceName = race!.raceName;
       await timer.page.goto(`/#/events/${demo.eventId}/startlists`);
       await expect(timer.page.getByRole('heading', { name: 'Start lists and timer export', exact: true })).toBeVisible();
-      await timer.page.getByRole('radio', { name: race!.raceName, exact: true }).check();
+      await timer.page.getByRole('radio', { name: lockedRaceName, exact: true }).check();
+      const currentWait = timer.page.waitForResponse((r) => r.url().includes(`/start-lists/${lockedRaceId}/csv`) && !r.url().includes('snapshot=') && r.request().method() === 'GET');
+      await timer.page.getByRole('link', { name: `Download ${lockedRaceName} CSV`, exact: true }).click();
+      const current = await currentWait;
+      expect(current.status()).toBe(200);
+      const currentCsv = await current.text();
+      expect(csvField(currentCsv, alex.entries[0].id, 'bib')).toBe('100');
+      const lockWait = timer.page.waitForResponse((r) => r.url().endsWith(`/start-lists/${lockedRaceId}/lock`) && r.request().method() === 'POST');
       await timer.page.getByRole('button', { name: 'Lock start list', exact: true }).click();
-      const locked = timer.page.waitForResponse((r) => r.url().includes(`/start-lists/${race!.raceId}/csv`) && r.request().method() === 'GET');
-      await timer.page.getByRole('link', { name: 'Download the locked list' }).click();
-      const csv = await locked;
+      const lock = await lockWait;
+      expect(lock.status()).toBe(201);
+      lockedVersion = (await lock.json() as { version: number }).version;
+      await expect(timer.page.getByRole('link', { name: 'Download the locked list', exact: true })).toBeVisible();
+      const lockedWait = timer.page.waitForResponse((r) => r.url().includes(`/start-lists/${lockedRaceId}/csv?snapshot=${lockedVersion}`) && r.request().method() === 'GET');
+      await timer.page.getByRole('link', { name: 'Download the locked list', exact: true }).click();
+      const csv = await lockedWait;
       expect(csv.status()).toBe(200);
-      const saved = await csv.text();
-      expect(saved).toContain(alex.entries[0].id);
+      lockedCsv = await csv.text();
+      expect(lockedCsv).toBe(currentCsv);
       expect((await timer.page.request.get(`${eventUrl}/check-in`)).status()).toBe(403);
+      expect((await timer.page.request.get(`${eventUrl}/exports/ledger.csv`)).status()).toBe(403);
       await shot(timer.page, 'timer-locked');
-      void saved;
+    });
+
+    await test.step('Timer handoff: a later bib change is visible and the locked CSV stays unchanged', async () => {
+      const change = {
+        mode: 'manual' as const,
+        acknowledgeCheckedIn: true,
+        dayId: desk.dayId,
+        reason: 'Fictional timer revision',
+        assignments: [{ orderId: alex.orderId, bib: 150 }],
+      };
+      const preview = await page.request.post(`${eventUrl}/bibs/reassign/preview`, { data: change });
+      expect(preview.ok(), await preview.text()).toBe(true);
+      const body = await preview.json() as { fingerprint: string };
+      const apply = await page.request.post(`${eventUrl}/bibs/reassign/apply`, { data: { batch: change, fingerprint: body.fingerprint } });
+      expect(apply.ok(), await apply.text()).toBe(true);
+      await timer.page.reload();
+      await timer.page.getByRole('radio', { name: lockedRaceName, exact: true }).check();
+      await expect(timer.page.getByRole('region', { name: `Revisions since the lock (v${lockedVersion})` })).toContainText('bib 100 → 150');
+      const currentWait = timer.page.waitForResponse((r) => r.url().includes(`/start-lists/${lockedRaceId}/csv`) && !r.url().includes('snapshot=') && r.request().method() === 'GET');
+      await timer.page.getByRole('link', { name: `Download ${lockedRaceName} CSV`, exact: true }).click();
+      const current = await currentWait;
+      expect(current.status()).toBe(200);
+      expect(csvField(await current.text(), alex.entries[0].id, 'bib')).toBe('150');
+      const repeated = await timer.page.request.get(`${eventUrl}/start-lists/${lockedRaceId}/csv?snapshot=${lockedVersion}`);
+      expect(repeated.status()).toBe(200);
+      expect(await repeated.text()).toBe(lockedCsv);
+      expect(csvField(lockedCsv, alex.entries[0].id, 'bib')).toBe('100');
+      await shot(timer.page, 'timer-revision');
     });
 
     testInfo.annotations.push({
