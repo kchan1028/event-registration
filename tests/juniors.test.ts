@@ -1,10 +1,10 @@
 import pg from 'pg';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { GuardianInvitation } from '../src/shared/juniors';
 import type { EventConfig } from '../src/shared/schema';
 import { as, fakeAuth } from './support/auth';
 import { testApp, testDatabaseUrl } from './support/db';
-import type { EmailSender } from '../src/server/email';
+import { createMailer, guardianInvitationText, type EmailSender } from '../src/server/email';
 import { openDb } from '../src/server/db';
 import { createJuniors } from '../src/server/juniors';
 import { publishReviewed } from './support/publish';
@@ -244,6 +244,86 @@ describe('guardian invitation records without access grants', () => {
     try {
       expect((await client.query(`SELECT status, from_email FROM email_messages`)).rows).toEqual([{ status: 'recorded', from_email: 'sender@example.test' }]);
     } finally { await client.end(); }
+  });
+
+  it('dispatches an open guardian invitation once and skips a closed or stopped address', async () => {
+    const send = vi.fn().mockResolvedValue('re_guardian');
+    const now = new Date('2027-01-01T12:00:00Z');
+    const sender: EmailSender = { mode: 'resend', from: 'sender@example.test', send };
+    const { call, registerJunior, databaseUrl } = await setup(() => now, sender);
+    await call(OTHER_PARENT, 'GET', '/api/me');
+    await registerJunior(PARENT, 'Sam');
+    const [sam] = (await call(PARENT, 'GET', '/api/rider/juniors')).json();
+    const url = `/api/rider/juniors/${sam.id}/guardian-invitations`;
+    const pending = (rows: GuardianInvitation[]) => {
+      const open = rows.filter((item) => item.status === 'pending');
+      expect(open).toHaveLength(1);
+      return open[0];
+    };
+    const invite = pending((await call(PARENT, 'POST', url, { email: OTHER_PARENT })).json() as GuardianInvitation[]);
+    const db = openDb(databaseUrl);
+    const mailer = createMailer(db, sender, () => now);
+    try {
+      expect(send).not.toHaveBeenCalled();
+      const first = await db.get<{ id: string }>(`SELECT id FROM email_messages WHERE guardian_invitation_id = $1`, [invite.id]);
+      const localSend = vi.fn().mockResolvedValue('local-should-not-send');
+      await createMailer(db, { mode: 'local', send: localSend }, () => now).dispatchNextRiderEmail();
+      expect(localSend).not.toHaveBeenCalled();
+      await db.run(`UPDATE email_messages SET from_email = NULL WHERE id = $1`, [first!.id]);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).not.toHaveBeenCalled();
+      await db.run(`UPDATE email_messages SET from_email = $2 WHERE id = $1`, [first!.id, 'sender@example.test']);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send.mock.calls[0][1]).toBe(first!.id);
+      expect(send.mock.calls[0][0]).toMatchObject({
+        from: sender.from,
+        to: OTHER_PARENT,
+        subject: 'You are invited to CycleReg',
+        text: guardianInvitationText(invite.expiresAt),
+      });
+      expect(send.mock.calls[0][0].text).not.toContain('Sam');
+      expect(send.mock.calls[0][0].text).not.toContain('@');
+      expect(await db.get(`SELECT status, organization_id FROM email_messages WHERE id = $1`, [first!.id])).toEqual({ status: 'sent', organization_id: null });
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(1);
+
+      await db.run(
+        `INSERT INTO email_delivery_events (id, email_id, kind, occurred_at) VALUES ('guardian-bounce', $1, 'bounced', $2)`,
+        [first!.id, now.toISOString()],
+      );
+      expect((await call(PARENT, 'POST', `${url}/${invite.id}/cancel`)).statusCode).toBe(200);
+      const retried = pending((await call(PARENT, 'POST', url, { email: OTHER_PARENT })).json() as GuardianInvitation[]);
+      const stopped = await db.get<{ id: string; status: string }>(`SELECT id, status FROM email_messages WHERE guardian_invitation_id = $1`, [retried.id]);
+      expect(stopped!.status).toBe('recorded');
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(1);
+      await db.run(`DELETE FROM email_delivery_events WHERE id = 'guardian-bounce'`);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send.mock.calls[1][1]).toBe(stopped!.id);
+      expect((await call(PARENT, 'POST', `${url}/${retried.id}/cancel`)).statusCode).toBe(200);
+
+      const second = pending((await call(PARENT, 'POST', url, { email: 'second.guardian@example.test' })).json() as GuardianInvitation[]);
+      expect((await call(PARENT, 'POST', `${url}/${second.id}/cancel`)).statusCode).toBe(200);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(await db.get<{ status: string }>(`SELECT status FROM email_messages WHERE guardian_invitation_id = $1`, [second.id])).toEqual({ status: 'recorded' });
+
+      const third = pending((await call(PARENT, 'POST', url, { email: 'third.guardian@example.test' })).json() as GuardianInvitation[]);
+      await db.run(`UPDATE junior_guardian_invitations SET expires_at = '2020-01-01T00:00:00Z' WHERE id = $1`, [third.id]);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(await db.get<{ status: string }>(`SELECT status FROM email_messages WHERE guardian_invitation_id = $1`, [third.id])).toEqual({ status: 'recorded' });
+
+      const open = pending((await call(PARENT, 'POST', url, { email: OTHER_PARENT })).json() as GuardianInvitation[]);
+      expect((await call(OTHER_PARENT, 'POST', `/api/rider/guardian-invitations/${open.id}/accept`, { acknowledge: true })).statusCode).toBe(200);
+      await mailer.dispatchNextRiderEmail();
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(await db.get<{ status: string }>(`SELECT status FROM email_messages WHERE guardian_invitation_id = $1`, [open.id])).toEqual({ status: 'recorded' });
+    } finally {
+      await db.close();
+    }
   });
 
   it('serializes replacements, keeps cancellation history and does not let an old cancellation close the new invitation', async () => {
