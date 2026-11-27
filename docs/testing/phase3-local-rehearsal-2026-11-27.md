@@ -6,6 +6,8 @@ Application source: `f0c36cf58d3c418a164cd18b9c72a382dacedb33`. The application 
 
 Environment: local Playwright, `playwright.rehearsal.config.ts`, loopback port 3417, database `cyclereg_phase3_rehearsal_e2e`, test sign-in, desktop Chromium at 1440×900. One worker. The default `npm run test:e2e` config ignores `*.rehearsal.spec.ts`. Result: 4 passed (`organizer-handoff`, `race-day`, `support-freeze`, `walk-up`).
 
+A follow-up run of the race-day script the same day passed after the timer steps were extended. Application source was still `f0c36cf58d3c418a164cd18b9c72a382dacedb33`. Result: 1 passed.
+
 ## Race-day desk
 
 Passed on the published demo weekend with fictional accounts (organizer, registration manager, two check-in volunteers, timer export):
@@ -20,7 +22,8 @@ Passed on the published demo weekend with fictional accounts (organizer, registr
 - Blake Demo checked in at bib 103. A checked-in reassignment to 140 was previewed and applied. After a simulated offline lookup, Alex stayed at 100, Gray Demo stayed unreviewed, and Blake showed 140.
 - Frankie Demo has no check-in code because the order is unpaid. A name lookup left Frankie not ready while Harper Demo checked in.
 - The incoming volunteer, in a new session, saw Alex at bib 100 and could not issue a second bib.
-- The timer account locked one start list, downloaded the locked CSV, and received HTTP 403 from check-in.
+- On the first run, the timer account locked one start list, downloaded the locked CSV, and received HTTP 403 from check-in.
+- On the follow-up run, the timer account downloaded the current CSV and the locked CSV for Alex Demo's race. The two files matched, with bib 100. The organizer then changed that checked-in bib to 150. The timer session showed the revision, the current CSV showed bib 150, and a repeat download of the locked CSV was byte-identical. Check-in and the finance ledger returned HTTP 403.
 
 Not rehearsed: physical bib stock, the paper desk contact sheet, a paper waiver, a physical camera, phone, or printer, and real sign-in delivery. Typed lookup was used. Camera emulation was not required for that path.
 
