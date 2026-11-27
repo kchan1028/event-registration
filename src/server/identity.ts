@@ -97,7 +97,7 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
      * self-registrations by account. Other events are limited to the same organization.
      */
     async eventParticipantHistory(eventId: string, orderId: string) {
-      const history = await db.all<{ orderId: string; eventId: string; createdAt: string; eventName: string; demo: boolean; orderDemo: boolean }>(
+      const history = await db.all<{ orderId: string; eventId: string; createdAt: string; eventName: string; startDate: string | null; demo: boolean; orderDemo: boolean }>(
         `WITH org_history AS (
            SELECT o.id, o.event_id, o.created_at, o.seq, o.published_version, CASE
              WHEN COALESCE(o.junior_profile_id, c.junior_profile_id) IS NOT NULL
@@ -114,6 +114,7 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
          )
          SELECT related.id AS "orderId", related.event_id AS "eventId", related.created_at AS "createdAt",
                 v.config_json #>> '{event,name}' AS "eventName",
+                (SELECT min(d ->> 'date') FROM jsonb_array_elements(v.config_json -> 'days') d) AS "startDate",
                 (v.config_json #>> '{event,isDemo}') = 'true' AS demo,
                 (ov.config_json #>> '{event,isDemo}') = 'true' AS "orderDemo"
          FROM org_history anchor
@@ -126,12 +127,12 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
         [eventId, orderId],
       );
       if (history.length === 0) throw new HttpError(404, 'Registration history not found.');
-      const otherEvents = new Map<string, { name: string; demo: boolean; orders: { orderId: string; orderNumber: string; createdAt: string }[] }>();
+      const otherEvents = new Map<string, { name: string; startDate: string; demo: boolean; orders: { orderId: string; orderNumber: string; createdAt: string }[] }>();
       const orderIds: string[] = [];
       for (const row of history) {
         if (row.eventId === eventId) orderIds.push(row.orderId);
         else {
-          const group = otherEvents.get(row.eventId) ?? { name: row.eventName, demo: row.demo, orders: [] };
+          const group = otherEvents.get(row.eventId) ?? { name: row.eventName, startDate: row.startDate ?? '', demo: row.demo, orders: [] };
           group.orders.push({
             orderId: row.orderId,
             orderNumber: formatOrderNumber(row.orderId, row.orderDemo),
@@ -142,7 +143,8 @@ export function createIdentity(db: Db, orders: Orders, clock: () => Date) {
       }
       return {
         orderIds,
-        otherEvents: [...otherEvents].sort(([a], [b]) => a.localeCompare(b)).map(([id, group]) => ({
+        // Newest event first by its first race day (owner decision, November 27, 2026); id breaks ties.
+        otherEvents: [...otherEvents].sort(([a, x], [b, y]) => y.startDate.localeCompare(x.startDate) || a.localeCompare(b)).map(([id, group]) => ({
           eventId: id,
           name: group.name,
           demo: group.demo,

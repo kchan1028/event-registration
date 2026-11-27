@@ -1,3 +1,5 @@
+// @covers src/server/identity.ts
+// @covers src/web/registrations/OrganizerParticipantHistory.tsx
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { publishReviewed } from './support/publish';
@@ -187,4 +189,108 @@ test('organizer history shows another event and labels a demo event', async ({ p
     expect(await fromDemo.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     expect((await new AxeBuilder({ page }).include('.organizer-participant-history[open]').analyze()).violations).toEqual([]);
   }
+});
+
+test('@smoke organizer history lists other events newest first by first race day', async ({ page }) => {
+  const demo = await page.request.post('/api/demo');
+  expect(demo.status()).toBe(201);
+  const { eventId, organizationId } = await demo.json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).status()).toBe(200);
+  const source = await (await page.request.get(eventUrl)).json();
+
+  const createdIds: string[] = [];
+  for (const name of ['First created race', 'Second created race', 'Third created race']) {
+    const created = await page.request.post(`/api/organizations/${organizationId}/events`, {
+      data: { name, template: 'road_race', startDate: '2027-04-04', timeZone: 'America/Los_Angeles' },
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    createdIds.push((await created.json()).id as string);
+  }
+  // Assign race days after the ids exist so date order is the reverse of id order.
+  const byId = [...createdIds].sort((a, b) => a.localeCompare(b));
+  const planned = [
+    { id: byId[0], name: 'Earlier fictional race', shiftDays: -60 },
+    { id: byId[1], name: 'Middle fictional race', shiftDays: 20 },
+    { id: byId[2], name: 'Later fictional race', shiftDays: 60 },
+  ];
+  const shift = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+  const place = async (event: string, ref: string, config: { categories: { id: string; timingCode: string }[]; registration: { waiverVersion: string } }) => {
+    const category = config.categories.find((row) => row.timingCode === 'RR-M35-34');
+    expect(category).toBeTruthy();
+    const result = await page.request.post(`/api/rider/events/${event}/orders`, {
+      data: {
+        clientRequestId: `organizer-history-date-${ref}`,
+        categoryIds: [category!.id],
+        selfRegistrationConfirmed: true,
+        rider: {
+          firstName: 'Sam', lastName: 'Fictional', email: 'rider@example.test', team: '',
+          racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men',
+          collegiateDivision: null, guardian: null,
+          emergencyContact: { name: 'Pat Fictional', phone: '555-555-0199' },
+        },
+        waiver: {
+          version: config.registration.waiverVersion, read: true, agreed: true,
+          signatureName: 'Sam Fictional', signerRole: 'rider',
+        },
+      },
+    });
+    expect(result.status(), await result.text()).toBe(201);
+    const order = await result.json() as { id: string; orderNumber: string };
+    expect((await page.request.post(`/api/orders/${order.id}/payment`, {
+      data: { attemptId: `organizer-history-date-paid-${order.id}`, outcome: 'success' },
+    })).status()).toBe(200);
+    return order;
+  };
+
+  const orders = new Map<string, { orderNumber: string }>();
+  for (const event of planned) {
+    const current = await (await page.request.get(`/api/events/${event.id}`)).json();
+    const config = {
+      ...source.config,
+      event: { ...source.config.event, name: event.name, isDemo: false },
+      days: source.config.days.map((day: { date: string }) => ({ ...day, date: shift(day.date, event.shiftDays) })),
+      categories: source.config.categories.map((category: { registration: { opensAt: string | null; closesAt: string | null } }) => ({
+        ...category,
+        registration: { ...category.registration, opensAt: null, closesAt: null },
+      })),
+    };
+    const saved = await page.request.put(`/api/events/${event.id}/config`, {
+      data: { revision: current.revision, config },
+    });
+    expect(saved.status(), await saved.text()).toBe(200);
+    expect((await publishReviewed(page.request, `/api/events/${event.id}`, { acknowledgeWarnings: true })).status()).toBe(200);
+    orders.set(event.name, await place(event.id, event.name, config));
+  }
+  const anchor = await place(eventId, 'anchor', source.config);
+
+  const history = await page.request.get(`${eventUrl}/orders/${anchor.id}/participant-history`);
+  expect(history.status(), await history.text()).toBe(200);
+  const otherEvents = (await history.json()).otherEvents as { eventId: string; name: string }[];
+  expect(otherEvents.map((event) => event.name)).toEqual([
+    'Later fictional race',
+    'Middle fictional race',
+    'Earlier fictional race',
+  ]);
+  expect(otherEvents.map((event) => event.eventId)).toEqual([byId[2], byId[1], byId[0]]);
+
+  await page.goto(`/#/events/${eventId}/registrations`);
+  const trigger = page.getByLabel(`Participant history for ${anchor.orderNumber}`);
+  await trigger.focus();
+  await trigger.press('Enter');
+  const panel = page.locator('.organizer-participant-history[open]');
+  const listed = panel.getByRole('list', { name: 'Other events in this organization' });
+  await expect(listed.locator('> li')).toHaveCount(3);
+  const text = await listed.innerText();
+  const laterAt = text.indexOf('Later fictional race');
+  const middleAt = text.indexOf('Middle fictional race');
+  const earlierAt = text.indexOf('Earlier fictional race');
+  expect(laterAt).toBeGreaterThanOrEqual(0);
+  expect(laterAt).toBeLessThan(middleAt);
+  expect(middleAt).toBeLessThan(earlierAt);
+  expect(text.slice(laterAt, middleAt)).toContain(orders.get('Later fictional race')!.orderNumber);
+  expect(text.slice(middleAt, earlierAt)).toContain(orders.get('Middle fictional race')!.orderNumber);
+  expect(text.slice(earlierAt)).toContain(orders.get('Earlier fictional race')!.orderNumber);
+  expect(text).not.toContain(anchor.orderNumber);
 });

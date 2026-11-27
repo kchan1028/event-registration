@@ -135,6 +135,49 @@ describe('participant identity API', () => {
   });
 });
 
+describe('participant history order', () => {
+  it('lists the rider\'s other events newest first by their first race day', async () => {
+    const { app, eventId, organizationId, buy } = await setup();
+    const rider = as('history-order@participants.test');
+    const anchor = await buy('RR-M35-34', rider, RIDER, true);
+    const source = (await app.inject({ url: `/api/events/${eventId}` })).json() as { config: EventConfig };
+    // Two more events in the organization, copied from the demo with their race days moved.
+    const copy = async (name: string, shiftDays: number) => {
+      const created = await app.inject({ method: 'POST', url: `/api/organizations/${organizationId}/events`, payload: { name, template: 'road_race', startDate: '2027-04-04', timeZone: 'America/Los_Angeles' } });
+      expect(created.statusCode, created.body).toBe(201);
+      const shift = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) + shiftDays * 86_400_000).toISOString().slice(0, 10);
+      const config = {
+        ...source.config,
+        event: { ...source.config.event, name, isDemo: false },
+        days: source.config.days.map((day) => ({ ...day, date: shift(day.date) })),
+        categories: source.config.categories.map((category) => ({ ...category, registration: { ...category.registration, opensAt: null, closesAt: null } })),
+      };
+      const saved = await app.inject({ method: 'PUT', url: `/api/events/${created.json().id}/config`, payload: { revision: created.json().revision, config } });
+      expect(saved.statusCode, saved.body).toBe(200);
+      const id = created.json().id as string;
+      await publishReviewed(app, `/api/events/${id}`, { acknowledgeWarnings: true });
+      const category = config.categories.find((row) => row.timingCode === 'RR-M35-34')!;
+      const order = await app.inject({ method: 'POST', url: `/api/rider/events/${id}/orders`, headers: rider, payload: {
+        clientRequestId: `history-order-${shiftDays}-xxxx`, categoryIds: [category.id], rider: RIDER, selfRegistrationConfirmed: true,
+        waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Pat Demo', signerRole: 'rider' },
+      } });
+      expect(order.statusCode, order.body).toBe(201);
+      const paid = await app.inject({ method: 'POST', url: `/api/orders/${order.json().id}/payment`, headers: rider, payload: { attemptId: `history-order-pay-${shiftDays}`, outcome: 'success' } });
+      expect(paid.statusCode, paid.body).toBe(200);
+      return id;
+    };
+    // Created out of date order; event ids are random, so neither creation nor id order matches date order by design.
+    const earlier = await copy('Earlier fictional race', -60);
+    const later = await copy('Later fictional race', 60);
+    const middle = await copy('Middle fictional race', 20);
+    const history = await app.inject({ url: `/api/events/${eventId}/orders/${anchor}/participant-history` });
+    expect(history.statusCode, history.body).toBe(200);
+    const events = (history.json() as { otherEvents: { eventId: string; name: string }[] }).otherEvents;
+    expect(events.map((event) => event.name)).toEqual(['Later fictional race', 'Middle fictional race', 'Earlier fictional race']);
+    expect(events.map((event) => event.eventId)).toEqual([later, middle, earlier]);
+  });
+});
+
 describe('rider identity API', () => {
   it('suggests two orders for one rider, links them on request, and treats them as one rider', async () => {
     const s = await setup();
