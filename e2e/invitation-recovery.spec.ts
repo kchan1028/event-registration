@@ -72,6 +72,8 @@ test('a recipient can hide an expired-invitation notice, and a failed hide says 
   // While the hide is slow, the user moves focus elsewhere; the finished hide must not pull it back.
   const elsewhere = page.getByRole('button', { name: /Switch to/ });
   await elsewhere.focus();
+  // Wait until the route handler holds the request before releasing it.
+  await expect.poll(() => releaseSlow !== null).toBe(true);
   releaseSlow!();
   await expect(notice.getByRole('listitem')).toHaveCount(1);
   await expect(elsewhere).toBeFocused();
