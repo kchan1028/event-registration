@@ -205,7 +205,7 @@ Record the tested commit, date, event/fixture, completed cases, expected and act
 
 ## Email in test mode (optional)
 
-In local mode the app records organizer invitations, registration confirmations, one registration receipt when an account-backed order confirms, one notice when a refund succeeds, one guardian invitation when a second guardian is invited, and waitlist offers in `email_messages` and sends nothing. Test mode sends one open guardian invitation and does not send a closed or stopped one. Registrations shows that notice to owners and registration managers. Finance does not see it. To rehearse with Resend:
+In local mode the app records organizer invitations, registration confirmations, one registration receipt when an account-backed order confirms, one notice when a refund succeeds, one entry-change notice when an organizer transfers or withdraws a paid entry, one guardian invitation when a second guardian is invited, and waitlist offers in `email_messages` and sends nothing. Test mode sends one open guardian invitation and does not send a closed or stopped one. Registrations shows the refund notice and the entry-change notice to owners and registration managers. Finance does not see those panels. Registration staff do not see the guardian invitation ([open decision](../../product.md#guardian-invitation-staff-view)). To rehearse with Resend:
 
 1. In the project's Resend account, create a sending key and verify a sender domain. For an initial test, Resend's `onboarding@resend.dev` sender can send to the account owner's address.
 2. In the server's local `.env`, set `EMAIL_MODE=resend`, `EMAIL_FROM=<sender address>`, `RESEND_API_KEY=<sending key>`, and `EMAIL_TEST_RECIPIENTS=<comma-separated test addresses>`. Restart `npm run dev`.
