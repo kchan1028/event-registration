@@ -763,6 +763,25 @@ When two orders are linked, a bib or check-in held by the later group moves to t
 
 Suggested matches the organizer marked as different riders (migration 10), so they are not suggested again. Primary key (`event_id`, `order_a`, `order_b`), with `order_a` < `order_b`; plus `dismissed_at`.
 
+### withdrawal_requests
+
+Migration 61. A rider's request to withdraw one paid entry, and the organizer's decision. Approval runs the existing organizer withdrawal, which writes `entry_changes`; nothing here refunds.
+
+| Column | Notes |
+|---|---|
+| `id` | Primary key (`wdr_...`) |
+| `seq` | Insertion order |
+| `event_id`, `order_id`, `entry_id` | The entry asked about. Cascade on delete |
+| `requested_by` | Account that asked; null if that account is deleted |
+| `client_request_id` | Retry key; unique per entry. The same key with a different reason is refused |
+| `reason` | The rider's reason (3–300 characters) |
+| `policy_json` | What the rider saw: category name, amount paid, the date and the accepted policy's return (cash, credit or rider choice; percent; amount) |
+| `status` | `open`, `approved` or `declined`. A partial unique index allows one open request per entry |
+| `decided_by`, `decided_at` | Who decided and when; `decided_at` is null exactly while open |
+| `decision_reason` | Required when declined |
+| `entry_change_id` | The withdrawal change written on approval; null if that row is deleted |
+| `created_at` | |
+
 ### entry_resolutions
 
 Resolution items for paid entries affected by a published change (migration 12). Publishing a change that touches paid entries opens one item per entry; a later change to the same entry adds to its open item.

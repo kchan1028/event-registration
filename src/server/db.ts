@@ -912,6 +912,29 @@ export const MIGRATIONS: string[] = [
     dismissed_at timestamptz NOT NULL,
     PRIMARY KEY (account_id, membership_change_id)
   );`,
+  // 61: a rider asks to withdraw one paid entry; an organizer approves (the existing withdrawal runs) or declines.
+  `CREATE TABLE withdrawal_requests (
+    id text PRIMARY KEY,
+    seq bigint GENERATED ALWAYS AS IDENTITY,
+    event_id text NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    order_id text NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    entry_id text NOT NULL REFERENCES order_entries(id) ON DELETE CASCADE,
+    requested_by text REFERENCES accounts(id) ON DELETE SET NULL,
+    client_request_id text NOT NULL,
+    reason text NOT NULL,
+    policy_json jsonb NOT NULL,
+    status text NOT NULL CHECK (status IN ('open', 'approved', 'declined')),
+    decided_by text REFERENCES accounts(id) ON DELETE SET NULL,
+    decision_reason text,
+    entry_change_id text REFERENCES entry_changes(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL,
+    decided_at timestamptz,
+    UNIQUE (entry_id, client_request_id),
+    CHECK ((status = 'open') = (decided_at IS NULL)),
+    CHECK (status <> 'declined' OR decision_reason IS NOT NULL)
+  );
+  CREATE UNIQUE INDEX withdrawal_requests_one_open ON withdrawal_requests(entry_id) WHERE status = 'open';
+  CREATE INDEX withdrawal_requests_by_event ON withdrawal_requests(event_id, status, created_at);`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

@@ -148,6 +148,10 @@ A separate signed-in route, `POST /api/events/:id/reservation-status`, gives sta
 
 Concurrent requests use the existing order-scoped provider key and fixed request parameters. The Stripe SDK handles bounded conflict retries; an exhausted `idempotency_key_in_use` conflict returns a retryable 503 without creating a payment or changing entry/readiness state. The same authenticated order can be retried. Session expiry is described in [the data model](DATA_MODEL.md#payment_sessions); it does not extend capacity reservations. A session saved after the rider cancelled is not returned as a payment-page redirect. Who may open checkout is unchanged, and an already open provider page is not expired. Tests use the real SDK with a fake HTTP transport and fictional data, not a real provider account. Live keys remain refused; permissions and webhook verification are unchanged. A signature-verified notification saved before its session row is applied when that row is recorded, and only for that session's order. The webhook stays public and is still trusted only by its signature. A mismatched order reference is not applied.
 
+## Rider withdrawal requests (Implemented locally)
+
+`GET /api/rider/order-entries/:id/withdrawal` and `POST /api/rider/order-entries/:id/withdrawal-requests` require a signed-in account that manages the order (the placing adult, an active guardian or an approved claimed rider). Any other account gets 404, and an organizer member who is not that rider gets 403. Listing, approving and declining under `/api/events/:id/withdrawal-requests` require `entries.manage` (owner or registration manager). Approval runs the existing organizer withdrawal under the event lock and never refunds; a decline needs a reason.
+
 ## Check-in camera
 
 The check-in QR scanner processes camera frames on the device. Stopping the scanner or leaving its view releases the camera stream, including a stream returned after the view closes while permission is pending.

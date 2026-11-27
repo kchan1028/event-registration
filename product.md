@@ -276,7 +276,9 @@ Status: Planned documentation only. The current app does not support time trials
 
 ### Rider self-service
 
-Status: Planned; organizer transfers and withdrawals already exist in the local build.
+Status: Partly Implemented locally (November 27, 2026): a rider-requested withdrawal API. The rest is Planned; organizer transfers and withdrawals already exist in the local build.
+
+Rider-requested withdrawal, first slice (Implemented locally, API only; rider and organizer screens Planned). A signed-in rider who manages a paid order sees, for one paid, active entry, the amount paid and what the accepted refund policy would return that day, then asks to withdraw with a reason. This follows the organizer-approval path: an owner or registration manager approves, which runs the existing organizer withdrawal and records the change and the rider notice, or declines with a reason, which leaves the entry, payment and readiness unchanged. One request per entry can be open; an exact retry returns the same request. Approval never refunds or issues credit: a refund stays a separate finance step. The policy amount shown is what the rider saw, saved with the request. A direct self-withdrawal without approval, category changes and transfers stay Planned.
 
 After sign-in, riders can view their registrations, receipts, waiver/readiness requirements, waitlist offers, and pending changes. Policies determine whether a change can be completed directly or requires organizer approval. Category-change previews must recheck eligibility, capacity, schedule conflicts, waivers, overall-participation rules, and package/pass effects, and show any charge or refund before submission. Transfers to another person require an explicit event policy, separate recipient consent and eligibility, and new required waivers; a signature is never transferred. Changes are reasoned, audited, and notified to affected parties. No rider can access another rider's private registration by guessing an order ID.
 
