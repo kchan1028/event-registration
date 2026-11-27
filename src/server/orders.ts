@@ -418,7 +418,8 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
   return {
     async publicEvent(eventId: string) {
       return db.transaction(async () => {
-        await db.lock(eventLock(eventId));
+        // Read-only: a shared lock keeps the snapshot consistent with writers without queueing public reads behind each other.
+        await db.lockShared(eventLock(eventId));
         const { config, version, organizationName } = await repo.getPublished(eventId);
         const entries = await repo.entries(eventId);
         const blockers = await waitlistBlockers(config, eventId);
