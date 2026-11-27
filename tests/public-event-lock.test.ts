@@ -19,26 +19,29 @@ async function setup() {
     return () => other.query('COMMIT');
   };
   const read = () => app.inject({ url: `/api/public/events/${eventId}` });
-  // Sessions in this database queued for an advisory lock they have not been granted.
-  const waiters = async () => (await other.query(`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`)).rows[0].n as number;
-  return { other, hold, read, waiters };
+  // Sessions queued for this event's lock that have not been granted it.
+  const waiters = async () => (await other.query(`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND objsubid = 1 AND ((classid::bigint << 32) | objid::bigint) = hashtext($1)::bigint AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`, [`event:${eventId}`])).rows[0].n as number;
+  // Ends the held transaction (if any) and the session, so a failed test never leaves the lock held.
+  const close = async () => { await other.query('ROLLBACK').catch(() => undefined); await other.end(); };
+  return { other, hold, read, waiters, close };
 }
 
 describe('public event read lock', () => {
   it('is not blocked by another reader holding the shared event lock', async () => {
-    const { other, hold, read } = await setup();
+    const { hold, read, close } = await setup();
     try {
       const release = await hold('shared');
-      const response = await read();
+      // Fail fast instead of hanging if the read ever waits for the shared holder.
+      const response = await Promise.race([read(), new Promise<never>((_, reject) => setTimeout(() => reject(new Error('The public read waited for another reader')), 5_000))]);
       expect(response.statusCode, response.body).toBe(200);
       await release();
     } finally {
-      await other.end();
+      await close();
     }
   });
 
   it('waits for a writer holding the event lock and answers once it commits', async () => {
-    const { other, hold, read, waiters } = await setup();
+    const { hold, read, waiters, close } = await setup();
     try {
       const release = await hold('exclusive');
       let answered = false;
@@ -50,7 +53,7 @@ describe('public event read lock', () => {
       const response = await pending;
       expect(response.statusCode, response.body).toBe(200);
     } finally {
-      await other.end();
+      await close();
     }
   });
 });

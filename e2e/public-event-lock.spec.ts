@@ -13,12 +13,12 @@ function databaseUrl(): string {
   return url.toString();
 }
 
-/** Number of sessions in this database queued for an advisory lock they have not been granted. */
-async function advisoryWaiters(): Promise<number> {
+/** Number of sessions queued for this event's lock that have not been granted it. */
+async function advisoryWaiters(eventId: string): Promise<number> {
   const client = new pg.Client({ connectionString: databaseUrl() });
   await client.connect();
   try {
-    const { rows } = await client.query(`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`);
+    const { rows } = await client.query(`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND objsubid = 1 AND ((classid::bigint << 32) | objid::bigint) = hashtext($1)::bigint AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`, [`event:${eventId}`]);
     return rows[0].n as number;
   } finally {
     await client.end();
@@ -106,7 +106,7 @@ test('public event read waits for a writer holding the event lock', async ({ pag
   });
   try {
     // The read is queued on the held event lock in PostgreSQL, not merely slow.
-    await expect.poll(advisoryWaiters).toBe(1);
+    await expect.poll(() => advisoryWaiters(eventId)).toBe(1);
     expect(answered).toBe(false);
     await holder.release();
     await expectPublicSnapshot(await pending, eventId, publishedVersion, categoryId);
