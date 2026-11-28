@@ -30,12 +30,23 @@ const STATUS_GROUP: Record<FilterableEntry['status'], RegistrationFilter['entryS
   released: null,
 };
 
-function entryMatches(e: FilterableEntry, f: RegistrationFilter): boolean {
+export function entryMatchesFilter(e: FilterableEntry, f: RegistrationFilter): boolean {
   if (f.dayId && e.dayId !== f.dayId) return false;
   if (f.categoryId && e.categoryId !== f.categoryId) return false;
   if (f.entryStatus && STATUS_GROUP[e.status] !== f.entryStatus) return false;
   if (f.missingWaiver && !e.readiness.some((r) => (r.key === 'waiver' || r.key === 'guardian') && r.state !== 'done')) return false;
   return true;
+}
+
+/** Query parameters for the same view, shared by the screen's download link and the server's export. */
+export function filterToParams(f: RegistrationFilter, query: string): URLSearchParams {
+  const p = new URLSearchParams();
+  if (query.trim()) p.set('q', query.trim());
+  if (f.dayId) p.set('dayId', f.dayId);
+  if (f.categoryId) p.set('categoryId', f.categoryId);
+  if (f.entryStatus) p.set('entryStatus', f.entryStatus);
+  if (f.missingWaiver) p.set('missingWaiver', '1');
+  return p;
 }
 
 export function isFilterActive(f: RegistrationFilter): boolean {
@@ -44,5 +55,5 @@ export function isFilterActive(f: RegistrationFilter): boolean {
 
 export function matchesRegistrationFilter(order: { entries: readonly FilterableEntry[] }, f: RegistrationFilter): boolean {
   if (!isFilterActive(f)) return true;
-  return order.entries.some((e) => entryMatches(e, f));
+  return order.entries.some((e) => entryMatchesFilter(e, f));
 }

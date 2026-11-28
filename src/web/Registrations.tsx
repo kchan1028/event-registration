@@ -21,7 +21,7 @@ import { Summary } from './registrations/Summary';
 import { Waitlists } from './registrations/Waitlists';
 import { DownloadLink, Pending } from './ui';
 import { useLoad } from './useLoad';
-import { isFilterActive, matchesRegistrationFilter, type RegistrationFilter } from '../shared/registrationFilters';
+import { filterToParams, isFilterActive, matchesRegistrationFilter, type RegistrationFilter } from '../shared/registrationFilters';
 
 const FILTERS = {
   all: { label: 'All', test: () => true },
@@ -153,6 +153,12 @@ export function Registrations({ draft }: { draft: Draft }) {
         </label>
         {isFilterActive(entryFilter) && (
           <button type="button" className="btn btn--ghost btn--small" onClick={() => setEntryFilter({})}>Clear entry filters</button>
+        )}
+        {/* The same view as a file: the server applies the same search and entry filters, with the usual columns and audit. */}
+        {can(roles, 'export.entries') && (query.trim() || isFilterActive(entryFilter)) && (
+          <DownloadLink className="btn btn--ghost btn--small" href={`/api/events/${eventId}/exports/entries.csv?${filterToParams(entryFilter, query)}`}>
+            Download this view (CSV)
+          </DownloadLink>
         )}
       </fieldset>
 
