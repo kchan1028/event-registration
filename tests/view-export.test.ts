@@ -35,9 +35,10 @@ describe('entries export of a filtered view', () => {
     expect(viewed.headers['x-cyclereg-export-generated-at']).toEqual(expect.any(String));
     expect(viewed.headers['content-disposition']).toContain('-filtered');
 
-    // A search narrows the same way; nothing matching gives a header-only file.
-    const none = await app.inject({ url: `${url}?q=${encodeURIComponent('nobody-matches-this-fictional-search')}` });
-    expect(parseCsv(none.body)).toEqual([header]);
+    // Search text is not accepted in the address, so a search term changes nothing and is not echoed back.
+    const searched = await app.inject({ url: `${url}?q=${encodeURIComponent('rider@example.test')}` });
+    expect(parseCsv(searched.body)).toEqual(parseCsv(full.body));
+    expect(searched.headers['x-cyclereg-export-filters']).toBeUndefined();
     expect((await app.inject({ url: `${url}?entryStatus=bogus` })).statusCode).toBe(400);
     // Other exports neither read nor validate the view parameters.
     expect((await app.inject({ url: `/api/events/${eventId}/exports/ledger.csv?entryStatus=bogus` })).statusCode).toBe(200);

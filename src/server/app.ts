@@ -18,7 +18,7 @@ import { type EventConfig, bibNumberSchema, createEventInputSchema, eventConfigS
 import { entriesCsv, ledgerCsv } from '../shared/exports';
 import { reservationLookupSchema, reservationReferenceSchema } from '../shared/checkout';
 import { eventSummary, financeSummaryCsv } from '../shared/reports';
-import { matchesRegistration, riderCorrectionSchema, staffReleaseReasonSchema } from '../shared/lookup';
+import { riderCorrectionSchema, staffReleaseReasonSchema } from '../shared/lookup';
 import { changeImpact, waiverChanged, type ImpactEntry } from '../shared/impact';
 import { validateConfig } from '../shared/validation';
 import { reconciliationCsv } from './reconciliation';
@@ -1057,14 +1057,13 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     await access.requireEvent(me(req), p.id, p.kind === 'entries.csv' ? 'export.entries' : 'export.ledger');
     // Optional view of the entries export; other files neither read nor validate these.
     const v = z.object({
-      q: z.string().max(200).optional(),
       dayId: idStr.optional(),
       categoryId: idStr.optional(),
       entryStatus: z.enum(['active', 'withdrawn', 'cancelled']).optional(),
       missingWaiver: z.literal('1').optional(),
     }).parse(p.kind === 'entries.csv' ? req.query ?? {} : {});
     const viewFilter: RegistrationFilter = { dayId: v.dayId, categoryId: v.categoryId, entryStatus: v.entryStatus, missingWaiver: v.missingWaiver === '1' || undefined };
-    const view = { query: v.q ?? '', filter: viewFilter, active: p.kind === 'entries.csv' && (Boolean(v.q?.trim()) || isFilterActive(viewFilter)) };
+    const view = { filter: viewFilter, active: p.kind === 'entries.csv' && isFilterActive(viewFilter) };
     const file = await db.transaction(async () => {
       await db.lock(eventLock(p.id));
       const record = await repo.getEvent(p.id);
@@ -1079,10 +1078,9 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
           const summary = eventSummary(list, await identity.keyOf(p.id), await waitlist.statuses(p.id), true);
           body = financeSummaryCsv(summary, p.id, generatedAt);
         } else if (p.kind === 'entries.csv') {
-          // The Registrations view: the same search and entry filters as the screen, applied to the rows the role may export.
+          // The Registrations view: the same entry filters as the screen, applied to the rows the role may export.
           const viewed = view.active
-            ? list.filter((o) => matchesRegistration(o, view.query) && matchesRegistrationFilter(o, view.filter))
-              .map((o) => ({ ...o, entries: isFilterActive(view.filter) ? o.entries.filter((e) => entryMatchesFilter(e, view.filter)) : o.entries }))
+            ? list.filter((o) => matchesRegistrationFilter(o, view.filter)).map((o) => ({ ...o, entries: o.entries.filter((e) => entryMatchesFilter(e, view.filter)) }))
             : list;
           body = entriesCsv(viewed, await identity.keyOf(p.id));
         } else body = ledgerCsv(list);
@@ -1094,7 +1092,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     await recordProtectedExport(req, p.id, auditKind, file.generatedAt);
     if (p.kind === 'reconciliation.csv' || p.kind === 'finance-summary.csv' || view.active) reply.header('X-CycleReg-Export-Generated-At', file.generatedAt);
     // A filtered view says which filters made it, so a saved file can be traced back to its view.
-    if (view.active) reply.header('X-CycleReg-Export-Filters', filterToParams(view.filter, view.query).toString());
+    if (view.active) reply.header('X-CycleReg-Export-Filters', filterToParams(view.filter).toString());
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
       .header('Content-Disposition', `attachment; filename="${file.filename}"`)

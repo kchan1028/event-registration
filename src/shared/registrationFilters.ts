@@ -38,10 +38,12 @@ export function entryMatchesFilter(e: FilterableEntry, f: RegistrationFilter): b
   return true;
 }
 
-/** Query parameters for the same view, shared by the screen's download link and the server's export. */
-export function filterToParams(f: RegistrationFilter, query: string): URLSearchParams {
+/**
+ * Query parameters for the entry filters, shared by the screen's download link and the server's export. Search text is
+ * never included: it can hold a rider's email or check-in code, and a URL is kept in browser history and access logs.
+ */
+export function filterToParams(f: RegistrationFilter): URLSearchParams {
   const p = new URLSearchParams();
-  if (query.trim()) p.set('q', query.trim());
   if (f.dayId) p.set('dayId', f.dayId);
   if (f.categoryId) p.set('categoryId', f.categoryId);
   if (f.entryStatus) p.set('entryStatus', f.entryStatus);

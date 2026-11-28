@@ -156,13 +156,14 @@ export function Registrations({ draft }: { draft: Draft }) {
           <button type="button" className="btn btn--ghost btn--small" onClick={() => setEntryFilter({})}>Clear entry filters</button>
         )}
         {/* The same view as a file: the server applies the same search and entry filters, with the usual columns and audit. */}
-        {can(roles, 'export.entries') && (query.trim() || isFilterActive(entryFilter)) && (filter === 'all' ? (
-          <DownloadLink className="btn btn--ghost btn--small" href={`/api/events/${eventId}/exports/entries.csv?${filterToParams(entryFilter, query)}`}>
+        {/* The file covers the entry filters only. Search text is never sent in the address (it can hold an email or check-in code),
+            so the download is offered only without a search and with the All chip. */}
+        {can(roles, 'export.entries') && isFilterActive(entryFilter) && (filter === 'all' && !query.trim() ? (
+          <DownloadLink className="btn btn--ghost btn--small" href={`/api/events/${eventId}/exports/entries.csv?${filterToParams(entryFilter)}`}>
             Download this view (CSV)
           </DownloadLink>
         ) : (
-          // The file covers search and entry filters only, so it is offered only when no queue chip narrows the list further.
-          <span className="small muted">Choose All to download this view.</span>
+          <span className="small muted">Clear the search and choose All to download this view.</span>
         ))}
       </fieldset>
 
