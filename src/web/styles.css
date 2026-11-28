@@ -246,6 +246,13 @@ a {
   border: 0;
   padding: 0;
   margin: 0.75rem 0;
+  /* A fieldset defaults to its content's width; let it shrink so a long category name cannot widen the page. */
+  min-inline-size: 0;
+}
+
+.reg-entry-filters label,
+.reg-entry-filters select {
+  max-inline-size: 100%;
 }
 
 .sr-only {

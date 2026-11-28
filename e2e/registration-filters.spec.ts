@@ -23,6 +23,9 @@ test('organizers narrow registrations by race day, category, entry status and mi
   const archived = structuredClone(current.config);
   const used = archived.categories.find((c: { id: string }) => c.id === usedCategoryId);
   used.status = 'archived';
+  // A very long category name must not widen the page on a phone.
+  const other = archived.categories.find((c: { id: string; status: string }) => c.id !== usedCategoryId && c.status !== 'archived');
+  other.name = 'Masters 35 plus Category 3 and 4 combined field with a deliberately very long fictional name';
   expect((await page.request.put(`${eventUrl}/config`, { data: { config: archived, revision: current.revision } })).ok()).toBe(true);
   expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true, acknowledgeImpact: true })).status()).toBe(200);
 
