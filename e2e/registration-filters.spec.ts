@@ -145,6 +145,9 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await filters.locator('summary', { hasText: 'Columns in the download' }).click();
   await filters.getByRole('checkbox', { name: 'team', exact: true }).uncheck();
   await expect(filters.getByRole('link', { name: 'Download this view (CSV)' })).toHaveAttribute('href', /columns=order_number%2Crider_id$/);
+  // Ticking it again matches the saved view's columns, so the view shows as selected again.
+  await filters.getByRole('checkbox', { name: 'team', exact: true }).check();
+  await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Team only');
   await filters.locator('summary', { hasText: 'Columns in the download' }).click();
   await page.request.get(`${eventUrl}/saved-views`).then(async (r) => {
     for (const v of await r.json() as { id: string }[]) await page.request.delete(`${eventUrl}/saved-views/${v.id}`);

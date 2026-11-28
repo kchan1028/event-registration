@@ -226,6 +226,10 @@ export function Registrations({ draft }: { draft: Draft }) {
   );
 }
 
+/** The columns a download actually has, in file order: a view's choice plus the always-included ids. */
+const downloadedColumns = (columns?: readonly EntryColumn[]) =>
+  ENTRY_COLUMNS.filter((c) => !columns || REQUIRED_ENTRY_COLUMNS.includes(c) || columns.includes(c)).join();
+
 /**
  * Which columns the view download includes. Every column is the default; the order and rider ids are always included,
  * so each row can be traced. Choosing every column again goes back to the default.
@@ -267,7 +271,7 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
   const [chosenId, setChosenId] = useState('');
   const same = (a: RegistrationFilter, b: RegistrationFilter) =>
     (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver) && (a.sort ?? 'newest') === (b.sort ?? 'newest')
-    && (a.columns ?? ENTRY_COLUMNS).join() === (b.columns ?? ENTRY_COLUMNS).join();
+    && downloadedColumns(a.columns) === downloadedColumns(b.columns);
   const chosen = views?.find((v) => v.id === chosenId);
   const selected = chosen && same(chosen.filter, filter) ? chosen.id : '';
   const [name, setName] = useState('');
