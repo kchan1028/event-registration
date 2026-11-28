@@ -777,6 +777,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     registration_confirmation: 'This confirmation cannot be retried now.',
     refund_notice: 'This refund email cannot be retried now.',
     entry_change_notice: 'This entry change email cannot be retried now.',
+    withdrawal_decline_notice: 'This decline email cannot be retried now.',
   };
   function registerRiderEmailControls(path: string, kind: OrganizerRiderEmailKind, field: 'confirmation' | 'receipt' | 'offerEmail' | 'notice') {
     app.get(path, async (req, reply) => {
@@ -805,6 +806,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   registerRiderEmailControls('/api/events/:id/waitlist/:recordId/offer-email', 'waitlist_offer', 'offerEmail');
   registerRiderEmailControls('/api/events/:id/refunds/:recordId/notice-delivery', 'refund_notice', 'notice');
   registerRiderEmailControls('/api/events/:id/entry-changes/:recordId/notice-delivery', 'entry_change_notice', 'notice');
+  registerRiderEmailControls('/api/events/:id/withdrawal-requests/:recordId/notice-delivery', 'withdrawal_decline_notice', 'notice');
 
   // Organizer corrections to rider details. A reason is required and every correction is kept.
   app.post('/api/orders/:id/rider-corrections', async (req) => {

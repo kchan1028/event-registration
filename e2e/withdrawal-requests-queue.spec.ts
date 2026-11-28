@@ -72,6 +72,11 @@ test('an organizer approves one rider withdrawal request and declines another wi
   await section.getByText('Decided (2)').click();
   await expect(section).toContainText('Robin Fictional');
   await expect(section).toContainText('Declined: Withdrawals closed after the start list was sent');
+  // The rider was emailed about the decline; its status is under the declined request, and only there.
+  const declineEmail = section.locator('details.decline-email-delivery');
+  await expect(declineEmail).toHaveCount(1);
+  await declineEmail.locator('summary', { hasText: 'Decline email' }).click();
+  await expect(declineEmail).toContainText('Recorded');
   await page.setViewportSize({ width: 390, height: 900 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await section.screenshot({ path: 'test-results/withdrawal-requests-queue-390.png' });

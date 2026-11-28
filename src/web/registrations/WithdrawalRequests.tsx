@@ -3,6 +3,7 @@ import { formatDollars } from '../../shared/format';
 import { api, type ApiError, type WithdrawalPolicyPreview, type WithdrawalRequest } from '../api';
 import { formatDateTime } from '../format';
 import { ReasonForm } from '../ui';
+import { RiderEmailDeliveryPanel } from './RiderEmailDeliveryPanel';
 import { moveTargetLabel } from '../WithdrawalRequest';
 import { useLoad } from '../useLoad';
 
@@ -56,6 +57,8 @@ export function WithdrawalRequests({ eventId, refreshKey, onChanged }: { eventId
                 {i.riderName} · {i.policy.categoryName}: {i.kind === 'transfer'
                   ? (i.status === 'approved' ? `Moved to ${i.policy.transfer ? moveTargetLabel(i.policy.transfer) : 'another category'}` : `Declined move to ${i.policy.transfer ? moveTargetLabel(i.policy.transfer) : 'another category'}: ${i.decisionReason}`)
                   : (i.status === 'approved' ? 'Withdrawn' : `Declined: ${i.decisionReason}`)}
+                {/* The rider is emailed about a decline; approvals use the entry change email on the order. */}
+                {i.status === 'declined' && <RiderEmailDeliveryPanel eventId={eventId} recordId={i.id} kind="decline" />}
               </li>
             ))}
           </ul>
