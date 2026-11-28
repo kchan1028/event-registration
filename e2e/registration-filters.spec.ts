@@ -103,7 +103,24 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await filters.getByRole('button', { name: 'Delete view' }).click();
   await expect(filters.getByLabel('Saved view')).toHaveCount(0);
 
+  // Two views with the same filters: picking the second keeps it selected, and Delete view removes that one.
+  await filters.getByLabel('View name').fill('First copy');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await filters.getByLabel('View name').fill('Second copy');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await filters.getByLabel('Saved view').selectOption({ label: 'Second copy' });
+  await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Second copy');
+  await filters.getByRole('button', { name: 'Delete view' }).click();
+  await expect(filters.getByLabel('Saved view').locator('option')).toHaveText(['Choose a view', 'First copy']);
+  await filters.getByLabel('Saved view').selectOption({ label: 'First copy' });
+  await filters.getByRole('button', { name: 'Delete view' }).click();
+  await expect(filters.getByLabel('Saved view')).toHaveCount(0);
+
+  // Clear entry filters resets every filter, category included.
+  await filters.getByLabel('Category').selectOption(usedCategoryId);
   await filters.getByRole('button', { name: 'Clear entry filters' }).click();
+  await expect(filters.getByLabel('Category')).toHaveValue('');
+  await expect(filters.getByLabel('Entry status')).toHaveValue('');
   await expect(allCount).toHaveText(String(orders.length));
   await expect(filters.getByRole('button', { name: 'Clear entry filters' })).toHaveCount(0);
 

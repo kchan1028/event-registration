@@ -220,10 +220,13 @@ export function Registrations({ draft }: { draft: Draft }) {
 /** An organizer's named views for this event: entry filters only, private to their account. */
 function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: RegistrationFilter; onApply: (f: RegistrationFilter) => void }) {
   const { data: views, setData: setViews, error } = useLoad(() => api.savedViews(eventId), [eventId]);
-  // The selected view is whichever saved view matches the current filters, so editing or clearing them deselects it.
+  // A view stays selected only while the filters still match it, so editing or clearing them deselects it. The chosen
+  // id wins over another view with the same filters, so Delete view removes the view the organizer picked.
+  const [chosenId, setChosenId] = useState('');
   const same = (a: RegistrationFilter, b: RegistrationFilter) =>
     (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver);
-  const selected = (isFilterActive(filter) && views?.find((v) => same(v.filter, filter))?.id) || '';
+  const chosen = views?.find((v) => v.id === chosenId);
+  const selected = !isFilterActive(filter) ? '' : chosen && same(chosen.filter, filter) ? chosen.id : views?.find((v) => same(v.filter, filter))?.id ?? '';
   const [name, setName] = useState('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const run = async (action: () => Promise<SavedView[]>, done: string) => {
@@ -242,6 +245,7 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
           Saved view{' '}
           <select className="input" value={selected} onChange={(e) => {
             const view = views.find((v) => v.id === e.target.value);
+            setChosenId(view?.id ?? '');
             if (view) onApply(view.filter);
           }}>
             <option value="">Choose a view</option>
