@@ -52,7 +52,9 @@ export function WithdrawalRequests({ eventId, refreshKey, onChanged }: { eventId
           <ul className="small">
             {done.map((i) => (
               <li key={i.id}>
-                {i.riderName} · {i.policy.categoryName}: {i.status === 'approved' ? (i.kind === 'transfer' ? `Moved to ${i.policy.transfer?.categoryName}` : 'Withdrawn') : `Declined: ${i.decisionReason}`}
+                {i.riderName} · {i.policy.categoryName}: {i.kind === 'transfer'
+                  ? (i.status === 'approved' ? `Moved to ${i.policy.transfer?.categoryName}` : `Declined move to ${i.policy.transfer?.categoryName}: ${i.decisionReason}`)
+                  : (i.status === 'approved' ? 'Withdrawn' : `Declined: ${i.decisionReason}`)}
               </li>
             ))}
           </ul>

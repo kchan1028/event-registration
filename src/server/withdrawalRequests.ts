@@ -100,7 +100,10 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
     return {
       entryId,
       categoryId: e.category_id,
-      categoryName: config.categories.find((c) => c.id === e.category_id)?.name ?? 'This entry',
+      // An organizer may have moved the entry into a category added after purchase, so fall back to the published version.
+      categoryName: config.categories.find((c) => c.id === e.category_id)?.name
+        ?? (await repo.getPublished(e.event_id)).config.categories.find((c) => c.id === e.category_id)?.name
+        ?? 'This entry',
       amountPaidCents,
       onDate,
       entitlement: refundPolicyEntitlement(config.registration.refundRules, firstDay, onDate, amountPaidCents, 'withdrawal'),

@@ -262,6 +262,8 @@ describe('rider withdrawal requests', () => {
     } });
     expect(asked.statusCode, asked.body).toBe(201);
     expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${asked.json().id}/decline`, payload: { reason: 'The criterium field is reserved for locals' } })).statusCode).toBe(200);
+    const decided = (await app.inject({ url: `/api/events/${eventId}/withdrawal-requests` })).json<{ kind: string; status: string; policy: { transfer?: { categoryName: string } } }[]>();
+    expect(decided).toEqual([expect.objectContaining({ kind: 'transfer', status: 'declined', policy: expect.objectContaining({ transfer: expect.objectContaining({ categoryName: target.name }) }) })]);
     const db = openDb(databaseUrl);
     try {
       const notice = await db.get<{ subject: string; body_text: string }>(`SELECT subject, body_text FROM email_messages WHERE kind = 'withdrawal_decline_notice'`);
