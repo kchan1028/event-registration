@@ -231,13 +231,12 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
   const selected = chosen && same(chosen.filter, filter) ? chosen.id : '';
   const [name, setName] = useState('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const run = async (action: () => Promise<SavedView[]>, done: string, select?: string) => {
+  const run = async (action: () => Promise<{ views: SavedView[]; savedId?: string }>, done: string) => {
     const pick = picks.current;
     try {
-      const next = await action();
+      const { views: next, savedId } = await action();
       setViews(next);
-      // The server stores the name exactly as sent, so an exact match finds the view just saved.
-      if (select !== undefined && pick === picks.current) setChosenId(next.find((v) => v.name === select)?.id ?? '');
+      if (savedId && pick === picks.current) setChosenId(savedId);
       setMessage({ ok: true, text: done });
     } catch (e) {
       setMessage({ ok: false, text: (e as ApiError).message });
@@ -261,7 +260,7 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
         </label>
       )}
       {selected && (
-        <button type="button" className="btn btn--ghost btn--small" onClick={() => { const id = selected; void run(() => api.deleteView(eventId, id), 'View deleted.'); }}>
+        <button type="button" className="btn btn--ghost btn--small" onClick={() => { const id = selected; void run(async () => ({ views: await api.deleteView(eventId, id) }), 'View deleted.'); }}>
           Delete view
         </button>
       )}
@@ -271,7 +270,7 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
             View name{' '}
             <input className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
           </label>
-          <button type="button" className="btn btn--secondary btn--small" disabled={!name.trim()} onClick={() => void run(() => api.saveView(eventId, name.trim(), filter), `Saved “${name.trim()}”.`, name.trim())}>
+          <button type="button" className="btn btn--secondary btn--small" disabled={!name.trim()} onClick={() => void run(() => api.saveView(eventId, name.trim(), filter), `Saved “${name.trim()}”.`)}>
             Save view
           </button>
         </span>

@@ -15,9 +15,13 @@ describe('saved registration views', () => {
     expect((await app.inject({ url })).json()).toEqual([]);
     const saved = await app.inject({ method: 'POST', url, payload: { name: 'Withdrawn', filter: { entryStatus: 'withdrawn' } } });
     expect(saved.statusCode, saved.body).toBe(200);
-    expect(saved.json()).toEqual([expect.objectContaining({ name: 'Withdrawn', filter: { entryStatus: 'withdrawn' } })]);
+    const first = saved.json<{ savedId: string; views: { id: string }[] }>();
+    expect(first.views).toEqual([expect.objectContaining({ id: first.savedId, name: 'Withdrawn', filter: { entryStatus: 'withdrawn' } })]);
     // The same name (any case) replaces the filters instead of adding a second view.
-    const replaced = (await app.inject({ method: 'POST', url, payload: { name: 'withdrawn', filter: { entryStatus: 'cancelled', missingWaiver: true } } })).json<{ id: string; filter: unknown }[]>();
+    const again = (await app.inject({ method: 'POST', url, payload: { name: 'withdrawn', filter: { entryStatus: 'cancelled', missingWaiver: true } } })).json<{ savedId: string; views: { id: string; filter: unknown }[] }>();
+    // Replacing keeps the same view, so the returned id is unchanged.
+    expect(again.savedId).toBe(first.savedId);
+    const replaced = again.views;
     expect(replaced).toHaveLength(1);
     expect(replaced[0].filter).toEqual({ entryStatus: 'cancelled', missingWaiver: true });
 

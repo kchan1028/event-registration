@@ -41,25 +41,30 @@ export function createSavedViews(db: Db, clock: () => Date) {
   return {
     list,
 
-    /** Saves the view under a name; saving the same name again replaces that view's filters. */
-    async save(eventId: string, accountId: string, name: string, filter: RegistrationFilter): Promise<SavedView[]> {
-      await db.transaction(async () => {
+    /**
+     * Saves the view under a name; saving the same name again replaces that view's filters. Returns the saved view's id
+     * with the updated list, so the screen can select it without matching names.
+     */
+    async save(eventId: string, accountId: string, name: string, filter: RegistrationFilter): Promise<{ savedId: string; views: SavedView[] }> {
+      const savedId = await db.transaction(async () => {
         await db.lock(`saved-views:${eventId}:${accountId}`);
         const existing = await db.get<{ id: string }>(
           `SELECT id FROM saved_registration_views WHERE event_id = $1 AND account_id = $2 AND lower(name) = lower($3)`, [eventId, accountId, name],
         );
         if (existing) {
           await db.run(`UPDATE saved_registration_views SET filter_json = $2, name = $3 WHERE id = $1`, [existing.id, JSON.stringify(filter), name]);
-          return;
+          return existing.id;
         }
         const count = (await db.get<{ n: number }>(`SELECT count(*)::int AS n FROM saved_registration_views WHERE event_id = $1 AND account_id = $2`, [eventId, accountId]))!.n;
         if (count >= MAX_VIEWS_PER_EVENT) throw new HttpError(409, `You can save up to ${MAX_VIEWS_PER_EVENT} views for an event. Delete one first.`);
+        const id = newId('view');
         await db.run(
           `INSERT INTO saved_registration_views (id, event_id, account_id, name, filter_json, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
-          [newId('view'), eventId, accountId, name, JSON.stringify(filter), clock().toISOString()],
+          [id, eventId, accountId, name, JSON.stringify(filter), clock().toISOString()],
         );
+        return id;
       });
-      return list(eventId, accountId);
+      return { savedId, views: await list(eventId, accountId) };
     },
 
     async remove(eventId: string, accountId: string, viewId: string): Promise<SavedView[]> {
