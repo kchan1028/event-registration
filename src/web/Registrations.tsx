@@ -21,6 +21,7 @@ import { Summary } from './registrations/Summary';
 import { Waitlists } from './registrations/Waitlists';
 import { DownloadLink, Pending } from './ui';
 import { useLoad } from './useLoad';
+import { isFilterActive, matchesRegistrationFilter, type RegistrationFilter } from '../shared/registrationFilters';
 
 const FILTERS = {
   all: { label: 'All', test: () => true },
@@ -43,10 +44,15 @@ export function Registrations({ draft }: { draft: Draft }) {
   const { data: orders, setData: setOrders, error, reload } = useLoad(() => api.orders(eventId), [eventId]);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
+  const [entryFilter, setEntryFilter] = useState<RegistrationFilter>({});
+  const setEntry = (patch: Partial<RegistrationFilter>) => setEntryFilter((f) => ({ ...f, ...patch }));
+  // Archived categories stay in the list while registrations still use them, so those entries can be found.
+  const usedCategories = useMemo(() => new Set((orders ?? []).flatMap((o) => o.entries.map((e) => e.categoryId))), [orders]);
+  const filterCategories = draft.config.categories.filter((c) => c.status !== 'archived' || usedCategories.has(c.id));
   const ordersById = useMemo(() => new Map(orders?.map((order) => [order.id, order])), [orders]);
 
   // Search narrows the list first; the filter chips and their counts apply to what it found.
-  const found = (orders ?? []).filter((o) => matchesRegistration(o, query));
+  const found = (orders ?? []).filter((o) => matchesRegistration(o, query) && matchesRegistrationFilter(o, entryFilter));
   const shown = found.filter(FILTERS[filter].test);
   const published = draft.data.publishedVersion !== null;
   const canManage = can(roles, 'entries.manage');
@@ -115,6 +121,40 @@ export function Registrations({ draft }: { draft: Draft }) {
           </p>
         )}
       </form>
+
+      <fieldset className="reg-entry-filters">
+        <legend className="small">Narrow by entry</legend>
+        <label className="small">
+          Race day{' '}
+          <select className="input" value={entryFilter.dayId ?? ''} onChange={(e) => setEntry({ dayId: e.target.value || undefined })}>
+            <option value="">All days</option>
+            {draft.config.days.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+          </select>
+        </label>
+        <label className="small">
+          Category{' '}
+          <select className="input" value={entryFilter.categoryId ?? ''} onChange={(e) => setEntry({ categoryId: e.target.value || undefined })}>
+            <option value="">All categories</option>
+            {filterCategories.map((c) => <option key={c.id} value={c.id}>{c.timingCode} {c.name}{c.status === 'archived' ? ' (archived)' : ''}</option>)}
+          </select>
+        </label>
+        <label className="small">
+          Entry status{' '}
+          <select className="input" value={entryFilter.entryStatus ?? ''} onChange={(e) => setEntry({ entryStatus: (e.target.value || undefined) as RegistrationFilter['entryStatus'] })}>
+            <option value="">Any status</option>
+            <option value="active">Active</option>
+            <option value="withdrawn">Withdrawn</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </label>
+        <label className="check small">
+          <input type="checkbox" checked={entryFilter.missingWaiver ?? false} onChange={(e) => setEntry({ missingWaiver: e.target.checked || undefined })} />
+          Missing waiver or guardian signature
+        </label>
+        {isFilterActive(entryFilter) && (
+          <button type="button" className="btn btn--ghost btn--small" onClick={() => setEntryFilter({})}>Clear entry filters</button>
+        )}
+      </fieldset>
 
       <div className="filters" role="group" aria-label="Show registrations">
         {(Object.keys(FILTERS) as Filter[]).map((key) => (
