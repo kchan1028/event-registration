@@ -238,6 +238,16 @@ a {
   margin-block: 0.25rem;
 }
 
+.reg-entry-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 1rem;
+  border: 0;
+  padding: 0;
+  margin: 0.75rem 0;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
