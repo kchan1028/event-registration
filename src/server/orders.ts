@@ -415,6 +415,41 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
     return { ok: true };
   }
 
+  /**
+   * Every check a category transfer must pass, read-only: the entry is paid and active, the target is open, eligible,
+   * not a duplicate or schedule conflict, has no waitlist and has room. Returns the paid amount and the target's price today.
+   * The organizer transfer and a rider's transfer preview use the same checks.
+   */
+  async function transferCheck(entryId: string, toCategoryId: string) {
+    const e = await db.get<EntryRow & { event_id: string }>(`SELECT * FROM order_entries WHERE id = $1`, [entryId]);
+    if (!e) throw new HttpError(404, 'Entry not found.');
+    const row = (await orderRow(e.order_id))!;
+    if (effectiveStatus(row) !== 'confirmed' || e.status !== 'confirmed') throw new HttpError(409, 'Only a paid, active entry can be transferred.');
+    if (e.category_id === toCategoryId) throw new HttpError(422, 'Choose a different category.');
+    const { config } = await repo.getPublished(e.event_id);
+    await requireCancellationOpen(db, e.event_id, config, [toCategoryId]);
+    const target = config.categories.find((c) => c.id === toCategoryId);
+    if (!target || target.status !== 'active') throw new HttpError(422, 'That category is not open for entries.');
+    const others = (await entryRows(e.order_id)).filter((x) => x.id !== e.id && x.status === 'confirmed');
+    if (others.some((x) => x.category_id === target.id)) throw new HttpError(409, `This rider is already entered in ${target.name}.`);
+
+    const rider = row.rider_json;
+    const waiver = row.waiver_json;
+    const elig = evaluateCategory(target, profileOf(rider));
+    if (elig.status === 'ineligible') throw new HttpError(422, `Not eligible for ${target.name}: ${elig.reasons.join('; ')}.`);
+    if (needsGuardian(config, [target.id], rider.racingAge) && waiver.signerRole !== 'guardian') throw new HttpError(422, `${target.name} needs a waiver signed by a parent or guardian. Register the rider again with a guardian instead.`);
+    const block = findConflicts(config, [...others.map((x) => x.category_id), target.id]).find((c) => c.level === 'block');
+    if (block) throw new HttpError(409, block.message);
+    if ((await waitlistBlockers(config, e.event_id)).has(target.id)) throw new HttpError(409, `${target.name} has riders on its waitlist. Offer the place through the waitlist instead.`);
+    const room = canAdmit(config, (await repo.entries(e.event_id)).filter((x) => x.id !== e.id), target.id, await repo.riderRef(e.order_id));
+    if (!room.ok) throw new HttpError(409, room.reason === 'full' ? fullMessage(target.name, room.blockedBy) : `${target.name} cannot take this entry.`);
+
+    const paid = paidLine(row.quote_json, e)?.totalCents ?? 0;
+    const newPrice = quote(config, [target.id], todayIn(config.event.timeZone, clock()), null, profileOf(rider)).lines[0].priceCents;
+    const fromName = config.categories.find((c) => c.id === e.category_id)?.name ?? 'the previous category';
+    return { e, config, target, paid, newPrice, fromName };
+  }
+
   return {
     async publicEvent(eventId: string) {
       return db.transaction(async () => {
@@ -808,36 +843,13 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
      * difference is recorded for the organizer to settle (money back goes through a refund, see
      * src/server/refunds.ts; the app does not collect a difference owed).
      */
+    transferCheck,
+
     async transferEntry(entryId: string, toCategoryId: string, reason: string) {
       return db.transaction(async () => {
         await lockEventOf(`SELECT event_id FROM order_entries WHERE id = $1`, entryId);
-        const e = await db.get<EntryRow & { event_id: string }>(`SELECT * FROM order_entries WHERE id = $1`, [entryId]);
-        if (!e) throw new HttpError(404, 'Entry not found.');
-        const row = (await orderRow(e.order_id))!;
-        if (effectiveStatus(row) !== 'confirmed' || e.status !== 'confirmed') throw new HttpError(409, 'Only a paid, active entry can be transferred.');
-        if (e.category_id === toCategoryId) throw new HttpError(422, 'Choose a different category.');
-        const { config } = await repo.getPublished(e.event_id);
-        await requireCancellationOpen(db, e.event_id, config, [toCategoryId]);
-        const target = config.categories.find((c) => c.id === toCategoryId);
-        if (!target || target.status !== 'active') throw new HttpError(422, 'That category is not open for entries.');
-        const others = (await entryRows(e.order_id)).filter((x) => x.id !== e.id && x.status === 'confirmed');
-        if (others.some((x) => x.category_id === target.id)) throw new HttpError(409, `This rider is already entered in ${target.name}.`);
-
-        const rider = row.rider_json;
-        const waiver = row.waiver_json;
-        const elig = evaluateCategory(target, profileOf(rider));
-        if (elig.status === 'ineligible') throw new HttpError(422, `Not eligible for ${target.name}: ${elig.reasons.join('; ')}.`);
-        if (needsGuardian(config, [target.id], rider.racingAge) && waiver.signerRole !== 'guardian') throw new HttpError(422, `${target.name} needs a waiver signed by a parent or guardian. Register the rider again with a guardian instead.`);
-        const block = findConflicts(config, [...others.map((x) => x.category_id), target.id]).find((c) => c.level === 'block');
-        if (block) throw new HttpError(409, block.message);
-        if ((await waitlistBlockers(config, e.event_id)).has(target.id)) throw new HttpError(409, `${target.name} has riders on its waitlist. Offer the place through the waitlist instead.`);
-        const room = canAdmit(config, (await repo.entries(e.event_id)).filter((x) => x.id !== e.id), target.id, await repo.riderRef(e.order_id));
-        if (!room.ok) throw new HttpError(409, room.reason === 'full' ? fullMessage(target.name, room.blockedBy) : `${target.name} cannot take this entry.`);
-
-        const paid = paidLine(row.quote_json, e)?.totalCents ?? 0;
-        const newPrice = quote(config, [target.id], todayIn(config.event.timeZone, clock()), null, profileOf(rider)).lines[0].priceCents;
+        const { e, target, paid, newPrice, fromName } = await transferCheck(entryId, toCategoryId);
         const t = nowIso();
-        const fromName = config.categories.find((c) => c.id === e.category_id)?.name ?? 'the previous category';
         const changeId = newId('chg');
         await db.run(`UPDATE order_entries SET original_category_id = COALESCE(original_category_id, category_id), category_id = $1 WHERE id = $2`, [target.id, e.id]);
         await db.run(

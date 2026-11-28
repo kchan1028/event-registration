@@ -150,7 +150,7 @@ Concurrent requests use the existing order-scoped provider key and fixed request
 
 ## Rider withdrawal requests (Implemented locally)
 
-`GET /api/rider/order-entries/:id/withdrawal` and `POST /api/rider/order-entries/:id/withdrawal-requests` require a signed-in account that manages the order (the placing adult, an active guardian or an approved claimed rider). Any other account gets 404, and an organizer member who is not that rider gets 403. Listing, approving and declining under `/api/events/:id/withdrawal-requests` require `entries.manage` (owner or registration manager). Approval runs the existing organizer withdrawal under the event lock and never refunds; a decline needs a reason.
+`GET /api/rider/order-entries/:id/withdrawal` and `POST /api/rider/order-entries/:id/withdrawal-requests` require a signed-in account that manages the order (the placing adult, an active guardian or an approved claimed rider). Any other account gets 404, and an organizer member who is not that rider gets 403. Listing, approving and declining under `/api/events/:id/withdrawal-requests` require `entries.manage` (owner or registration manager). Approval runs the existing organizer withdrawal under the event lock and never refunds; a decline needs a reason. `GET /api/rider/order-entries/:id/transfer-options` and `POST /api/rider/order-entries/:id/transfer-requests` use the same rider access check; approving a transfer request runs the existing organizer transfer and never charges or refunds.
 
 ## Check-in camera
 

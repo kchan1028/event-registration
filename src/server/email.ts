@@ -192,18 +192,22 @@ const declinedEntryKept = (w: string) => `EXISTS (
 )`;
 
 /** Order number and category only. The organizer's reason stays out of the message; the rider reads it on My registrations. */
-export function withdrawalDeclineNoticeText(orderNumber: string, categoryName: string, isDemo: boolean): string {
+export function withdrawalDeclineNoticeText(orderNumber: string, categoryName: string, isDemo: boolean, toCategoryName: string | null = null): string {
+  const outcome = toCategoryName
+    ? `the organizer kept your ${categoryName} entry and did not move it to ${toCategoryName}`
+    : `the organizer kept your ${categoryName} entry and did not withdraw it`;
   return isDemo
-    ? `Demo registration ${orderNumber}: the organizer kept your ${categoryName} entry and did not withdraw it. Simulated registration: no money was moved. Sign in and open My registrations to see why.`
-    : `Registration ${orderNumber}: the organizer kept your ${categoryName} entry and did not withdraw it. Sign in and open My registrations to see why.`;
+    ? `Demo registration ${orderNumber}: ${outcome}. Simulated registration: no money was moved. Sign in and open My registrations to see why.`
+    : `Registration ${orderNumber}: ${outcome}. Sign in and open My registrations to see why.`;
 }
 
 /** Called in the transaction that declines a rider's withdrawal request. A null sender stays unsent. This step does not send. */
 export async function recordWithdrawalDeclineNotice(db: Db, requestId: string, recordedAt: string, senderAddress?: string) {
-  const row = await db.get<{ organization_id: string; order_id: string; email: string; is_demo: boolean | null; category_name: string }>(
+  const row = await db.get<{ organization_id: string; order_id: string; email: string; is_demo: boolean | null; category_name: string; to_category_name: string | null }>(
     `SELECT e.organization_id, o.id AS order_id, a.email,
             (v.config_json #>> '{event,isDemo}') = 'true' AS is_demo,
-            w.policy_json ->> 'categoryName' AS category_name
+            w.policy_json ->> 'categoryName' AS category_name,
+            w.policy_json #>> '{transfer,categoryName}' AS to_category_name
      FROM withdrawal_requests w
      JOIN orders o ON o.id = w.order_id
      JOIN events e ON e.id = o.event_id
@@ -218,7 +222,7 @@ export async function recordWithdrawalDeclineNotice(db: Db, requestId: string, r
     `INSERT INTO email_messages (id, organization_id, kind, ref, withdrawal_request_id, to_email, subject, body_text, status, created_at, from_email, keyed)
      VALUES ($1, $2, 'withdrawal_decline_notice', $3, $3, $4, $5, $6, 'recorded', $7, $8, true)
      ON CONFLICT (withdrawal_request_id) DO NOTHING`,
-    [newId('eml'), row.organization_id, requestId, row.email, 'Your withdrawal request', withdrawalDeclineNoticeText(formatOrderNumber(row.order_id, isDemo), row.category_name, isDemo), recordedAt, senderAddress ?? null],
+    [newId('eml'), row.organization_id, requestId, row.email, row.to_category_name ? 'Your category change request' : 'Your withdrawal request', withdrawalDeclineNoticeText(formatOrderNumber(row.order_id, isDemo), row.category_name, isDemo, row.to_category_name), recordedAt, senderAddress ?? null],
   );
 }
 
