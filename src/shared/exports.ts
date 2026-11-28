@@ -50,15 +50,19 @@ export interface ExportOrder {
 /** Amounts are written as numbers, so the CSV writer leaves them unquoted and negative amounts work. */
 const money = (cents: number) => Math.round(cents) / 100;
 
-export const ENTRY_COLUMNS = ['order_number', 'rider_id', 'last_name', 'first_name', 'team', 'racing_age', 'license_category', 'category_code', 'category', 'race', 'entry_status', 'order_status', 'amount_paid', 'refunded', 'license_reviewed', 'waiver_signed_by', 'category_answers', 'discount', 'discount_reason', 'coupon_code'];
+export const ENTRY_COLUMNS = ['order_number', 'rider_id', 'last_name', 'first_name', 'team', 'racing_age', 'license_category', 'category_code', 'category', 'race', 'entry_status', 'order_status', 'amount_paid', 'refunded', 'license_reviewed', 'waiver_signed_by', 'category_answers', 'discount', 'discount_reason', 'coupon_code'] as const;
+export type EntryColumn = (typeof ENTRY_COLUMNS)[number];
+/** Always in a view's file, whatever columns were chosen, so every row can be traced to its order and rider. */
+export const REQUIRED_ENTRY_COLUMNS: readonly EntryColumn[] = ['order_number', 'rider_id'];
 
 /**
  * One row per entry. Sorted by rider, then race, unless `keepOrder` is set: then the orders stay in the order given (a
- * Registrations view's row order) and each order's entries are sorted by race.
+ * Registrations view's row order) and each order's entries are sorted by race. `columns` keeps only those columns plus the
+ * required ones, in the file's usual column order; missing means every column.
  * `amount_paid` is 0 until the order is confirmed: a held or unresolved order has not paid for a place.
  * `refunded` is the total of this entry's refunds that were asked for, are on their way, or are done.
  */
-export function entriesCsv(orders: readonly ExportOrder[], riderKey: (orderId: string) => string, keepOrder = false): string {
+export function entriesCsv(orders: readonly ExportOrder[], riderKey: (orderId: string) => string, keepOrder = false, columns?: readonly EntryColumn[]): string {
   const rows: unknown[][] = [];
   const position = new Map<unknown, number>();
   for (const [index, o] of orders.entries()) {
@@ -94,7 +98,9 @@ export function entriesCsv(orders: readonly ExportOrder[], riderKey: (orderId: s
   rows.sort(keepOrder
     ? (a, b) => position.get(a[0])! - position.get(b[0])! || String(a[9]).localeCompare(String(b[9]))
     : (a, b) => `${a[2]} ${a[3]} ${a[9]}`.localeCompare(`${b[2]} ${b[3]} ${b[9]}`));
-  return writeCsv([ENTRY_COLUMNS, ...rows]);
+  if (!columns) return writeCsv([ENTRY_COLUMNS, ...rows]);
+  const kept = ENTRY_COLUMNS.flatMap((c, i) => (REQUIRED_ENTRY_COLUMNS.includes(c) || columns.includes(c) ? [i] : []));
+  return writeCsv([kept.map((i) => ENTRY_COLUMNS[i]), ...rows.map((r) => kept.map((i) => r[i]))]);
 }
 
 export const LEDGER_COLUMNS = ['order_number', 'order_status', 'recorded_at', 'kind', 'description', 'category_code', 'amount', 'note'];

@@ -15,7 +15,7 @@ import { buildDemoEvent } from '../shared/demo';
 import { buildCaseStudyScenarios, CASE_STUDY_ORG_ID, CASE_STUDY_REFERENCE_NOW } from '../shared/caseStudies';
 import { configFromTemplate, newId } from '../shared/factory';
 import { type EventConfig, bibNumberSchema, createEventInputSchema, eventConfigSchema } from '../shared/schema';
-import { entriesCsv, ledgerCsv } from '../shared/exports';
+import { ENTRY_COLUMNS, entriesCsv, ledgerCsv } from '../shared/exports';
 import { reservationLookupSchema, reservationReferenceSchema } from '../shared/checkout';
 import { eventSummary, financeSummaryCsv } from '../shared/reports';
 import { riderCorrectionSchema, staffReleaseReasonSchema } from '../shared/lookup';
@@ -1076,8 +1076,9 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       entryStatus: z.enum(['active', 'withdrawn', 'cancelled']).optional(),
       missingWaiver: z.literal('1').optional(),
       sort: z.enum(REGISTRATION_SORT_KEYS).optional(),
+      columns: z.string().max(400).transform((s) => s.split(',')).pipe(z.array(z.enum(ENTRY_COLUMNS)).min(1)).optional(),
     }).parse(p.kind === 'entries.csv' ? req.query ?? {} : {});
-    const viewFilter: RegistrationFilter = { dayId: v.dayId, categoryId: v.categoryId, entryStatus: v.entryStatus, missingWaiver: v.missingWaiver === '1' || undefined, sort: v.sort };
+    const viewFilter: RegistrationFilter = { dayId: v.dayId, categoryId: v.categoryId, entryStatus: v.entryStatus, missingWaiver: v.missingWaiver === '1' || undefined, sort: v.sort, columns: v.columns };
     // A view is any filter or any requested row order, `newest` included; the file then names them in its response.
     const viewParams = filterToParams(viewFilter);
     if (v.sort) viewParams.set('sort', v.sort);
@@ -1101,7 +1102,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
             ? list.filter((o) => matchesRegistrationFilter(o, view.filter)).map((o) => ({ ...o, entries: o.entries.filter((e) => entryMatchesFilter(e, view.filter)) }))
             : list;
           // A view keeps the screen's row order (newest first unless chosen); the full file keeps its rider-then-race order.
-          body = view.active ? entriesCsv(sortRegistrations(viewed, viewFilter.sort), await identity.keyOf(p.id), true) : entriesCsv(list, await identity.keyOf(p.id));
+          body = view.active ? entriesCsv(sortRegistrations(viewed, viewFilter.sort), await identity.keyOf(p.id), true, viewFilter.columns) : entriesCsv(list, await identity.keyOf(p.id));
         } else body = ledgerCsv(list);
       }
       const cancellation = await cancellationExportState(db, p.id, record.config);

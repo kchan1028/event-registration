@@ -49,6 +49,11 @@ describe('entries export of a filtered view', () => {
     const newestNumbers = parseCsv(newest.body).slice(1).map((r) => r[header.indexOf('order_number')]).filter((n, i, all) => n !== all[i - 1]);
     const listed = (await app.inject({ url: `/api/events/${eventId}/orders` })).json<Parameters<typeof sortRegistrations>[0][number][]>();
     expect(newestNumbers).toEqual(sortRegistrations(listed.filter((o) => newestNumbers.includes(o.orderNumber)), 'newest').map((o) => o.orderNumber));
+    // Chosen columns: only those plus the order and rider ids; an unknown column is refused.
+    const narrow = await app.inject({ url: `${url}?dayId=${sunday.id}&columns=category,last_name` });
+    expect(parseCsv(narrow.body)[0]).toEqual(['order_number', 'rider_id', 'last_name', 'category']);
+    expect(narrow.headers['x-cyclereg-export-filters']).toBe(`dayId=${sunday.id}&columns=category%2Clast_name`);
+    expect((await app.inject({ url: `${url}?columns=emergency_contact` })).statusCode).toBe(400);
     // A sort alone orders the whole file.
     const byNumber = parseCsv((await app.inject({ url: `${url}?sort=order` })).body).slice(1).map((r) => r[header.indexOf('order_number')]);
     expect(byNumber).toEqual([...byNumber].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' })));
@@ -66,7 +71,7 @@ describe('entries export of a filtered view', () => {
     const db = openDb(databaseUrl);
     try {
       expect((await db.all<{ export_kind: string }>(`SELECT export_kind FROM protected_export_audit WHERE event_id = $1 ORDER BY export_kind`, [eventId])).map((r) => r.export_kind))
-        .toEqual(['entries', 'entries', 'entries', 'entries', 'entries', 'entries', 'ledger']);
+        .toEqual(['entries', 'entries', 'entries', 'entries', 'entries', 'entries', 'entries', 'ledger']);
     } finally {
       await db.close();
     }

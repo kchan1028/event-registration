@@ -779,7 +779,7 @@ Migration 64. An organizer's named view of an event's Registrations list. Privat
 | `event_id` | References `events`; cascades on delete |
 | `account_id` | The organizer who saved it. References `accounts`; cascades on delete |
 | `name` | 1 to 60 characters; unique per event and account, ignoring case |
-| `filter_json` | Race day, category, entry status, missing-waiver flag and row order (`sort`: newest, oldest, name or order; all optional, at least one filter required) |
+| `filter_json` | Race day, category, entry status, missing-waiver flag, row order (`sort`: newest, oldest, name or order) and download `columns` (a subset of the entries export columns); all optional, at least one filter required |
 | `created_at` | |
 
 ### withdrawal_requests

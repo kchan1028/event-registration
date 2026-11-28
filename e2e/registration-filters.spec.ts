@@ -130,6 +130,14 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await expect(rows.first()).toContainText(sortRegistrations(live, 'order')[0].orderNumber);
   // A sort alone is enough to download the view in that order.
   await expect(filters.getByRole('link', { name: 'Download this view (CSV)' })).toHaveAttribute('href', /\?sort=order$/);
+  // Leaving a column out narrows the download; the order and rider ids cannot be left out; ticking it again restores all.
+  await filters.locator('summary', { hasText: 'Columns in the download' }).click();
+  await expect(filters.getByRole('checkbox', { name: /^order_number/ })).toBeDisabled();
+  await filters.getByRole('checkbox', { name: 'team', exact: true }).uncheck();
+  await expect(filters.getByRole('link', { name: 'Download this view (CSV)' })).toHaveAttribute('href', /columns=order_number%2Crider_id%2Clast_name%2Cfirst_name%2Cracing_age/);
+  await filters.getByRole('checkbox', { name: 'team', exact: true }).check();
+  await expect(filters.getByRole('link', { name: 'Download this view (CSV)' })).toHaveAttribute('href', /\?sort=order$/);
+  await filters.locator('summary', { hasText: 'Columns in the download' }).click();
   // Clearing the entry filters keeps the row order.
   await filters.getByLabel('Entry status').selectOption('withdrawn');
   await filters.getByRole('button', { name: 'Clear entry filters' }).click();
