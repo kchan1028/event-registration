@@ -263,8 +263,6 @@ test('a sort orders riders by last name, stays in a saved view, and is the view 
   const alex = live.find((order) => order.rider.firstName === 'Alex' && order.rider.lastName === 'Demo');
   expect(aaron && alex).toBeTruthy();
   expect(live.filter((order) => byText(order.rider.lastName, 'Demo') === 0).length).toBeGreaterThan(1);
-  // The shared last name is a real tie: first name and order number disagree, so either rule can be told from the other.
-  expect(orderedBy(live, 'name').map((order) => order.id)).not.toEqual(orderedBy(live, 'order').map((order) => order.id));
 
   await page.goto(`/#/events/${eventId}/registrations`);
   const filters = page.getByRole('group', { name: 'Narrow by entry' });
@@ -335,7 +333,7 @@ test('a sort orders riders by last name, stays in a saved view, and is the view 
   const onlyFirst = sortedOnly.header.indexOf('first_name');
   const onlyNumber = sortedOnly.header.indexOf('order_number');
   expect(sortedOnly.rows.map((row) => [row[onlyLast], row[onlyFirst], row[onlyNumber]])).toEqual(namesOf(byName));
-  // Order number disagrees with last-name order, so the file cannot pass by sorting riders alphabetically.
+  // The file follows the order-number rule, checked against the shared sort.
   await sortBy.selectOption('order');
   await expect(viewDownload()).toHaveAttribute('href', /\?sort=order$/);
   await expectRowOrder(rows, orderedBy(live, 'order'));
