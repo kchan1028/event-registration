@@ -19,3 +19,4 @@ src/web/registrations/OrganizerParticipantHistory.tsx=e2e/organizer-participant-
 src/web/registrations/RiderEmailDeliveryPanel.tsx=e2e/decline-notice-delivery.spec.ts
 src/web/registrations/WithdrawalRequests.tsx=e2e/decline-notice-delivery.spec.ts
 src/web/registrations/WithdrawalRequests.tsx=e2e/withdrawal-requests-queue.spec.ts
+src/web/styles.css=e2e/registration-filters.spec.ts
