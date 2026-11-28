@@ -132,6 +132,9 @@ export function moveCostSentence(o: TransferOption): string {
 function MoveForm({ entryId, category, onSent, onCancel }: { entryId: string; category: string; onSent: (r: WithdrawalRequest) => void; onCancel: () => void }) {
   const [data, setData] = useState<{ from: WithdrawalPolicyPreview; options: TransferOption[] } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // A failed refresh after the form is showing stays inside the form, so the choice and the typed reason are kept.
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const hasData = useRef(false);
   const [choice, setChoice] = useState('');
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const choices = useRef<HTMLFieldSetElement>(null);
@@ -146,9 +149,11 @@ function MoveForm({ entryId, category, onSent, onCancel }: { entryId: string; ca
     setLoading(true);
     try {
       const options = await api.transferOptions(entryId);
-      if (mine === latestLoad.current) { setData(options); setLoadError(null); }
+      if (mine === latestLoad.current) { hasData.current = true; setData(options); setLoadError(null); setRefreshError(null); }
     } catch (e) {
-      if (mine === latestLoad.current) setLoadError((e as ApiError).message);
+      if (mine !== latestLoad.current) return;
+      if (hasData.current) setRefreshError((e as ApiError).message);
+      else setLoadError((e as ApiError).message);
     } finally {
       if (mine === latestLoad.current) setLoading(false);
     }
@@ -199,13 +204,26 @@ function MoveForm({ entryId, category, onSent, onCancel }: { entryId: string; ca
         try {
           onSent(await api.requestTransfer(entryId, { clientRequestId: requestId, reason, toCategoryId: option.categoryId, expectedCategoryId: data.from.categoryId, expectedNewPriceCents: option.newPriceCents }));
         } catch (e) {
-          // A price or the entry's category changed since the rider looked: show the current choices and let them decide again.
-          if (e instanceof ApiError && e.status === 409) { await load(); setRequestId(crypto.randomUUID()); }
+          // Refused because something changed since the rider looked (409), or the target closed or went away (422).
+          if (e instanceof ApiError && (e.status === 409 || e.status === 422)) {
+            // Another tab may already have sent a request for this entry: show it as waiting instead of the form.
+            const status = await api.withdrawalStatus(entryId).catch(() => null);
+            if (status?.openRequest) { onSent(status.openRequest); return; }
+            // Otherwise show the current choices and let the rider decide again.
+            await load();
+            setRequestId(crypto.randomUUID());
+          }
           throw e;
         }
       }}
       onCancel={onCancel}
     >
+      {refreshError && (
+        <p className="text-error small" role="alert">
+          The choices could not refresh. {refreshError}{' '}
+          <button type="button" className="btn btn--secondary btn--small" disabled={loading} onClick={() => void load()}>{loading ? 'Trying again…' : 'Refresh choices'}</button>
+        </p>
+      )}
       <fieldset className="field" ref={choices}>
         <legend>Move to</legend>
         {data.options.map((o) => (

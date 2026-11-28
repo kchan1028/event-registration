@@ -388,3 +388,69 @@ test('the move form recovers from a failed load and drops a choice that a refres
   }
 });
 
+test('the move form keeps the reason when a refresh fails, refreshes after a closed target, and shows a request sent from another tab', async ({ page, browser, baseURL }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).status()).toBe(200);
+  const { config } = await (await page.request.get(eventUrl)).json();
+  const from = config.categories.find((row: { timingCode: string }) => row.timingCode === 'RR-M35-34');
+  const to = config.categories.find((row: { timingCode: string }) => row.timingCode === 'CR-M35-34');
+  const email = `mover-tabs-${eventId}@example.test`;
+  const headers = { Authorization: `Bearer test:${email}` };
+  const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { headers, data: {
+    clientRequestId: `mover-tabs-${eventId}`.slice(0, 64), categoryIds: [from.id],
+    rider: { firstName: 'Sam', lastName: 'Fictional', email, team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Pat Fictional', phone: '555-555-0199' } },
+    waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Sam Fictional', signerRole: 'rider' },
+  } });
+  expect(created.status(), await created.text()).toBe(201);
+  const { id: orderId } = await created.json();
+  const paid = await page.request.post(`/api/orders/${orderId}/payment`, { headers, data: { attemptId: `mover-tabs-paid-${orderId}`, outcome: 'success' } });
+  const entryId = (await paid.json()).entries[0].id as string;
+
+  const context = await browser.newContext({ baseURL, extraHTTPHeaders: headers });
+  await context.addInitScript((account) => sessionStorage.setItem('cyclereg.test-session', account), email);
+  const rider = await context.newPage();
+  try {
+    await rider.goto(`/#/orders/${orderId}`);
+    await rider.getByRole('button', { name: `Ask to move from ${from.name} to another category` }).click();
+    const form = rider.getByRole('form', { name: `Ask to move from ${from.name} to another category` });
+    const reason = form.getByRole('textbox', { name: 'Why do you want to move?' });
+    await form.getByRole('radio').first().check();
+    await reason.fill('Prefer another race');
+
+    // A refused send whose refresh then fails keeps the form, the choice and the reason.
+    let optionLoads = 0;
+    await rider.route('**/api/rider/order-entries/*/transfer-requests', (route) => route.fulfill({ status: 409, json: { error: 'Something changed since you looked.' } }), { times: 1 });
+    await rider.route('**/api/rider/order-entries/*/transfer-options', (route) => { optionLoads += 1; return route.fulfill({ status: 503, json: { error: 'Fictional temporary failure' } }); }, { times: 1 });
+    await form.getByRole('button', { name: 'Send request' }).click();
+    await expect(form.getByText('The choices could not refresh.')).toBeVisible();
+    await expect(reason).toHaveValue('Prefer another race');
+    await form.getByRole('button', { name: 'Refresh choices' }).click();
+    await expect(form.getByText('The choices could not refresh.')).toHaveCount(0);
+    await expect(reason).toHaveValue('Prefer another race');
+
+    // A target that closed since the rider looked (422) also refreshes the choices.
+    const loadsBefore = optionLoads;
+    await rider.route('**/api/rider/order-entries/*/transfer-options', (route) => { optionLoads += 1; return route.continue(); });
+    await rider.route('**/api/rider/order-entries/*/transfer-requests', (route) => route.fulfill({ status: 422, json: { error: 'That category is not open for entries.' } }), { times: 1 });
+    await form.getByRole('radio').first().check();
+    await form.getByRole('button', { name: 'Send request' }).click();
+    await expect(form.getByRole('alert').filter({ hasText: 'not open for entries' })).toBeVisible();
+    await expect.poll(() => optionLoads).toBeGreaterThan(loadsBefore);
+
+    // Another tab sends a request first: this tab's send is refused and the waiting request is shown instead of the form.
+    const { from: current, options } = await (await page.request.get(`/api/rider/order-entries/${entryId}/transfer-options`, { headers })).json();
+    const option = options.find((o: { categoryId: string }) => o.categoryId === to.id);
+    expect((await page.request.post(`/api/rider/order-entries/${entryId}/transfer-requests`, { headers, data: {
+      clientRequestId: `mover-other-tab-${entryId}`, reason: 'Sent from another tab', toCategoryId: to.id, expectedCategoryId: current.categoryId, expectedNewPriceCents: option.newPriceCents,
+    } })).status()).toBe(201);
+    await form.getByRole('radio').first().check();
+    await form.getByRole('button', { name: 'Send request' }).click();
+    await expect(rider.getByRole('status').filter({ hasText: 'You asked to move this entry to' })).toBeVisible();
+    await expect(form).toHaveCount(0);
+    await expect(rider.getByRole('button', { name: /Ask to withdraw|Ask to move/ })).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
+
