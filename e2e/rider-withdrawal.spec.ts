@@ -248,3 +248,61 @@ test('a junior viewing their own registration cannot ask to withdraw, and the gu
     await guardianContext.close();
   }
 });
+
+test('a rider picks a category to move to, sees how its price compares, and the request waits for the organizer', async ({ page, browser, baseURL }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).status()).toBe(200);
+  const { config } = await (await page.request.get(eventUrl)).json();
+  const from = config.categories.find((row: { timingCode: string }) => row.timingCode === 'RR-M35-34');
+  const to = config.categories.find((row: { timingCode: string }) => row.timingCode === 'CR-M35-34');
+  const email = `mover-ui-${eventId}@example.test`;
+  const headers = { Authorization: `Bearer test:${email}` };
+  const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { headers, data: {
+    clientRequestId: `mover-ui-${eventId}`.slice(0, 64), categoryIds: [from.id],
+    rider: { firstName: 'Sam', lastName: 'Fictional', email, team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Pat Fictional', phone: '555-555-0199' } },
+    waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Sam Fictional', signerRole: 'rider' },
+  } });
+  expect(created.status(), await created.text()).toBe(201);
+  const { id: orderId } = await created.json();
+  const paid = await page.request.post(`/api/orders/${orderId}/payment`, { headers, data: { attemptId: `mover-ui-paid-${orderId}`, outcome: 'success' } });
+  const entryId = (await paid.json()).entries[0].id as string;
+  const { options } = await (await page.request.get(`/api/rider/order-entries/${entryId}/transfer-options`, { headers })).json();
+  const option = options.find((o: { categoryId: string }) => o.categoryId === to.id);
+
+  const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 900 }, extraHTTPHeaders: headers });
+  await context.addInitScript((account) => sessionStorage.setItem('cyclereg.test-session', account), email);
+  const rider = await context.newPage();
+  try {
+    await rider.goto(`/#/orders/${orderId}`);
+    await rider.getByRole('button', { name: `Ask to move from ${from.name} to another category` }).click();
+    const form = rider.getByRole('form', { name: `Ask to move from ${from.name} to another category` });
+    // Both races have a "Masters 35+ Cat 3/4", so each choice names its timing code and race.
+    const choice = form.getByRole('radio', { name: new RegExp(`^${option.code} `) });
+    await expect(choice).toBeVisible();
+    // The rider's current category is not offered.
+    const fromCode = from.classifications[0]?.code || from.timingCode;
+    const fromRace = config.races.find((r: { id: string }) => r.id === from.raceId).name;
+    await expect(form.getByRole('radio', { name: `${fromCode} ${from.name} (${fromRace}):`, exact: false })).toHaveCount(0);
+    await expect(form).toContainText('nothing is charged or refunded here');
+    await expect(form.getByRole('radio').first()).toBeFocused();
+    expect(await rider.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    expect((await new AxeBuilder({ page: rider }).include('form.correction').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+
+    // A choice and a reason are both needed before anything is sent.
+    await form.getByRole('textbox', { name: 'Why do you want to move?' }).fill('Prefer the criterium');
+    await form.getByRole('button', { name: 'Send request' }).click();
+    await expect(form.getByRole('alert')).toHaveText('Choose the category to move to.');
+    expect(await (await page.request.get(`${eventUrl}/withdrawal-requests`)).json()).toEqual([]);
+
+    await choice.check();
+    await form.getByRole('button', { name: 'Send request' }).click();
+    const waiting = rider.getByRole('status').filter({ hasText: `You asked to move this entry to ${option.code} ${to.name} (${option.raceName}).` });
+    await expect(waiting).toBeFocused();
+    await rider.screenshot({ path: 'test-results/rider-move-waiting-390.png', fullPage: true });
+    const requests = await (await page.request.get(`${eventUrl}/withdrawal-requests`)).json();
+    expect(requests).toEqual([expect.objectContaining({ kind: 'transfer', status: 'open', policy: expect.objectContaining({ transfer: expect.objectContaining({ categoryId: to.id, newPriceCents: option.newPriceCents }) }) })]);
+  } finally {
+    await context.close();
+  }
+});

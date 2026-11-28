@@ -3,6 +3,7 @@ import { formatDollars } from '../../shared/format';
 import { api, type ApiError, type WithdrawalPolicyPreview, type WithdrawalRequest } from '../api';
 import { formatDateTime } from '../format';
 import { ReasonForm } from '../ui';
+import { moveTargetLabel } from '../WithdrawalRequest';
 import { useLoad } from '../useLoad';
 
 /** For a category change: the target's price when the rider asked and who owes the difference. Nothing is charged here. */
@@ -10,7 +11,7 @@ function differenceAtRequest(p: WithdrawalPolicyPreview): string {
   const t = p.transfer!;
   const d = t.differenceCents;
   const owed = d > 0 ? `${formatDollars(d)} owed by the rider` : d < 0 ? `${formatDollars(-d)} due to the rider` : 'no difference';
-  return `Paid ${formatDollars(p.amountPaidCents)}. On ${p.onDate}, ${t.categoryName} cost ${formatDollars(t.newPriceCents)}: ${owed}.`;
+  return `Paid ${formatDollars(p.amountPaidCents)}. On ${p.onDate}, ${moveTargetLabel(t)} cost ${formatDollars(t.newPriceCents)}: ${owed}.`;
 }
 
 /** What the accepted policy said the rider would get back when they asked, in the organizer's words. */
@@ -53,7 +54,7 @@ export function WithdrawalRequests({ eventId, refreshKey, onChanged }: { eventId
             {done.map((i) => (
               <li key={i.id}>
                 {i.riderName} · {i.policy.categoryName}: {i.kind === 'transfer'
-                  ? (i.status === 'approved' ? `Moved to ${i.policy.transfer?.categoryName}` : `Declined move to ${i.policy.transfer?.categoryName}: ${i.decisionReason}`)
+                  ? (i.status === 'approved' ? `Moved to ${i.policy.transfer ? moveTargetLabel(i.policy.transfer) : 'another category'}` : `Declined move to ${i.policy.transfer ? moveTargetLabel(i.policy.transfer) : 'another category'}: ${i.decisionReason}`)
                   : (i.status === 'approved' ? 'Withdrawn' : `Declined: ${i.decisionReason}`)}
               </li>
             ))}
@@ -69,7 +70,7 @@ function RequestRow({ eventId, item, onDecided }: { eventId: string; item: Withd
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const who = `${item.riderName}, ${item.policy.categoryName}`;
-  const to = item.kind === 'transfer' ? item.policy.transfer?.categoryName ?? 'another category' : null;
+  const to = item.kind === 'transfer' ? (item.policy.transfer ? moveTargetLabel(item.policy.transfer) : 'another category') : null;
   // The action named on every control, so an organizer never confirms a withdrawal for a move or the reverse.
   const action = to ? `move to ${to}` : 'withdrawal';
   const approve = async () => {

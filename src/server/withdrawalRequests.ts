@@ -20,6 +20,9 @@ export type WithdrawalReturn = 'cash' | 'credit' | 'rider_choice';
 export interface TransferOption {
   categoryId: string;
   categoryName: string;
+  /** The code shown on the receipt (first classification, else timing code) and the race, so same-named categories differ. */
+  code: string;
+  raceName: string;
   newPriceCents: number;
   differenceCents: number;
 }
@@ -175,7 +178,10 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
         if (c.status !== 'active' || c.id === from.categoryId) continue;
         try {
           const check = await orders.transferCheck(entryId, c.id);
-          options.push({ categoryId: c.id, categoryName: c.name, newPriceCents: check.newPrice, differenceCents: check.newPrice - check.paid });
+          options.push({
+            categoryId: c.id, categoryName: c.name, code: c.classifications[0]?.code || c.timingCode, raceName: config.races.find((r) => r.id === c.raceId)?.name ?? '',
+            newPriceCents: check.newPrice, differenceCents: check.newPrice - check.paid,
+          });
         } catch (e) {
           if (!(e instanceof HttpError)) throw e;
         }
@@ -212,7 +218,11 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
         if (check.newPrice !== body.expectedNewPriceCents) {
           throw new HttpError(409, `The price of ${check.target.name} has changed since you looked. Review it and send your request again.`);
         }
-        const transfer: TransferOption = { categoryId: check.target.id, categoryName: check.target.name, newPriceCents: check.newPrice, differenceCents: check.newPrice - check.paid };
+        const transfer: TransferOption = {
+          categoryId: check.target.id, categoryName: check.target.name, code: check.target.classifications[0]?.code || check.target.timingCode,
+          raceName: check.config.races.find((r) => r.id === check.target.raceId)?.name ?? '',
+          newPriceCents: check.newPrice, differenceCents: check.newPrice - check.paid,
+        };
         const id = newId('wdr');
         await db.run(
           `INSERT INTO withdrawal_requests (id, event_id, order_id, entry_id, category_id, requested_by, client_request_id, reason, policy_json, status, created_at, kind, to_category_id)
