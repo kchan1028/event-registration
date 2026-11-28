@@ -84,6 +84,20 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await filters.getByLabel('Category').selectOption(usedCategoryId);
   await expect(allCount).toHaveText(String(orders.filter((o) => o.entries.some((e) => e.categoryId === usedCategoryId)).length));
 
+  // Save the withdrawn view, reload, and apply it again from Saved view.
+  await filters.getByLabel('Category').selectOption('');
+  await filters.getByLabel('Entry status').selectOption('withdrawn');
+  await filters.getByLabel('View name').fill('Withdrawn riders');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await expect(filters.getByLabel('Saved view').locator('option', { hasText: 'Withdrawn riders' })).toHaveCount(1);
+  await page.reload();
+  await expect(allCount).toHaveText(String(orders.length));
+  await filters.getByLabel('Saved view').selectOption({ label: 'Withdrawn riders' });
+  await expect(allCount).toHaveText('1');
+  await expect(filters.getByLabel('Entry status')).toHaveValue('withdrawn');
+  await filters.getByRole('button', { name: 'Delete view' }).click();
+  await expect(filters.getByLabel('Saved view')).toHaveCount(0);
+
   await filters.getByRole('button', { name: 'Clear entry filters' }).click();
   await expect(allCount).toHaveText(String(orders.length));
   await expect(filters.getByRole('button', { name: 'Clear entry filters' })).toHaveCount(0);

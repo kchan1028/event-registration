@@ -954,6 +954,16 @@ export const MIGRATIONS: string[] = [
   `ALTER TABLE withdrawal_requests ADD COLUMN kind text NOT NULL DEFAULT 'withdraw' CHECK (kind IN ('withdraw', 'transfer'));
   ALTER TABLE withdrawal_requests ADD COLUMN to_category_id text;
   ALTER TABLE withdrawal_requests ADD CONSTRAINT withdrawal_requests_transfer_target CHECK ((kind = 'transfer') = (to_category_id IS NOT NULL));`,
+  // 64: an organizer's named Registrations views; entry filters only, never search text.
+  `CREATE TABLE saved_registration_views (
+    id text PRIMARY KEY,
+    event_id text NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    account_id text NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 60),
+    filter_json jsonb NOT NULL,
+    created_at timestamptz NOT NULL
+  );
+  CREATE UNIQUE INDEX saved_registration_views_name ON saved_registration_views(event_id, account_id, lower(name));`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

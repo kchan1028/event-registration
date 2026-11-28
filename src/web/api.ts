@@ -1,3 +1,4 @@
+import type { RegistrationFilter } from '../shared/registrationFilters';
 import type { PublicCancellationStatus, CancellationExecution, CancellationExecutionInput, CancellationExecutionCheck, CancellationSelection, CancellationConfirmationPreview, CancellationConfirmationInput, CancellationConfirmation } from '../shared/cancellations';
 import type { LimitUsage } from '../shared/capacity';
 import type { RefundStatus, RefundRequest, RefundRequestResult } from '../shared/refunds';
@@ -284,6 +285,8 @@ export interface WithdrawalRequest {
   decidedAt: string | null;
 }
 
+export interface SavedView { id: string; name: string; filter: RegistrationFilter; createdAt: string }
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -421,6 +424,9 @@ export const api = {
   linkRiders: (eventId: string, a: string, b: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/link`, { orderIds: [a, b] }),
   dismissRiderMatch: (eventId: string, a: string, b: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/dismiss`, { orderIds: [a, b] }),
   unlinkRider: (eventId: string, orderId: string) => request<RiderIdentityOverview>('POST', `/api/events/${eventId}/rider-identity/unlink`, { orderId }),
+  savedViews: (eventId: string) => request<SavedView[]>('GET', `/api/events/${eventId}/saved-views`),
+  saveView: (eventId: string, name: string, filter: RegistrationFilter) => request<SavedView[]>('POST', `/api/events/${eventId}/saved-views`, { name, filter }),
+  deleteView: (eventId: string, viewId: string) => request<SavedView[]>('DELETE', `/api/events/${eventId}/saved-views/${encodeURIComponent(viewId)}`),
   withdrawalRequests: (eventId: string) => request<WithdrawalRequest[]>('GET', `/api/events/${eventId}/withdrawal-requests`),
   approveWithdrawalRequest: (eventId: string, id: string) => request<WithdrawalRequest>('POST', `/api/events/${eventId}/withdrawal-requests/${encodeURIComponent(id)}/approve`),
   declineWithdrawalRequest: (eventId: string, id: string, reason: string) => request<WithdrawalRequest>('POST', `/api/events/${eventId}/withdrawal-requests/${encodeURIComponent(id)}/decline`, { reason }),

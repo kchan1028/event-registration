@@ -31,6 +31,7 @@ import { createCaseStudyFixtures } from './caseStudies';
 import { createIdentity } from './identity';
 import { createResolutions } from './resolutions';
 import { createWithdrawalRequests } from './withdrawalRequests';
+import { createSavedViews, savedViewFilterSchema } from './savedViews';
 import { createStartLists, slug } from './startlists';
 import { createCoupons } from './coupons';
 import { createOrders, isLiveOrder, type Orders } from './orders';
@@ -121,6 +122,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const refunds = createRefunds(db, paymentProvider, clock, repo, emailSender.mode === 'resend' ? emailSender.from : undefined);
   const identity = createIdentity(db, orders, clock);
   const resolutions = createResolutions(db, orders, clock);
+  const savedViews = createSavedViews(db, clock);
   const withdrawalRequests = createWithdrawalRequests(db, repo, orders, clock, emailSender.mode === 'resend' ? emailSender.from : undefined);
   const startLists = createStartLists(db, repo, orders, clock, identity);
   const checkIn = createCheckIn(db, repo, orders, clock, identity, startLists);
@@ -864,6 +866,18 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     }).parse(req.body);
     reply.code(201);
     return withdrawalRequests.requestTransfer(id, account.id, body);
+  });
+  // Named Registrations views, private to the caller; access to the event is checked on every request.
+  app.get('/api/events/:id/saved-views', async (req) => savedViews.list((await onEvent(req, 'orders.view')).id, me(req).id));
+  app.post('/api/events/:id/saved-views', async (req) => {
+    const { id } = await onEvent(req, 'orders.view');
+    const body = z.object({ name: z.string().trim().min(1, 'Name the view.').max(60), filter: savedViewFilterSchema }).parse(req.body);
+    return savedViews.save(id, me(req).id, body.name, body.filter);
+  });
+  app.delete('/api/events/:id/saved-views/:viewId', async (req) => {
+    const { id } = await onEvent(req, 'orders.view');
+    const { viewId } = z.object({ viewId: idStr }).parse(req.params);
+    return savedViews.remove(id, me(req).id, viewId);
   });
   app.get('/api/events/:id/withdrawal-requests', async (req) => withdrawalRequests.list((await onEvent(req, 'entries.manage')).id));
   app.post('/api/events/:id/withdrawal-requests/:rid/approve', async (req) => {

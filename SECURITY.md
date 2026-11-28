@@ -50,6 +50,10 @@ Financial-preflight reads require current event finance authority and an event-s
 
 `GET /api/events/:id/exports/reconciliation.csv` uses the existing `export.ledger` authority (owner/finance), before any financial read or attachment metadata. It exports only selected event-linked source fields, including records on inactive orders; unlinked provider events are excluded. No checkout URL, rider/contact/license/waiver fields, raw payloads, reason/failure text or support evidence is included. Provider references remain protected finance data. CSV formula escaping, no-store caching and existing cancellation labels apply. The read does not call a provider or change financial records and does not prove external settlement. The published Registrations control is hidden without ledger authority, uses the existing authenticated download helper and leaves the server authoritative for every request, including stale screens after revocation. No financial records are put into browser recovery storage; failures offer a download retry. See [Reporting](product.md#reporting).
 
+## Saved Registrations views (Implemented locally)
+
+`/api/events/:id/saved-views` (list, save, delete) needs `orders.view` on the event and returns or changes only the caller's own views; another account's view cannot be read or deleted (404). A view stores entry filters only, never search text, and loading one grants no access.
+
 ## Protected CSV audit
 
 Published Registrations shows the finance summary download to owners and finance. The CSV request requires current event `export.ledger` permission before reading financial data. It contains aggregate metrics and published scope labels and records the authenticated actor on generation.
