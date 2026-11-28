@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { awaitsLicenseReview } from '../shared/checkout';
 import { matchesRegistration } from '../shared/lookup';
 import { can } from '../shared/roles';
@@ -223,6 +223,8 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
   // Only the view the organizer picked or just saved is selected, and only while the filters still match it, so editing
   // or clearing them deselects it and Delete view never targets a view nobody chose.
   const [chosenId, setChosenId] = useState('');
+  // Counts picker changes, so a save that finishes after the organizer picked another view does not override that pick.
+  const picks = useRef(0);
   const same = (a: RegistrationFilter, b: RegistrationFilter) =>
     (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver);
   const chosen = views?.find((v) => v.id === chosenId);
@@ -230,10 +232,12 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
   const [name, setName] = useState('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const run = async (action: () => Promise<SavedView[]>, done: string, select?: string) => {
+    const pick = picks.current;
     try {
       const next = await action();
       setViews(next);
-      if (select !== undefined) setChosenId(next.find((v) => v.name.toLowerCase() === select.toLowerCase())?.id ?? '');
+      // The server stores the name exactly as sent, so an exact match finds the view just saved.
+      if (select !== undefined && pick === picks.current) setChosenId(next.find((v) => v.name === select)?.id ?? '');
       setMessage({ ok: true, text: done });
     } catch (e) {
       setMessage({ ok: false, text: (e as ApiError).message });
@@ -247,6 +251,7 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
           Saved view{' '}
           <select className="input" value={selected} onChange={(e) => {
             const view = views.find((v) => v.id === e.target.value);
+            picks.current += 1;
             setChosenId(view?.id ?? '');
             if (view) onApply(view.filter);
           }}>
