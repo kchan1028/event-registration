@@ -451,6 +451,10 @@ export const api = {
     request<{ notice: RiderEmailDelivery | null }>('GET', `/api/events/${eventId}/entry-changes/${changeId}/notice-delivery`),
   retryEntryChangeNotice: (eventId: string, changeId: string) =>
     request<{ notice: RiderEmailDelivery | null }>('POST', `/api/events/${eventId}/entry-changes/${changeId}/notice-delivery/retry`),
+  declineNotice: (eventId: string, requestId: string) =>
+    request<{ notice: RiderEmailDelivery | null }>('GET', `/api/events/${eventId}/withdrawal-requests/${requestId}/notice-delivery`),
+  retryDeclineNotice: (eventId: string, requestId: string) =>
+    request<{ notice: RiderEmailDelivery | null }>('POST', `/api/events/${eventId}/withdrawal-requests/${requestId}/notice-delivery/retry`),
   reservationStatus: (eventId: string, reference: string) =>
     request<ReservationLookupResult>('POST', `/api/events/${eventId}/reservation-status`, { reference }),
   releaseReservation: (eventId: string, input: { reference: string; reason: string; riderRequested: true }) =>

@@ -297,4 +297,40 @@ describe('rider withdrawal requests', () => {
     const order = (await app.inject({ url: `/api/rider/order-entries/${entryId}/withdrawal`, headers: rider })).json<{ preview: { categoryId: string } }>();
     expect(order.preview.categoryId).toBe(from.categoryId);
   });
+
+  it('organizers see the decline email status and can retry it only when uncertain; other roles cannot', async () => {
+    const send = vi.fn<EmailSender['send']>(async () => 're_decline_panel');
+    const sender: EmailSender = { mode: 'resend', from: 'sender@example.test', send };
+    const databaseUrl = await testDatabaseUrl();
+    const { app, eventId, organizationId, ask } = await setup({ email: sender, databaseUrl });
+    const request = (await ask('Schedule clash')).json<{ id: string }>();
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${request.id}/decline`, payload: { reason: 'Kept for the start list' } })).statusCode).toBe(200);
+    const url = `/api/events/${eventId}/withdrawal-requests/${request.id}/notice-delivery`;
+    const db = openDb(databaseUrl);
+    try {
+      expect((await app.inject({ url, headers: as('outsider@notice.test') })).statusCode).toBe(404);
+      for (const [email, role] of [['finance@notice.test', 'finance'], ['manager@notice.test', 'registration_manager']]) {
+        expect((await app.inject({ method: 'POST', url: `/api/organizations/${organizationId}/members`, payload: { email, role } })).statusCode).toBe(200);
+      }
+      expect((await app.inject({ url, headers: as('finance@notice.test') })).statusCode).toBe(403);
+      expect((await app.inject({ method: 'POST', url: `${url}/retry`, headers: as('finance@notice.test') })).statusCode).toBe(403);
+      expect((await app.inject({ url, headers: as('manager@notice.test') })).json()).toEqual({ notice: { status: 'recorded', delivery: null, canRetry: false } });
+      const recorded = await app.inject({ url });
+      expect(recorded.headers['cache-control']).toBe('no-store');
+      const refused = await app.inject({ method: 'POST', url: `${url}/retry` });
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json()).toEqual({ error: 'This decline email cannot be retried now.' });
+      await db.run(`UPDATE email_messages SET status = 'uncertain', sending_until = now() - interval '1 second' WHERE withdrawal_request_id = $1`, [request.id]);
+      expect((await app.inject({ url })).json()).toEqual({ notice: { status: 'uncertain', delivery: null, canRetry: true } });
+      const retried = await app.inject({ method: 'POST', url: `${url}/retry` });
+      expect(retried.json()).toEqual({ notice: { status: 'sent', delivery: null, canRetry: false } });
+      expect(send.mock.calls.filter((call) => call[0].subject === 'Your withdrawal request')).toHaveLength(1);
+      // An approved request has no decline email to show.
+      const another = (await ask('Leaving after all', 'withdraw-request-0011')).json<{ id: string }>();
+      expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${another.id}/approve` })).statusCode).toBe(200);
+      expect((await app.inject({ url: `/api/events/${eventId}/withdrawal-requests/${another.id}/notice-delivery` })).json()).toEqual({ notice: null });
+    } finally {
+      await db.close();
+    }
+  });
 });
