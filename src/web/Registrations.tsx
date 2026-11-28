@@ -226,7 +226,10 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
   // Counts picker changes, so a save that finishes after the organizer picked another view does not override that pick.
   // The latest pick is also kept in a ref, which the save response reads after it arrives.
   const picks = useRef(0);
-  const pickedId = useRef('');
+  const picked = useRef<{ id: string; filter: RegistrationFilter } | null>(null);
+  // The filters on screen now, read by a save response that arrives after later edits.
+  const current = useRef(filter);
+  current.current = filter;
   const same = (a: RegistrationFilter, b: RegistrationFilter) =>
     (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver);
   const chosen = views?.find((v) => v.id === chosenId);
@@ -240,8 +243,9 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
       setViews(next);
       if (savedId && pick === picks.current) setChosenId(savedId);
       // The organizer picked this same view while the save was running, so the picker applied its old filters. Apply the
-      // filters just saved, so the screen shows what the view now holds and it stays selected.
-      else if (savedId && pickedId.current === savedId) {
+      // filters just saved, so the screen shows what the view now holds and it stays selected. Skip it if the organizer
+      // changed the filters after picking, so their newer edit wins.
+      else if (savedId && picked.current?.id === savedId && same(current.current, picked.current.filter)) {
         const view = next.find((v) => v.id === savedId);
         if (view) onApply(view.filter);
       }
@@ -259,7 +263,7 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
           <select className="input" value={selected} onChange={(e) => {
             const view = views.find((v) => v.id === e.target.value);
             picks.current += 1;
-            pickedId.current = view?.id ?? '';
+            picked.current = view ? { id: view.id, filter: view.filter } : null;
             setChosenId(view?.id ?? '');
             if (view) onApply(view.filter);
           }}>

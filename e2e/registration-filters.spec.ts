@@ -128,7 +128,7 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await expect(filters.getByLabel('Saved view').locator('option', { hasText: 'Slow save' })).toHaveCount(1);
   await filters.getByLabel('Entry status').selectOption('cancelled');
   let release!: () => void;
-  const held = new Promise<void>((resolve) => { release = resolve; });
+  let held = new Promise<void>((resolve) => { release = resolve; });
   await page.route('**/saved-views', async (route) => {
     if (route.request().method() === 'POST') await held;
     await route.continue();
@@ -139,6 +139,22 @@ test('organizers narrow registrations by race day, category, entry status and mi
   release();
   await expect(filters.getByLabel('Entry status')).toHaveValue('cancelled');
   await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Slow save');
+  // A filter edit made after the re-pick wins over the late save.
+  held = new Promise<void>((resolve) => { release = resolve; });
+  await filters.getByLabel('Entry status').selectOption('withdrawn');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await filters.getByLabel('Saved view').selectOption({ label: 'Slow save' });
+  await expect(filters.getByLabel('Entry status')).toHaveValue('cancelled');
+  await filters.getByLabel('Entry status').selectOption('active');
+  const lateSave = page.waitForResponse((r) => r.url().endsWith('/saved-views') && r.request().method() === 'POST');
+  release();
+  await lateSave;
+  // Let the screen handle the response before checking that the edit survived.
+  await expect(filters.getByLabel('Saved view').locator('option', { hasText: 'Slow save' })).toHaveCount(1);
+  await page.waitForTimeout(200);
+  await expect(filters.getByLabel('Entry status')).toHaveValue('active');
+  await expect(filters.getByLabel('Saved view')).toHaveValue('');
+  await filters.getByLabel('Saved view').selectOption({ label: 'Slow save' });
   await page.unroute('**/saved-views');
   await filters.getByRole('button', { name: 'Delete view' }).click();
   await expect(filters.getByLabel('Saved view')).toHaveCount(0);
