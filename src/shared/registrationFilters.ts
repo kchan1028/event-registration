@@ -14,6 +14,8 @@ export interface RegistrationFilter {
   entryStatus?: 'active' | 'withdrawn' | 'cancelled';
   /** The entry's waiver or required guardian signature is not done. */
   missingWaiver?: boolean;
+  /** Order-level: the order was bought with this package (its id), or with any package (`any`). */
+  bundle?: string;
   /** Row order, not a condition: it never narrows the list. Missing means `newest`. */
   sort?: RegistrationSort;
   /** Columns of the view's download, not a condition. Missing means every column; the required ones are always kept. */
@@ -87,16 +89,20 @@ export function filterToParams(f: RegistrationFilter): URLSearchParams {
   if (f.categoryId) p.set('categoryId', f.categoryId);
   if (f.entryStatus) p.set('entryStatus', f.entryStatus);
   if (f.missingWaiver) p.set('missingWaiver', '1');
+  if (f.bundle) p.set('bundle', f.bundle);
   if (f.sort && f.sort !== 'newest') p.set('sort', f.sort);
   if (f.columns) p.set('columns', f.columns.join(','));
   return p;
 }
 
 export function isFilterActive(f: RegistrationFilter): boolean {
-  return Boolean(f.dayId || f.categoryId || f.entryStatus || f.missingWaiver);
+  return Boolean(f.dayId || f.categoryId || f.entryStatus || f.missingWaiver || f.bundle);
 }
 
-export function matchesRegistrationFilter(order: { entries: readonly FilterableEntry[] }, f: RegistrationFilter): boolean {
+/** The package condition belongs to the order, so it is checked once here and not on each entry. */
+export function matchesRegistrationFilter(order: { entries: readonly FilterableEntry[]; quote: { bundle: { id: string } | null } }, f: RegistrationFilter): boolean {
   if (!isFilterActive(f)) return true;
+  const bought = order.quote.bundle?.id;
+  if (f.bundle && (f.bundle === 'any' ? !bought : bought !== f.bundle)) return false;
   return order.entries.some((e) => entryMatchesFilter(e, f));
 }

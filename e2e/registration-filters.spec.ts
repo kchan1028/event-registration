@@ -14,7 +14,7 @@ import { expect, test } from './fixtures';
 import { publishReviewed } from './support/publish';
 
 type Entry = { id: string; dayId: string; categoryId: string; status: string; raceName: string };
-type Order = { id: string; orderNumber: string; createdAt: string; rider: { firstName: string; lastName: string }; entries: Entry[] };
+type Order = { id: string; orderNumber: string; createdAt: string; rider: { firstName: string; lastName: string }; entries: Entry[]; quote: { bundle: { id: string } | null } };
 
 const byText = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' });
 
@@ -278,6 +278,16 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await expect(allCount).toHaveText('0');
   await expect(page.getByRole('status').filter({ hasText: 'registrations match' })).toHaveText('0 registrations match “zzzz-not-a-rider”.');
   await page.getByLabel('Find a registration').fill('');
+  await expect(allCount).toHaveText(String(orders.length));
+
+  // Package: orders bought with the weekend package, by name or as any package.
+  const packaged = orders.filter((o) => o.quote.bundle).length;
+  expect(packaged).toBeGreaterThan(0);
+  await filters.getByLabel('Package').selectOption({ label: config.registration.bundles[0].name });
+  await expect(allCount).toHaveText(String(packaged));
+  await filters.getByLabel('Package').selectOption('any');
+  await expect(allCount).toHaveText(String(packaged));
+  await filters.getByLabel('Package').selectOption('');
   await expect(allCount).toHaveText(String(orders.length));
 
   // The demo riders all signed their waivers, so the missing-waiver filter finds none.

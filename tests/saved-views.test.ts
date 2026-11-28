@@ -31,6 +31,8 @@ describe('saved registration views', () => {
     const sorted = (await app.inject({ method: 'POST', url, payload: { name: 'By name', filter: { entryStatus: 'active', sort: 'name' } } })).json<{ views: { name: string; filter: unknown }[] }>();
     expect(sorted.views.find((v) => v.name === 'By name')?.filter).toEqual({ entryStatus: 'active', sort: 'name' });
     expect((await app.inject({ method: 'POST', url, payload: { name: 'Only sort', filter: { sort: 'name' } } })).statusCode).toBe(400);
+    // A package alone is a filter, so it can be saved as a view.
+    expect((await app.inject({ method: 'POST', url, payload: { name: 'Packages', filter: { bundle: 'any' } } })).statusCode).toBe(200);
     // A view keeps its download columns; an unknown column is refused.
     const narrow = (await app.inject({ method: 'POST', url, payload: { name: 'By name', filter: { entryStatus: 'active', sort: 'name', columns: ['last_name', 'category'] } } })).json<{ views: { name: string; filter: unknown }[] }>();
     expect(narrow.views.find((v) => v.name === 'By name')?.filter).toEqual({ entryStatus: 'active', sort: 'name', columns: ['last_name', 'category'] });
@@ -48,6 +50,6 @@ describe('saved registration views', () => {
     // Someone with no access to the event gets nothing.
     expect((await app.inject({ url, headers: as('outsider@example.test') })).statusCode).toBe(404);
 
-    expect((await app.inject({ method: 'DELETE', url: `${url}/${replaced[0].id}` })).json<{ name: string }[]>().map((v) => v.name)).toEqual(['By name']);
+    expect((await app.inject({ method: 'DELETE', url: `${url}/${replaced[0].id}` })).json<{ name: string }[]>().map((v) => v.name)).toEqual(['By name', 'Packages']);
   });
 });
