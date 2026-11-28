@@ -12,7 +12,7 @@ import { sortRegistrations } from '../src/shared/registrationFilters';
 import { expect, test } from './fixtures';
 import { publishReviewed } from './support/publish';
 
-type Entry = { id: string; dayId: string; categoryId: string; status: string };
+type Entry = { id: string; dayId: string; categoryId: string; status: string; raceName: string };
 type Order = { id: string; orderNumber: string; createdAt: string; rider: { firstName: string; lastName: string }; entries: Entry[] };
 
 const byText = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' });
@@ -52,6 +52,30 @@ async function downloadView(page: Page, link: Locator) {
   const download = await pending;
   const [header, ...rows] = parseCsv(await readFile((await download.path())!, 'utf8'));
   return { filename: download.suggestedFilename(), header, rows };
+}
+
+/** A view file: orders in the screen's row order, and each order's entries by race name. */
+function viewEntryRows(orders: readonly Order[], sort: 'newest' | 'oldest' | 'name' | 'order'): string[][] {
+  return orderedBy(orders, sort).flatMap((order) =>
+    [...order.entries]
+      .sort((a, b) => a.raceName.localeCompare(b.raceName))
+      .map((entry) => [order.orderNumber, order.rider.lastName, order.rider.firstName, entry.raceName]),
+  );
+}
+
+/** The full entries file: every entry by rider, then race, ignoring the screen's row order. */
+function riderEntryRows(orders: readonly Order[]): string[][] {
+  return orders
+    .flatMap((order) => order.entries.map((entry) => [order.orderNumber, order.rider.lastName, order.rider.firstName, entry.raceName]))
+    .sort((a, b) => `${a[1]} ${a[2]} ${a[3]}`.localeCompare(`${b[1]} ${b[2]} ${b[3]}`));
+}
+
+function csvEntryRows(file: { header: string[]; rows: string[][] }): string[][] {
+  const number = file.header.indexOf('order_number');
+  const last = file.header.indexOf('last_name');
+  const first = file.header.indexOf('first_name');
+  const race = file.header.indexOf('race');
+  return file.rows.map((row) => [row[number], row[last], row[first], row[race]]);
 }
 
 test('organizers narrow registrations by race day, category, entry status and missing waiver', { tag: '@smoke' }, async ({ page }) => {
@@ -344,4 +368,57 @@ test('a sort orders riders by last name, stays in a saved view, and is the view 
   const seen: string[] = [];
   for (const row of orderedFile.rows) if (seen.at(-1) !== row[orderNumber]) seen.push(row[orderNumber]);
   expect(seen).toEqual(orderedBy(live, 'order').map((order) => order.orderNumber));
+});
+
+test('the full entries file stays in rider order and an explicit newest sort is the screen order', { tag: '@smoke' }, async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).status()).toBe(200);
+  expect((await page.request.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  const { config } = await (await page.request.get(eventUrl)).json();
+  const road = config.categories.find((item: { timingCode: string }) => item.timingCode === 'RR-M35-34');
+  const crit = config.categories.find((item: { timingCode: string }) => item.timingCode === 'CR-M35-34');
+  expect(road && crit).toBeTruthy();
+  // Crit is stored first. Race names sort the road race ahead of it, so the file order is not the stored entry order.
+  const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: {
+    clientRequestId: `sort-newest-${eventId}`,
+    categoryIds: [crit.id, road.id],
+    rider: { firstName: 'Zoe', lastName: 'Young', email: 'zoe.young@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Fictional Contact', phone: '555-555-0199' } },
+    waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Zoe Young', signerRole: 'rider' },
+  } });
+  expect(created.status(), created.status() === 201 ? '' : await created.text()).toBe(201);
+  const zoeId = (await created.json()).id as string;
+  expect((await page.request.post(`/api/orders/${zoeId}/payment`, { data: { attemptId: `sort-newest-pay-${eventId}`, outcome: 'success' } })).ok()).toBe(true);
+  const live = await (await page.request.get(`${eventUrl}/orders`)).json() as Order[];
+  const zoe = live.find((order) => order.id === zoeId);
+  expect(zoe).toBeTruthy();
+  const storedRaces = zoe!.entries.map((entry) => entry.raceName);
+  const racesByName = [...storedRaces].sort((a, b) => a.localeCompare(b));
+  expect(storedRaces).toHaveLength(2);
+  expect(storedRaces).not.toEqual(racesByName);
+  expect(orderedBy(live, 'newest')[0].id).toBe(zoeId);
+
+  await page.goto(`/#/events/${eventId}/registrations`);
+  const filters = page.getByRole('group', { name: 'Narrow by entry' });
+  const rows = page.getByRole('list', { name: 'Registrations', exact: true }).locator('> li');
+  await expect(filters.getByLabel('Sort by')).toHaveValue('newest');
+  await expect(filters.getByRole('link', { name: 'Download this view (CSV)' })).toHaveCount(0);
+  await expectRowOrder(rows, orderedBy(live, 'newest'));
+
+  const full = await downloadView(page, page.getByRole('link', { name: 'Download entries (CSV)' }));
+  expect(full.filename).toContain('entries');
+  expect(full.filename).not.toContain('filtered');
+  const fullRows = csvEntryRows(full);
+  expect(fullRows).toEqual(riderEntryRows(live));
+  expect(fullRows[0][0]).not.toBe(zoe!.orderNumber);
+
+  const newestRes = await page.request.get(`${eventUrl}/exports/entries.csv?sort=newest`);
+  expect(newestRes.ok()).toBe(true);
+  expect(newestRes.headers()['x-cyclereg-export-filters']).toBe('sort=newest');
+  expect(newestRes.headers()['content-disposition']).toContain('-filtered');
+  const [header, ...newestRows] = parseCsv(await newestRes.text());
+  const newest = csvEntryRows({ header, rows: newestRows });
+  expect(newest).toEqual(viewEntryRows(live, 'newest'));
+  expect(newest[0][0]).toBe(zoe!.orderNumber);
+  expect(newest.filter((row) => row[0] === zoe!.orderNumber).map((row) => row[3])).toEqual(racesByName);
 });
