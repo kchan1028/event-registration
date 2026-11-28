@@ -3,6 +3,7 @@
 // @covers src/web/styles.css
 // @covers src/server/app.ts
 // @covers src/server/savedViews.ts
+// @covers src/shared/exports.ts
 import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
@@ -334,4 +335,15 @@ test('a sort orders riders by last name, stays in a saved view, and is the view 
   const onlyFirst = sortedOnly.header.indexOf('first_name');
   const onlyNumber = sortedOnly.header.indexOf('order_number');
   expect(sortedOnly.rows.map((row) => [row[onlyLast], row[onlyFirst], row[onlyNumber]])).toEqual(namesOf(byName));
+  // Order number disagrees with last-name order, so the file cannot pass by sorting riders alphabetically.
+  await sortBy.selectOption('order');
+  await expect(viewDownload()).toHaveAttribute('href', /\?sort=order$/);
+  await expectRowOrder(rows, orderedBy(live, 'order'));
+  const orderedFile = await downloadView(page, viewDownload());
+  expect(orderedFile.filename).toContain('entries');
+  expect(orderedFile.filename).toContain('filtered');
+  const orderNumber = orderedFile.header.indexOf('order_number');
+  const seen: string[] = [];
+  for (const row of orderedFile.rows) if (seen.at(-1) !== row[orderNumber]) seen.push(row[orderNumber]);
+  expect(seen).toEqual(orderedBy(live, 'order').map((order) => order.orderNumber));
 });
