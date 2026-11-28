@@ -224,7 +224,9 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
   // or clearing them deselects it and Delete view never targets a view nobody chose.
   const [chosenId, setChosenId] = useState('');
   // Counts picker changes, so a save that finishes after the organizer picked another view does not override that pick.
+  // The latest pick is also kept in a ref, which the save response reads after it arrives.
   const picks = useRef(0);
+  const pickedId = useRef('');
   const same = (a: RegistrationFilter, b: RegistrationFilter) =>
     (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver);
   const chosen = views?.find((v) => v.id === chosenId);
@@ -237,6 +239,12 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
       const { views: next, savedId } = await action();
       setViews(next);
       if (savedId && pick === picks.current) setChosenId(savedId);
+      // The organizer picked this same view while the save was running, so the picker applied its old filters. Apply the
+      // filters just saved, so the screen shows what the view now holds and it stays selected.
+      else if (savedId && pickedId.current === savedId) {
+        const view = next.find((v) => v.id === savedId);
+        if (view) onApply(view.filter);
+      }
       setMessage({ ok: true, text: done });
     } catch (e) {
       setMessage({ ok: false, text: (e as ApiError).message });
@@ -251,6 +259,7 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
           <select className="input" value={selected} onChange={(e) => {
             const view = views.find((v) => v.id === e.target.value);
             picks.current += 1;
+            pickedId.current = view?.id ?? '';
             setChosenId(view?.id ?? '');
             if (view) onApply(view.filter);
           }}>

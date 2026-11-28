@@ -121,6 +121,28 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await filters.getByRole('button', { name: 'Delete view' }).click();
   await expect(filters.getByLabel('Saved view')).toHaveCount(0);
 
+  // Picking a view while a save of new filters over it is still running ends on the saved filters, still selected.
+  await filters.getByLabel('Entry status').selectOption('withdrawn');
+  await filters.getByLabel('View name').fill('Slow save');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await expect(filters.getByLabel('Saved view').locator('option', { hasText: 'Slow save' })).toHaveCount(1);
+  await filters.getByLabel('Entry status').selectOption('cancelled');
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/saved-views', async (route) => {
+    if (route.request().method() === 'POST') await held;
+    await route.continue();
+  });
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await filters.getByLabel('Saved view').selectOption({ label: 'Slow save' });
+  await expect(filters.getByLabel('Entry status')).toHaveValue('withdrawn');
+  release();
+  await expect(filters.getByLabel('Entry status')).toHaveValue('cancelled');
+  await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Slow save');
+  await page.unroute('**/saved-views');
+  await filters.getByRole('button', { name: 'Delete view' }).click();
+  await expect(filters.getByLabel('Saved view')).toHaveCount(0);
+
   // Clear entry filters resets every filter, category included.
   await filters.getByLabel('Category').selectOption(usedCategoryId);
   await filters.getByRole('button', { name: 'Clear entry filters' }).click();
