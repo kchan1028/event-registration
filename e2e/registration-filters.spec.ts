@@ -17,6 +17,15 @@ test('organizers narrow registrations by race day, category, entry status and mi
   const entryId = orders.flatMap((o) => o.entries).find((e) => e.status === 'confirmed')!.id;
   expect((await page.request.post(`/api/order-entries/${entryId}/withdraw`, { data: { reason: 'Fictional withdrawal for the filter test' } })).ok()).toBe(true);
 
+  // Archive a category that still has registrations; it must stay filterable.
+  const usedCategoryId = orders.flatMap((o) => o.entries)[0].categoryId;
+  const current = await (await page.request.get(eventUrl)).json();
+  const archived = structuredClone(current.config);
+  const used = archived.categories.find((c: { id: string }) => c.id === usedCategoryId);
+  used.status = 'archived';
+  expect((await page.request.put(`${eventUrl}/config`, { data: { config: archived, revision: current.revision } })).ok()).toBe(true);
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true, acknowledgeImpact: true })).status()).toBe(200);
+
   await page.goto(`/#/events/${eventId}/registrations`);
   const filters = page.getByRole('group', { name: 'Narrow by entry' });
   const allCount = page.getByRole('group', { name: 'Show registrations' }).getByRole('button', { name: /^All/ }).locator('.num');
@@ -29,6 +38,11 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await filters.getByLabel('Entry status').selectOption('withdrawn');
   await expect(allCount).toHaveText('1');
   expect((await new AxeBuilder({ page }).include('.reg-entry-filters').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+
+  await expect(filters.getByLabel('Category').locator(`option[value="${usedCategoryId}"]`)).toHaveText(`${used.timingCode} ${used.name} (archived)`);
+  await filters.getByLabel('Entry status').selectOption('');
+  await filters.getByLabel('Category').selectOption(usedCategoryId);
+  await expect(allCount).toHaveText(String(orders.filter((o) => o.entries.some((e) => e.categoryId === usedCategoryId)).length));
 
   await filters.getByRole('button', { name: 'Clear entry filters' }).click();
   await expect(allCount).toHaveText(String(orders.length));

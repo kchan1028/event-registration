@@ -46,6 +46,9 @@ export function Registrations({ draft }: { draft: Draft }) {
   const [query, setQuery] = useState('');
   const [entryFilter, setEntryFilter] = useState<RegistrationFilter>({});
   const setEntry = (patch: Partial<RegistrationFilter>) => setEntryFilter((f) => ({ ...f, ...patch }));
+  // Archived categories stay in the list while registrations still use them, so those entries can be found.
+  const usedCategories = useMemo(() => new Set((orders ?? []).flatMap((o) => o.entries.map((e) => e.categoryId))), [orders]);
+  const filterCategories = draft.config.categories.filter((c) => c.status !== 'archived' || usedCategories.has(c.id));
   const ordersById = useMemo(() => new Map(orders?.map((order) => [order.id, order])), [orders]);
 
   // Search narrows the list first; the filter chips and their counts apply to what it found.
@@ -132,7 +135,7 @@ export function Registrations({ draft }: { draft: Draft }) {
           Category{' '}
           <select className="input" value={entryFilter.categoryId ?? ''} onChange={(e) => setEntry({ categoryId: e.target.value || undefined })}>
             <option value="">All categories</option>
-            {draft.config.categories.filter((c) => c.status !== 'archived').map((c) => <option key={c.id} value={c.id}>{c.timingCode} {c.name}</option>)}
+            {filterCategories.map((c) => <option key={c.id} value={c.id}>{c.timingCode} {c.name}{c.status === 'archived' ? ' (archived)' : ''}</option>)}
           </select>
         </label>
         <label className="small">
