@@ -845,10 +845,14 @@ export function createOrders(db: Db, repo: Repo, clock: () => Date, holdMinutes:
      */
     transferCheck,
 
-    async transferEntry(entryId: string, toCategoryId: string, reason: string) {
+    /** `expectedNewPriceCents`: a rider-agreed price; the move is refused if the price it would record differs. */
+    async transferEntry(entryId: string, toCategoryId: string, reason: string, opts: { expectedNewPriceCents?: number } = {}) {
       return db.transaction(async () => {
         await lockEventOf(`SELECT event_id FROM order_entries WHERE id = $1`, entryId);
         const { e, target, paid, newPrice, fromName } = await transferCheck(entryId, toCategoryId);
+        if (opts.expectedNewPriceCents !== undefined && newPrice !== opts.expectedNewPriceCents) {
+          throw new HttpError(409, 'The price of the requested category changed after the rider asked. Decline this request and check with the rider.');
+        }
         const t = nowIso();
         const changeId = newId('chg');
         await db.run(`UPDATE order_entries SET original_category_id = COALESCE(original_category_id, category_id), category_id = $1 WHERE id = $2`, [target.id, e.id]);

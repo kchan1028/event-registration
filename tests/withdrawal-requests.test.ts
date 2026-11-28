@@ -56,8 +56,12 @@ describe('rider withdrawal requests', () => {
     const first = await ask('Injured my knee');
     expect(first.statusCode, first.body).toBe(201);
     expect(first.json()).toMatchObject({ status: 'open', reason: 'Injured my knee', entryId, policy: { amountPaidCents: preview.amountPaidCents } });
-    // An exact retry returns the same request; the same id with a different reason is refused.
+    // An exact retry returns the same request; the same id with a different reason or different terms is refused.
     expect((await ask('Injured my knee')).json().id).toBe(first.json().id);
+    const changedTerms = await app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/withdrawal-requests`, headers: rider, payload: {
+      clientRequestId: 'withdraw-request-0001', reason: 'Injured my knee', expectedCategoryId: first.json().policy.categoryId, expectedReturnAs: 'credit', expectedAmountCents: 1,
+    } });
+    expect(changedTerms.statusCode).toBe(409);
     expect((await ask('Something else')).statusCode).toBe(409);
     // Only one open request per entry.
     expect((await ask('Injured my knee', 'withdraw-request-0002')).statusCode).toBe(409);
@@ -233,8 +237,9 @@ describe('rider withdrawal requests', () => {
     const asked = await send({ ...base, expectedNewPriceCents: option.newPriceCents });
     expect(asked.statusCode, asked.body).toBe(201);
     expect(asked.json()).toMatchObject({ kind: 'transfer', status: 'open', policy: { transfer: { categoryId: target.id, newPriceCents: option.newPriceCents } } });
-    // An exact retry returns the same request; only one open request per entry, of either kind.
+    // An exact retry returns the same request; the same id with different terms is refused; one open request per entry, of either kind.
     expect((await send({ ...base, expectedNewPriceCents: option.newPriceCents })).json().id).toBe(asked.json().id);
+    expect((await send({ ...base, expectedNewPriceCents: option.newPriceCents + 1 })).statusCode).toBe(409);
     expect((await ask('Or just withdraw', 'withdraw-request-0020')).statusCode).toBe(409);
 
     const approved = await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${asked.json().id}/approve` });

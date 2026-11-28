@@ -133,7 +133,11 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
         await db.lock(eventLock(event_id));
         const same = await db.get<Row>(`${SELECT} WHERE w.entry_id = $1 AND w.client_request_id = $2`, [entryId, body.clientRequestId]);
         if (same) {
-          if (same.reason !== body.reason || same.kind !== 'withdraw') throw new HttpError(409, 'This request id was already used with a different reason.');
+          // An exact retry only: the same reason and the terms the rider saw.
+          if (same.reason !== body.reason || same.kind !== 'withdraw' || same.policy_json.categoryId !== body.expectedCategoryId
+            || (same.policy_json.entitlement?.returnAs ?? null) !== body.expectedReturnAs || (same.policy_json.entitlement?.amountCents ?? null) !== body.expectedAmountCents) {
+            throw new HttpError(409, 'This request id was already used for a different request.');
+          }
           return toView(same);
         }
         const e = await facts(entryId);
@@ -187,7 +191,9 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
         await db.lock(eventLock(event_id));
         const same = await db.get<Row>(`${SELECT} WHERE w.entry_id = $1 AND w.client_request_id = $2`, [entryId, body.clientRequestId]);
         if (same) {
-          if (same.reason !== body.reason || same.kind !== 'transfer' || same.to_category_id !== body.toCategoryId) {
+          // An exact retry only: the same reason, target and the terms the rider saw.
+          if (same.reason !== body.reason || same.kind !== 'transfer' || same.to_category_id !== body.toCategoryId
+            || same.policy_json.categoryId !== body.expectedCategoryId || same.policy_json.transfer?.newPriceCents !== body.expectedNewPriceCents) {
             throw new HttpError(409, 'This request id was already used for a different request.');
           }
           return toView(same);
@@ -230,12 +236,11 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
         if ((await facts(row.entry_id)).category_id !== row.category_id) {
           throw new HttpError(409, 'This entry moved to another category after the rider asked. Decline this request and check with the rider.');
         }
-        // The rider agreed to a price; if the target's price changed since, they have not agreed to the new difference.
-        if (row.kind === 'transfer' && (await orders.transferCheck(row.entry_id, row.to_category_id!)).newPrice !== row.policy_json.transfer?.newPriceCents) {
-          throw new HttpError(409, 'The price of the requested category changed after the rider asked. Decline this request and check with the rider.');
-        }
         // The existing organizer action rechecks everything; if the move is no longer possible, the request stays open.
-        if (row.kind === 'transfer') await orders.transferEntry(row.entry_id, row.to_category_id!, `Rider request: ${row.reason}`.slice(0, 300));
+        // The rider agreed to a price, so the transfer is refused if the price it records (worked out once, inside it) differs.
+        if (row.kind === 'transfer') {
+          await orders.transferEntry(row.entry_id, row.to_category_id!, `Rider request: ${row.reason}`.slice(0, 300), { expectedNewPriceCents: row.policy_json.transfer?.newPriceCents ?? -1 });
+        }
         else await orders.withdrawEntry(row.entry_id, `Rider request: ${row.reason}`.slice(0, 300));
         const change = await db.get<{ id: string }>(
           `SELECT id FROM entry_changes WHERE entry_id = $1 AND kind = $2 ORDER BY seq DESC LIMIT 1`, [row.entry_id, row.kind],
