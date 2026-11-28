@@ -126,6 +126,12 @@ describe('entries and ledger CSV builders', () => {
     expect(ledger[2].note).toBe('Refund failed; no money returned');
   });
 
+  it('keeps only the chosen columns plus the order and rider ids, in the usual column order', () => {
+    const rows = table(entriesCsv([order()], (id) => id, true, ['amount_paid', 'last_name']));
+    expect(Object.keys(rows[0])).toEqual(['order_number', 'rider_id', 'last_name', 'amount_paid']);
+    expect(rows).toHaveLength(2);
+  });
+
   it('reports nothing paid for an order that is not confirmed, and keeps it out of the ledger', () => {
     const held = order({ status: 'held', confirmedAt: null, paidWith: null });
     const rows = table(entriesCsv([held], (id) => id));

@@ -31,6 +31,10 @@ describe('saved registration views', () => {
     const sorted = (await app.inject({ method: 'POST', url, payload: { name: 'By name', filter: { entryStatus: 'active', sort: 'name' } } })).json<{ views: { name: string; filter: unknown }[] }>();
     expect(sorted.views.find((v) => v.name === 'By name')?.filter).toEqual({ entryStatus: 'active', sort: 'name' });
     expect((await app.inject({ method: 'POST', url, payload: { name: 'Only sort', filter: { sort: 'name' } } })).statusCode).toBe(400);
+    // A view keeps its download columns; an unknown column is refused.
+    const narrow = (await app.inject({ method: 'POST', url, payload: { name: 'By name', filter: { entryStatus: 'active', sort: 'name', columns: ['last_name', 'category'] } } })).json<{ views: { name: string; filter: unknown }[] }>();
+    expect(narrow.views.find((v) => v.name === 'By name')?.filter).toEqual({ entryStatus: 'active', sort: 'name', columns: ['last_name', 'category'] });
+    expect((await app.inject({ method: 'POST', url, payload: { name: 'Bad column', filter: { entryStatus: 'active', columns: ['emergency_contact'] } } })).statusCode).toBe(400);
     expect((await app.inject({ method: 'POST', url, payload: { name: 'Bad sort', filter: { entryStatus: 'active', sort: 'random' } } })).statusCode).toBe(400);
     expect((await app.inject({ method: 'POST', url, payload: { name: '', filter: {} } })).statusCode).toBe(400);
     // A view with no filters would show every registration and could not be told apart from no view.

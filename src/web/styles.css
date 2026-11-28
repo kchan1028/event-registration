@@ -255,6 +255,16 @@ a {
   max-inline-size: 100%;
 }
 
+.reg-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  border: 0;
+  padding: 0.5rem 0 0;
+  margin: 0;
+  min-inline-size: 0;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

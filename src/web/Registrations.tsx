@@ -21,6 +21,7 @@ import { Summary } from './registrations/Summary';
 import { Waitlists } from './registrations/Waitlists';
 import { DownloadLink, Pending } from './ui';
 import { useLoad } from './useLoad';
+import { ENTRY_COLUMNS, REQUIRED_ENTRY_COLUMNS, type EntryColumn } from '../shared/exports';
 import { filterToParams, isFilterActive, matchesRegistrationFilter, REGISTRATION_SORTS, sortRegistrations, type RegistrationFilter, type RegistrationSort } from '../shared/registrationFilters';
 
 const FILTERS = {
@@ -158,9 +159,10 @@ export function Registrations({ draft }: { draft: Draft }) {
             {(Object.keys(REGISTRATION_SORTS) as RegistrationSort[]).map((k) => <option key={k} value={k}>{REGISTRATION_SORTS[k]}</option>)}
           </select>
         </label>
-        {/* Clearing the filters keeps the chosen row order. */}
+        {can(roles, 'export.entries') && <DownloadColumns columns={entryFilter.columns} onChange={(columns) => setEntry({ columns })} />}
+        {/* Clearing the filters keeps the chosen row order and download columns. */}
         {isFilterActive(entryFilter) && (
-          <button type="button" className="btn btn--ghost btn--small" onClick={() => setEntryFilter((f) => ({ sort: f.sort }))}>Clear entry filters</button>
+          <button type="button" className="btn btn--ghost btn--small" onClick={() => setEntryFilter((f) => ({ sort: f.sort, columns: f.columns }))}>Clear entry filters</button>
         )}
         <SavedViews eventId={eventId} filter={entryFilter} onApply={setEntryFilter} />
         {/* The same view as a file: the server applies the same search and entry filters, with the usual columns and audit. */}
@@ -224,6 +226,43 @@ export function Registrations({ draft }: { draft: Draft }) {
   );
 }
 
+/** The columns a download actually has, in file order: a view's choice plus the always-included ids. */
+const downloadedColumns = (columns?: readonly EntryColumn[]) =>
+  ENTRY_COLUMNS.filter((c) => !columns || REQUIRED_ENTRY_COLUMNS.includes(c) || columns.includes(c)).join();
+
+/**
+ * Which columns the view download includes. Every column is the default; the order and rider ids are always included,
+ * so each row can be traced. Choosing every column again goes back to the default.
+ */
+function DownloadColumns({ columns, onChange }: { columns?: EntryColumn[]; onChange: (columns: EntryColumn[] | undefined) => void }) {
+  const chosen = columns ?? ENTRY_COLUMNS;
+  // The checkboxes exist only while the list is open, so a closed list adds nothing for screen readers to step through.
+  const [open, setOpen] = useState(false);
+  const toggle = (c: EntryColumn, on: boolean) => {
+    // Kept in the file's column order, so the same choice always saves and compares the same way.
+    // The required columns are always part of the choice, even when a saved view left them out.
+    const next = ENTRY_COLUMNS.filter((x) => REQUIRED_ENTRY_COLUMNS.includes(x) || (x === c ? on : chosen.includes(x)));
+    onChange(next.length === ENTRY_COLUMNS.length ? undefined : next);
+  };
+  return (
+    <details className="small" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>Columns in the download{columns ? ` (${ENTRY_COLUMNS.filter((c) => REQUIRED_ENTRY_COLUMNS.includes(c) || columns.includes(c)).length} of ${ENTRY_COLUMNS.length})` : ''}</summary>
+      {open && <fieldset className="reg-columns">
+        <legend className="sr-only">Columns in the download</legend>
+        {ENTRY_COLUMNS.map((c) => {
+          const required = REQUIRED_ENTRY_COLUMNS.includes(c);
+          return (
+            <label key={c} className="check small">
+              <input type="checkbox" checked={required || chosen.includes(c)} disabled={required} onChange={(e) => toggle(c, e.target.checked)} />
+              {c}{required ? ' (always included)' : ''}
+            </label>
+          );
+        })}
+      </fieldset>}
+    </details>
+  );
+}
+
 /** An organizer's named views for this event: entry filters only, private to their account. */
 function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: RegistrationFilter; onApply: (f: RegistrationFilter) => void }) {
   const { data: views, setData: setViews, error } = useLoad(() => api.savedViews(eventId), [eventId]);
@@ -231,7 +270,8 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
   // or clearing them deselects it and Delete view never targets a view nobody chose.
   const [chosenId, setChosenId] = useState('');
   const same = (a: RegistrationFilter, b: RegistrationFilter) =>
-    (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver) && (a.sort ?? 'newest') === (b.sort ?? 'newest');
+    (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver) && (a.sort ?? 'newest') === (b.sort ?? 'newest')
+    && downloadedColumns(a.columns) === downloadedColumns(b.columns);
   const chosen = views?.find((v) => v.id === chosenId);
   const selected = chosen && same(chosen.filter, filter) ? chosen.id : '';
   const [name, setName] = useState('');

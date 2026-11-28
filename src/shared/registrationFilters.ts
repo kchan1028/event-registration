@@ -1,4 +1,5 @@
 import type { ReadinessItem } from './checkout';
+import type { EntryColumn } from './exports';
 
 /**
  * Entry-level filters for an event's registrations. Shared by the Registrations screen and any export of the same view,
@@ -15,6 +16,8 @@ export interface RegistrationFilter {
   missingWaiver?: boolean;
   /** Row order, not a condition: it never narrows the list. Missing means `newest`. */
   sort?: RegistrationSort;
+  /** Columns of the view's download, not a condition. Missing means every column; the required ones are always kept. */
+  columns?: EntryColumn[];
 }
 
 export const REGISTRATION_SORTS = {
@@ -85,6 +88,7 @@ export function filterToParams(f: RegistrationFilter): URLSearchParams {
   if (f.entryStatus) p.set('entryStatus', f.entryStatus);
   if (f.missingWaiver) p.set('missingWaiver', '1');
   if (f.sort && f.sort !== 'newest') p.set('sort', f.sort);
+  if (f.columns) p.set('columns', f.columns.join(','));
   return p;
 }
 
