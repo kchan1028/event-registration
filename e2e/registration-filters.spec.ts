@@ -138,6 +138,20 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await filters.getByRole('checkbox', { name: 'team', exact: true }).check();
   await expect(filters.getByRole('link', { name: 'Download this view (CSV)' })).toHaveAttribute('href', /\?sort=order$/);
   await filters.locator('summary', { hasText: 'Columns in the download' }).click();
+  // A saved view whose columns leave out the ids still downloads them after its last optional column is unticked.
+  expect((await page.request.post(`${eventUrl}/saved-views`, { data: { name: 'Team only', filter: { entryStatus: 'withdrawn', columns: ['team'] } } })).ok()).toBe(true);
+  await page.reload();
+  await filters.getByLabel('Saved view').selectOption({ label: 'Team only' });
+  await filters.locator('summary', { hasText: 'Columns in the download' }).click();
+  await filters.getByRole('checkbox', { name: 'team', exact: true }).uncheck();
+  await expect(filters.getByRole('link', { name: 'Download this view (CSV)' })).toHaveAttribute('href', /columns=order_number%2Crider_id$/);
+  await filters.locator('summary', { hasText: 'Columns in the download' }).click();
+  await page.request.get(`${eventUrl}/saved-views`).then(async (r) => {
+    for (const v of await r.json() as { id: string }[]) await page.request.delete(`${eventUrl}/saved-views/${v.id}`);
+  });
+  // Start again from a fresh screen with the order-number sort the next steps expect.
+  await page.reload();
+  await sortBy.selectOption('order');
   // Clearing the entry filters keeps the row order.
   await filters.getByLabel('Entry status').selectOption('withdrawn');
   await filters.getByRole('button', { name: 'Clear entry filters' }).click();

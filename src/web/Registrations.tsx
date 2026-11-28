@@ -236,12 +236,13 @@ function DownloadColumns({ columns, onChange }: { columns?: EntryColumn[]; onCha
   const [open, setOpen] = useState(false);
   const toggle = (c: EntryColumn, on: boolean) => {
     // Kept in the file's column order, so the same choice always saves and compares the same way.
-    const next = ENTRY_COLUMNS.filter((x) => (x === c ? on : chosen.includes(x)));
+    // The required columns are always part of the choice, even when a saved view left them out.
+    const next = ENTRY_COLUMNS.filter((x) => REQUIRED_ENTRY_COLUMNS.includes(x) || (x === c ? on : chosen.includes(x)));
     onChange(next.length === ENTRY_COLUMNS.length ? undefined : next);
   };
   return (
     <details className="small" onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary>Columns in the download{columns ? ` (${columns.length + REQUIRED_ENTRY_COLUMNS.filter((c) => !columns.includes(c)).length} of ${ENTRY_COLUMNS.length})` : ''}</summary>
+      <summary>Columns in the download{columns ? ` (${ENTRY_COLUMNS.filter((c) => REQUIRED_ENTRY_COLUMNS.includes(c) || columns.includes(c)).length} of ${ENTRY_COLUMNS.length})` : ''}</summary>
       {open && <fieldset className="reg-columns">
         <legend className="sr-only">Columns in the download</legend>
         {ENTRY_COLUMNS.map((c) => {
