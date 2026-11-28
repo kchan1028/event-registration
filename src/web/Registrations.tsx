@@ -21,7 +21,7 @@ import { Summary } from './registrations/Summary';
 import { Waitlists } from './registrations/Waitlists';
 import { DownloadLink, Pending } from './ui';
 import { useLoad } from './useLoad';
-import { isFilterActive, matchesRegistrationFilter, type RegistrationFilter } from '../shared/registrationFilters';
+import { filterToParams, isFilterActive, matchesRegistrationFilter, type RegistrationFilter } from '../shared/registrationFilters';
 
 const FILTERS = {
   all: { label: 'All', test: () => true },
@@ -113,6 +113,7 @@ export function Registrations({ draft }: { draft: Draft }) {
           spellCheck={false}
           placeholder="Rider name, email, team, bib, license number, order number, or check-in code"
           value={query}
+          maxLength={200}
           onChange={(e) => setQuery(e.target.value)}
         />
         {orders && query.trim() && (
@@ -154,6 +155,16 @@ export function Registrations({ draft }: { draft: Draft }) {
         {isFilterActive(entryFilter) && (
           <button type="button" className="btn btn--ghost btn--small" onClick={() => setEntryFilter({})}>Clear entry filters</button>
         )}
+        {/* The same view as a file: the server applies the same search and entry filters, with the usual columns and audit. */}
+        {/* The file covers the entry filters only. Search text is never sent in the address (it can hold an email or check-in code),
+            so the download is offered only without a search and with the All chip. */}
+        {can(roles, 'export.entries') && isFilterActive(entryFilter) && (filter === 'all' && !query.trim() ? (
+          <DownloadLink className="btn btn--ghost btn--small" href={`/api/events/${eventId}/exports/entries.csv?${filterToParams(entryFilter)}`}>
+            Download this view (CSV)
+          </DownloadLink>
+        ) : (
+          <span className="small muted">Clear the search and choose All to download this view.</span>
+        ))}
       </fieldset>
 
       <div className="filters" role="group" aria-label="Show registrations">

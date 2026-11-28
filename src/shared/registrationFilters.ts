@@ -30,12 +30,25 @@ const STATUS_GROUP: Record<FilterableEntry['status'], RegistrationFilter['entryS
   released: null,
 };
 
-function entryMatches(e: FilterableEntry, f: RegistrationFilter): boolean {
+export function entryMatchesFilter(e: FilterableEntry, f: RegistrationFilter): boolean {
   if (f.dayId && e.dayId !== f.dayId) return false;
   if (f.categoryId && e.categoryId !== f.categoryId) return false;
   if (f.entryStatus && STATUS_GROUP[e.status] !== f.entryStatus) return false;
   if (f.missingWaiver && !e.readiness.some((r) => (r.key === 'waiver' || r.key === 'guardian') && r.state !== 'done')) return false;
   return true;
+}
+
+/**
+ * Query parameters for the entry filters, shared by the screen's download link and the server's export. Search text is
+ * never included: it can hold a rider's email or check-in code, and a URL is kept in browser history and access logs.
+ */
+export function filterToParams(f: RegistrationFilter): URLSearchParams {
+  const p = new URLSearchParams();
+  if (f.dayId) p.set('dayId', f.dayId);
+  if (f.categoryId) p.set('categoryId', f.categoryId);
+  if (f.entryStatus) p.set('entryStatus', f.entryStatus);
+  if (f.missingWaiver) p.set('missingWaiver', '1');
+  return p;
 }
 
 export function isFilterActive(f: RegistrationFilter): boolean {
@@ -44,5 +57,5 @@ export function isFilterActive(f: RegistrationFilter): boolean {
 
 export function matchesRegistrationFilter(order: { entries: readonly FilterableEntry[] }, f: RegistrationFilter): boolean {
   if (!isFilterActive(f)) return true;
-  return order.entries.some((e) => entryMatches(e, f));
+  return order.entries.some((e) => entryMatchesFilter(e, f));
 }
