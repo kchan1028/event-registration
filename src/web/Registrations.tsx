@@ -220,7 +220,10 @@ export function Registrations({ draft }: { draft: Draft }) {
 /** An organizer's named views for this event: entry filters only, private to their account. */
 function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: RegistrationFilter; onApply: (f: RegistrationFilter) => void }) {
   const { data: views, setData: setViews, error } = useLoad(() => api.savedViews(eventId), [eventId]);
-  const [selected, setSelected] = useState('');
+  // The selected view is whichever saved view matches the current filters, so editing or clearing them deselects it.
+  const same = (a: RegistrationFilter, b: RegistrationFilter) =>
+    (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver);
+  const selected = (isFilterActive(filter) && views?.find((v) => same(v.filter, filter))?.id) || '';
   const [name, setName] = useState('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const run = async (action: () => Promise<SavedView[]>, done: string) => {
@@ -238,7 +241,6 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
         <label className="small">
           Saved view{' '}
           <select className="input" value={selected} onChange={(e) => {
-            setSelected(e.target.value);
             const view = views.find((v) => v.id === e.target.value);
             if (view) onApply(view.filter);
           }}>
@@ -248,7 +250,7 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
         </label>
       )}
       {selected && (
-        <button type="button" className="btn btn--ghost btn--small" onClick={() => { const id = selected; setSelected(''); void run(() => api.deleteView(eventId, id), 'View deleted.'); }}>
+        <button type="button" className="btn btn--ghost btn--small" onClick={() => { const id = selected; void run(() => api.deleteView(eventId, id), 'View deleted.'); }}>
           Delete view
         </button>
       )}

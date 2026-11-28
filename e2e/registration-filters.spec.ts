@@ -95,6 +95,11 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await filters.getByLabel('Saved view').selectOption({ label: 'Withdrawn riders' });
   await expect(allCount).toHaveText('1');
   await expect(filters.getByLabel('Entry status')).toHaveValue('withdrawn');
+  // Changing a filter deselects the view; choosing it again re-applies it.
+  await filters.getByLabel('Entry status').selectOption('');
+  await expect(filters.getByLabel('Saved view')).toHaveValue('');
+  await filters.getByLabel('Saved view').selectOption({ label: 'Withdrawn riders' });
+  await expect(filters.getByLabel('Entry status')).toHaveValue('withdrawn');
   await filters.getByRole('button', { name: 'Delete view' }).click();
   await expect(filters.getByLabel('Saved view')).toHaveCount(0);
 
