@@ -328,15 +328,22 @@ test('the move form recovers from a failed load and drops a choice that a refres
   await context.addInitScript((account) => sessionStorage.setItem('cyclereg.test-session', account), email);
   const rider = await context.newPage();
   try {
-    // The first load fails: the rider can close the form and still ask to withdraw, or try again.
+    // A stalled first load can be closed while it is still loading; the next load fails, and the rider can close it too.
     let loads = 0;
+    const stalled: { release?: () => void } = {};
     await rider.route('**/api/rider/order-entries/*/transfer-options', async (route) => {
       loads += 1;
-      if (loads === 1) return route.fulfill({ status: 503, json: { error: 'Fictional temporary failure' } });
+      if (loads === 1) { await new Promise<void>((resolve) => { stalled.release = resolve; }); return route.abort(); }
+      if (loads === 2) return route.fulfill({ status: 503, json: { error: 'Fictional temporary failure' } });
       return route.continue();
     });
     await rider.goto(`/#/orders/${orderId}`);
     const askMove = rider.getByRole('button', { name: `Ask to move from ${from.name} to another category` });
+    await askMove.click();
+    await expect(rider.getByRole('status').filter({ hasText: 'Loading the categories you can move to' })).toBeVisible();
+    await rider.getByRole('button', { name: 'Close' }).click();
+    await expect(rider.getByRole('button', { name: `Ask to withdraw from ${from.name}` })).toBeVisible();
+    stalled.release?.();
     await askMove.click();
     await expect(rider.getByRole('alert')).toContainText('Move options could not load');
     await rider.getByRole('button', { name: 'Close' }).click();

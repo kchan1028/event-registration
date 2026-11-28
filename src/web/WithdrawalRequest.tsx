@@ -159,7 +159,14 @@ function MoveForm({ entryId, category, onSent, onCancel }: { entryId: string; ca
       </div>
     );
   }
-  if (!data) return <p className="small muted" role="status">Loading the categories you can move to…</p>;
+  if (!data) {
+    return (
+      <p className="small muted" role="status">
+        Loading the categories you can move to…{' '}
+        <button type="button" className="btn btn--ghost btn--small" onClick={onCancel}>Close</button>
+      </p>
+    );
+  }
   if (data.options.length === 0) {
     return (
       <p className="note small" role="status">
