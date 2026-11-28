@@ -27,6 +27,11 @@ describe('saved registration views', () => {
 
     // Search text is not a filter a view can hold.
     expect((await app.inject({ method: 'POST', url, payload: { name: 'Search', filter: { q: 'rider@example.test' } } })).statusCode).toBe(400);
+    // A view keeps a row order, but a sort alone is not a view, and an unknown sort is refused.
+    const sorted = (await app.inject({ method: 'POST', url, payload: { name: 'By name', filter: { entryStatus: 'active', sort: 'name' } } })).json<{ views: { name: string; filter: unknown }[] }>();
+    expect(sorted.views.find((v) => v.name === 'By name')?.filter).toEqual({ entryStatus: 'active', sort: 'name' });
+    expect((await app.inject({ method: 'POST', url, payload: { name: 'Only sort', filter: { sort: 'name' } } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url, payload: { name: 'Bad sort', filter: { entryStatus: 'active', sort: 'random' } } })).statusCode).toBe(400);
     expect((await app.inject({ method: 'POST', url, payload: { name: '', filter: {} } })).statusCode).toBe(400);
     // A view with no filters would show every registration and could not be told apart from no view.
     expect((await app.inject({ method: 'POST', url, payload: { name: 'Everything', filter: {} } })).statusCode).toBe(400);
@@ -39,6 +44,6 @@ describe('saved registration views', () => {
     // Someone with no access to the event gets nothing.
     expect((await app.inject({ url, headers: as('outsider@example.test') })).statusCode).toBe(404);
 
-    expect((await app.inject({ method: 'DELETE', url: `${url}/${replaced[0].id}` })).json()).toEqual([]);
+    expect((await app.inject({ method: 'DELETE', url: `${url}/${replaced[0].id}` })).json<{ name: string }[]>().map((v) => v.name)).toEqual(['By name']);
   });
 });

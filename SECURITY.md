@@ -52,13 +52,13 @@ Financial-preflight reads require current event finance authority and an event-s
 
 ## Saved Registrations views (Implemented locally)
 
-`/api/events/:id/saved-views` (list, save, delete) needs `orders.view` on the event and returns or changes only the caller's own views; another account's view cannot be read or deleted (404). A view stores entry filters only, never search text, and loading one grants no access.
+`/api/events/:id/saved-views` (list, save, delete) needs `orders.view` on the event and returns or changes only the caller's own views; another account's view cannot be read or deleted (404). A view stores entry filters and a row order only, never search text, and loading one grants no access.
 
 ## Protected CSV audit
 
 Published Registrations shows the finance summary download to owners and finance. The CSV request requires current event `export.ledger` permission before reading financial data. It contains aggregate metrics and published scope labels and records the authenticated actor on generation.
 
-Entries, ledger, finance summary, reconciliation and start-list CSV handlers record the authenticated actor only after authorization and successful preparation. An audit error returns no CSV. HEAD, denied and failed preparations do not create audit rows. The audit tracks generation, since the server cannot confirm delivery or local file persistence. Existing CSV permissions remain in force. Audit data has no application read endpoint and contains no CSV contents, rider details or provider references. Restricted operator access and retention/deletion approval remain gates before real rider data. A filtered view of the entries export (`dayId`, `categoryId`, `entryStatus`, `missingWaiver`; search text is never accepted, because it can hold an email or check-in code and a URL is kept in history and logs) uses the same `export.entries` check and records the same `entries` audit row; the filters are sent back in a response header, not stored.
+Entries, ledger, finance summary, reconciliation and start-list CSV handlers record the authenticated actor only after authorization and successful preparation. An audit error returns no CSV. HEAD, denied and failed preparations do not create audit rows. The audit tracks generation, since the server cannot confirm delivery or local file persistence. Existing CSV permissions remain in force. Audit data has no application read endpoint and contains no CSV contents, rider details or provider references. Restricted operator access and retention/deletion approval remain gates before real rider data. A filtered view of the entries export (`dayId`, `categoryId`, `entryStatus`, `missingWaiver`, and the row order `sort`; search text is never accepted, because it can hold an email or check-in code and a URL is kept in history and logs) uses the same `export.entries` check and records the same `entries` audit row; the filters are sent back in a response header, not stored.
 
 ## Public cancellation status
 

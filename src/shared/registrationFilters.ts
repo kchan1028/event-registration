@@ -13,6 +13,42 @@ export interface RegistrationFilter {
   entryStatus?: 'active' | 'withdrawn' | 'cancelled';
   /** The entry's waiver or required guardian signature is not done. */
   missingWaiver?: boolean;
+  /** Row order, not a condition: it never narrows the list. Missing means `newest`. */
+  sort?: RegistrationSort;
+}
+
+export const REGISTRATION_SORTS = {
+  newest: 'Newest first',
+  oldest: 'Oldest first',
+  name: 'Rider last name',
+  order: 'Order number',
+} as const;
+export type RegistrationSort = keyof typeof REGISTRATION_SORTS;
+/** The sort names as a non-empty tuple, for validating a sort from a request. */
+export const REGISTRATION_SORT_KEYS = Object.keys(REGISTRATION_SORTS) as [RegistrationSort, ...RegistrationSort[]];
+
+interface SortableOrder {
+  id: string;
+  orderNumber: string;
+  createdAt: string;
+  rider: { firstName: string; lastName: string };
+}
+
+const byText = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' });
+
+/**
+ * Orders in the chosen row order. Shared by the screen and the entries download, so a saved view lists and exports rows
+ * the same way. Ties fall back to the order number and then the id, so the order never depends on how rows were read.
+ */
+export function sortRegistrations<T extends SortableOrder>(orders: readonly T[], sort: RegistrationSort = 'newest'): T[] {
+  const tie = (a: T, b: T) => byText(a.orderNumber, b.orderNumber) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const compare: Record<RegistrationSort, (a: T, b: T) => number> = {
+    newest: (a, b) => b.createdAt.localeCompare(a.createdAt) || tie(a, b),
+    oldest: (a, b) => a.createdAt.localeCompare(b.createdAt) || tie(a, b),
+    name: (a, b) => byText(a.rider.lastName, b.rider.lastName) || byText(a.rider.firstName, b.rider.firstName) || tie(a, b),
+    order: tie,
+  };
+  return [...orders].sort(compare[sort]);
 }
 
 interface FilterableEntry {
@@ -48,6 +84,7 @@ export function filterToParams(f: RegistrationFilter): URLSearchParams {
   if (f.categoryId) p.set('categoryId', f.categoryId);
   if (f.entryStatus) p.set('entryStatus', f.entryStatus);
   if (f.missingWaiver) p.set('missingWaiver', '1');
+  if (f.sort && f.sort !== 'newest') p.set('sort', f.sort);
   return p;
 }
 
