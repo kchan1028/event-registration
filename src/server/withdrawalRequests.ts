@@ -3,6 +3,7 @@ import { todayIn } from '../shared/pricing';
 import { refundPolicyEntitlement } from '../shared/refundPolicy';
 import type { Quote } from '../shared/pricing';
 import type { Db } from './db';
+import { recordWithdrawalDeclineNotice } from './email';
 import { paidLine, type Orders } from './orders';
 import { eventLock, HttpError, type Repo } from './repo';
 
@@ -64,7 +65,7 @@ const toView = (r: Row): WithdrawalRequest => ({
   createdAt: new Date(r.created_at).toISOString(), decidedAt: r.decided_at ? new Date(r.decided_at).toISOString() : null,
 });
 
-export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clock: () => Date) {
+export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clock: () => Date, senderAddress?: string) {
   async function facts(entryId: string) {
     const e = await db.get<EntryFacts>(
       `SELECT o.event_id, e.order_id, e.status AS entry_status, o.status AS order_status, e.category_id, e.original_category_id,
@@ -184,6 +185,7 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
           `UPDATE withdrawal_requests SET status = 'declined', decided_by = $2, decided_at = $3, decision_reason = $4 WHERE id = $1`,
           [id, accountId, clock().toISOString(), reason],
         );
+        await recordWithdrawalDeclineNotice(db, id, clock().toISOString(), senderAddress);
         return toView(await one(id));
       });
     },

@@ -183,6 +183,45 @@ export function entryChangeNoticeText(orderNumber: string, summary: string, isDe
     : `Entry change ${orderNumber}: ${summary}. Sign in and open My registrations to see it.`;
 }
 
+/**
+ * The message says the entry was kept, so it is only true while the entry is still active in the category the rider
+ * asked about. If the organizer already withdrew or moved it, the entry-change notice has told the rider instead.
+ */
+const declinedEntryKept = (w: string) => `EXISTS (
+  SELECT 1 FROM order_entries kept WHERE kept.id = ${w}.entry_id AND kept.status = 'confirmed' AND kept.category_id = ${w}.category_id
+)`;
+
+/** Order number and category only. The organizer's reason stays out of the message; the rider reads it on My registrations. */
+export function withdrawalDeclineNoticeText(orderNumber: string, categoryName: string, isDemo: boolean): string {
+  return isDemo
+    ? `Demo registration ${orderNumber}: the organizer kept your ${categoryName} entry and did not withdraw it. Simulated registration: no money was moved. Sign in and open My registrations to see why.`
+    : `Registration ${orderNumber}: the organizer kept your ${categoryName} entry and did not withdraw it. Sign in and open My registrations to see why.`;
+}
+
+/** Called in the transaction that declines a rider's withdrawal request. A null sender stays unsent. This step does not send. */
+export async function recordWithdrawalDeclineNotice(db: Db, requestId: string, recordedAt: string, senderAddress?: string) {
+  const row = await db.get<{ organization_id: string; order_id: string; email: string; is_demo: boolean | null; category_name: string }>(
+    `SELECT e.organization_id, o.id AS order_id, a.email,
+            (v.config_json #>> '{event,isDemo}') = 'true' AS is_demo,
+            w.policy_json ->> 'categoryName' AS category_name
+     FROM withdrawal_requests w
+     JOIN orders o ON o.id = w.order_id
+     JOIN events e ON e.id = o.event_id
+     JOIN accounts a ON a.id = o.account_id
+     JOIN event_versions v ON v.event_id = o.event_id AND v.version = o.published_version
+     WHERE w.id = $1 AND w.status = 'declined' AND ${declinedEntryKept('w')}`,
+    [requestId],
+  );
+  if (!row) return;
+  const isDemo = row.is_demo === true;
+  await db.run(
+    `INSERT INTO email_messages (id, organization_id, kind, ref, withdrawal_request_id, to_email, subject, body_text, status, created_at, from_email, keyed)
+     VALUES ($1, $2, 'withdrawal_decline_notice', $3, $3, $4, $5, $6, 'recorded', $7, $8, true)
+     ON CONFLICT (withdrawal_request_id) DO NOTHING`,
+    [newId('eml'), row.organization_id, requestId, row.email, 'Your withdrawal request', withdrawalDeclineNoticeText(formatOrderNumber(row.order_id, isDemo), row.category_name, isDemo), recordedAt, senderAddress ?? null],
+  );
+}
+
 /** Called when an organizer transfer or withdrawal is saved. A null sender stays unsent. This step does not send. */
 export async function recordEntryChangeNotice(db: Db, changeId: string, recordedAt: string, summary: string, senderAddress?: string) {
   const row = await db.get<{ organization_id: string; order_id: string; email: string; is_demo: boolean | null }>(
@@ -313,7 +352,7 @@ const riderEmailAllowed = `NOT EXISTS (
     )
     AND NOT EXISTS (
       SELECT 1 FROM email_messages previous JOIN email_delivery_events d ON d.email_id = previous.id
-      WHERE previous.organization_id = m.organization_id AND previous.kind IN ('registration_confirmation', 'registration_receipt', 'waitlist_offer', 'waitlist_expired', 'refund_notice', 'entry_change_notice')
+      WHERE previous.organization_id = m.organization_id AND previous.kind IN ('registration_confirmation', 'registration_receipt', 'waitlist_offer', 'waitlist_expired', 'refund_notice', 'entry_change_notice', 'withdrawal_decline_notice')
         AND lower(btrim(previous.to_email)) = lower(btrim(m.to_email)) AND d.kind IN ('bounced', 'complained')
     )`;
 
@@ -342,7 +381,7 @@ const waitlistExpiryReady = `EXISTS (
 )`;
 
 export type OrganizerRiderEmailKind = 'registration_confirmation' | 'registration_receipt' | 'waitlist_offer' | 'refund_notice' | 'entry_change_notice';
-export type RiderEmailKind = OrganizerRiderEmailKind | 'waitlist_expired' | 'guardian_invitation';
+export type RiderEmailKind = OrganizerRiderEmailKind | 'waitlist_expired' | 'guardian_invitation' | 'withdrawal_decline_notice';
 
 // The last check uses current account and family authority, not purchase provenance alone.
 const confirmationReady = `EXISTS (
@@ -384,6 +423,15 @@ const entryChangeNoticeReady = `EXISTS (
     AND lower(btrim(a.email)) = lower(btrim(m.to_email))
     AND ${riderEmailAllowed}
 )`;
+// Still declined, and still sent only to the account that placed the order.
+const withdrawalDeclineNoticeReady = `EXISTS (
+  SELECT 1 FROM withdrawal_requests w
+  JOIN orders o ON o.id = w.order_id
+  JOIN accounts a ON a.id = o.account_id
+  WHERE w.id = m.withdrawal_request_id AND w.status = 'declined' AND ${declinedEntryKept('w')} AND m.from_email IS NOT NULL
+    AND lower(btrim(a.email)) = lower(btrim(m.to_email))
+    AND ${riderEmailAllowed}
+)`;
 const riderEmailReady = {
   registration_confirmation: confirmationReady,
   registration_receipt: confirmationReady,
@@ -392,6 +440,7 @@ const riderEmailReady = {
   refund_notice: refundNoticeReady,
   guardian_invitation: guardianInvitationReady,
   entry_change_notice: entryChangeNoticeReady,
+  withdrawal_decline_notice: withdrawalDeclineNoticeReady,
 };
 const riderEmailSource = {
   registration_confirmation: 'JOIN orders source ON source.id = m.order_id',
@@ -493,7 +542,8 @@ export function createMailer(db: Db, sender: EmailSender, clock: () => Date) {
              OR (m.kind = 'waitlist_expired' AND ${waitlistExpiryReady})
              OR (m.kind = 'refund_notice' AND ${refundNoticeReady})
              OR (m.kind = 'guardian_invitation' AND ${guardianInvitationReady})
-             OR (m.kind = 'entry_change_notice' AND ${entryChangeNoticeReady}))
+             OR (m.kind = 'entry_change_notice' AND ${entryChangeNoticeReady})
+             OR (m.kind = 'withdrawal_decline_notice' AND ${withdrawalDeclineNoticeReady}))
          ORDER BY m.sending_until NULLS FIRST, m.created_at, m.seq LIMIT 1`,
         [new Date(clock().getTime() - RESEND_IDEMPOTENCY_WINDOW_MS).toISOString()],
       );

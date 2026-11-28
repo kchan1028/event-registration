@@ -120,7 +120,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
   const refunds = createRefunds(db, paymentProvider, clock, repo, emailSender.mode === 'resend' ? emailSender.from : undefined);
   const identity = createIdentity(db, orders, clock);
   const resolutions = createResolutions(db, orders, clock);
-  const withdrawalRequests = createWithdrawalRequests(db, repo, orders, clock);
+  const withdrawalRequests = createWithdrawalRequests(db, repo, orders, clock, emailSender.mode === 'resend' ? emailSender.from : undefined);
   const startLists = createStartLists(db, repo, orders, clock, identity);
   const checkIn = createCheckIn(db, repo, orders, clock, identity, startLists);
   const emergencyContacts = createEmergencyContacts(db, clock);

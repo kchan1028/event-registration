@@ -2,8 +2,11 @@
 # To add a pair: put "// @covers <source glob>" at the top of the spec,
 # or add it under test_map in AGENTS.md.
 src/server/db.ts=e2e/public-event-lock.spec.ts
+src/server/db.ts=e2e/withdrawal-decline-notice.spec.ts
+src/server/email.ts=e2e/withdrawal-decline-notice.spec.ts
 src/server/identity.ts=e2e/organizer-participant-history.spec.ts
 src/server/orders.ts=e2e/public-event-lock.spec.ts
+src/server/withdrawalRequests.ts=e2e/withdrawal-decline-notice.spec.ts
 src/web/Register.tsx=e2e/rider-withdrawal.spec.ts
 src/web/WithdrawalRequest.tsx=e2e/rider-withdrawal.spec.ts
 src/web/api.ts=e2e/rider-withdrawal.spec.ts
