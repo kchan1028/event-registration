@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { newId } from '../shared/factory';
-import type { RegistrationFilter } from '../shared/registrationFilters';
+import { isFilterActive, type RegistrationFilter } from '../shared/registrationFilters';
 import type { Db } from './db';
 import { HttpError } from './repo';
 
@@ -15,7 +15,7 @@ export const savedViewFilterSchema = z.object({
   categoryId: z.string().min(1).max(64).optional(),
   entryStatus: z.enum(['active', 'withdrawn', 'cancelled']).optional(),
   missingWaiver: z.literal(true).optional(),
-}).strict();
+}).strict().refine(isFilterActive, 'Choose at least one filter to save a view.');
 
 export interface SavedView {
   id: string;
@@ -63,8 +63,12 @@ export function createSavedViews(db: Db, clock: () => Date) {
     },
 
     async remove(eventId: string, accountId: string, viewId: string): Promise<SavedView[]> {
-      const removed = await db.run(`DELETE FROM saved_registration_views WHERE id = $1 AND event_id = $2 AND account_id = $3`, [viewId, eventId, accountId]);
-      if (removed === 0) throw new HttpError(404, 'Saved view not found.');
+      // Same lock as save, so a delete cannot land between save finding a view and updating it.
+      await db.transaction(async () => {
+        await db.lock(`saved-views:${eventId}:${accountId}`);
+        const removed = await db.run(`DELETE FROM saved_registration_views WHERE id = $1 AND event_id = $2 AND account_id = $3`, [viewId, eventId, accountId]);
+        if (removed === 0) throw new HttpError(404, 'Saved view not found.');
+      });
       return list(eventId, accountId);
     },
   };

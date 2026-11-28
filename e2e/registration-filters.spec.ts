@@ -110,6 +110,11 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await filters.getByRole('button', { name: 'Save view' }).click();
   await filters.getByLabel('Saved view').selectOption({ label: 'Second copy' });
   await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Second copy');
+  // Choosing no view stays on no view even though both views match the filters.
+  await filters.getByLabel('Saved view').selectOption('');
+  await expect(filters.getByLabel('Saved view')).toHaveValue('');
+  await expect(filters.getByRole('button', { name: 'Delete view' })).toHaveCount(0);
+  await filters.getByLabel('Saved view').selectOption({ label: 'Second copy' });
   await filters.getByRole('button', { name: 'Delete view' }).click();
   await expect(filters.getByLabel('Saved view').locator('option')).toHaveText(['Choose a view', 'First copy']);
   await filters.getByLabel('Saved view').selectOption({ label: 'First copy' });

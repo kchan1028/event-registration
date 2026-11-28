@@ -24,6 +24,8 @@ describe('saved registration views', () => {
     // Search text is not a filter a view can hold.
     expect((await app.inject({ method: 'POST', url, payload: { name: 'Search', filter: { q: 'rider@example.test' } } })).statusCode).toBe(400);
     expect((await app.inject({ method: 'POST', url, payload: { name: '', filter: {} } })).statusCode).toBe(400);
+    // A view with no filters would show every registration and could not be told apart from no view.
+    expect((await app.inject({ method: 'POST', url, payload: { name: 'Everything', filter: {} } })).statusCode).toBe(400);
 
     // Another manager sees only their own views and cannot delete this one.
     const manager = 'views.manager@example.test';

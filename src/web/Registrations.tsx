@@ -220,18 +220,20 @@ export function Registrations({ draft }: { draft: Draft }) {
 /** An organizer's named views for this event: entry filters only, private to their account. */
 function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: RegistrationFilter; onApply: (f: RegistrationFilter) => void }) {
   const { data: views, setData: setViews, error } = useLoad(() => api.savedViews(eventId), [eventId]);
-  // A view stays selected only while the filters still match it, so editing or clearing them deselects it. The chosen
-  // id wins over another view with the same filters, so Delete view removes the view the organizer picked.
+  // Only the view the organizer picked or just saved is selected, and only while the filters still match it, so editing
+  // or clearing them deselects it and Delete view never targets a view nobody chose.
   const [chosenId, setChosenId] = useState('');
   const same = (a: RegistrationFilter, b: RegistrationFilter) =>
     (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver);
   const chosen = views?.find((v) => v.id === chosenId);
-  const selected = !isFilterActive(filter) ? '' : chosen && same(chosen.filter, filter) ? chosen.id : views?.find((v) => same(v.filter, filter))?.id ?? '';
+  const selected = chosen && same(chosen.filter, filter) ? chosen.id : '';
   const [name, setName] = useState('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const run = async (action: () => Promise<SavedView[]>, done: string) => {
+  const run = async (action: () => Promise<SavedView[]>, done: string, select?: string) => {
     try {
-      setViews(await action());
+      const next = await action();
+      setViews(next);
+      if (select !== undefined) setChosenId(next.find((v) => v.name.toLowerCase() === select.toLowerCase())?.id ?? '');
       setMessage({ ok: true, text: done });
     } catch (e) {
       setMessage({ ok: false, text: (e as ApiError).message });
@@ -264,7 +266,7 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
             View name{' '}
             <input className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
           </label>
-          <button type="button" className="btn btn--secondary btn--small" disabled={!name.trim()} onClick={() => void run(() => api.saveView(eventId, name.trim(), filter), `Saved “${name.trim()}”.`)}>
+          <button type="button" className="btn btn--secondary btn--small" disabled={!name.trim()} onClick={() => void run(() => api.saveView(eventId, name.trim(), filter), `Saved “${name.trim()}”.`, name.trim())}>
             Save view
           </button>
         </span>
