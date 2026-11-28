@@ -164,9 +164,9 @@ export function Registrations({ draft }: { draft: Draft }) {
         )}
         <SavedViews eventId={eventId} filter={entryFilter} onApply={setEntryFilter} />
         {/* The same view as a file: the server applies the same search and entry filters, with the usual columns and audit. */}
-        {/* The file covers the entry filters only. Search text is never sent in the address (it can hold an email or check-in code),
+        {/* The file covers the entry filters and row order only; a sort alone is enough to offer it. Search text is never sent in the address (it can hold an email or check-in code),
             so the download is offered only without a search and with the All chip. */}
-        {can(roles, 'export.entries') && isFilterActive(entryFilter) && (filter === 'all' && !query.trim() ? (
+        {can(roles, 'export.entries') && filterToParams(entryFilter).toString() !== '' && (filter === 'all' && !query.trim() ? (
           <DownloadLink className="btn btn--ghost btn--small" href={`/api/events/${eventId}/exports/entries.csv?${filterToParams(entryFilter)}`}>
             Download this view (CSV)
           </DownloadLink>

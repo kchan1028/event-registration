@@ -59,6 +59,8 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await expect(rows.last()).toContainText(sortRegistrations(live, 'name').at(-1)!.orderNumber);
   await sortBy.selectOption('order');
   await expect(rows.first()).toContainText(sortRegistrations(live, 'order')[0].orderNumber);
+  // A sort alone is enough to download the view in that order.
+  await expect(filters.getByRole('link', { name: 'Download this view (CSV)' })).toHaveAttribute('href', /\?sort=order$/);
   // Clearing the entry filters keeps the row order.
   await filters.getByLabel('Entry status').selectOption('withdrawn');
   await filters.getByRole('button', { name: 'Clear entry filters' }).click();
