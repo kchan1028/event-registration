@@ -1,13 +1,57 @@
 // @covers src/web/Registrations.tsx
 // @covers src/shared/registrationFilters.ts
 // @covers src/web/styles.css
+// @covers src/server/app.ts
+// @covers src/server/savedViews.ts
+import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
+import type { Locator, Page } from '@playwright/test';
+import { parseCsv } from '../src/shared/csv';
+import { sortRegistrations } from '../src/shared/registrationFilters';
 import { expect, test } from './fixtures';
 import { publishReviewed } from './support/publish';
-import { sortRegistrations } from '../src/shared/registrationFilters';
 
 type Entry = { id: string; dayId: string; categoryId: string; status: string };
 type Order = { id: string; orderNumber: string; createdAt: string; rider: { firstName: string; lastName: string }; entries: Entry[] };
+
+const byText = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' });
+
+/** Last name, then first name, then order number, then id. Same rule for the list and the entries file. */
+function orderedBy(orders: readonly Order[], sort: 'newest' | 'oldest' | 'name' | 'order'): Order[] {
+  const tie = (a: Order, b: Order) => byText(a.orderNumber, b.orderNumber) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const compare = {
+    newest: (a: Order, b: Order) => b.createdAt.localeCompare(a.createdAt) || tie(a, b),
+    oldest: (a: Order, b: Order) => a.createdAt.localeCompare(b.createdAt) || tie(a, b),
+    name: (a: Order, b: Order) => byText(a.rider.lastName, b.rider.lastName) || byText(a.rider.firstName, b.rider.firstName) || tie(a, b),
+    order: tie,
+  };
+  return [...orders].sort(compare[sort]);
+}
+
+const isActiveEntry = (status: string) => status === 'held' || status === 'confirmed';
+
+function withEntryStatus(orders: readonly Order[], entryStatus: 'active'): Order[] {
+  return orders
+    .filter((order) => order.entries.some((entry) => isActiveEntry(entry.status)))
+    .map((order) => ({ ...order, entries: order.entries.filter((entry) => isActiveEntry(entry.status)) }));
+}
+
+async function expectRowOrder(rows: Locator, orders: readonly Order[]) {
+  await expect(rows).toHaveCount(orders.length);
+  const texts = await rows.allTextContents();
+  orders.forEach((order, index) => {
+    expect(texts[index]).toContain(`${order.rider.firstName} ${order.rider.lastName}`);
+    expect(texts[index]).toContain(`order ${order.orderNumber}`);
+  });
+}
+
+async function downloadView(page: Page, link: Locator) {
+  const pending = page.waitForEvent('download');
+  await link.click();
+  const download = await pending;
+  const [header, ...rows] = parseCsv(await readFile((await download.path())!, 'utf8'));
+  return { filename: download.suggestedFilename(), header, rows };
+}
 
 test('organizers narrow registrations by race day, category, entry status and missing waiver', { tag: '@smoke' }, async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
@@ -193,4 +237,101 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await filters.getByLabel('Missing waiver or guardian signature').uncheck();
   await expect(allCount).toHaveText(String(orders.length));
   await expect(filters.getByRole('button', { name: 'Clear entry filters' })).toHaveCount(0);
+});
+
+test('a sort orders riders by last name, stays in a saved view, and is the view download', { tag: '@smoke' }, async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).status()).toBe(200);
+  expect((await page.request.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  const { config } = await (await page.request.get(eventUrl)).json();
+  const category = config.categories.find((item: { timingCode: string }) => item.timingCode === 'RR-M35-34');
+  expect(category).toBeTruthy();
+  // Aaron shares the demo riders' last name and sorts ahead of Alex by first name, whichever order number he draws.
+  const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: {
+    clientRequestId: `sort-tie-${eventId}`,
+    categoryIds: [category.id],
+    rider: { firstName: 'Aaron', lastName: 'Demo', email: 'aaron.demo@example.test', team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Fictional Contact', phone: '555-555-0199' } },
+    waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Aaron Demo', signerRole: 'rider' },
+  } });
+  expect(created.status(), created.status() === 201 ? '' : await created.text()).toBe(201);
+  const aaronId = (await created.json()).id as string;
+  expect((await page.request.post(`/api/orders/${aaronId}/payment`, { data: { attemptId: `sort-tie-pay-${eventId}`, outcome: 'success' } })).ok()).toBe(true);
+  const live = await (await page.request.get(`${eventUrl}/orders`)).json() as Order[];
+  const aaron = live.find((order) => order.rider.firstName === 'Aaron' && order.rider.lastName === 'Demo');
+  const alex = live.find((order) => order.rider.firstName === 'Alex' && order.rider.lastName === 'Demo');
+  expect(aaron && alex).toBeTruthy();
+  expect(live.filter((order) => byText(order.rider.lastName, 'Demo') === 0).length).toBeGreaterThan(1);
+  // The shared last name is a real tie: first name and order number disagree, so either rule can be told from the other.
+  expect(orderedBy(live, 'name').map((order) => order.id)).not.toEqual(orderedBy(live, 'order').map((order) => order.id));
+
+  await page.goto(`/#/events/${eventId}/registrations`);
+  const filters = page.getByRole('group', { name: 'Narrow by entry' });
+  const rows = page.getByRole('list', { name: 'Registrations', exact: true }).locator('> li');
+  const sortBy = filters.getByLabel('Sort by');
+  const viewDownload = () => filters.getByRole('link', { name: 'Download this view (CSV)' });
+
+  await expect(sortBy).toHaveValue('newest');
+  await expect(viewDownload()).toHaveCount(0);
+  await expectRowOrder(rows, orderedBy(live, 'newest'));
+
+  await sortBy.selectOption('name');
+  const byName = orderedBy(live, 'name');
+  await expectRowOrder(rows, byName);
+  const shown = await rows.allTextContents();
+  expect(shown.findIndex((text) => text.includes('Aaron Demo'))).toBeLessThan(shown.findIndex((text) => text.includes('Alex Demo')));
+  await expect(viewDownload()).toHaveAttribute('href', /\?sort=name$/);
+  // A sort is not a filter, so it cannot be saved on its own.
+  await expect(filters.getByRole('button', { name: 'Save view' })).toHaveCount(0);
+
+  await page.getByLabel('Find a registration').fill('Aaron');
+  await expect(viewDownload()).toHaveCount(0);
+  await expect(filters).toContainText('Clear the search and choose All to download this view.');
+  await page.getByLabel('Find a registration').fill('');
+  await expect(sortBy).toHaveValue('name');
+  await expect(viewDownload()).toBeVisible();
+
+  await sortBy.selectOption('oldest');
+  await expectRowOrder(rows, orderedBy(live, 'oldest'));
+  await sortBy.selectOption('order');
+  await expectRowOrder(rows, orderedBy(live, 'order'));
+  await sortBy.selectOption('name');
+
+  const active = withEntryStatus(live, 'active');
+  await filters.getByLabel('Entry status').selectOption('active');
+  await expectRowOrder(rows, orderedBy(active, 'name'));
+  await filters.getByLabel('View name').fill('Active by last name');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Active by last name');
+  // A different row order is a different view, so the saved one drops away until it is applied again.
+  await sortBy.selectOption('oldest');
+  await expect(filters.getByLabel('Saved view')).toHaveValue('');
+  await expectRowOrder(rows, orderedBy(active, 'oldest'));
+
+  await page.reload();
+  await filters.getByLabel('Saved view').selectOption({ label: 'Active by last name' });
+  await expect(sortBy).toHaveValue('name');
+  await expect(filters.getByLabel('Entry status')).toHaveValue('active');
+  await expectRowOrder(rows, orderedBy(active, 'name'));
+  await expect(viewDownload()).toHaveAttribute('href', /entryStatus=active&sort=name$/);
+  const filtered = await downloadView(page, viewDownload());
+  expect(filtered.filename).toContain('entries');
+  expect(filtered.filename).toContain('filtered');
+  const last = filtered.header.indexOf('last_name');
+  const first = filtered.header.indexOf('first_name');
+  const number = filtered.header.indexOf('order_number');
+  const namesOf = (orders: readonly Order[]) => orders.flatMap((order) => order.entries.map(() => [order.rider.lastName, order.rider.firstName, order.orderNumber]));
+  expect(filtered.rows.map((row) => [row[last], row[first], row[number]])).toEqual(namesOf(orderedBy(active, 'name')));
+
+  await filters.getByRole('button', { name: 'Clear entry filters' }).click();
+  await expect(sortBy).toHaveValue('name');
+  await expect(filters.getByLabel('Entry status')).toHaveValue('');
+  await expect(filters.getByRole('button', { name: 'Save view' })).toHaveCount(0);
+  await expect(viewDownload()).toHaveAttribute('href', /\?sort=name$/);
+  const sortedOnly = await downloadView(page, viewDownload());
+  expect(sortedOnly.filename).toContain('filtered');
+  const onlyLast = sortedOnly.header.indexOf('last_name');
+  const onlyFirst = sortedOnly.header.indexOf('first_name');
+  const onlyNumber = sortedOnly.header.indexOf('order_number');
+  expect(sortedOnly.rows.map((row) => [row[onlyLast], row[onlyFirst], row[onlyNumber]])).toEqual(namesOf(byName));
 });
