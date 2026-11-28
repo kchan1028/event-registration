@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 import { parseCsv } from '../src/shared/csv';
+import { ENTRY_COLUMNS } from '../src/shared/exports';
 import { sortRegistrations } from '../src/shared/registrationFilters';
 import { expect, test } from './fixtures';
 import { publishReviewed } from './support/publish';
@@ -446,4 +447,133 @@ test('the full entries file stays in rider order and an explicit newest sort is 
   expect(newest).toEqual(viewEntryRows(live, 'newest'));
   expect(newest[0][0]).toBe(zoe!.orderNumber);
   expect(newest.filter((row) => row[0] === zoe!.orderNumber).map((row) => row[3])).toEqual(racesByName);
+});
+
+test('chosen download columns stay in the file and in a saved view, and clearing filters keeps them', { tag: '@smoke' }, async ({ page, browser, baseURL }) => {
+  const { eventId, organizationId } = await (await page.request.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).status()).toBe(200);
+  expect((await page.request.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  const before = await (await page.request.get(`${eventUrl}/orders`)).json() as Order[];
+  const target = before.find((order) => order.entries.filter((entry) => entry.status === 'confirmed').length >= 2);
+  expect(target).toBeTruthy();
+  const entryId = target!.entries.find((entry) => entry.status === 'confirmed')!.id;
+  expect((await page.request.post(`/api/order-entries/${entryId}/withdraw`, { data: { reason: 'Fictional withdrawal for the column test' } })).ok()).toBe(true);
+  const live = await (await page.request.get(`${eventUrl}/orders`)).json() as Order[];
+  const entries = live.flatMap((order) => order.entries);
+  const activeEntries = entries.filter((entry) => entry.status === 'held' || entry.status === 'confirmed');
+  expect(entries.length).toBeGreaterThan(activeEntries.length);
+
+  await page.goto(`/#/events/${eventId}/registrations`);
+  const filters = page.getByRole('group', { name: 'Narrow by entry' });
+  const summary = filters.locator('summary', { hasText: 'Columns in the download' });
+  const viewDownload = () => filters.getByRole('link', { name: 'Download this view (CSV)' });
+  const allCount = page.getByRole('group', { name: 'Show registrations' }).getByRole('button', { name: /^All/ }).locator('.num');
+  // The checkboxes are not in the page until the list is opened.
+  await expect(summary).toHaveText('Columns in the download');
+  await expect(filters.getByRole('checkbox', { name: 'team', exact: true })).toHaveCount(0);
+  await expect(filters.getByRole('checkbox', { name: 'order_number (always included)', exact: true })).toHaveCount(0);
+  await summary.click();
+  await expect(filters.getByRole('checkbox', { name: 'order_number (always included)', exact: true })).toBeDisabled();
+  await expect(filters.getByRole('checkbox', { name: 'order_number (always included)', exact: true })).toBeChecked();
+  await expect(filters.getByRole('checkbox', { name: 'rider_id (always included)', exact: true })).toBeDisabled();
+  await expect(filters.getByRole('checkbox', { name: 'rider_id (always included)', exact: true })).toBeChecked();
+  expect((await new AxeBuilder({ page }).include('.reg-columns').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+
+  // Untick in an order that is not the file order. The link and the file stay in the usual column order.
+  const kept = ENTRY_COLUMNS.filter((column) => column !== 'team' && column !== 'amount_paid');
+  const encoded = kept.join('%2C');
+  await filters.getByRole('checkbox', { name: 'amount_paid', exact: true }).uncheck();
+  await filters.getByRole('checkbox', { name: 'team', exact: true }).uncheck();
+  await expect(summary).toHaveText(`Columns in the download (${kept.length} of ${ENTRY_COLUMNS.length})`);
+  await expect(viewDownload()).toHaveAttribute('href', new RegExp(`\\?columns=${encoded}$`));
+  await page.setViewportSize({ width: 390, height: 900 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const narrowed = await downloadView(page, viewDownload());
+  expect(narrowed.filename).toContain('entries');
+  expect(narrowed.filename).toContain('filtered');
+  expect(narrowed.header).toEqual([...kept]);
+  expect(narrowed.rows).toHaveLength(entries.length);
+  expect(narrowed.rows[0][narrowed.header.indexOf('order_number')]).toBe(sortRegistrations(live, 'newest')[0].orderNumber);
+  expect(narrowed.rows.every((row) => row[narrowed.header.indexOf('rider_id')] !== '')).toBe(true);
+  expect(narrowed.rows.filter((row) => row[narrowed.header.indexOf('entry_status')] === 'withdrawn').length).toBeGreaterThan(0);
+  const href = (await viewDownload().getAttribute('href'))!;
+  const exported = await page.request.get(href);
+  expect(exported.ok()).toBe(true);
+  expect(exported.headers()['x-cyclereg-export-filters']).toBe(`columns=${encoded}`);
+  expect(parseCsv(await exported.text())[0]).toEqual([...kept]);
+  expect((await page.request.get(`${eventUrl}/exports/entries.csv?columns=emergency_contact`)).status()).toBe(400);
+
+  // Columns are not an entry filter, so Clear stays hidden until a filter is set, and then leaves the columns in place.
+  await expect(filters.getByRole('button', { name: 'Clear entry filters' })).toHaveCount(0);
+  await filters.getByLabel('Entry status').selectOption('active');
+  await expect(viewDownload()).toHaveAttribute('href', new RegExp(`entryStatus=active&columns=${encoded}$`));
+  await filters.getByRole('button', { name: 'Clear entry filters' }).click();
+  await expect(filters.getByLabel('Entry status')).toHaveValue('');
+  await expect(filters.getByLabel('Sort by')).toHaveValue('newest');
+  await expect(allCount).toHaveText(String(live.length));
+  await expect(filters.getByRole('checkbox', { name: 'team', exact: true })).not.toBeChecked();
+  await expect(filters.getByRole('checkbox', { name: 'amount_paid', exact: true })).not.toBeChecked();
+  await expect(viewDownload()).toHaveAttribute('href', new RegExp(`\\?columns=${encoded}$`));
+  await expect(filters.getByRole('button', { name: 'Clear entry filters' })).toHaveCount(0);
+
+  await filters.getByLabel('Entry status').selectOption('active');
+  await filters.getByLabel('View name').fill('Active columns');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Active columns');
+  await filters.getByRole('checkbox', { name: 'racing_age', exact: true }).uncheck();
+  await expect(filters.getByLabel('Saved view')).toHaveValue('');
+  await filters.getByRole('checkbox', { name: 'racing_age', exact: true }).check();
+  await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Active columns');
+  await page.reload();
+  await filters.getByLabel('Saved view').selectOption({ label: 'Active columns' });
+  await expect(filters.getByLabel('Entry status')).toHaveValue('active');
+  await summary.click();
+  await expect(summary).toHaveText(`Columns in the download (${kept.length} of ${ENTRY_COLUMNS.length})`);
+  await expect(filters.getByRole('checkbox', { name: 'team', exact: true })).not.toBeChecked();
+  await expect(filters.getByRole('checkbox', { name: 'amount_paid', exact: true })).not.toBeChecked();
+  const saved = await downloadView(page, viewDownload());
+  expect(saved.header).toEqual([...kept]);
+  expect(saved.rows).toHaveLength(activeEntries.length);
+  expect(saved.rows.every((row) => row[saved.header.indexOf('entry_status')] !== 'withdrawn')).toBe(true);
+
+  // A saved view that left the ids out still downloads them, in the usual column order, ahead of the chosen columns.
+  expect((await page.request.post(`${eventUrl}/saved-views`, { data: { name: 'Ids left out', filter: { entryStatus: 'active', columns: ['category', 'last_name'] } } })).ok()).toBe(true);
+  await page.reload();
+  await filters.getByLabel('Saved view').selectOption({ label: 'Ids left out' });
+  await summary.click();
+  await expect(summary).toHaveText(`Columns in the download (4 of ${ENTRY_COLUMNS.length})`);
+  await expect(filters.getByRole('checkbox', { name: 'order_number (always included)', exact: true })).toBeChecked();
+  await expect(filters.getByRole('checkbox', { name: 'order_number (always included)', exact: true })).toBeDisabled();
+  await expect(filters.getByRole('checkbox', { name: 'rider_id (always included)', exact: true })).toBeChecked();
+  await expect(filters.getByRole('checkbox', { name: 'last_name', exact: true })).toBeChecked();
+  await expect(filters.getByRole('checkbox', { name: 'category', exact: true })).toBeChecked();
+  await expect(filters.getByRole('checkbox', { name: 'team', exact: true })).not.toBeChecked();
+  await expect(viewDownload()).toHaveAttribute('href', /entryStatus=active&columns=category%2Clast_name$/);
+  const omittedHref = (await viewDownload().getAttribute('href'))!;
+  const omitted = await downloadView(page, viewDownload());
+  expect(omitted.header).toEqual(['order_number', 'rider_id', 'last_name', 'category']);
+  expect(omitted.rows).toHaveLength(activeEntries.length);
+  expect(omitted.rows.every((row) => row[2] !== '' && row[3] !== '')).toBe(true);
+  const omittedExport = await page.request.get(omittedHref);
+  expect(omittedExport.headers()['x-cyclereg-export-filters']).toBe('entryStatus=active&columns=category%2Clast_name');
+
+  const email = `columns-finance-${eventId}@example.test`;
+  const financeContext = await browser.newContext({ baseURL, extraHTTPHeaders: { Authorization: `Bearer test:${email}` } });
+  try {
+    await financeContext.request.get('/api/me');
+    expect((await page.request.post(`/api/organizations/${organizationId}/members`, { data: { email, role: 'finance' } })).ok()).toBe(true);
+    const finance = await financeContext.newPage();
+    await finance.addInitScript((address) => sessionStorage.setItem('cyclereg.test-session', address), email);
+    await finance.goto(`/#/events/${eventId}/registrations`);
+    const financeFilters = finance.getByRole('group', { name: 'Narrow by entry' });
+    await expect(financeFilters.getByLabel('Sort by')).toBeVisible();
+    await expect(financeFilters.locator('summary', { hasText: 'Columns in the download' })).toHaveCount(0);
+    await expect(finance.getByRole('link', { name: 'Download entries (CSV)' })).toHaveCount(0);
+    expect((await financeContext.request.get(`${eventUrl}/exports/entries.csv?columns=last_name`)).status()).toBe(403);
+  } finally {
+    await financeContext.close();
+  }
 });
