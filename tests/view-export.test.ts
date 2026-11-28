@@ -45,7 +45,7 @@ describe('entries export of a filtered view', () => {
     // Each download is audited as an entries export.
     const db = openDb(databaseUrl);
     try {
-      expect((await db.all<{ export_kind: string }>(`SELECT export_kind FROM protected_export_audit WHERE event_id = $1`, [eventId])).map((r) => r.export_kind))
+      expect((await db.all<{ export_kind: string }>(`SELECT export_kind FROM protected_export_audit WHERE event_id = $1 ORDER BY export_kind`, [eventId])).map((r) => r.export_kind))
         .toEqual(['entries', 'entries', 'entries', 'ledger']);
     } finally {
       await db.close();
