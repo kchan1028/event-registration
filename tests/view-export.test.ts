@@ -39,12 +39,14 @@ describe('entries export of a filtered view', () => {
     const none = await app.inject({ url: `${url}?q=${encodeURIComponent('nobody-matches-this-fictional-search')}` });
     expect(parseCsv(none.body)).toEqual([header]);
     expect((await app.inject({ url: `${url}?entryStatus=bogus` })).statusCode).toBe(400);
+    // Other exports neither read nor validate the view parameters.
+    expect((await app.inject({ url: `/api/events/${eventId}/exports/ledger.csv?entryStatus=bogus` })).statusCode).toBe(200);
 
     // Each download is audited as an entries export.
     const db = openDb(databaseUrl);
     try {
       expect((await db.all<{ export_kind: string }>(`SELECT export_kind FROM protected_export_audit WHERE event_id = $1`, [eventId])).map((r) => r.export_kind))
-        .toEqual(['entries', 'entries', 'entries']);
+        .toEqual(['entries', 'entries', 'entries', 'ledger']);
     } finally {
       await db.close();
     }

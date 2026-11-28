@@ -113,6 +113,7 @@ export function Registrations({ draft }: { draft: Draft }) {
           spellCheck={false}
           placeholder="Rider name, email, team, bib, license number, order number, or check-in code"
           value={query}
+          maxLength={200}
           onChange={(e) => setQuery(e.target.value)}
         />
         {orders && query.trim() && (
@@ -155,11 +156,14 @@ export function Registrations({ draft }: { draft: Draft }) {
           <button type="button" className="btn btn--ghost btn--small" onClick={() => setEntryFilter({})}>Clear entry filters</button>
         )}
         {/* The same view as a file: the server applies the same search and entry filters, with the usual columns and audit. */}
-        {can(roles, 'export.entries') && (query.trim() || isFilterActive(entryFilter)) && (
+        {can(roles, 'export.entries') && (query.trim() || isFilterActive(entryFilter)) && (filter === 'all' ? (
           <DownloadLink className="btn btn--ghost btn--small" href={`/api/events/${eventId}/exports/entries.csv?${filterToParams(entryFilter, query)}`}>
             Download this view (CSV)
           </DownloadLink>
-        )}
+        ) : (
+          // The file covers search and entry filters only, so it is offered only when no queue chip narrows the list further.
+          <span className="small muted">Choose All to download this view.</span>
+        ))}
       </fieldset>
 
       <div className="filters" role="group" aria-label="Show registrations">

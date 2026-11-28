@@ -1055,14 +1055,14 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     // The permission depends on which file is asked for, so the parameters are parsed before the check.
     const p = z.object({ id: idStr, kind: z.enum(['entries.csv', 'ledger.csv', 'reconciliation.csv', 'finance-summary.csv']) }).parse(req.params);
     await access.requireEvent(me(req), p.id, p.kind === 'entries.csv' ? 'export.entries' : 'export.ledger');
-    // Optional view of the entries export; other files ignore these.
+    // Optional view of the entries export; other files neither read nor validate these.
     const v = z.object({
       q: z.string().max(200).optional(),
       dayId: idStr.optional(),
       categoryId: idStr.optional(),
       entryStatus: z.enum(['active', 'withdrawn', 'cancelled']).optional(),
       missingWaiver: z.literal('1').optional(),
-    }).parse(req.query ?? {});
+    }).parse(p.kind === 'entries.csv' ? req.query ?? {} : {});
     const viewFilter: RegistrationFilter = { dayId: v.dayId, categoryId: v.categoryId, entryStatus: v.entryStatus, missingWaiver: v.missingWaiver === '1' || undefined };
     const view = { query: v.q ?? '', filter: viewFilter, active: p.kind === 'entries.csv' && (Boolean(v.q?.trim()) || isFilterActive(viewFilter)) };
     const file = await db.transaction(async () => {
