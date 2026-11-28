@@ -306,3 +306,67 @@ test('a rider picks a category to move to, sees how its price compares, and the 
     await context.close();
   }
 });
+
+test('the move form recovers from a failed load and drops a choice that a refresh no longer offers', async ({ page, browser, baseURL }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).status()).toBe(200);
+  const { config } = await (await page.request.get(eventUrl)).json();
+  const from = config.categories.find((row: { timingCode: string }) => row.timingCode === 'RR-M35-34');
+  const email = `mover-recover-${eventId}@example.test`;
+  const headers = { Authorization: `Bearer test:${email}` };
+  const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { headers, data: {
+    clientRequestId: `mover-recover-${eventId}`.slice(0, 64), categoryIds: [from.id],
+    rider: { firstName: 'Sam', lastName: 'Fictional', email, team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Pat Fictional', phone: '555-555-0199' } },
+    waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Sam Fictional', signerRole: 'rider' },
+  } });
+  expect(created.status(), await created.text()).toBe(201);
+  const { id: orderId } = await created.json();
+  expect((await page.request.post(`/api/orders/${orderId}/payment`, { headers, data: { attemptId: `mover-recover-paid-${orderId}`, outcome: 'success' } })).status()).toBe(200);
+
+  const context = await browser.newContext({ baseURL, extraHTTPHeaders: headers });
+  await context.addInitScript((account) => sessionStorage.setItem('cyclereg.test-session', account), email);
+  const rider = await context.newPage();
+  try {
+    // The first load fails: the rider can close the form and still ask to withdraw, or try again.
+    let loads = 0;
+    await rider.route('**/api/rider/order-entries/*/transfer-options', async (route) => {
+      loads += 1;
+      if (loads === 1) return route.fulfill({ status: 503, json: { error: 'Fictional temporary failure' } });
+      return route.continue();
+    });
+    await rider.goto(`/#/orders/${orderId}`);
+    const askMove = rider.getByRole('button', { name: `Ask to move from ${from.name} to another category` });
+    await askMove.click();
+    await expect(rider.getByRole('alert')).toContainText('Move options could not load');
+    await rider.getByRole('button', { name: 'Close' }).click();
+    await expect(rider.getByRole('button', { name: `Ask to withdraw from ${from.name}` })).toBeVisible();
+    await askMove.click();
+    await expect(rider.getByRole('alert')).toHaveCount(0);
+    const form = rider.getByRole('form', { name: `Ask to move from ${from.name} to another category` });
+    const first = form.getByRole('radio').first();
+    const firstValue = await first.getAttribute('value');
+    await first.check();
+    await form.getByRole('textbox', { name: 'Why do you want to move?' }).fill('Prefer another race');
+
+    // The send is refused and the refreshed options no longer include the picked category.
+    await rider.unroute('**/api/rider/order-entries/*/transfer-options');
+    await rider.route('**/api/rider/order-entries/*/transfer-options', async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      body.options = body.options.filter((o: { categoryId: string }) => o.categoryId !== firstValue);
+      return route.fulfill({ response, json: body });
+    });
+    await rider.route('**/api/rider/order-entries/*/transfer-requests', (route) => route.fulfill({ status: 409, json: { error: 'The price of that category has changed since you looked. Review it and send your request again.' } }), { times: 1 });
+    await form.getByRole('button', { name: 'Send request' }).click();
+    await expect(form.getByRole('alert')).toContainText('has changed since you looked');
+    await expect(form.locator(`input[type="radio"][value="${firstValue}"]`)).toHaveCount(0);
+    await expect(form.getByRole('radio', { checked: true })).toHaveCount(0);
+    await form.getByRole('button', { name: 'Send request' }).click();
+    await expect(form.getByRole('alert')).toHaveText('Choose the category to move to.');
+    expect(await (await page.request.get(`${eventUrl}/withdrawal-requests`)).json()).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
+

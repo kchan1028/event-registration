@@ -148,7 +148,17 @@ function MoveForm({ entryId, category, onSent, onCancel }: { entryId: string; ca
   };
   useEffect(() => { void load(); }, [entryId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loadError) return <p className="small text-error" role="alert">Move options could not load. {loadError}</p>;
+  if (loadError) {
+    return (
+      <div className="small">
+        <p className="text-error" role="alert">Move options could not load. {loadError}</p>
+        <span className="order__entry-actions">
+          <button type="button" className="btn btn--secondary btn--small" onClick={() => void load()}>Try again</button>
+          <button type="button" className="btn btn--ghost btn--small" onClick={onCancel}>Close</button>
+        </span>
+      </div>
+    );
+  }
   if (!data) return <p className="small muted" role="status">Loading the categories you can move to…</p>;
   if (data.options.length === 0) {
     return (
@@ -159,6 +169,8 @@ function MoveForm({ entryId, category, onSent, onCancel }: { entryId: string; ca
     );
   }
   const name = data.from.categoryName || category;
+  // A refresh can drop the category the rider picked; only a choice that is still offered counts.
+  const chosen = data.options.find((o) => o.categoryId === choice);
   return (
     <ReasonForm
       variant="block"
@@ -167,11 +179,11 @@ function MoveForm({ entryId, category, onSent, onCancel }: { entryId: string; ca
       reasonLabel="Why do you want to move?"
       submitLabel="Send request"
       busyLabel="Sending…"
-      validate={(reason) => (!choice ? 'Choose the category to move to.' : reason.length < 3 ? 'Write why you want to move.' : null)}
+      validate={(reason) => (!chosen ? 'Choose the category to move to.' : reason.length < 3 ? 'Write why you want to move.' : null)}
       onSubmit={async (reason) => {
-        const option = data.options.find((o) => o.categoryId === choice)!;
+        const option = chosen!;
         try {
-          onSent(await api.requestTransfer(entryId, { clientRequestId: requestId, reason, toCategoryId: choice, expectedCategoryId: data.from.categoryId, expectedNewPriceCents: option.newPriceCents }));
+          onSent(await api.requestTransfer(entryId, { clientRequestId: requestId, reason, toCategoryId: option.categoryId, expectedCategoryId: data.from.categoryId, expectedNewPriceCents: option.newPriceCents }));
         } catch (e) {
           // A price or the entry's category changed since the rider looked: show the current choices and let them decide again.
           if (e instanceof ApiError && e.status === 409) { await load(); setRequestId(crypto.randomUUID()); }
@@ -184,7 +196,7 @@ function MoveForm({ entryId, category, onSent, onCancel }: { entryId: string; ca
         <legend>Move to</legend>
         {data.options.map((o) => (
           <label key={o.categoryId} className="check">
-            <input type="radio" name={`move-${entryId}`} value={o.categoryId} checked={choice === o.categoryId} onChange={() => setChoice(o.categoryId)} />
+            <input type="radio" name={`move-${entryId}`} value={o.categoryId} checked={chosen?.categoryId === o.categoryId} onChange={() => setChoice(o.categoryId)} />
             <span>{moveTargetLabel(o)}: {moveCostSentence(o)}</span>
           </label>
         ))}
