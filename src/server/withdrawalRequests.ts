@@ -230,6 +230,10 @@ export function createWithdrawalRequests(db: Db, repo: Repo, orders: Orders, clo
         if ((await facts(row.entry_id)).category_id !== row.category_id) {
           throw new HttpError(409, 'This entry moved to another category after the rider asked. Decline this request and check with the rider.');
         }
+        // The rider agreed to a price; if the target's price changed since, they have not agreed to the new difference.
+        if (row.kind === 'transfer' && (await orders.transferCheck(row.entry_id, row.to_category_id!)).newPrice !== row.policy_json.transfer?.newPriceCents) {
+          throw new HttpError(409, 'The price of the requested category changed after the rider asked. Decline this request and check with the rider.');
+        }
         // The existing organizer action rechecks everything; if the move is no longer possible, the request stays open.
         if (row.kind === 'transfer') await orders.transferEntry(row.entry_id, row.to_category_id!, `Rider request: ${row.reason}`.slice(0, 300));
         else await orders.withdrawEntry(row.entry_id, `Rider request: ${row.reason}`.slice(0, 300));

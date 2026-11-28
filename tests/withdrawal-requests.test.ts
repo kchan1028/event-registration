@@ -267,4 +267,27 @@ describe('rider withdrawal requests', () => {
       await db.close();
     }
   });
+
+  it('refuses to approve a move after the target price changed, so the rider is not held to a difference they did not see', async () => {
+    const { app, eventId, entryId, rider, ev } = await setup();
+    const target = ev.config.categories.find((c) => c.timingCode === 'CR-M35-34')!;
+    const { from, options } = (await app.inject({ url: `/api/rider/order-entries/${entryId}/transfer-options`, headers: rider })).json<{ from: { categoryId: string }; options: { categoryId: string; newPriceCents: number }[] }>();
+    const option = options.find((o) => o.categoryId === target.id)!;
+    const asked = await app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/transfer-requests`, headers: rider, payload: {
+      clientRequestId: 'transfer-request-price', reason: 'Prefer the criterium', toCategoryId: target.id, expectedCategoryId: from.categoryId, expectedNewPriceCents: option.newPriceCents,
+    } });
+    expect(asked.statusCode, asked.body).toBe(201);
+    // The organizer raises the criterium price and republishes while the request is open.
+    const current = (await app.inject({ url: `/api/events/${eventId}` })).json<{ config: EventConfig; revision: number }>();
+    const config = structuredClone(current.config);
+    const changed = config.categories.find((c) => c.id === target.id)!;
+    changed.pricing.baseCents += 500;
+    expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { config, revision: current.revision } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).statusCode).toBe(200);
+    const approve = await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${asked.json().id}/approve` });
+    expect(approve.statusCode, approve.body).toBe(409);
+    expect(approve.json().error).toContain('price of the requested category changed');
+    const order = (await app.inject({ url: `/api/rider/order-entries/${entryId}/withdrawal`, headers: rider })).json<{ preview: { categoryId: string } }>();
+    expect(order.preview.categoryId).toBe(from.categoryId);
+  });
 });

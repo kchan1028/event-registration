@@ -255,6 +255,8 @@ export interface WithdrawalPolicyPreview {
   amountPaidCents: number;
   onDate: string;
   entitlement: { returnAs: 'cash' | 'credit' | 'rider_choice'; percent: number; amountCents: number } | null;
+  /** Set only for a category-change request: the target the rider saw. */
+  transfer?: { categoryId: string; categoryName: string; newPriceCents: number; differenceCents: number };
 }
 
 export interface WithdrawalRequest {
@@ -263,6 +265,7 @@ export interface WithdrawalRequest {
   orderId: string;
   entryId: string;
   riderName: string;
+  kind: 'withdraw' | 'transfer';
   reason: string;
   policy: WithdrawalPolicyPreview;
   status: 'open' | 'approved' | 'declined';
