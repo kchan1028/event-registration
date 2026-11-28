@@ -1098,7 +1098,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
           const viewed = view.active
             ? list.filter((o) => matchesRegistrationFilter(o, view.filter)).map((o) => ({ ...o, entries: o.entries.filter((e) => entryMatchesFilter(e, view.filter)) }))
             : list;
-          body = entriesCsv(sortRegistrations(viewed, viewFilter.sort), await identity.keyOf(p.id));
+          // A view keeps the screen's row order (newest first unless chosen); the full file keeps its rider-then-race order.
+          body = view.active ? entriesCsv(sortRegistrations(viewed, viewFilter.sort), await identity.keyOf(p.id), true) : entriesCsv(list, await identity.keyOf(p.id));
         } else body = ledgerCsv(list);
       }
       const cancellation = await cancellationExportState(db, p.id, record.config);

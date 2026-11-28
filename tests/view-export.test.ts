@@ -42,6 +42,10 @@ describe('entries export of a filtered view', () => {
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' })));
     expect(names).toHaveLength(rows.length);
     expect((await app.inject({ url: `${url}?sort=bogus` })).statusCode).toBe(400);
+    // A sort alone orders the whole file.
+    const byNumber = parseCsv((await app.inject({ url: `${url}?sort=order` })).body).slice(1).map((r) => r[header.indexOf('order_number')]);
+    expect(byNumber).toEqual([...byNumber].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' })));
+    expect(byNumber).toHaveLength(allRows.length);
 
     // Search text is not accepted in the address, so a search term changes nothing and is not echoed back.
     const searched = await app.inject({ url: `${url}?q=${encodeURIComponent('rider@example.test')}` });
@@ -55,7 +59,7 @@ describe('entries export of a filtered view', () => {
     const db = openDb(databaseUrl);
     try {
       expect((await db.all<{ export_kind: string }>(`SELECT export_kind FROM protected_export_audit WHERE event_id = $1 ORDER BY export_kind`, [eventId])).map((r) => r.export_kind))
-        .toEqual(['entries', 'entries', 'entries', 'entries', 'ledger']);
+        .toEqual(['entries', 'entries', 'entries', 'entries', 'entries', 'ledger']);
     } finally {
       await db.close();
     }

@@ -53,13 +53,16 @@ const money = (cents: number) => Math.round(cents) / 100;
 export const ENTRY_COLUMNS = ['order_number', 'rider_id', 'last_name', 'first_name', 'team', 'racing_age', 'license_category', 'category_code', 'category', 'race', 'entry_status', 'order_status', 'amount_paid', 'refunded', 'license_reviewed', 'waiver_signed_by', 'category_answers', 'discount', 'discount_reason', 'coupon_code'];
 
 /**
- * One row per entry. Sorted by rider, then race.
+ * One row per entry. Sorted by rider, then race, unless `keepOrder` is set: then the orders stay in the order given (a
+ * Registrations view's row order) and each order's entries are sorted by race.
  * `amount_paid` is 0 until the order is confirmed: a held or unresolved order has not paid for a place.
  * `refunded` is the total of this entry's refunds that were asked for, are on their way, or are done.
  */
-export function entriesCsv(orders: readonly ExportOrder[], riderKey: (orderId: string) => string): string {
+export function entriesCsv(orders: readonly ExportOrder[], riderKey: (orderId: string) => string, keepOrder = false): string {
   const rows: unknown[][] = [];
-  for (const o of orders) {
+  const position = new Map<unknown, number>();
+  for (const [index, o] of orders.entries()) {
+    position.set(o.orderNumber, index);
     for (const e of o.entries) {
       rows.push([
         o.orderNumber,
@@ -88,7 +91,9 @@ export function entriesCsv(orders: readonly ExportOrder[], riderKey: (orderId: s
       ]);
     }
   }
-  rows.sort((a, b) => `${a[2]} ${a[3]} ${a[9]}`.localeCompare(`${b[2]} ${b[3]} ${b[9]}`));
+  rows.sort(keepOrder
+    ? (a, b) => position.get(a[0])! - position.get(b[0])! || String(a[9]).localeCompare(String(b[9]))
+    : (a, b) => `${a[2]} ${a[3]} ${a[9]}`.localeCompare(`${b[2]} ${b[3]} ${b[9]}`));
   return writeCsv([ENTRY_COLUMNS, ...rows]);
 }
 
