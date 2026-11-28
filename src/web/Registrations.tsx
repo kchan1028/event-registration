@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { awaitsLicenseReview } from '../shared/checkout';
 import { matchesRegistration } from '../shared/lookup';
 import { can } from '../shared/roles';
-import { api, type OrderView } from './api';
+import { api, type ApiError, type SavedView, type OrderView } from './api';
 import { href } from './App';
 import { useSession } from './auth';
 import type { Draft } from './Builder';
@@ -155,6 +155,7 @@ export function Registrations({ draft }: { draft: Draft }) {
         {isFilterActive(entryFilter) && (
           <button type="button" className="btn btn--ghost btn--small" onClick={() => setEntryFilter({})}>Clear entry filters</button>
         )}
+        <SavedViews eventId={eventId} filter={entryFilter} onApply={setEntryFilter} />
         {/* The same view as a file: the server applies the same search and entry filters, with the usual columns and audit. */}
         {/* The file covers the entry filters only. Search text is never sent in the address (it can hold an email or check-in code),
             so the download is offered only without a search and with the All chip. */}
@@ -215,3 +216,68 @@ export function Registrations({ draft }: { draft: Draft }) {
     </div>
   );
 }
+
+/** An organizer's named views for this event: entry filters only, private to their account. */
+function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: RegistrationFilter; onApply: (f: RegistrationFilter) => void }) {
+  const { data: views, setData: setViews, error } = useLoad(() => api.savedViews(eventId), [eventId]);
+  // Only the view the organizer picked or just saved is selected, and only while the filters still match it, so editing
+  // or clearing them deselects it and Delete view never targets a view nobody chose.
+  const [chosenId, setChosenId] = useState('');
+  const same = (a: RegistrationFilter, b: RegistrationFilter) =>
+    (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver);
+  const chosen = views?.find((v) => v.id === chosenId);
+  const selected = chosen && same(chosen.filter, filter) ? chosen.id : '';
+  const [name, setName] = useState('');
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  // While a save or delete is running, the picker and both buttons are disabled, so no pick or second request can race it.
+  const [busy, setBusy] = useState(false);
+  const run = async (action: () => Promise<{ views: SavedView[]; savedId?: string }>, done: string) => {
+    setBusy(true);
+    try {
+      const { views: next, savedId } = await action();
+      setViews(next);
+      if (savedId) setChosenId(savedId);
+      setMessage({ ok: true, text: done });
+    } catch (e) {
+      setMessage({ ok: false, text: (e as ApiError).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (error) return <p className="small text-error">Saved views could not load.</p>;
+  return (
+    <>
+      {views && views.length > 0 && (
+        <label className="small">
+          Saved view{' '}
+          <select className="input" value={selected} disabled={busy} onChange={(e) => {
+            const view = views.find((v) => v.id === e.target.value);
+            setChosenId(view?.id ?? '');
+            if (view) onApply(view.filter);
+          }}>
+            <option value="">Choose a view</option>
+            {views.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+        </label>
+      )}
+      {selected && (
+        <button type="button" className="btn btn--ghost btn--small" disabled={busy} onClick={() => { const id = selected; void run(async () => ({ views: await api.deleteView(eventId, id) }), 'View deleted.'); }}>
+          Delete view
+        </button>
+      )}
+      {isFilterActive(filter) && (
+        <span className="order__entry-actions">
+          <label className="small">
+            View name{' '}
+            <input className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <button type="button" className="btn btn--secondary btn--small" disabled={busy || !name.trim()} onClick={() => void run(() => api.saveView(eventId, name.trim(), filter), `Saved “${name.trim()}”.`)}>
+            Save view
+          </button>
+        </span>
+      )}
+      <span className={message && !message.ok ? 'small text-error' : 'sr-only'} role={message && !message.ok ? 'alert' : 'status'}>{message?.text ?? ''}</span>
+    </>
+  );
+}
+

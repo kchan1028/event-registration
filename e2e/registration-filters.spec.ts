@@ -84,7 +84,81 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await filters.getByLabel('Category').selectOption(usedCategoryId);
   await expect(allCount).toHaveText(String(orders.filter((o) => o.entries.some((e) => e.categoryId === usedCategoryId)).length));
 
+  // Save the withdrawn view, reload, and apply it again from Saved view.
+  await filters.getByLabel('Category').selectOption('');
+  await filters.getByLabel('Entry status').selectOption('withdrawn');
+  await filters.getByLabel('View name').fill('Withdrawn riders');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await expect(filters.getByLabel('Saved view').locator('option', { hasText: 'Withdrawn riders' })).toHaveCount(1);
+  await page.reload();
+  await expect(allCount).toHaveText(String(orders.length));
+  await filters.getByLabel('Saved view').selectOption({ label: 'Withdrawn riders' });
+  await expect(allCount).toHaveText('1');
+  await expect(filters.getByLabel('Entry status')).toHaveValue('withdrawn');
+  // Changing a filter deselects the view; choosing it again re-applies it.
+  await filters.getByLabel('Entry status').selectOption('');
+  await expect(filters.getByLabel('Saved view')).toHaveValue('');
+  await filters.getByLabel('Saved view').selectOption({ label: 'Withdrawn riders' });
+  await expect(filters.getByLabel('Entry status')).toHaveValue('withdrawn');
+  await filters.getByRole('button', { name: 'Delete view' }).click();
+  await expect(filters.getByLabel('Saved view')).toHaveCount(0);
+
+  // Two views with the same filters: picking the second keeps it selected, and Delete view removes that one.
+  await filters.getByLabel('View name').fill('First copy');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await filters.getByLabel('View name').fill('Second copy');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await filters.getByLabel('Saved view').selectOption({ label: 'Second copy' });
+  await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Second copy');
+  // Choosing no view stays on no view even though both views match the filters.
+  await filters.getByLabel('Saved view').selectOption('');
+  await expect(filters.getByLabel('Saved view')).toHaveValue('');
+  await expect(filters.getByRole('button', { name: 'Delete view' })).toHaveCount(0);
+  await filters.getByLabel('Saved view').selectOption({ label: 'Second copy' });
+  await filters.getByRole('button', { name: 'Delete view' }).click();
+  await expect(filters.getByLabel('Saved view').locator('option')).toHaveText(['Choose a view', 'First copy']);
+  await filters.getByLabel('Saved view').selectOption({ label: 'First copy' });
+  await filters.getByRole('button', { name: 'Delete view' }).click();
+  await expect(filters.getByLabel('Saved view')).toHaveCount(0);
+
+  // While a save is running, the picker and Save view are disabled, so nothing can race it; it ends selected.
+  await filters.getByLabel('View name').fill('Slow save');
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/saved-views', async (route) => {
+    if (route.request().method() === 'POST') await held;
+    await route.continue();
+  });
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await expect(filters.getByRole('button', { name: 'Save view' })).toBeDisabled();
+  release();
+  await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Slow save');
+  await expect(filters.getByRole('button', { name: 'Save view' })).toBeEnabled();
+  await page.unroute('**/saved-views');
+  // With an existing view, the picker is disabled during a save too.
+  await filters.getByLabel('Entry status').selectOption('cancelled');
+  const held2 = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/saved-views', async (route) => {
+    if (route.request().method() === 'POST') await held2;
+    await route.continue();
+  });
+  await filters.getByLabel('View name').fill('Another');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await expect(filters.getByLabel('Saved view')).toBeDisabled();
+  release();
+  await expect(filters.getByLabel('Saved view')).toBeEnabled();
+  await page.unroute('**/saved-views');
+  await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Another');
+  await filters.getByRole('button', { name: 'Delete view' }).click();
+  await filters.getByLabel('Saved view').selectOption({ label: 'Slow save' });
+  await filters.getByRole('button', { name: 'Delete view' }).click();
+  await expect(filters.getByLabel('Saved view')).toHaveCount(0);
+
+  // Clear entry filters resets every filter, category included.
+  await filters.getByLabel('Category').selectOption(usedCategoryId);
   await filters.getByRole('button', { name: 'Clear entry filters' }).click();
+  await expect(filters.getByLabel('Category')).toHaveValue('');
+  await expect(filters.getByLabel('Entry status')).toHaveValue('');
   await expect(allCount).toHaveText(String(orders.length));
   await expect(filters.getByRole('button', { name: 'Clear entry filters' })).toHaveCount(0);
 
