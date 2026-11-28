@@ -21,7 +21,7 @@ import { Summary } from './registrations/Summary';
 import { Waitlists } from './registrations/Waitlists';
 import { DownloadLink, Pending } from './ui';
 import { useLoad } from './useLoad';
-import { filterToParams, isFilterActive, matchesRegistrationFilter, type RegistrationFilter } from '../shared/registrationFilters';
+import { filterToParams, isFilterActive, matchesRegistrationFilter, REGISTRATION_SORTS, sortRegistrations, type RegistrationFilter, type RegistrationSort } from '../shared/registrationFilters';
 
 const FILTERS = {
   all: { label: 'All', test: () => true },
@@ -53,7 +53,7 @@ export function Registrations({ draft }: { draft: Draft }) {
 
   // Search narrows the list first; the filter chips and their counts apply to what it found.
   const found = (orders ?? []).filter((o) => matchesRegistration(o, query) && matchesRegistrationFilter(o, entryFilter));
-  const shown = found.filter(FILTERS[filter].test);
+  const shown = sortRegistrations(found.filter(FILTERS[filter].test), entryFilter.sort);
   const published = draft.data.publishedVersion !== null;
   const canManage = can(roles, 'entries.manage');
 
@@ -152,8 +152,15 @@ export function Registrations({ draft }: { draft: Draft }) {
           <input type="checkbox" checked={entryFilter.missingWaiver ?? false} onChange={(e) => setEntry({ missingWaiver: e.target.checked || undefined })} />
           Missing waiver or guardian signature
         </label>
+        <label className="small">
+          Sort by{' '}
+          <select className="input" value={entryFilter.sort ?? 'newest'} onChange={(e) => setEntry({ sort: e.target.value === 'newest' ? undefined : e.target.value as RegistrationSort })}>
+            {(Object.keys(REGISTRATION_SORTS) as RegistrationSort[]).map((k) => <option key={k} value={k}>{REGISTRATION_SORTS[k]}</option>)}
+          </select>
+        </label>
+        {/* Clearing the filters keeps the chosen row order. */}
         {isFilterActive(entryFilter) && (
-          <button type="button" className="btn btn--ghost btn--small" onClick={() => setEntryFilter({})}>Clear entry filters</button>
+          <button type="button" className="btn btn--ghost btn--small" onClick={() => setEntryFilter((f) => ({ sort: f.sort }))}>Clear entry filters</button>
         )}
         <SavedViews eventId={eventId} filter={entryFilter} onApply={setEntryFilter} />
         {/* The same view as a file: the server applies the same search and entry filters, with the usual columns and audit. */}
@@ -224,7 +231,7 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
   // or clearing them deselects it and Delete view never targets a view nobody chose.
   const [chosenId, setChosenId] = useState('');
   const same = (a: RegistrationFilter, b: RegistrationFilter) =>
-    (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver);
+    (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver) && (a.sort ?? 'newest') === (b.sort ?? 'newest');
   const chosen = views?.find((v) => v.id === chosenId);
   const selected = chosen && same(chosen.filter, filter) ? chosen.id : '';
   const [name, setName] = useState('');

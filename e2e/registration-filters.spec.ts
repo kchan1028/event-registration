@@ -4,9 +4,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { publishReviewed } from './support/publish';
+import { sortRegistrations } from '../src/shared/registrationFilters';
 
 type Entry = { id: string; dayId: string; categoryId: string; status: string };
-type Order = { orderNumber: string; entries: Entry[] };
+type Order = { id: string; orderNumber: string; createdAt: string; rider: { firstName: string; lastName: string }; entries: Entry[] };
 
 test('organizers narrow registrations by race day, category, entry status and missing waiver', { tag: '@smoke' }, async ({ page }) => {
   const { eventId } = await (await page.request.post('/api/demo')).json();
@@ -49,6 +50,20 @@ test('organizers narrow registrations by race day, category, entry status and mi
   const rows = page.getByRole('list', { name: 'Registrations', exact: true }).locator('> li');
   const allCount = page.getByRole('group', { name: 'Show registrations' }).getByRole('button', { name: /^All/ }).locator('.num');
   await expect(allCount).toHaveText(String(orders.length));
+
+  // Sort by rider last name, then by order number; the rows follow the shared sort rule.
+  const sortBy = filters.getByLabel('Sort by');
+  await expect(sortBy).toHaveValue('newest');
+  await sortBy.selectOption('name');
+  await expect(rows.first()).toContainText(sortRegistrations(live, 'name')[0].orderNumber);
+  await expect(rows.last()).toContainText(sortRegistrations(live, 'name').at(-1)!.orderNumber);
+  await sortBy.selectOption('order');
+  await expect(rows.first()).toContainText(sortRegistrations(live, 'order')[0].orderNumber);
+  // Clearing the entry filters keeps the row order.
+  await filters.getByLabel('Entry status').selectOption('withdrawn');
+  await filters.getByRole('button', { name: 'Clear entry filters' }).click();
+  await expect(sortBy).toHaveValue('order');
+  await sortBy.selectOption('newest');
 
   await filters.getByLabel('Race day').selectOption(sunday.id);
   await expect(allCount).toHaveText(String(expectedSunday));

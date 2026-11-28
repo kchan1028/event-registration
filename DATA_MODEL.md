@@ -771,7 +771,7 @@ Suggested matches the organizer marked as different riders (migration 10), so th
 
 ### saved_registration_views
 
-Migration 64. An organizer's named view of an event's Registrations list. Private to the account that saved it; every read checks that account's current access to the event, so a saved view grants nothing. Stores only the entry filters, never search text, which can hold a rider's email or check-in code. Up to 20 views per account and event; saving an existing name (any case) replaces its filters.
+Migration 64. An organizer's named view of an event's Registrations list. Private to the account that saved it; every read checks that account's current access to the event, so a saved view grants nothing. Stores only the entry filters and the row order, never search text, which can hold a rider's email or check-in code. Up to 20 views per account and event; saving an existing name (any case) replaces its filters.
 
 | Column | Notes |
 |---|---|
@@ -779,7 +779,7 @@ Migration 64. An organizer's named view of an event's Registrations list. Privat
 | `event_id` | References `events`; cascades on delete |
 | `account_id` | The organizer who saved it. References `accounts`; cascades on delete |
 | `name` | 1 to 60 characters; unique per event and account, ignoring case |
-| `filter_json` | Race day, category, entry status and missing-waiver flag (all optional) |
+| `filter_json` | Race day, category, entry status, missing-waiver flag and row order (`sort`: newest, oldest, name or order; all optional, at least one filter required) |
 | `created_at` | |
 
 ### withdrawal_requests

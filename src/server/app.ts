@@ -1,4 +1,4 @@
-import { entryMatchesFilter, filterToParams, isFilterActive, matchesRegistrationFilter, type RegistrationFilter } from '../shared/registrationFilters';
+import { entryMatchesFilter, filterToParams, matchesRegistrationFilter, REGISTRATION_SORT_KEYS, sortRegistrations, type RegistrationFilter } from '../shared/registrationFilters';
 import { isResearchExample } from '../shared/researchExamples';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -1075,9 +1075,11 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       categoryId: idStr.optional(),
       entryStatus: z.enum(['active', 'withdrawn', 'cancelled']).optional(),
       missingWaiver: z.literal('1').optional(),
+      sort: z.enum(REGISTRATION_SORT_KEYS).optional(),
     }).parse(p.kind === 'entries.csv' ? req.query ?? {} : {});
-    const viewFilter: RegistrationFilter = { dayId: v.dayId, categoryId: v.categoryId, entryStatus: v.entryStatus, missingWaiver: v.missingWaiver === '1' || undefined };
-    const view = { filter: viewFilter, active: p.kind === 'entries.csv' && isFilterActive(viewFilter) };
+    const viewFilter: RegistrationFilter = { dayId: v.dayId, categoryId: v.categoryId, entryStatus: v.entryStatus, missingWaiver: v.missingWaiver === '1' || undefined, sort: v.sort };
+    // A view is any filter or a non-default row order; the file then names them in its response.
+    const view = { filter: viewFilter, active: p.kind === 'entries.csv' && filterToParams(viewFilter).toString() !== '' };
     const file = await db.transaction(async () => {
       await db.lock(eventLock(p.id));
       const record = await repo.getEvent(p.id);
@@ -1096,7 +1098,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
           const viewed = view.active
             ? list.filter((o) => matchesRegistrationFilter(o, view.filter)).map((o) => ({ ...o, entries: o.entries.filter((e) => entryMatchesFilter(e, view.filter)) }))
             : list;
-          body = entriesCsv(viewed, await identity.keyOf(p.id));
+          body = entriesCsv(sortRegistrations(viewed, viewFilter.sort), await identity.keyOf(p.id));
         } else body = ledgerCsv(list);
       }
       const cancellation = await cancellationExportState(db, p.id, record.config);

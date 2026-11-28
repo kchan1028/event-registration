@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import { newId } from '../shared/factory';
-import { isFilterActive, type RegistrationFilter } from '../shared/registrationFilters';
+import { isFilterActive, REGISTRATION_SORT_KEYS, type RegistrationFilter } from '../shared/registrationFilters';
 import type { Db } from './db';
 import { HttpError } from './repo';
 
 /**
  * Named Registrations views (product.md "Participant management"). Each view is private to one organizer account and
- * one event, and stores only the entry filters: never search text, which can hold a rider's email or check-in code.
+ * one event, and stores only the entry filters and row order: never search text, which can hold a rider's email or check-in code.
  * Loading a view grants nothing; the caller's current access to the event is checked on every request.
  */
 
@@ -15,6 +15,7 @@ export const savedViewFilterSchema = z.object({
   categoryId: z.string().min(1).max(64).optional(),
   entryStatus: z.enum(['active', 'withdrawn', 'cancelled']).optional(),
   missingWaiver: z.literal(true).optional(),
+  sort: z.enum(REGISTRATION_SORT_KEYS).optional(),
 }).strict().refine(isFilterActive, 'Choose at least one filter to save a view.');
 
 export interface SavedView {
