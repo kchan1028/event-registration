@@ -950,6 +950,10 @@ export const MIGRATIONS: string[] = [
     OR (kind = 'guardian_invitation' AND organization_id IS NULL AND guardian_invitation_id IS NOT NULL AND ref = guardian_invitation_id AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL AND withdrawal_request_id IS NULL)
     OR (kind = 'withdrawal_decline_notice' AND organization_id IS NOT NULL AND withdrawal_request_id IS NOT NULL AND ref = withdrawal_request_id AND guardian_invitation_id IS NULL AND order_id IS NULL AND waitlist_entry_id IS NULL AND waitlist_expiry_entry_id IS NULL AND refund_id IS NULL AND entry_change_id IS NULL)
   );`,
+  // 63: a rider's request can also ask to move the entry to another category (kind 'transfer').
+  `ALTER TABLE withdrawal_requests ADD COLUMN kind text NOT NULL DEFAULT 'withdraw' CHECK (kind IN ('withdraw', 'transfer'));
+  ALTER TABLE withdrawal_requests ADD COLUMN to_category_id text;
+  ALTER TABLE withdrawal_requests ADD CONSTRAINT withdrawal_requests_transfer_target CHECK ((kind = 'transfer') = (to_category_id IS NOT NULL));`,
 ];
 
 /** timestamptz values come back as ISO 8601 UTC strings instead of Date objects. */

@@ -82,3 +82,56 @@ test('an organizer approves one rider withdrawal request and declines another wi
   expect(await entryStatus(casey.orderId)).toBe('confirmed');
   expect((await (await page.request.get(`/api/orders/${robin.orderId}/refunds`)).json()).refunds).toEqual([]);
 });
+
+test('a category-change request is labeled as a move everywhere, and approving it moves the entry', async ({ page, browser, baseURL }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).status()).toBe(200);
+  const { config } = await (await page.request.get(eventUrl)).json();
+  const from = config.categories.find((row: { timingCode: string }) => row.timingCode === 'RR-M35-34');
+  const to = config.categories.find((row: { timingCode: string }) => row.timingCode === 'CR-M35-34');
+  const email = `mover-${eventId}@example.test`;
+  const headers = { Authorization: `Bearer test:${email}` };
+  const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { headers, data: {
+    clientRequestId: `mover-${eventId}`.slice(0, 64), categoryIds: [from.id],
+    rider: { firstName: 'Morgan', lastName: 'Fictional', email, team: '', racingAge: 40, licenseCategory: '3', licenseType: 'annual', competitionClass: 'men', collegiateDivision: null, guardian: null, emergencyContact: { name: 'Pat Fictional', phone: '555-555-0199' } },
+    waiver: { version: config.registration.waiverVersion, read: true, agreed: true, signatureName: 'Morgan Fictional', signerRole: 'rider' },
+  } });
+  expect(created.status(), await created.text()).toBe(201);
+  const order = await created.json();
+  const paid = await page.request.post(`/api/orders/${order.id}/payment`, { headers, data: { attemptId: `mover-paid-${order.id}`, outcome: 'success' } });
+  const entryId = (await paid.json()).entries[0].id as string;
+  const { from: current, options } = await (await page.request.get(`/api/rider/order-entries/${entryId}/transfer-options`, { headers })).json();
+  const option = options.find((o: { categoryId: string }) => o.categoryId === to.id);
+  const asked = await page.request.post(`/api/rider/order-entries/${entryId}/transfer-requests`, { headers, data: {
+    clientRequestId: `mover-ask-${entryId}`, reason: 'Prefer the criterium', toCategoryId: to.id, expectedCategoryId: current.categoryId, expectedNewPriceCents: option.newPriceCents,
+  } });
+  expect(asked.status(), await asked.text()).toBe(201);
+
+  // The rider's receipt says it is a move, not a withdrawal.
+  const context = await browser.newContext({ baseURL, extraHTTPHeaders: headers });
+  await context.addInitScript((account) => sessionStorage.setItem('cyclereg.test-session', account), email);
+  const rider = await context.newPage();
+  try {
+    await rider.goto(`/#/orders/${order.id}`);
+    await expect(rider.getByRole('status').filter({ hasText: `You asked to move from ${from.name} to ${to.name}.` })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+
+  await page.goto(`/#/events/${eventId}/registrations`);
+  const section = page.getByRole('region', { name: /Withdrawal requests/ });
+  const who = `Morgan Fictional, ${from.name}`;
+  await expect(section).toContainText(`Move to ${to.name} · waiting`);
+  await expect(section).toContainText(`${to.name} cost`);
+  await expect(section.getByRole('button', { name: `Approve withdrawal for ${who}` })).toHaveCount(0);
+  await section.getByRole('button', { name: `Approve move to ${to.name} for ${who}` }).click();
+  const confirm = section.getByRole('group', { name: `Confirm move to ${to.name} for ${who}` });
+  await expect(confirm).toContainText(`This moves the entry to ${to.name} now.`);
+  await confirm.getByRole('button', { name: 'Move entry' }).click();
+  await expect(section.getByText('No requests are waiting.')).toBeVisible();
+  await section.getByText('Decided (1)').click();
+  await expect(section).toContainText(`Moved to ${to.name}`);
+  const after = await (await page.request.get(`/api/orders/${order.id}`)).json();
+  expect(after.entries[0]).toMatchObject({ status: 'confirmed', categoryId: to.id });
+});

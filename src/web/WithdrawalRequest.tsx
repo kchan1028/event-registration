@@ -53,7 +53,9 @@ export function WithdrawalRequestControl({ entryId, categoryName }: { entryId: s
   if (state.openRequest) {
     return (
       <p ref={waiting} tabIndex={-1} className="note small" role="status">
-        You asked to withdraw from {state.openRequest.policy.categoryName}. The organizer has not decided yet, and this entry still races until they do.
+        {state.openRequest.kind === 'transfer'
+          ? <>You asked to move from {state.openRequest.policy.categoryName} to {state.openRequest.policy.transfer?.categoryName}. The organizer has not decided yet, and this entry stays where it is until they do.</>
+          : <>You asked to withdraw from {state.openRequest.policy.categoryName}. The organizer has not decided yet, and this entry still races until they do.</>}
       </p>
     );
   }

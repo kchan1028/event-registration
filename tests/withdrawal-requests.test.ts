@@ -56,8 +56,12 @@ describe('rider withdrawal requests', () => {
     const first = await ask('Injured my knee');
     expect(first.statusCode, first.body).toBe(201);
     expect(first.json()).toMatchObject({ status: 'open', reason: 'Injured my knee', entryId, policy: { amountPaidCents: preview.amountPaidCents } });
-    // An exact retry returns the same request; the same id with a different reason is refused.
+    // An exact retry returns the same request; the same id with a different reason or different terms is refused.
     expect((await ask('Injured my knee')).json().id).toBe(first.json().id);
+    const changedTerms = await app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/withdrawal-requests`, headers: rider, payload: {
+      clientRequestId: 'withdraw-request-0001', reason: 'Injured my knee', expectedCategoryId: first.json().policy.categoryId, expectedReturnAs: 'credit', expectedAmountCents: 1,
+    } });
+    expect(changedTerms.statusCode).toBe(409);
     expect((await ask('Something else')).statusCode).toBe(409);
     // Only one open request per entry.
     expect((await ask('Injured my knee', 'withdraw-request-0002')).statusCode).toBe(409);
@@ -205,5 +209,92 @@ describe('rider withdrawal requests', () => {
     } finally {
       await db.close();
     }
+  });
+
+  it('lists the categories an entry can move to, and a rider can ask to move; approval runs the organizer transfer', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app, eventId, orderId, entryId, rider, ask, ev, category } = await setup({ databaseUrl });
+    const optionsRes = await app.inject({ url: `/api/rider/order-entries/${entryId}/transfer-options`, headers: rider });
+    expect(optionsRes.statusCode, optionsRes.body).toBe(200);
+    const { from, options } = optionsRes.json<{ from: { categoryId: string; amountPaidCents: number }; options: { categoryId: string; newPriceCents: number; differenceCents: number }[] }>();
+    expect(from.categoryId).toBe(category.id);
+    expect(options.map((o) => o.categoryId)).not.toContain(category.id);
+    const target = ev.config.categories.find((c) => c.timingCode === 'CR-M35-34')!;
+    const junior = ev.config.categories.find((c) => c.timingCode.includes('J'));
+    if (junior) expect(options.map((o) => o.categoryId)).not.toContain(junior.id);
+    const option = options.find((o) => o.categoryId === target.id)!;
+    expect(option).toBeDefined();
+    expect(option.differenceCents).toBe(option.newPriceCents - from.amountPaidCents);
+    // Another account sees nothing.
+    expect((await app.inject({ url: `/api/rider/order-entries/${entryId}/transfer-options`, headers: as('stranger@example.test') })).statusCode).toBe(404);
+
+    const send = (body: Record<string, unknown>) => app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/transfer-requests`, headers: rider, payload: body });
+    const base = { clientRequestId: 'transfer-request-0001', reason: 'Prefer the criterium', toCategoryId: target.id, expectedCategoryId: from.categoryId };
+    // A changed price is refused so the rider can review it.
+    const stale = await send({ ...base, clientRequestId: 'transfer-request-stale', expectedNewPriceCents: option.newPriceCents + 100 });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().error).toContain('has changed since you looked');
+    const asked = await send({ ...base, expectedNewPriceCents: option.newPriceCents });
+    expect(asked.statusCode, asked.body).toBe(201);
+    expect(asked.json()).toMatchObject({ kind: 'transfer', status: 'open', policy: { transfer: { categoryId: target.id, newPriceCents: option.newPriceCents } } });
+    // An exact retry returns the same request; the same id with different terms is refused; one open request per entry, of either kind.
+    expect((await send({ ...base, expectedNewPriceCents: option.newPriceCents })).json().id).toBe(asked.json().id);
+    expect((await send({ ...base, expectedNewPriceCents: option.newPriceCents + 1 })).statusCode).toBe(409);
+    expect((await ask('Or just withdraw', 'withdraw-request-0020')).statusCode).toBe(409);
+
+    const approved = await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${asked.json().id}/approve` });
+    expect(approved.statusCode, approved.body).toBe(200);
+    const order = (await app.inject({ url: `/api/orders/${orderId}` })).json<{ entries: { id: string; status: string; categoryId: string; changes: { kind: string; reason: string }[] }[] }>();
+    const entry = order.entries.find((e) => e.id === entryId)!;
+    expect(entry).toMatchObject({ status: 'confirmed', categoryId: target.id });
+    expect(entry.changes).toEqual([expect.objectContaining({ kind: 'transfer', reason: 'Rider request: Prefer the criterium' })]);
+    expect((await app.inject({ url: `/api/orders/${orderId}/refunds` })).json<{ refunds: unknown[] }>().refunds).toEqual([]);
+  });
+
+  it('declining a transfer request keeps the entry and the rider notice says it was not moved', async () => {
+    const databaseUrl = await testDatabaseUrl();
+    const { app, eventId, entryId, rider, ev } = await setup({ databaseUrl });
+    const target = ev.config.categories.find((c) => c.timingCode === 'CR-M35-34')!;
+    const { from, options } = (await app.inject({ url: `/api/rider/order-entries/${entryId}/transfer-options`, headers: rider })).json<{ from: { categoryId: string }; options: { categoryId: string; newPriceCents: number }[] }>();
+    const option = options.find((o) => o.categoryId === target.id)!;
+    const asked = await app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/transfer-requests`, headers: rider, payload: {
+      clientRequestId: 'transfer-request-decline', reason: 'Prefer the criterium', toCategoryId: target.id, expectedCategoryId: from.categoryId, expectedNewPriceCents: option.newPriceCents,
+    } });
+    expect(asked.statusCode, asked.body).toBe(201);
+    expect((await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${asked.json().id}/decline`, payload: { reason: 'The criterium field is reserved for locals' } })).statusCode).toBe(200);
+    const decided = (await app.inject({ url: `/api/events/${eventId}/withdrawal-requests` })).json<{ kind: string; status: string; policy: { transfer?: { categoryName: string } } }[]>();
+    expect(decided).toEqual([expect.objectContaining({ kind: 'transfer', status: 'declined', policy: expect.objectContaining({ transfer: expect.objectContaining({ categoryName: target.name }) }) })]);
+    const db = openDb(databaseUrl);
+    try {
+      const notice = await db.get<{ subject: string; body_text: string }>(`SELECT subject, body_text FROM email_messages WHERE kind = 'withdrawal_decline_notice'`);
+      expect(notice).toMatchObject({ subject: 'Your category change request' });
+      expect(notice!.body_text).toContain(`did not move it to ${target.name}`);
+      expect(notice!.body_text).not.toContain('reserved for locals');
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('refuses to approve a move after the target price changed, so the rider is not held to a difference they did not see', async () => {
+    const { app, eventId, entryId, rider, ev } = await setup();
+    const target = ev.config.categories.find((c) => c.timingCode === 'CR-M35-34')!;
+    const { from, options } = (await app.inject({ url: `/api/rider/order-entries/${entryId}/transfer-options`, headers: rider })).json<{ from: { categoryId: string }; options: { categoryId: string; newPriceCents: number }[] }>();
+    const option = options.find((o) => o.categoryId === target.id)!;
+    const asked = await app.inject({ method: 'POST', url: `/api/rider/order-entries/${entryId}/transfer-requests`, headers: rider, payload: {
+      clientRequestId: 'transfer-request-price', reason: 'Prefer the criterium', toCategoryId: target.id, expectedCategoryId: from.categoryId, expectedNewPriceCents: option.newPriceCents,
+    } });
+    expect(asked.statusCode, asked.body).toBe(201);
+    // The organizer raises the criterium price and republishes while the request is open.
+    const current = (await app.inject({ url: `/api/events/${eventId}` })).json<{ config: EventConfig; revision: number }>();
+    const config = structuredClone(current.config);
+    const changed = config.categories.find((c) => c.id === target.id)!;
+    changed.pricing.baseCents += 500;
+    expect((await app.inject({ method: 'PUT', url: `/api/events/${eventId}/config`, payload: { config, revision: current.revision } })).statusCode).toBe(200);
+    expect((await publishReviewed(app, `/api/events/${eventId}`, { acknowledgeWarnings: true, acknowledgeImpact: true })).statusCode).toBe(200);
+    const approve = await app.inject({ method: 'POST', url: `/api/events/${eventId}/withdrawal-requests/${asked.json().id}/approve` });
+    expect(approve.statusCode, approve.body).toBe(409);
+    expect(approve.json().error).toContain('price of the requested category changed');
+    const order = (await app.inject({ url: `/api/rider/order-entries/${entryId}/withdrawal`, headers: rider })).json<{ preview: { categoryId: string } }>();
+    expect(order.preview.categoryId).toBe(from.categoryId);
   });
 });

@@ -842,6 +842,26 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     reply.code(201);
     return withdrawalRequests.request(id, account.id, body);
   });
+  app.get('/api/rider/order-entries/:id/transfer-options', async (req) => {
+    const { id } = idParam.parse(req.params);
+    await access.requireOrderAccess(me(req), { entryId: id }, { rider: true });
+    return withdrawalRequests.transferOptions(id);
+  });
+  app.post('/api/rider/order-entries/:id/transfer-requests', async (req, reply) => {
+    const { id } = idParam.parse(req.params);
+    const account = me(req);
+    await access.requireOrderAccess(account, { entryId: id }, { rider: true });
+    const body = z.object({
+      clientRequestId: z.string().min(8).max(128),
+      reason: z.string().trim().min(3, 'Write why you want to move to another category.').max(300),
+      toCategoryId: idStr,
+      // What the rider was shown; a changed category or price is refused so they can review it.
+      expectedCategoryId: z.string().min(1).max(64),
+      expectedNewPriceCents: z.number().int().nonnegative(),
+    }).parse(req.body);
+    reply.code(201);
+    return withdrawalRequests.requestTransfer(id, account.id, body);
+  });
   app.get('/api/events/:id/withdrawal-requests', async (req) => withdrawalRequests.list((await onEvent(req, 'entries.manage')).id));
   app.post('/api/events/:id/withdrawal-requests/:rid/approve', async (req) => {
     const { id } = await onEvent(req, 'entries.manage');
