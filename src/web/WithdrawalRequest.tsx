@@ -138,12 +138,19 @@ function MoveForm({ entryId, category, onSent, onCancel }: { entryId: string; ca
   // Focus the first choice once the options arrive, so keyboard users land in the form.
   const loaded = data !== null;
   useEffect(() => { if (loaded) choices.current?.querySelector<HTMLInputElement>('input')?.focus(); }, [loaded]);
+  const [loading, setLoading] = useState(false);
+  // Only the newest load may update the form, so an older failure cannot replace a loaded form or a typed reason.
+  const latestLoad = useRef(0);
   const load = async () => {
+    const mine = ++latestLoad.current;
+    setLoading(true);
     try {
-      setData(await api.transferOptions(entryId));
-      setLoadError(null);
+      const options = await api.transferOptions(entryId);
+      if (mine === latestLoad.current) { setData(options); setLoadError(null); }
     } catch (e) {
-      setLoadError((e as ApiError).message);
+      if (mine === latestLoad.current) setLoadError((e as ApiError).message);
+    } finally {
+      if (mine === latestLoad.current) setLoading(false);
     }
   };
   useEffect(() => { void load(); }, [entryId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -153,7 +160,7 @@ function MoveForm({ entryId, category, onSent, onCancel }: { entryId: string; ca
       <div className="small">
         <p className="text-error" role="alert">Move options could not load. {loadError}</p>
         <span className="order__entry-actions">
-          <button type="button" className="btn btn--secondary btn--small" onClick={() => void load()}>Try again</button>
+          <button type="button" className="btn btn--secondary btn--small" disabled={loading} onClick={() => void load()}>{loading ? 'Trying again…' : 'Try again'}</button>
           <button type="button" className="btn btn--ghost btn--small" onClick={onCancel}>Close</button>
         </span>
       </div>

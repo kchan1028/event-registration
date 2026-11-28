@@ -346,6 +346,17 @@ test('the move form recovers from a failed load and drops a choice that a refres
     stalled.release?.();
     await askMove.click();
     await expect(rider.getByRole('alert')).toContainText('Move options could not load');
+    // Try again cannot be pressed twice while a retry is in flight.
+    const heldRetry: { release?: () => void } = {};
+    await rider.route('**/api/rider/order-entries/*/transfer-options', async (route) => {
+      await new Promise<void>((resolve) => { heldRetry.release = resolve; });
+      return route.fulfill({ status: 503, json: { error: 'Fictional temporary failure' } });
+    }, { times: 1 });
+    await rider.getByRole('button', { name: 'Try again' }).click();
+    await expect(rider.getByRole('button', { name: 'Trying again…' })).toBeDisabled();
+    await expect.poll(() => heldRetry.release !== undefined).toBe(true);
+    heldRetry.release?.();
+    await expect(rider.getByRole('button', { name: 'Try again' })).toBeEnabled();
     await rider.getByRole('button', { name: 'Close' }).click();
     await expect(rider.getByRole('button', { name: `Ask to withdraw from ${from.name}` })).toBeVisible();
     await askMove.click();
