@@ -961,6 +961,20 @@ What stays blocked: any rider-initiated transfer to another person.
 
 Revisit when the project owner sets the transfer policy: who may offer it, money, recipient account and consent, and bib handling.
 
+### Bulk confirmation resend
+
+Open, raised November 28, 2026; owner: project owner. [Participant management](#participant-management) lists confirmation resend among the record actions an organizer can apply to several selected registrations. Today an organizer can only retry a registration confirmation whose delivery is uncertain, inside the provider's repeat-safe window. A resend to a rider who never got the message, or lost it, would be a new email for an already-delivered confirmation.
+
+Why it matters: each choice changes who receives mail and how often. Open points: which registrations qualify (confirmed orders only, or also orders with withdrawn or cancelled entries); whether an address stopped after a bounce or complaint is skipped or can be sent again by an owner; how many resends one registration may get, and how often; and whether the resend goes to the address on the order or to the purchaser's current account address.
+
+Provisional assumption: no bulk resend and no resend of a delivered confirmation. The single-record retry of an uncertain confirmation stays as it is.
+
+What can proceed: saved views, sorting, download columns and other filters in the participant workspace.
+
+What stays blocked: a bulk confirmation resend and any resend of a delivered confirmation.
+
+Revisit when the project owner sets which records qualify, the stopped-address rule, the limit, and the address used.
+
 ### Duplicate junior claim resolution
 
 Open, raised November 26, 2026; owner: project owner. Support must resolve multiple approved junior claims before a new adult self-registration attaches to junior history. The product documents do not say what that resolution does to each claim that is not chosen as the history source, or whether the rider keeps, loses, or narrows access to those junior profiles and their orders.
