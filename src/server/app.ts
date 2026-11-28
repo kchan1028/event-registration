@@ -1078,8 +1078,10 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       sort: z.enum(REGISTRATION_SORT_KEYS).optional(),
     }).parse(p.kind === 'entries.csv' ? req.query ?? {} : {});
     const viewFilter: RegistrationFilter = { dayId: v.dayId, categoryId: v.categoryId, entryStatus: v.entryStatus, missingWaiver: v.missingWaiver === '1' || undefined, sort: v.sort };
-    // A view is any filter or a non-default row order; the file then names them in its response.
-    const view = { filter: viewFilter, active: p.kind === 'entries.csv' && filterToParams(viewFilter).toString() !== '' };
+    // A view is any filter or any requested row order, `newest` included; the file then names them in its response.
+    const viewParams = filterToParams(viewFilter);
+    if (v.sort) viewParams.set('sort', v.sort);
+    const view = { filter: viewFilter, params: viewParams.toString(), active: p.kind === 'entries.csv' && viewParams.toString() !== '' };
     const file = await db.transaction(async () => {
       await db.lock(eventLock(p.id));
       const record = await repo.getEvent(p.id);
@@ -1109,7 +1111,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
     await recordProtectedExport(req, p.id, auditKind, file.generatedAt);
     if (p.kind === 'reconciliation.csv' || p.kind === 'finance-summary.csv' || view.active) reply.header('X-CycleReg-Export-Generated-At', file.generatedAt);
     // A filtered view says which filters made it, so a saved file can be traced back to its view.
-    if (view.active) reply.header('X-CycleReg-Export-Filters', filterToParams(view.filter).toString());
+    if (view.active) reply.header('X-CycleReg-Export-Filters', view.params);
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
       .header('Content-Disposition', `attachment; filename="${file.filename}"`)
