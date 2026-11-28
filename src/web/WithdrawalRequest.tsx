@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatDollars } from '../shared/format';
-import { api, ApiError, type WithdrawalPolicyPreview, type WithdrawalRequest } from './api';
+import { api, ApiError, type TransferOption, type WithdrawalPolicyPreview, type WithdrawalRequest } from './api';
 import { ReasonForm } from './ui';
 
 /** Plain sentence for what the accepted refund policy returns if this entry is withdrawn today. */
@@ -24,7 +24,7 @@ type Status = { preview: WithdrawalPolicyPreview; openRequest: WithdrawalRequest
 export function WithdrawalRequestControl({ entryId, categoryName }: { entryId: string; categoryName: string }) {
   const [state, setState] = useState<Status | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<'none' | 'withdraw' | 'move'>('none');
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const formHost = useRef<HTMLDivElement>(null);
   const waiting = useRef<HTMLParagraphElement>(null);
@@ -39,8 +39,8 @@ export function WithdrawalRequestControl({ entryId, categoryName }: { entryId: s
   }, [entryId]);
 
   useEffect(() => {
-    if (open) formHost.current?.querySelector<HTMLInputElement>('input')?.focus();
-  }, [open]);
+    if (mode !== 'none') formHost.current?.querySelector<HTMLInputElement>('input')?.focus();
+  }, [mode]);
   useEffect(() => {
     if (focusWaiting) { waiting.current?.focus(); setFocusWaiting(false); }
   }, [focusWaiting]);
@@ -54,16 +54,29 @@ export function WithdrawalRequestControl({ entryId, categoryName }: { entryId: s
     return (
       <p ref={waiting} tabIndex={-1} className="note small" role="status">
         {state.openRequest.kind === 'transfer'
-          ? <>You asked to move from {state.openRequest.policy.categoryName} to {state.openRequest.policy.transfer?.categoryName}. The organizer has not decided yet, and this entry stays where it is until they do.</>
+          ? <>You asked to move this entry to {state.openRequest.policy.transfer ? moveTargetLabel(state.openRequest.policy.transfer) : 'another category'}. The organizer has not decided yet, and this entry stays where it is until they do.</>
           : <>You asked to withdraw from {state.openRequest.policy.categoryName}. The organizer has not decided yet, and this entry still races until they do.</>}
       </p>
     );
   }
-  if (!open) {
+  const sent = (openRequest: WithdrawalRequest) => { setState({ preview: state.preview, openRequest }); setFocusWaiting(true); };
+  if (mode === 'none') {
     return (
-      <button type="button" className="btn btn--ghost btn--small" aria-label={`Ask to withdraw from ${category}`} onClick={() => setOpen(true)}>
-        Ask to withdraw
-      </button>
+      <span className="order__entry-actions">
+        <button type="button" className="btn btn--ghost btn--small" aria-label={`Ask to withdraw from ${category}`} onClick={() => setMode('withdraw')}>
+          Ask to withdraw
+        </button>
+        <button type="button" className="btn btn--ghost btn--small" aria-label={`Ask to move from ${category} to another category`} onClick={() => setMode('move')}>
+          Ask to move
+        </button>
+      </span>
+    );
+  }
+  if (mode === 'move') {
+    return (
+      <div ref={formHost}>
+        <MoveForm entryId={entryId} category={category} onSent={sent} onCancel={() => setMode('none')} />
+      </div>
     );
   }
   const shown = state.preview.entitlement;
@@ -86,8 +99,7 @@ export function WithdrawalRequestControl({ entryId, categoryName }: { entryId: s
               expectedReturnAs: shown?.returnAs ?? null,
               expectedAmountCents: shown?.amountCents ?? null,
             });
-            setState({ preview: state.preview, openRequest });
-            setFocusWaiting(true);
+            sent(openRequest);
           } catch (e) {
             // The category or policy step changed since the rider looked: show the current preview and let them decide again.
             if (e instanceof ApiError && e.status === 409) {
@@ -97,8 +109,130 @@ export function WithdrawalRequestControl({ entryId, categoryName }: { entryId: s
             throw e;
           }
         }}
-        onCancel={() => { setOpen(false); setRequestId(crypto.randomUUID()); }}
+        onCancel={() => { setMode('none'); setRequestId(crypto.randomUUID()); }}
       />
     </div>
+  );
+}
+
+/** "RR-M35-34 Masters 35+ Cat 3/4 (Saturday road race)": categories in different races can share a name. Older requests have the name only. */
+export function moveTargetLabel(t: { categoryName: string; code?: string; raceName?: string }): string {
+  return `${t.code ? `${t.code} ` : ''}${t.categoryName}${t.raceName ? ` (${t.raceName})` : ''}`;
+}
+
+/** How a category's price today compares with what the rider paid. Nothing is charged here. */
+export function moveCostSentence(o: TransferOption): string {
+  const price = formatDollars(o.newPriceCents);
+  if (o.differenceCents > 0) return `${price} today, ${formatDollars(o.differenceCents)} more than you paid`;
+  if (o.differenceCents < 0) return `${price} today, ${formatDollars(-o.differenceCents)} less than you paid`;
+  return `${price} today, the same as you paid`;
+}
+
+/** The rider picks one category the entry can move to now and says why. The organizer decides. */
+function MoveForm({ entryId, category, onSent, onCancel }: { entryId: string; category: string; onSent: (r: WithdrawalRequest) => void; onCancel: () => void }) {
+  const [data, setData] = useState<{ from: WithdrawalPolicyPreview; options: TransferOption[] } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // A failed refresh after the form is showing stays inside the form, so the choice and the typed reason are kept.
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const hasData = useRef(false);
+  const [choice, setChoice] = useState('');
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const choices = useRef<HTMLFieldSetElement>(null);
+  // Focus the first choice once the options arrive, so keyboard users land in the form.
+  const loaded = data !== null;
+  useEffect(() => { if (loaded) choices.current?.querySelector<HTMLInputElement>('input')?.focus(); }, [loaded]);
+  const [loading, setLoading] = useState(false);
+  // Only the newest load may update the form, so an older failure cannot replace a loaded form or a typed reason.
+  const latestLoad = useRef(0);
+  const load = async () => {
+    const mine = ++latestLoad.current;
+    setLoading(true);
+    try {
+      const options = await api.transferOptions(entryId);
+      if (mine === latestLoad.current) { hasData.current = true; setData(options); setLoadError(null); setRefreshError(null); }
+    } catch (e) {
+      if (mine !== latestLoad.current) return;
+      if (hasData.current) setRefreshError((e as ApiError).message);
+      else setLoadError((e as ApiError).message);
+    } finally {
+      if (mine === latestLoad.current) setLoading(false);
+    }
+  };
+  useEffect(() => { void load(); }, [entryId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loadError) {
+    return (
+      <div className="small">
+        <p className="text-error" role="alert">Move options could not load. {loadError}</p>
+        <span className="order__entry-actions">
+          <button type="button" className="btn btn--secondary btn--small" disabled={loading} onClick={() => void load()}>{loading ? 'Trying again…' : 'Try again'}</button>
+          <button type="button" className="btn btn--ghost btn--small" onClick={onCancel}>Close</button>
+        </span>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <p className="small muted" role="status">
+        Loading the categories you can move to…{' '}
+        <button type="button" className="btn btn--ghost btn--small" onClick={onCancel}>Close</button>
+      </p>
+    );
+  }
+  if (data.options.length === 0) {
+    return (
+      <p className="note small" role="status">
+        No other category can take this entry right now. Ask the registration desk if you need a change.{' '}
+        <button type="button" className="btn btn--ghost btn--small" onClick={onCancel}>Close</button>
+      </p>
+    );
+  }
+  const name = data.from.categoryName || category;
+  // A refresh can drop the category the rider picked; only a choice that is still offered counts.
+  const chosen = data.options.find((o) => o.categoryId === choice);
+  return (
+    <ReasonForm
+      variant="block"
+      label={`Ask to move from ${name} to another category`}
+      intro={<><strong>{name}.</strong> These categories can take this entry now. Any price difference is settled with the organizer; nothing is charged or refunded here. Nothing changes until the organizer approves.</>}
+      reasonLabel="Why do you want to move?"
+      submitLabel="Send request"
+      busyLabel="Sending…"
+      validate={(reason) => (!chosen ? 'Choose the category to move to.' : reason.length < 3 ? 'Write why you want to move.' : null)}
+      onSubmit={async (reason) => {
+        const option = chosen!;
+        try {
+          onSent(await api.requestTransfer(entryId, { clientRequestId: requestId, reason, toCategoryId: option.categoryId, expectedCategoryId: data.from.categoryId, expectedNewPriceCents: option.newPriceCents }));
+        } catch (e) {
+          // Refused because something changed since the rider looked (409), or the target closed or went away (422).
+          if (e instanceof ApiError && (e.status === 409 || e.status === 422)) {
+            // Another tab may already have sent a request for this entry: show it as waiting instead of the form.
+            const status = await api.withdrawalStatus(entryId).catch(() => null);
+            if (status?.openRequest) { onSent(status.openRequest); return; }
+            // Otherwise show the current choices and let the rider decide again.
+            await load();
+            setRequestId(crypto.randomUUID());
+          }
+          throw e;
+        }
+      }}
+      onCancel={onCancel}
+    >
+      {refreshError && (
+        <p className="text-error small" role="alert">
+          The choices could not refresh. {refreshError}{' '}
+          <button type="button" className="btn btn--secondary btn--small" disabled={loading} onClick={() => void load()}>{loading ? 'Trying again…' : 'Refresh choices'}</button>
+        </p>
+      )}
+      <fieldset className="field" ref={choices}>
+        <legend>Move to</legend>
+        {data.options.map((o) => (
+          <label key={o.categoryId} className="check">
+            <input type="radio" name={`move-${entryId}`} value={o.categoryId} checked={chosen?.categoryId === o.categoryId} onChange={() => setChoice(o.categoryId)} />
+            <span>{moveTargetLabel(o)}: {moveCostSentence(o)}</span>
+          </label>
+        ))}
+      </fieldset>
+    </ReasonForm>
   );
 }

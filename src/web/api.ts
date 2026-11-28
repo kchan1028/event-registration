@@ -248,6 +248,16 @@ export interface TestEntryResult {
 }
 
 /** What the accepted refund policy would return for one entry today (src/server/withdrawalRequests.ts). */
+/** A category the entry could move to now, with its price today and the difference from what was paid (owed if positive). */
+export interface TransferOption {
+  categoryId: string;
+  categoryName: string;
+  code: string;
+  raceName: string;
+  newPriceCents: number;
+  differenceCents: number;
+}
+
 export interface WithdrawalPolicyPreview {
   entryId: string;
   categoryId: string;
@@ -256,7 +266,7 @@ export interface WithdrawalPolicyPreview {
   onDate: string;
   entitlement: { returnAs: 'cash' | 'credit' | 'rider_choice'; percent: number; amountCents: number } | null;
   /** Set only for a category-change request: the target the rider saw. */
-  transfer?: { categoryId: string; categoryName: string; newPriceCents: number; differenceCents: number };
+  transfer?: { categoryId: string; categoryName: string; code?: string; raceName?: string; newPriceCents: number; differenceCents: number };
 }
 
 export interface WithdrawalRequest {
@@ -483,6 +493,8 @@ export const api = {
   transferEntry: (entryId: string, toCategoryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/transfer`, { toCategoryId, reason }),
   withdrawEntry: (entryId: string, reason: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/withdraw`, { reason }),
   withdrawalStatus: (entryId: string) => request<{ preview: WithdrawalPolicyPreview; openRequest: WithdrawalRequest | null }>('GET', `/api/rider/order-entries/${encodeURIComponent(entryId)}/withdrawal`),
+  transferOptions: (entryId: string) => request<{ from: WithdrawalPolicyPreview; options: TransferOption[] }>('GET', `/api/rider/order-entries/${encodeURIComponent(entryId)}/transfer-options`),
+  requestTransfer: (entryId: string, body: { clientRequestId: string; reason: string; toCategoryId: string; expectedCategoryId: string; expectedNewPriceCents: number }) => request<WithdrawalRequest>('POST', `/api/rider/order-entries/${encodeURIComponent(entryId)}/transfer-requests`, body),
   requestWithdrawal: (entryId: string, body: { clientRequestId: string; reason: string; expectedCategoryId: string; expectedReturnAs: 'cash' | 'credit' | 'rider_choice' | null; expectedAmountCents: number | null }) => request<WithdrawalRequest>('POST', `/api/rider/order-entries/${encodeURIComponent(entryId)}/withdrawal-requests`, body),
   correctRider: (orderId: string, changes: RiderCorrection, reason: string) => request<OrderView>('POST', `/api/orders/${orderId}/rider-corrections`, { changes, reason }),
   reviewLicense: (entryId: string, note?: string) => request<OrderView>('POST', `/api/order-entries/${entryId}/license-review`, { note }),

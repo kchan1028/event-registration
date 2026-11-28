@@ -103,6 +103,8 @@ test('a category-change request is labeled as a move everywhere, and approving i
   const entryId = (await paid.json()).entries[0].id as string;
   const { from: current, options } = await (await page.request.get(`/api/rider/order-entries/${entryId}/transfer-options`, { headers })).json();
   const option = options.find((o: { categoryId: string }) => o.categoryId === to.id);
+  // The same-named category exists in both races, so labels carry the code and race.
+  const label = `${option.code} ${to.name} (${option.raceName})`;
   const asked = await page.request.post(`/api/rider/order-entries/${entryId}/transfer-requests`, { headers, data: {
     clientRequestId: `mover-ask-${entryId}`, reason: 'Prefer the criterium', toCategoryId: to.id, expectedCategoryId: current.categoryId, expectedNewPriceCents: option.newPriceCents,
   } });
@@ -114,7 +116,7 @@ test('a category-change request is labeled as a move everywhere, and approving i
   const rider = await context.newPage();
   try {
     await rider.goto(`/#/orders/${order.id}`);
-    await expect(rider.getByRole('status').filter({ hasText: `You asked to move from ${from.name} to ${to.name}.` })).toBeVisible();
+    await expect(rider.getByRole('status').filter({ hasText: `You asked to move this entry to ${label}.` })).toBeVisible();
   } finally {
     await context.close();
   }
@@ -122,16 +124,16 @@ test('a category-change request is labeled as a move everywhere, and approving i
   await page.goto(`/#/events/${eventId}/registrations`);
   const section = page.getByRole('region', { name: /Withdrawal requests/ });
   const who = `Morgan Fictional, ${from.name}`;
-  await expect(section).toContainText(`Move to ${to.name} · waiting`);
-  await expect(section).toContainText(`${to.name} cost`);
+  await expect(section).toContainText(`Move to ${label} · waiting`);
+  await expect(section).toContainText(`${label} cost`);
   await expect(section.getByRole('button', { name: `Approve withdrawal for ${who}` })).toHaveCount(0);
-  await section.getByRole('button', { name: `Approve move to ${to.name} for ${who}` }).click();
-  const confirm = section.getByRole('group', { name: `Confirm move to ${to.name} for ${who}` });
-  await expect(confirm).toContainText(`This moves the entry to ${to.name} now.`);
+  await section.getByRole('button', { name: `Approve move to ${label} for ${who}` }).click();
+  const confirm = section.getByRole('group', { name: `Confirm move to ${label} for ${who}` });
+  await expect(confirm).toContainText(`This moves the entry to ${label} now.`);
   await confirm.getByRole('button', { name: 'Move entry' }).click();
   await expect(section.getByText('No requests are waiting.')).toBeVisible();
   await section.getByText('Decided (1)').click();
-  await expect(section).toContainText(`Moved to ${to.name}`);
+  await expect(section).toContainText(`Moved to ${label}`);
   const after = await (await page.request.get(`/api/orders/${order.id}`)).json();
   expect(after.entries[0]).toMatchObject({ status: 'confirmed', categoryId: to.id });
 });
