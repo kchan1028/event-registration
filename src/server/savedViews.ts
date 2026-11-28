@@ -16,6 +16,7 @@ export const savedViewFilterSchema = z.object({
   categoryId: z.string().min(1).max(64).optional(),
   entryStatus: z.enum(['active', 'withdrawn', 'cancelled']).optional(),
   missingWaiver: z.literal(true).optional(),
+  bundle: z.string().min(1).max(64).optional(),
   sort: z.enum(REGISTRATION_SORT_KEYS).optional(),
   columns: z.array(z.enum(ENTRY_COLUMNS)).min(1).max(ENTRY_COLUMNS.length).optional(),
 }).strict().refine(isFilterActive, 'Choose at least one filter to save a view.');

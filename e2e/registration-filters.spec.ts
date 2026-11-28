@@ -14,7 +14,7 @@ import { expect, test } from './fixtures';
 import { publishReviewed } from './support/publish';
 
 type Entry = { id: string; dayId: string; categoryId: string; status: string; raceName: string };
-type Order = { id: string; orderNumber: string; createdAt: string; rider: { firstName: string; lastName: string }; entries: Entry[] };
+type Order = { id: string; orderNumber: string; createdAt: string; rider: { firstName: string; lastName: string }; entries: Entry[]; quote: { bundle: { id: string } | null } };
 
 const byText = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' });
 
@@ -280,6 +280,16 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await page.getByLabel('Find a registration').fill('');
   await expect(allCount).toHaveText(String(orders.length));
 
+  // Package: orders bought with the weekend package, by name or as any package.
+  const packaged = orders.filter((o) => o.quote.bundle).length;
+  expect(packaged).toBeGreaterThan(0);
+  await filters.getByLabel('Package').selectOption({ label: config.registration.bundles[0].name });
+  await expect(allCount).toHaveText(String(packaged));
+  await filters.getByLabel('Package').selectOption('any');
+  await expect(allCount).toHaveText(String(packaged));
+  await filters.getByLabel('Package').selectOption('');
+  await expect(allCount).toHaveText(String(orders.length));
+
   // The demo riders all signed their waivers, so the missing-waiver filter finds none.
   await filters.getByLabel('Missing waiver or guardian signature').check();
   await expect(allCount).toHaveText('0');
@@ -288,6 +298,143 @@ test('organizers narrow registrations by race day, category, entry status and mi
   await filters.getByLabel('Missing waiver or guardian signature').uncheck();
   await expect(allCount).toHaveText(String(orders.length));
   await expect(filters.getByRole('button', { name: 'Clear entry filters' })).toHaveCount(0);
+});
+
+test('a package filter stays in a saved view and in the view download', { tag: '@smoke' }, async ({ page }) => {
+  const { eventId } = await (await page.request.post('/api/demo')).json();
+  const eventUrl = `/api/events/${eventId}`;
+  expect((await publishReviewed(page.request, eventUrl, { acknowledgeWarnings: true })).status()).toBe(200);
+  expect((await page.request.post(`${eventUrl}/check-in-demo-riders`)).ok()).toBe(true);
+  const { config } = await (await page.request.get(eventUrl)).json();
+  const bundle = config.registration.bundles[0];
+  expect(bundle).toBeTruthy();
+  const road = config.categories.find((item: { timingCode: string }) => item.timingCode === 'RR-M35-34');
+  const crit = config.categories.find((item: { timingCode: string }) => item.timingCode === 'CR-M35-34');
+  expect(road && crit).toBeTruthy();
+  const rider = (firstName: string, lastName: string) => ({
+    firstName,
+    lastName,
+    email: `${firstName}.${lastName}@example.test`.toLowerCase(),
+    team: '',
+    racingAge: 40,
+    licenseCategory: '3',
+    licenseType: 'annual',
+    competitionClass: 'men',
+    collegiateDivision: null,
+    guardian: null,
+    emergencyContact: { name: 'Fictional Contact', phone: '555-555-0199' },
+  });
+  const waiver = (name: string) => ({ version: config.registration.waiverVersion, read: true, agreed: true, signatureName: name, signerRole: 'rider' as const });
+  const place = async (key: string, categoryIds: string[], person: ReturnType<typeof rider>, bundleIntent?: string) => {
+    const created = await page.request.post(`/api/rider/events/${eventId}/orders`, { data: {
+      clientRequestId: `package-${key}-${eventId}`,
+      categoryIds,
+      bundleIntent: bundleIntent ?? null,
+      rider: person,
+      waiver: waiver(`${person.firstName} ${person.lastName}`),
+    } });
+    expect(created.status(), created.status() === 201 ? '' : await created.text()).toBe(201);
+    const id = (await created.json()).id as string;
+    expect((await page.request.post(`/api/orders/${id}/payment`, { data: { attemptId: `package-pay-${key}-${eventId}`, outcome: 'success' } })).ok()).toBe(true);
+  };
+  // One order bought the weekend package; one bought a single race, so the filter has someone to leave out.
+  await place('quinn', [road.id, crit.id], rider('Quinn', 'Package'), bundle.id);
+  await place('riley', [road.id], rider('Riley', 'Single'));
+  const bought = (await (await page.request.get(`${eventUrl}/orders`)).json() as Order[]).find((order) => order.rider.firstName === 'Quinn')!;
+  expect(bought.quote.bundle?.id).toBe(bundle.id);
+  expect(bought.entries.length).toBeGreaterThan(1);
+  expect((await page.request.post(`/api/order-entries/${bought.entries[0].id}/withdraw`, { data: { reason: 'Fictional withdrawal for the package filter' } })).ok()).toBe(true);
+  const live = await (await page.request.get(`${eventUrl}/orders`)).json() as Order[];
+  const packaged = live.filter((order) => order.quote.bundle?.id === bundle.id);
+  const anyPackage = live.filter((order) => order.quote.bundle);
+  const quinn = live.find((order) => order.rider.firstName === 'Quinn' && order.rider.lastName === 'Package')!;
+  const riley = live.find((order) => order.rider.firstName === 'Riley' && order.rider.lastName === 'Single')!;
+  expect(packaged.length).toBeGreaterThan(0);
+  expect(packaged.length).toBeLessThan(live.length);
+  expect(riley.quote.bundle).toBeNull();
+  expect(quinn.entries.some((entry) => entry.status === 'withdrawn')).toBe(true);
+  expect(quinn.entries.some((entry) => entry.status === 'confirmed')).toBe(true);
+  const withdrawnPackaged = packaged
+    .filter((order) => order.entries.some((entry) => entry.status === 'withdrawn'))
+    .map((order) => ({ ...order, entries: order.entries.filter((entry) => entry.status === 'withdrawn') }));
+  expect(withdrawnPackaged.reduce((count, order) => count + order.entries.length, 0)).toBeLessThan(packaged.reduce((count, order) => count + order.entries.length, 0));
+
+  await page.goto(`/#/events/${eventId}/registrations`);
+  const filters = page.getByRole('group', { name: 'Narrow by entry' });
+  const rows = page.getByRole('list', { name: 'Registrations', exact: true }).locator('> li');
+  const allCount = page.getByRole('group', { name: 'Show registrations' }).getByRole('button', { name: /^All/ }).locator('.num');
+  const packageSelect = filters.getByRole('combobox', { name: 'Package', exact: true });
+  const viewDownload = () => filters.getByRole('link', { name: 'Download this view (CSV)' });
+  await expect(packageSelect.locator('option')).toHaveText(['Any order', 'Bought with any package', ...config.registration.bundles.map((item: { name: string }) => item.name)]);
+
+  await packageSelect.selectOption(bundle.id);
+  await expect(allCount).toHaveText(String(packaged.length));
+  await expect(rows.filter({ hasText: 'Quinn Package' })).toHaveCount(1);
+  await expect(rows.filter({ hasText: 'Riley Single' })).toHaveCount(0);
+  await expect(viewDownload()).toHaveAttribute('href', new RegExp(`[?&]bundle=${bundle.id}$`));
+  const named = await downloadView(page, viewDownload());
+  expect(named.filename).toContain('entries');
+  expect(named.filename).toContain('filtered');
+  expect(csvEntryRows(named)).toEqual(viewEntryRows(packaged, 'newest'));
+
+  await filters.getByLabel('View name').fill('Weekend package');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Weekend package');
+  await page.reload();
+  await expect(packageSelect).toHaveValue('');
+  await expect(viewDownload()).toHaveCount(0);
+  await filters.getByLabel('Saved view').selectOption({ label: 'Weekend package' });
+  await expect(packageSelect).toHaveValue(bundle.id);
+  await expect(allCount).toHaveText(String(packaged.length));
+  await expect(rows.filter({ hasText: 'Riley Single' })).toHaveCount(0);
+  await expect(viewDownload()).toHaveAttribute('href', new RegExp(`[?&]bundle=${bundle.id}$`));
+
+  // A different package choice is a different view, so the saved one drops away.
+  await packageSelect.selectOption('any');
+  await expect(filters.getByLabel('Saved view')).toHaveValue('');
+  await expect(allCount).toHaveText(String(anyPackage.length));
+  await expect(rows.filter({ hasText: 'Quinn Package' })).toHaveCount(1);
+  await expect(rows.filter({ hasText: 'Riley Single' })).toHaveCount(0);
+  await expect(viewDownload()).toHaveAttribute('href', /[?&]bundle=any$/);
+  const anyFile = await downloadView(page, viewDownload());
+  expect(anyFile.filename).toContain('filtered');
+  expect(csvEntryRows(anyFile)).toEqual(viewEntryRows(anyPackage, 'newest'));
+
+  await filters.getByLabel('View name').fill('Any package');
+  await filters.getByRole('button', { name: 'Save view' }).click();
+  await expect(filters.getByLabel('Saved view').locator('option:checked')).toHaveText('Any package');
+  await page.reload();
+  await filters.getByLabel('Saved view').selectOption({ label: 'Any package' });
+  await expect(packageSelect).toHaveValue('any');
+  await expect(allCount).toHaveText(String(anyPackage.length));
+  await expect(viewDownload()).toHaveAttribute('href', /[?&]bundle=any$/);
+
+  await filters.getByRole('button', { name: 'Clear entry filters' }).click();
+  await expect(packageSelect).toHaveValue('');
+  await expect(filters.getByLabel('Saved view')).toHaveValue('');
+  await expect(viewDownload()).toHaveCount(0);
+  await expect(rows.filter({ hasText: 'Riley Single' })).toHaveCount(1);
+  await expect(allCount).toHaveText(String(live.length));
+
+  // The package and an entry condition apply together. The file keeps every entry of a matching order only when no entry condition is set.
+  await packageSelect.selectOption(bundle.id);
+  await filters.getByLabel('Entry status').selectOption('active');
+  const activePackaged = packaged.filter((order) => order.entries.some((entry) => entry.status === 'held' || entry.status === 'confirmed'));
+  await expect(allCount).toHaveText(String(activePackaged.length));
+  await expect(rows.filter({ hasText: 'Quinn Package' })).toHaveCount(1);
+  await filters.getByLabel('Entry status').selectOption('withdrawn');
+  await expect(allCount).toHaveText(String(withdrawnPackaged.length));
+  await expect(rows.filter({ hasText: 'Quinn Package' })).toHaveCount(1);
+  await expect(rows.filter({ hasText: 'Riley Single' })).toHaveCount(0);
+  await expect(viewDownload()).toHaveAttribute('href', new RegExp(`entryStatus=withdrawn&bundle=${bundle.id}$`));
+  const withdrawnFile = await downloadView(page, viewDownload());
+  expect(csvEntryRows(withdrawnFile)).toEqual(viewEntryRows(withdrawnPackaged, 'newest'));
+
+  await filters.getByLabel('Saved view').selectOption({ label: 'Weekend package' });
+  await expect(packageSelect).toHaveValue(bundle.id);
+  await expect(filters.getByLabel('Entry status')).toHaveValue('');
+  await expect(allCount).toHaveText(String(packaged.length));
+  await expect(viewDownload()).toHaveAttribute('href', new RegExp(`[?&]bundle=${bundle.id}$`));
 });
 
 test('a sort orders riders by last name, stays in a saved view, and is the view download', { tag: '@smoke' }, async ({ page }) => {

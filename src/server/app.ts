@@ -1075,10 +1075,11 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; repo: Repo; 
       categoryId: idStr.optional(),
       entryStatus: z.enum(['active', 'withdrawn', 'cancelled']).optional(),
       missingWaiver: z.literal('1').optional(),
+      bundle: z.union([z.literal('any'), idStr]).optional(),
       sort: z.enum(REGISTRATION_SORT_KEYS).optional(),
       columns: z.string().max(400).transform((s) => s.split(',')).pipe(z.array(z.enum(ENTRY_COLUMNS)).min(1)).optional(),
     }).parse(p.kind === 'entries.csv' ? req.query ?? {} : {});
-    const viewFilter: RegistrationFilter = { dayId: v.dayId, categoryId: v.categoryId, entryStatus: v.entryStatus, missingWaiver: v.missingWaiver === '1' || undefined, sort: v.sort, columns: v.columns };
+    const viewFilter: RegistrationFilter = { dayId: v.dayId, categoryId: v.categoryId, entryStatus: v.entryStatus, missingWaiver: v.missingWaiver === '1' || undefined, bundle: v.bundle, sort: v.sort, columns: v.columns };
     // A view is any filter or any requested row order, `newest` included; the file then names them in its response.
     const viewParams = filterToParams(viewFilter);
     if (v.sort) viewParams.set('sort', v.sort);

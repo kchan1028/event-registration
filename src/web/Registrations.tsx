@@ -149,6 +149,17 @@ export function Registrations({ draft }: { draft: Draft }) {
             <option value="cancelled">Cancelled</option>
           </select>
         </label>
+        {/* Shown only when the event offers packages; `any` finds an order bought with any of them. */}
+        {draft.config.registration.bundles.length > 0 && (
+          <label className="small">
+            Package{' '}
+            <select className="input" value={entryFilter.bundle ?? ''} onChange={(e) => setEntry({ bundle: e.target.value || undefined })}>
+              <option value="">Any order</option>
+              <option value="any">Bought with any package</option>
+              {draft.config.registration.bundles.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </label>
+        )}
         <label className="check small">
           <input type="checkbox" checked={entryFilter.missingWaiver ?? false} onChange={(e) => setEntry({ missingWaiver: e.target.checked || undefined })} />
           Missing waiver or guardian signature
@@ -270,7 +281,7 @@ function SavedViews({ eventId, filter, onApply }: { eventId: string; filter: Reg
   // or clearing them deselects it and Delete view never targets a view nobody chose.
   const [chosenId, setChosenId] = useState('');
   const same = (a: RegistrationFilter, b: RegistrationFilter) =>
-    (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver) && (a.sort ?? 'newest') === (b.sort ?? 'newest')
+    (a.dayId ?? '') === (b.dayId ?? '') && (a.categoryId ?? '') === (b.categoryId ?? '') && (a.entryStatus ?? '') === (b.entryStatus ?? '') && Boolean(a.missingWaiver) === Boolean(b.missingWaiver) && (a.bundle ?? '') === (b.bundle ?? '') && (a.sort ?? 'newest') === (b.sort ?? 'newest')
     && downloadedColumns(a.columns) === downloadedColumns(b.columns);
   const chosen = views?.find((v) => v.id === chosenId);
   const selected = chosen && same(chosen.filter, filter) ? chosen.id : '';

@@ -5,14 +5,16 @@ type Entry = Parameters<typeof matchesRegistrationFilter>[0]['entries'][number];
 const done = [{ key: 'waiver', state: 'done' }, { key: 'license', state: 'needs_review' }] as Entry['readiness'];
 const entry = (over: Partial<Entry> = {}): Entry => ({ dayId: 'sat', categoryId: 'rr-m35', status: 'confirmed', readiness: done, ...over });
 
+const noBundle = { bundle: null };
+
 describe('registration filters', () => {
   it('matches everything when no filter is set', () => {
     expect(isFilterActive({})).toBe(false);
-    expect(matchesRegistrationFilter({ entries: [] }, {})).toBe(true);
+    expect(matchesRegistrationFilter({ quote: noBundle, entries: [] }, {})).toBe(true);
   });
 
   it('matches an order when one entry meets every chosen condition', () => {
-    const weekend = { entries: [entry(), entry({ dayId: 'sun', categoryId: 'cr-m35' })] };
+    const weekend = { quote: noBundle, entries: [entry(), entry({ dayId: 'sun', categoryId: 'cr-m35' })] };
     expect(matchesRegistrationFilter(weekend, { dayId: 'sun' })).toBe(true);
     expect(matchesRegistrationFilter(weekend, { dayId: 'sun', categoryId: 'cr-m35' })).toBe(true);
     // Conditions apply to the same entry, not across entries.
@@ -20,19 +22,19 @@ describe('registration filters', () => {
   });
 
   it('groups held and confirmed as active, and never shows a released hold under a status', () => {
-    expect(matchesRegistrationFilter({ entries: [entry({ status: 'held' })] }, { entryStatus: 'active' })).toBe(true);
-    expect(matchesRegistrationFilter({ entries: [entry({ status: 'withdrawn' })] }, { entryStatus: 'active' })).toBe(false);
-    expect(matchesRegistrationFilter({ entries: [entry({ status: 'withdrawn' })] }, { entryStatus: 'withdrawn' })).toBe(true);
-    expect(matchesRegistrationFilter({ entries: [entry({ status: 'cancelled' })] }, { entryStatus: 'cancelled' })).toBe(true);
+    expect(matchesRegistrationFilter({ quote: noBundle, entries: [entry({ status: 'held' })] }, { entryStatus: 'active' })).toBe(true);
+    expect(matchesRegistrationFilter({ quote: noBundle, entries: [entry({ status: 'withdrawn' })] }, { entryStatus: 'active' })).toBe(false);
+    expect(matchesRegistrationFilter({ quote: noBundle, entries: [entry({ status: 'withdrawn' })] }, { entryStatus: 'withdrawn' })).toBe(true);
+    expect(matchesRegistrationFilter({ quote: noBundle, entries: [entry({ status: 'cancelled' })] }, { entryStatus: 'cancelled' })).toBe(true);
     for (const entryStatus of ['active', 'withdrawn', 'cancelled'] as const) {
-      expect(matchesRegistrationFilter({ entries: [entry({ status: 'released' })] }, { entryStatus })).toBe(false);
+      expect(matchesRegistrationFilter({ quote: noBundle, entries: [entry({ status: 'released' })] }, { entryStatus })).toBe(false);
     }
   });
 
   it('finds a missing waiver or guardian signature, but not a license review alone', () => {
-    expect(matchesRegistrationFilter({ entries: [entry()] }, { missingWaiver: true })).toBe(false);
-    expect(matchesRegistrationFilter({ entries: [entry({ readiness: [{ key: 'waiver', state: 'missing' }] })] }, { missingWaiver: true })).toBe(true);
-    expect(matchesRegistrationFilter({ entries: [entry({ readiness: [{ key: 'waiver', state: 'done' }, { key: 'guardian', state: 'missing' }] })] }, { missingWaiver: true })).toBe(true);
+    expect(matchesRegistrationFilter({ quote: noBundle, entries: [entry()] }, { missingWaiver: true })).toBe(false);
+    expect(matchesRegistrationFilter({ quote: noBundle, entries: [entry({ readiness: [{ key: 'waiver', state: 'missing' }] })] }, { missingWaiver: true })).toBe(true);
+    expect(matchesRegistrationFilter({ quote: noBundle, entries: [entry({ readiness: [{ key: 'waiver', state: 'done' }, { key: 'guardian', state: 'missing' }] })] }, { missingWaiver: true })).toBe(true);
   });
 
   it('sorts deterministically, never treats a sort as a filter, and leaves the default sort out of the address', () => {
@@ -50,8 +52,19 @@ describe('registration filters', () => {
     expect(ids('name')).toEqual(['o2', 'o1', 'o3']);
     expect(ids('order')).toEqual(['o2', 'o1', 'o3']);
     expect(isFilterActive({ sort: 'name' })).toBe(false);
-    expect(matchesRegistrationFilter({ entries: [entry({ status: 'withdrawn' })] }, { sort: 'name' })).toBe(true);
+    expect(matchesRegistrationFilter({ quote: noBundle, entries: [entry({ status: 'withdrawn' })] }, { sort: 'name' })).toBe(true);
     expect(filterToParams({ sort: 'newest' }).toString()).toBe('');
     expect(filterToParams({ entryStatus: 'active', sort: 'name' }).toString()).toBe('entryStatus=active&sort=name');
+  });
+
+  it('finds orders bought with one package or with any package, and still applies the entry conditions', () => {
+    const omnium = { bundle: { id: 'omnium' } };
+    expect(isFilterActive({ bundle: 'any' })).toBe(true);
+    expect(matchesRegistrationFilter({ quote: omnium, entries: [entry()] }, { bundle: 'omnium' })).toBe(true);
+    expect(matchesRegistrationFilter({ quote: omnium, entries: [entry()] }, { bundle: 'any' })).toBe(true);
+    expect(matchesRegistrationFilter({ quote: omnium, entries: [entry()] }, { bundle: 'weekend' })).toBe(false);
+    expect(matchesRegistrationFilter({ quote: noBundle, entries: [entry()] }, { bundle: 'any' })).toBe(false);
+    expect(matchesRegistrationFilter({ quote: omnium, entries: [entry({ status: 'withdrawn' })] }, { bundle: 'omnium', entryStatus: 'active' })).toBe(false);
+    expect(filterToParams({ bundle: 'omnium' }).toString()).toBe('bundle=omnium');
   });
 });
